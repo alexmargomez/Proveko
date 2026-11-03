@@ -1,0 +1,69 @@
+services:
+  proveko-control-db:
+    image: postgres:16-alpine
+    container_name: proveko-control-db
+    environment:
+      POSTGRES_USER: ${CONTROL_DB_USER:-proveko_control}
+      POSTGRES_PASSWORD: ${CONTROL_DB_PASS:-proveko_control_secret}
+      POSTGRES_DB: ${CONTROL_DB_NAME:-proveko_control_db}
+    ports:
+      - "54320:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U proveko_control -d proveko_control_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  proveko-cell-a-db:
+    image: postgres:16-alpine
+    container_name: proveko-cell-a-db
+    command: ["postgres", "-c", "max_connections=400"]
+    environment:
+      POSTGRES_USER: ${CELL_A_ADMIN_USER:-proveko_provisioner}
+      POSTGRES_PASSWORD: ${CELL_A_ADMIN_PASS:-cell_a_master_secret}
+      POSTGRES_DB: postgres
+    ports:
+      - "54321:5432"
+
+  proveko-cell-a-pgbouncer:
+    image: edoburu/pgbouncer:1.22.0-p0
+    container_name: proveko-cell-a-pgbouncer
+    depends_on:
+      - proveko-cell-a-db
+    environment:
+      DB_HOST: proveko-cell-a-db
+      DB_PORT: 5432
+      DB_USER: ${CELL_A_ADMIN_USER:-proveko_provisioner}
+      DB_PASSWORD: ${CELL_A_ADMIN_PASS:-cell_a_master_secret}
+      POOL_MODE: transaction
+      MIN_POOL_SIZE: 0
+      DEFAULT_POOL_SIZE: 4
+      MAX_DB_CONNECTIONS: 8
+      SERVER_IDLE_TIMEOUT: 30
+      MAX_CLIENT_CONN: 5000
+    ports:
+      - "64321:5432"
+
+  proveko-cell-sandbox-db:
+    image: postgres:16-alpine
+    container_name: proveko-cell-sandbox-db
+    environment:
+      POSTGRES_USER: ${SANDBOX_ADMIN_USER:-proveko_provisioner}
+      POSTGRES_PASSWORD: ${SANDBOX_ADMIN_PASS:-sandbox_master_secret}
+      POSTGRES_DB: postgres
+    ports:
+      - "54322:5432"
+
+  proveko-redis:
+    image: redis:7.4-alpine
+    container_name: proveko-redis
+    ports:
+      - "63790:6379"
+
+  proveko-nats:
+    image: nats:2.10-alpine
+    container_name: proveko-nats
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "42220:4222"
+      - "82220:8222"

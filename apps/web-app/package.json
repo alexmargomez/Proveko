@@ -1,0 +1,11 @@
+{
+  "name": "@proveko/web-app",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@proveko/shared-kernel": "workspace:*",
+    "@proveko/ui-kit": "workspace:*"
+  }
+}
