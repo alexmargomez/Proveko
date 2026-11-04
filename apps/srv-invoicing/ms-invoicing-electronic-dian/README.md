@@ -10,7 +10,7 @@
 - **Override de Servidor Dedicado:** `UPSTREAM_MS_INVOICING_ELECTRONIC_DIAN`
 
 ## ¿De qué trata este microservicio?
-Emisor de Facturación Electrónica DIAN (Anexo Técnico 1.9 UBL 2.1). Siguiendo el **Pilar 1 de Ingeniería Estilo Alegra**, la ruta HTTP pre-liquida la factura con `MoneyDecimal`, calcula determinísticamente el **CUFE (`SHA-384`)** y encola la firma criptográfica `XAdES-EPES` y transmisión SOAP/REST hacia la DIAN en el worker asíncrono (`bullmq:dian-xml-signer`), respondiendo en `< 15 ms` sin bloquear el Event Loop.
+Emisor de Facturación Electrónica DIAN (Anexo Técnico 1.9 UBL 2.1). La ruta HTTP pre-liquida la factura con `MoneyDecimal`, calcula determinísticamente el **CUFE (`SHA-384`)** y encola la firma criptográfica `XAdES-EPES` y transmisión SOAP/REST hacia la DIAN en el worker asíncrono (`bullmq:dian-xml-signer`), respondiendo en `< 15 ms` sin bloquear el Event Loop.
 
 ## Despliegue en Servidor Dedicado
 Puede ejecutarse aislado en su propio VPS mediante `createStandaloneInvoicingElectronicDianServer` configurando `UPSTREAM_MS_INVOICING_ELECTRONIC_DIAN` en el API Gateway.

@@ -1,6 +1,6 @@
 # Proveko — El Servicio SaaS Modular Multi-Tenant de Alto Rendimiento
 
-**Proveko** (del latín *Provehere / Provectus*: impulsar hacia adelante) es **el Servicio empresarial SaaS completo**, multi-tenant y multi-sucursal construido bajo el **Modelo de Ingeniería Estilo Alegra (100% TypeScript + Arquitectura Hexagonal SOLID)**, diseñado específicamente para escalar ante tráfico masivo de pauta publicitaria y adaptarse a múltiples giros de negocio (Bares/Restaurantes, Comercios/Ferreterías DIAN, Hoteles/Alojamiento, Distribuidoras/Farmacias FEFO).
+**Proveko** es **el Servicio empresarial SaaS completo**, multi-tenant y multi-sucursal construido en **100% TypeScript bajo Arquitectura Hexagonal y Principios SOLID**, diseñado específicamente para escalar ante tráfico masivo de pauta publicitaria y adaptarse a múltiples giros de negocio (Bares/Restaurantes, Comercios/Ferreterías DIAN, Hoteles/Alojamiento, Distribuidoras/Farmacias FEFO).
 
 ---
 
