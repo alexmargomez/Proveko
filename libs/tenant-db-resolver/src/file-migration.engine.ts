@@ -7,6 +7,7 @@ import {
   PROVEKO_ERROR_CODES,
   type ParentMicroserviceKey,
   ProvekoDomainError,
+  SEED_MICROSERVICES_CATALOG,
   type ServiceKey,
   normalizeModuleKey,
   normalizeParentMicroserviceKey,
@@ -174,6 +175,22 @@ export class FileBasedMigrationRegistry {
       );
     }
     return this.getMigrationsForModule(moduleKeyInput);
+  }
+
+  public loadAllCatalogMigrationsFromRoot(migrationsRootDir: string): number {
+    let loadedFilesCount = 0;
+    for (const def of SEED_MICROSERVICES_CATALOG) {
+      const srvFolder = def.parentService.replace(':', '-'); // ej. srv-invoicing
+      const msFolder = def.key.replace(':', '-'); // ej. ms-invoicing-pos
+      const moduleDir = join(migrationsRootDir, srvFolder, msFolder);
+      const loaded = this.loadModuleMigrationsFromDirectory(
+        moduleDir,
+        def.parentService,
+        def.key,
+      );
+      loadedFilesCount += loaded.length;
+    }
+    return loadedFilesCount;
   }
 
   public getMigrationsForModule(

@@ -849,17 +849,9 @@ describe('Proveko — Core-Service & Inner Ring Libraries (Audit Verification Su
     expect(baseABackup.appliedMigrationsSnapshot).toHaveLength(2);
     expect(backupManager.listBackupsForDatabase('db_base_b')).toHaveLength(0); // Aislamiento total: Base B no fue tocada
 
-    // 3. Cargar desde disco todas las migraciones (`0001_*.sql` antiguas + `0002_*.sql` nuevas)
-    migrationRegistry.loadModuleMigrationsFromDirectory(
-      join(migrationsRoot, 'srv-invoicing/ms-invoicing-pos'),
-      'ms:invoicing',
-      'mod:invoicing-pos',
-    );
-    migrationRegistry.loadModuleMigrationsFromDirectory(
-      join(migrationsRoot, 'srv-inventory/ms-inventory-stock'),
-      'ms:inventory',
-      'mod:inventory-stock',
-    );
+    // 3. Cargar desde disco todas las migraciones de los 20 módulos (`0001_*.sql` antiguas + `0002_*.sql` nuevas = 23 archivos)
+    const totalLoadedFiles = migrationRegistry.loadAllCatalogMigrationsFromRoot(migrationsRoot);
+    expect(totalLoadedFiles).toBe(23);
 
     // Sincronizar el checksum de las `0001` ya aplicadas en Base A y Base B con los archivos reales en disco
     const pos0001 = migrationRegistry
