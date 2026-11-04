@@ -1,16 +1,15 @@
-# Microservicio: Comandas de Cocina y Barra KDS (`ms:gastro-kds`)
+# Módulo Interno (Prender / Apagar): Comandas de Cocina y Barra KDS (`mod:gastro-kds`)
 
-- **Clave del Microservicio:** `ms:gastro-kds`
-- **Servicio Padre (Gatekeeper):** `srv:gastro`
+- **Clave del Módulo (On/Off):** `mod:gastro-kds` (alias `ms:gastro-kds`)
+- **Pertenece al Microservicio Independiente:** `ms:gastro` (`srv:gastro`)
 - **Esquema PostgreSQL:** `srv_gastro`
 - **Prefijo de Tablas:** `kds_` (`srv_gastro.kds_tickets`)
-- **Prerrequisitos (`requires`):** `["srv:gastro", "ms:gastro-tables"]`
+- **Prerrequisitos (`requires`):** `["ms:gastro", "mod:gastro-tables"]`
 - **Grupo de Exclusión (`mutex_group`):** `null`
-- **Override de Servidor Dedicado:** `UPSTREAM_MS_GASTRO_KDS`
 
-## ¿De qué trata este microservicio?
-Sistema de Pantallas de Cocina y Barra (*Kitchen Display System — KDS*). Recibe los pedidos tomados en las mesas (`ms:gastro-tables`), los separa por estación de preparación (`HOT_KITCHEN`, `BAR`, `GRILL`) y controla tiempos de preparación (`PREPARING`, `READY`, `SERVED`).
+## ¿De qué trata este módulo?
+Es un módulo interno del Microservicio `ms:gastro` que se prende o apaga según la suscripción del cliente. Opera el Sistema de Pantallas de Cocina y Barra (*Kitchen Display System — KDS*): recibe los pedidos tomados en las mesas (`mod:gastro-tables`), los separa por estación de preparación (`HOT_KITCHEN`, `BAR`, `GRILL`) y controla tiempos de preparación (`PREPARING`, `READY`, `SERVED`).
 
 ## Endpoints Principales
-- `GET /api/v1/srv:gastro/ms:gastro-kds/tickets`: Lista las comandas activas por estación.
-- `POST /api/v1/srv:gastro/ms:gastro-kds/tickets/dispatch`: Despacha una nueva comanda a cocina o barra.
+- `GET /api/v1/ms:gastro/mod:gastro-kds/tickets`: Lista las comandas activas por estación.
+- `POST /api/v1/ms:gastro/mod:gastro-kds/tickets/dispatch`: Despacha una nueva comanda a cocina o barra.

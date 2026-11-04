@@ -1,15 +1,14 @@
-# `@proveko/api-gateway` — Puerta Perimetral Zero-Trust y Enrutador Multi-Servidor
+# `@proveko/api-gateway` — Puerta Perimetral Zero-Trust y Enrutador de Microservicios
 
 ## Propósito
-El **API Gateway** es el punto único de entrada HTTP hacia todos los servicios de **Proveko**. Aplica seguridad perimetral Zero-Trust y resuelve dinámicamente a qué servidor físico o contenedor debe enviarse cada petición.
+El **API Gateway** es el punto único de entrada HTTP hacia todos los **Microservicios Independientes (`ms:<dominio>`)** de **Proveko**. Aplica seguridad perimetral Zero-Trust, verifica qué **Módulos internos (`mod:<dominio>-<modulo>`)** tiene prendidos o apagados el cliente y enruta la petición hacia el servidor donde corre el Microservicio correspondiente.
 
 ## Responsabilidades Principales
-1. **Sanitización Anti-Spoofing (`sanitizeInboundTenantHeaders`):** Purga cualquier cabecera entrante `x-proveko-*`, `x-tenant-*` o `x-cell-*` enviada desde Internet.
-2. **Verificación Criptográfica y de Frescura (`DoubleKeyServiceGuard`):**
+1. **Sanitización Anti-Spoofing (`sanitizeInboundTenantHeaders`):** Purga cualquier cabecera entrante `x-proveko-*`, `x-tenant-*` o `x-cell-*` enviada desde Internet y bloquea intentos de Path Traversal (`..`, `%2e%2e`).
+2. **Verificación Criptográfica y de Módulos Activos (`DoubleKeyServiceGuard`):**
    - Verifica la firma asimétrica `Ed25519` del JWT.
-   - Comprueba en Redis que `jwt.sub_ver === redis.sub_ver` (devolviendo `401 ERR_SUB_VER_STALE` si el plan cambió en caliente).
-   - Valida la **Doble Llave**: que el Servicio Padre (`srv:*`) esté activo y que el Microservicio hijo (`ms:*`) esté activo o en modo `READONLY_ARCHIVE` (bloqueando `POST/PUT/PATCH/DELETE`).
-3. **Rate Limiting por Tier (`TenantTierRateLimiter`):** Controla ráfagas según el plan del inquilino (`sandbox_ephemeral`, `basic`, `business`, `enterprise`).
-4. **Enrutamiento Jerárquico en 2 Niveles (`UpstreamRouteRegistry`):**
-   - **Nivel 1 (Servidor Dedicado por Microservicio):** Si existe `UPSTREAM_MS_<MICROSERVICE>` (ej. `UPSTREAM_MS_INVOICING_ELECTRONIC_DIAN`), enruta directamente a ese servidor dedicado.
-   - **Nivel 2 (Fallback al Servidor del Servicio Padre):** Si no tiene servidor dedicado, enruta al `host-runner` del Servicio Padre (`UPSTREAM_SRV_<SERVICE>`).
+   - Comprueba en Redis que `jwt.sub_ver === redis.sub_ver` (devolviendo `401 ERR_SUB_VER_STALE` si el cliente prendió o apagó módulos en caliente).
+   - Valida la **Doble Llave**: que el **Microservicio (`ms:<dominio>`)** esté activo y que el **Módulo interno (`mod:<dominio>-<modulo>`)** esté prendido (`ACTIVE`) o en modo histórico (`READONLY_ARCHIVE`, donde se permiten lecturas `GET/HEAD` y se bloquean escrituras `POST/PUT/PATCH/DELETE`).
+3. **Rate Limiting por Tier (`TenantTierRateLimiter`):** Controla ráfagas con cota LRU según el plan del inquilino (`sandbox_ephemeral`, `basic`, `business`, `enterprise`).
+4. **Enrutamiento hacia los Microservicios Independientes (`UpstreamRouteRegistry`):**
+   - Enruta cada petición `/api/v1/ms:<microservicio>/mod:<modulo>/*` al servidor donde se encuentra desplegado ese Microservicio (`UPSTREAM_MS_<DOMINIO>` / `UPSTREAM_SRV_<DOMINIO>`).

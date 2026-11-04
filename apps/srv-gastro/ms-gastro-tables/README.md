@@ -1,16 +1,15 @@
-# Microservicio: Salones, Mesas y Ocupación (`ms:gastro-tables`)
+# Módulo Interno (Prender / Apagar): Salones, Mesas y Ocupación (`mod:gastro-tables`)
 
-- **Clave del Microservicio:** `ms:gastro-tables`
-- **Servicio Padre (Gatekeeper):** `srv:gastro`
+- **Clave del Módulo (On/Off):** `mod:gastro-tables` (alias `ms:gastro-tables`)
+- **Pertenece al Microservicio Independiente:** `ms:gastro` (`srv:gastro`)
 - **Esquema PostgreSQL:** `srv_gastro`
 - **Prefijo de Tablas:** `tbl_` (`srv_gastro.tbl_dining_tables`)
-- **Prerrequisitos (`requires`):** `["srv:gastro", "ms:invoicing-pos"]`
+- **Prerrequisitos (`requires`):** `["ms:gastro", "mod:invoicing-pos"]`
 - **Grupo de Exclusión (`mutex_group`):** `null`
-- **Override de Servidor Dedicado:** `UPSTREAM_MS_GASTRO_TABLES`
 
-## ¿De qué trata este microservicio?
-Gestiona el plano de salones, terrazas y barras, controlando en tiempo real el estado de cada mesa (`AVAILABLE`, `OCCUPIED`, `BILL_REQUESTED`) y la cantidad de comensales atendidos. Es prerrequisito para `ms:gastro-kds` y `ms:gastro-split-check`.
+## ¿De qué trata este módulo?
+Es un módulo interno del Microservicio `ms:gastro` que se prende o apaga según la suscripción del cliente. Gestiona el plano de salones, terrazas y barras, controlando en tiempo real el estado de cada mesa (`AVAILABLE`, `OCCUPIED`, `BILL_REQUESTED`) y la cantidad de comensales atendidos. Es prerrequisito para `mod:gastro-kds` y `mod:gastro-split-check`.
 
 ## Endpoints Principales
-- `GET /api/v1/srv:gastro/ms:gastro-tables/tables`: Consulta el estado de todas las mesas de la sucursal.
-- `POST /api/v1/srv:gastro/ms:gastro-tables/tables/occupy`: Abre una mesa y asigna número de comensales.
+- `GET /api/v1/ms:gastro/mod:gastro-tables/tables`: Consulta el estado de todas las mesas de la sucursal.
+- `POST /api/v1/ms:gastro/mod:gastro-tables/tables/occupy`: Abre una mesa y asigna número de comensales.

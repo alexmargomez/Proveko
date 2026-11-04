@@ -1,16 +1,16 @@
-# Servicio Padre: Clientes y Comercial (`srv:crm`)
+# Microservicio Independiente: Clientes y Comercial (`ms:crm` / `srv:crm`)
 
-- **Identificador del Servicio Padre (Gatekeeper):** `srv:crm`
-- **Esquema PostgreSQL por Inquilino:** `srv_crm` (`pgSchema('srv_crm')`)
-- **Variable de Entorno en API Gateway:** `UPSTREAM_SRV_CRM`
+- **Identificador del Microservicio:** `ms:crm` (alias `srv:crm`)
+- **Esquema PostgreSQL Aislado por Inquilino:** `srv_crm` (`pgSchema('srv_crm')`)
+- **Variable de Servidor en API Gateway:** `UPSTREAM_MS_CRM` (o `UPSTREAM_SRV_CRM`)
 
-## Regla de Compuerta (Service Gatekeeper)
-Habilitar únicamente `srv:crm` sin ningún microservicio hijo no expone pantallas, pero es obligatorio tener `srv:crm` activo para activar cualquiera de sus 3 microservicios hijos. Si se desactiva `srv:crm`, se bloquea en cascada todo el grupo.
+## Naturaleza del Microservicio y sus Módulos Internos
+`ms:crm` es un **Microservicio Independiente** desplegable en su propio servidor/contenedor. Dentro de él viven sus **Módulos internos (`mod:crm-*`)**, los cuales **no son servidores separados**, sino capacidades funcionales que se **prenden y apagan dinámicamente por cliente** según su suscripción.
 
-## Microservicios Hijos del Grupo
-1. [`ms:crm-directory`](./ms-crm-directory/README.md) — Directorio de Terceros, Clientes y Proveedores (Prefijo: `dir_`)
-2. [`ms:crm-pipelines`](./ms-crm-pipelines/README.md) — Embudos Comerciales y Oportunidades (Prefijo: `pip_`)
-3. [`ms:crm-loyalty`](./ms-crm-loyalty/README.md) — Fidelización y Billetera de Puntos (Prefijo: `loy_`)
+- Activar únicamente el Microservicio `ms:crm` sin ningún módulo interno habilita el contenedor pero no expone pantallas.
+- Apagar el Microservicio `ms:crm` corta en cascada todos sus módulos internos.
 
-## Despliegue Elástico (`host-runner`)
-Puedes correr los 3 microservicios juntos en un solo servidor mediante `apps/srv-crm/host-runner` o filtrar cuáles corren en esta máquina usando `ENABLED_MICROSERVICES=ms:crm-directory,ms:crm-pipelines`.
+## Módulos Internos (Prender / Apagar)
+1. [`mod:crm-directory`](./ms-crm-directory/README.md) — Directorio de Terceros, Clientes y Proveedores (Prefijo: `dir_`)
+2. [`mod:crm-pipelines`](./ms-crm-pipelines/README.md) — Embudos Comerciales y Oportunidades (Prefijo: `pip_`)
+3. [`mod:crm-loyalty`](./ms-crm-loyalty/README.md) — Fidelización y Billetera de Puntos (Prefijo: `loy_`)
