@@ -161,7 +161,33 @@ En **Proveko**, la distribución en infraestructura y el control funcional está
 
 ---
 
-## 6. Comandos de Desarrollo y Verificación
+## 6. Arquitectura Multi-Base de Datos por Cliente (`Base A`, `Base B`, `Base C`, `Base D`): Complejidad Técnica y Operación
+
+En `@proveko/tenant-db-resolver` están implementados los **6 pilares** necesarios para operar un **Backend Único** frente a múltiples bases de datos aisladas por cliente:
+
+### A. Complejidad Técnica (`libs/tenant-db-resolver`)
+1. **Conexiones Dinámicas (`TenantConnectionPoolManager`):**
+   - Abre y administra micro-pools bajo demanda hacia `Base A`, `Base B`, `Base C`, `Base D` con presupuesto estricto de sockets por plan, deduplicación *Single-Flight* y cierre limpio (*Graceful Drain*) al expulsar de la caché LRU.
+2. **Routing por Cliente (`RoutingEnvelopeProviderPort` + `EnvelopeCryptoVault`):**
+   - Resuelve en cada petición a qué Celda física (`cellId`) y a qué base de datos (`db_tenant_<id>`) pertenece el cliente tomando su contexto firmado en `AsyncLocalStorage` y descifrando sus credenciales con `AES-256-GCM` + `AAD`.
+3. **Migraciones Múltiples — Flujo de Migraciones Antiguas vs. Nuevas por Archivo (`FileBasedMigrationEngine` + `MultiDatabaseMigrationOrchestrator`):**
+   - Los archivos SQL se numeran secuencialmente en `libs/tenant-db-resolver/migrations/<microservicio>/<modulo>/NNNN_descripcion.sql` (`0001_init_*.sql`, `0002_add_*.sql`).
+   - En cada base de datos (`Base A`, `Base B`, etc.), la tabla `srv_<microservicio>.schema_migrations` guarda el historial de archivos ejecutados y su `checksum_sha256`.
+   - **Migraciones Antiguas:** Se valida su `checksum_sha256` (lanzando `409 ERR_MIGRATION_CHECKSUM_DRIFT` si alguien alteró un archivo antiguo ya corrido) y **se saltan (`skippedOldMigrations`)**.
+   - **Migraciones Nuevas:** Se ejecutan en orden estricto bajo `pg_advisory_lock` y transacción `BEGIN ... COMMIT` (`appliedNewMigrations`).
+   - **Aislamiento de Fallos en Flota:** Si `Base C` falla durante una corrida masiva, `Base A`, `Base B` y `Base D` completan sus migraciones sin interrupción.
+
+### B. Operación (`libs/tenant-db-resolver/src/tenant-db-operations.manager.ts`)
+4. **Backups por Cliente (`PerTenantBackupManager`):**
+   - Genera y restaura snapshots individuales por base de datos (`Base A` sin tocar a `Base B`, `Base C` ni `Base D`), firmados con `SHA-256` e incluyendo el estado exacto de las migraciones aplicadas y puesta al día automática (*catch-up*) tras restaurar.
+5. **Monitoreo por Base (`PerDatabaseHealthAndAlertMonitor`):**
+   - Evalúa métricas individuales por cada base de datos (`queryLatencyP95Ms`, `connectionUtilizationPercent`, `storageUtilizationPercent`, `migrationStatus`, `lastBackupAtIso`).
+6. **Alertas más Finas (`GranularDatabaseAlert`):**
+   - Dispara alertas específicas por base de datos individual (`HIGH_QUERY_LATENCY`, `CONNECTION_POOL_SATURATION`, `STORAGE_QUOTA_THRESHOLD`, `MIGRATION_FAILURE_OR_DRIFT`, `BACKUP_OVERDUE`) identificando exactamente qué cliente (`Base A`, `Base B`, `Base C` o `Base D`) requiere atención.
+
+---
+
+## 7. Comandos de Desarrollo y Verificación
 
 ```bash
 # Levantar infraestructura base (PostgreSQL Control Plane + Celda 01 + PgBouncer + Redis + NATS)
@@ -170,6 +196,6 @@ docker compose -f infra/docker/docker-compose.yml up -d
 # Verificación estricta de tipos TypeScript en todo el monorepo
 npm run typecheck
 
-# Ejecutar suite completa de pruebas de auditoría SOLID, Hexagonal e Integración (Vitest)
+# Ejecutar suite completa de pruebas de auditoría SOLID, Hexagonal, Migraciones y Operación Multi-BD (Vitest)
 npm test
 ```

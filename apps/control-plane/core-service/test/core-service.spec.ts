@@ -15,8 +15,16 @@ import {
   PROVEKO_ERROR_CODES,
   ProvekoDomainError,
 } from '@proveko/shared-kernel';
+import { join } from 'node:path';
 import {
+  FileBasedMigrationEngine,
+  FileBasedMigrationRegistry,
+  InMemoryMigrationDatabaseDriverAdapter,
+  MultiDatabaseMigrationOrchestrator,
+  PerDatabaseHealthAndAlertMonitor,
+  PerTenantBackupManager,
   TenantConnectionPoolManager,
+  createMigrationFileDescriptor,
   type TenantSqlClient,
 } from '@proveko/tenant-db-resolver';
 import { PosCartCapabilityReconciler } from '@proveko/ui-kit';
@@ -759,5 +767,244 @@ describe('Proveko — Core-Service & Inner Ring Libraries (Audit Verification Su
       CustomFieldsAndWebhookGuard.assertPublicWebhookTargetIp('::ffff:7f00:1'),
     ).toThrowError(ProvekoDomainError);
   });
+
+  it('5. Backend Único -> Bases de Datos (Base A, Base B, Base C, Base D): Flujo de Migraciones Antiguas vs. Nuevas por Archivo, Backups por Cliente, Monitoreo por Base y Alertas más Finas', async () => {
+    const migrationRegistry = new FileBasedMigrationRegistry();
+    const migrationsRoot = join(
+      process.cwd(),
+      'libs/tenant-db-resolver/migrations',
+    );
+
+    // Fase Inicial: Cargar únicamente las migraciones iniciales `0001_*.sql` para Clientes Antiguos (`Base A` y `Base B`)
+    migrationRegistry.registerMigrationFile(
+      createMigrationFileDescriptor({
+        filename: '0001_init_pos_tables.sql',
+        parentService: 'ms:invoicing',
+        moduleKey: 'mod:invoicing-pos',
+        sqlUp: 'CREATE TABLE IF NOT EXISTS srv_invoicing.pos_sale_tickets (id UUID PRIMARY KEY);',
+      }),
+    );
+    migrationRegistry.registerMigrationFile(
+      createMigrationFileDescriptor({
+        filename: '0001_init_stock_tables.sql',
+        parentService: 'ms:inventory',
+        moduleKey: 'mod:inventory-stock',
+        sqlUp: 'CREATE TABLE IF NOT EXISTS srv_inventory.stk_items (id UUID PRIMARY KEY);',
+      }),
+    );
+
+    const migrationDriver = new InMemoryMigrationDatabaseDriverAdapter();
+    const migrationEngine = new FileBasedMigrationEngine(migrationRegistry, migrationDriver);
+    const fleetOrchestrator = new MultiDatabaseMigrationOrchestrator(migrationEngine, {
+      maxConcurrentDatabases: 2,
+    });
+    const backupManager = new PerTenantBackupManager(migrationDriver, migrationEngine);
+    const healthMonitor = new PerDatabaseHealthAndAlertMonitor({
+      latencyWarningMs: 100,
+      latencyCriticalMs: 250,
+      connectionSaturationWarningPct: 80,
+      storageQuotaWarningPct: 80,
+      maxBackupAgeHours: 24,
+    });
+
+    // 1. `Base A` y `Base B` (Clientes Antiguos) corren las migraciones iniciales `0001_*.sql`
+    const initialRun = await fleetOrchestrator.migrateTenantDatabaseFleet([
+      {
+        tenantId: 'tenant-a',
+        cellId: 'cell-db-01',
+        dbName: 'db_base_a',
+        activeServices: {
+          'srv:invoicing': ['ms:invoicing-pos'],
+          'srv:inventory': ['ms:inventory-stock'],
+        },
+      },
+      {
+        tenantId: 'tenant-b',
+        cellId: 'cell-db-01',
+        dbName: 'db_base_b',
+        activeServices: {
+          'srv:invoicing': ['ms:invoicing-pos'],
+        },
+      },
+    ]);
+
+    expect(initialRun.succeededDatabasesCount).toBe(2);
+    expect(initialRun.resultsByDatabase['db_base_a']?.appliedNewMigrations).toEqual([
+      '0001_init_pos_tables.sql',
+      '0001_init_stock_tables.sql',
+    ]);
+    expect(initialRun.resultsByDatabase['db_base_a']?.skippedOldMigrations).toEqual([]);
+
+    // 2. Tomar Backup Individual de `Base A` antes de subir nuevas migraciones (`Backups por cliente`)
+    const baseABackup = await backupManager.createDatabaseBackup({
+      tenantId: 'tenant-a',
+      cellId: 'cell-db-01',
+      dbName: 'db_base_a',
+      reason: 'PRE_MIGRATION_SAFETY',
+      activeServicesSnapshot: {
+        'srv:invoicing': ['ms:invoicing-pos'],
+        'srv:inventory': ['ms:inventory-stock'],
+      },
+    });
+    expect(baseABackup.appliedMigrationsSnapshot).toHaveLength(2);
+    expect(backupManager.listBackupsForDatabase('db_base_b')).toHaveLength(0); // Aislamiento total: Base B no fue tocada
+
+    // 3. Cargar desde disco todas las migraciones (`0001_*.sql` antiguas + `0002_*.sql` nuevas)
+    migrationRegistry.loadModuleMigrationsFromDirectory(
+      join(migrationsRoot, 'srv-invoicing/ms-invoicing-pos'),
+      'ms:invoicing',
+      'mod:invoicing-pos',
+    );
+    migrationRegistry.loadModuleMigrationsFromDirectory(
+      join(migrationsRoot, 'srv-inventory/ms-inventory-stock'),
+      'ms:inventory',
+      'mod:inventory-stock',
+    );
+
+    // Sincronizar el checksum de las `0001` ya aplicadas en Base A y Base B con los archivos reales en disco
+    const pos0001 = migrationRegistry
+      .getMigrationsForModule('mod:invoicing-pos')
+      .find((f) => f.version === '0001')!;
+    const stk0001 = migrationRegistry
+      .getMigrationsForModule('mod:inventory-stock')
+      .find((f) => f.version === '0001')!;
+    migrationDriver.tamperStoredChecksumForTesting(
+      'db_base_a',
+      'mod:invoicing-pos',
+      '0001_init_pos_tables.sql',
+      pos0001.checksumSha256,
+    );
+    migrationDriver.tamperStoredChecksumForTesting(
+      'db_base_a',
+      'mod:inventory-stock',
+      '0001_init_stock_tables.sql',
+      stk0001.checksumSha256,
+    );
+    migrationDriver.tamperStoredChecksumForTesting(
+      'db_base_b',
+      'mod:invoicing-pos',
+      '0001_init_pos_tables.sql',
+      pos0001.checksumSha256,
+    );
+
+    // 4. Simular un fallo en `Base C` mientras `Base A` (antigua), `Base B` (antigua) y `Base D` (cliente nuevo) se migran en paralelo
+    migrationDriver.simulateFailureForDatabase('db_base_c', 'Connection refused on Base C');
+
+    const fleetWave2 = await fleetOrchestrator.migrateTenantDatabaseFleet([
+      {
+        tenantId: 'tenant-a',
+        cellId: 'cell-db-01',
+        dbName: 'db_base_a',
+        activeServices: {
+          'srv:invoicing': ['ms:invoicing-pos'],
+          'srv:inventory': ['ms:inventory-stock'],
+        },
+      },
+      {
+        tenantId: 'tenant-b',
+        cellId: 'cell-db-01',
+        dbName: 'db_base_b',
+        activeServices: {
+          'srv:invoicing': ['ms:invoicing-pos'],
+        },
+      },
+      {
+        tenantId: 'tenant-c',
+        cellId: 'cell-db-01',
+        dbName: 'db_base_c',
+        activeServices: {
+          'srv:invoicing': ['ms:invoicing-pos'],
+        },
+      },
+      {
+        tenantId: 'tenant-d',
+        cellId: 'cell-db-01',
+        dbName: 'db_base_d',
+        activeServices: {
+          'srv:invoicing': ['ms:invoicing-pos'],
+        },
+      },
+    ]);
+
+    expect(fleetWave2.succeededDatabasesCount).toBe(3);
+    expect(fleetWave2.failedDatabasesCount).toBe(1);
+
+    // En `Base A` (cliente antiguo): se saltaron las `0001` (antiguas) y se aplicaron SOLO las `0002` (nuevas)
+    expect(fleetWave2.resultsByDatabase['db_base_a']?.skippedOldMigrations).toEqual([
+      '0001_init_pos_tables.sql',
+      '0001_init_stock_tables.sql',
+    ]);
+    expect(fleetWave2.resultsByDatabase['db_base_a']?.appliedNewMigrations).toEqual([
+      '0002_add_pos_tip_and_notes.sql',
+      '0002_add_stock_reorder_point.sql',
+    ]);
+
+    // En `Base D` (cliente nuevo): se aplicaron `0001` y `0002` en orden estricto
+    expect(fleetWave2.resultsByDatabase['db_base_d']?.skippedOldMigrations).toEqual([]);
+    expect(fleetWave2.resultsByDatabase['db_base_d']?.appliedNewMigrations).toEqual([
+      '0001_init_pos_tables.sql',
+      '0002_add_pos_tip_and_notes.sql',
+    ]);
+
+    // En `Base C` (aislada por fallo): queda registrada como FAILED sin abortar a A, B ni D
+    expect(fleetWave2.resultsByDatabase['db_base_c']?.status).toBe('FAILED');
+
+    // 5. Detección de alteración de migración antigua (`ERR_MIGRATION_CHECKSUM_DRIFT`)
+    migrationDriver.tamperStoredChecksumForTesting(
+      'db_base_b',
+      'mod:invoicing-pos',
+      '0001_init_pos_tables.sql',
+      'corrupted_sha256_hash',
+    );
+    await expect(
+      migrationEngine.migrateModuleForTenantDatabase({
+        tenantId: 'tenant-b',
+        dbName: 'db_base_b',
+        parentService: 'ms:invoicing',
+        moduleKey: 'mod:invoicing-pos',
+      }),
+    ).rejects.toMatchObject({
+      errorCode: PROVEKO_ERROR_CODES.ERR_MIGRATION_CHECKSUM_DRIFT,
+      statusCode: 409,
+    });
+
+    // 6. Monitoreo por Base y Alertas más Finas (`Base A` sana vs `Base C` con alertas críticas específicas)
+    const evalBaseA = healthMonitor.evaluateDatabaseHealth({
+      tenantId: 'tenant-a',
+      cellId: 'cell-db-01',
+      dbName: 'db_base_a',
+      queryLatencyP95Ms: 18,
+      activeConnections: 1,
+      maxConnections: 4,
+      storageUsedMb: 120,
+      storageQuotaMb: 2048,
+      migrationStatus: 'UP_TO_DATE',
+      lastBackupAtIso: baseABackup.createdAtIso,
+    });
+    expect(evalBaseA.snapshot.overallHealth).toBe('HEALTHY');
+    expect(evalBaseA.alerts).toHaveLength(0);
+
+    const evalBaseC = healthMonitor.evaluateDatabaseHealth({
+      tenantId: 'tenant-c',
+      cellId: 'cell-db-01',
+      dbName: 'db_base_c',
+      queryLatencyP95Ms: 340,
+      activeConnections: 4,
+      maxConnections: 4,
+      storageUsedMb: 950,
+      storageQuotaMb: 1000,
+      migrationStatus: 'MIGRATION_FAILED',
+      lastBackupAtIso: null,
+    });
+    expect(evalBaseC.snapshot.overallHealth).toBe('CRITICAL');
+    expect(evalBaseC.alerts.map((a) => a.category)).toEqual([
+      'HIGH_QUERY_LATENCY',
+      'CONNECTION_POOL_SATURATION',
+      'STORAGE_QUOTA_THRESHOLD',
+      'MIGRATION_FAILURE_OR_DRIFT',
+      'BACKUP_OVERDUE',
+    ]);
+  });
 });
+
 
