@@ -13,6 +13,14 @@ export const srvGastroSchema = pgSchema('srv_gastro');
 export const srvHotelSchema = pgSchema('srv_hotel');
 export const srvFinanceSchema = pgSchema('srv_finance');
 
+// Alias bajo la nomenclatura de Microservicio Padre (ms:*)
+export const msCrmSchema = srvCrmSchema;
+export const msInvoicingSchema = srvInvoicingSchema;
+export const msInventorySchema = srvInventorySchema;
+export const msGastroSchema = srvGastroSchema;
+export const msHotelSchema = srvHotelSchema;
+export const msFinanceSchema = srvFinanceSchema;
+
 export const SERVICE_SCHEMA_MAP: Record<ServiceKey, string> = {
   'srv:crm': 'srv_crm',
   'srv:invoicing': 'srv_invoicing',

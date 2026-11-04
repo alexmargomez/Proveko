@@ -472,4 +472,226 @@ describe('Proveko — Full Outward Ecosystem: API Gateway, Multi-Server Topology
     );
     expect(archiveGate.mode).toBe('READONLY_ARCHIVE_BANNER');
   });
+
+  it('4. Auditoría SOLID Hexagonal (20 Módulos), Rutas Unificadas /api/v1/ms:*/mod:*, Prevención Path Traversal y Recuperación TOCTOU en Webhooks', async () => {
+    const keyPair = Ed25519JwtVault.generateKeyPairEntry('kid-2026-solid');
+    const jwtVault = new Ed25519JwtVault('kid-2026-solid', [keyPair]);
+    const guard = new DoubleKeyServiceGuard(jwtVault);
+
+    const invRunner = createSrvInventoryHostRunner(guard);
+    const financeRunner = createSrvFinanceHostRunner(guard);
+
+    const upstreamRegistry = new UpstreamRouteRegistry({});
+    upstreamRegistry.registerParentServiceHostServer(
+      'ms:inventory',
+      'http://10.10.0.40:4200',
+      invRunner,
+    );
+    upstreamRegistry.registerParentServiceHostServer(
+      'ms:finance',
+      'http://10.10.0.60:4600',
+      financeRunner,
+    );
+
+    const gateway = new ProvekoApiGateway(guard, upstreamRegistry);
+
+    const token = jwtVault.signAccessToken({
+      tenant_id: 'tenant-solid-01',
+      cell_id: 'cell-db-01',
+      user_id: 'usr-01',
+      role_key: 'admin',
+      tier: 'business',
+      is_sandbox: false,
+      active_branch_id: 'br-01',
+      allowed_branch_ids: ['br-01', 'br-02'],
+      sub_ver: 1,
+      services: {
+        'srv:inventory': ['ms:inventory-stock', 'ms:inventory-transfers'],
+        'srv:finance': ['ms:finance-accounting-puc'],
+      },
+      readonly_microservices: [],
+    });
+
+    // 1. Enrutamiento con Nomenclatura Unificada `/api/v1/ms:inventory/mod:inventory-stock/items?page=1&limit=25`
+    const stockGetRes = await gateway.handleGatewayRequest({
+      method: 'GET',
+      url: '/api/v1/ms:inventory/mod:inventory-stock/items?page=1&limit=25',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(stockGetRes.status).toBe(200);
+    expect(stockGetRes.headers['x-proveko-parent-microservice']).toBe('ms:inventory');
+    expect(stockGetRes.headers['x-proveko-module']).toBe('mod:inventory-stock');
+
+    // 2. Prevención de Path Traversal (`..` / `%2e%2e`) en el API Gateway -> 400 ERR_VALIDATION_FAILED
+    const traversalRes = await gateway.handleGatewayRequest({
+      method: 'GET',
+      url: '/api/v1/ms:inventory/mod:inventory-stock/items/..%2f..%2fadmin',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(traversalRes.status).toBe(400);
+    expect((traversalRes.body as any).error_code).toBe(PROVEKO_ERROR_CODES.ERR_VALIDATION_FAILED);
+
+    // 3. Invariantes de Dominio Hexagonal en `mod:inventory-stock`: rechazar stock insuficiente y cantidades negativas
+    const negativeStockRes = await gateway.handleGatewayRequest({
+      method: 'POST',
+      url: '/api/v1/ms:inventory/mod:inventory-stock/movements',
+      headers: { authorization: `Bearer ${token}` },
+      body: {
+        sku: 'SKU-LAPTOP',
+        name: 'Laptop Pro',
+        movementType: 'IN',
+        quantity: '-5.0000',
+        unitCost: '1000.0000',
+      },
+    });
+    expect(negativeStockRes.status).toBe(422);
+    expect((negativeStockRes.body as any).error_code).toBe(
+      PROVEKO_ERROR_CODES.ERR_VALIDATION_FAILED,
+    );
+
+    const outMovementInsufficientRes = await gateway.handleGatewayRequest({
+      method: 'POST',
+      url: '/api/v1/ms:inventory/mod:inventory-stock/movements',
+      headers: { authorization: `Bearer ${token}` },
+      body: {
+        sku: 'SKU-LAPTOP',
+        name: 'Laptop Pro',
+        movementType: 'OUT',
+        quantity: '10.0000',
+        unitCost: '1000.0000',
+      },
+    });
+    expect(outMovementInsufficientRes.status).toBe(422);
+
+    // 4. Invariante de Dominio en `mod:inventory-transfers`: bloquear transferencia circular a la misma sucursal
+    const circularTransferRes = await gateway.handleGatewayRequest({
+      method: 'POST',
+      url: '/api/v1/ms:inventory/mod:inventory-transfers/transfers',
+      headers: { authorization: `Bearer ${token}` },
+      body: {
+        targetBranchId: 'br-01', // Igual a active_branch_id ('br-01')
+        items: [{ sku: 'SKU-LAPTOP', quantity: '2.0000' }],
+      },
+    });
+    expect(circularTransferRes.status).toBe(422);
+
+    // 5. Invariante de Dominio en `mod:finance-accounting-puc`: bloquear línea con Débito > 0 y Crédito > 0 simultáneos y descuadre contable
+    const simultaneousDebitCreditRes = await gateway.handleGatewayRequest({
+      method: 'POST',
+      url: '/api/v1/ms:finance/mod:finance-accounting-puc/journal/post-voucher',
+      headers: { authorization: `Bearer ${token}` },
+      body: {
+        voucherNumber: 'CBTE-ERR-LINE',
+        lines: [
+          {
+            pucAccountCode: '110505',
+            thirdPartyContactId: 'dir-1',
+            debit: '50.0000',
+            credit: '50.0000',
+          },
+          {
+            pucAccountCode: '413501',
+            thirdPartyContactId: 'dir-1',
+            debit: '0.0000',
+            credit: '50.0000',
+          },
+        ],
+      },
+    });
+    expect(simultaneousDebitCreditRes.status).toBe(422);
+    expect((simultaneousDebitCreditRes.body as any).error_code).toBe(
+      PROVEKO_ERROR_CODES.ERR_VALIDATION_FAILED,
+    );
+
+    const imbalanceRes = await gateway.handleGatewayRequest({
+      method: 'POST',
+      url: '/api/v1/ms:finance/mod:finance-accounting-puc/journal/post-voucher',
+      headers: { authorization: `Bearer ${token}` },
+      body: {
+        voucherNumber: 'CBTE-IMBALANCE',
+        lines: [
+          {
+            pucAccountCode: '110505',
+            thirdPartyContactId: 'dir-1',
+            debit: '100.0000',
+            credit: '0.0000',
+          },
+          {
+            pucAccountCode: '413501',
+            thirdPartyContactId: 'dir-1',
+            debit: '0.0000',
+            credit: '80.0000',
+          },
+        ],
+      },
+    });
+    expect(imbalanceRes.status).toBe(422);
+    expect((imbalanceRes.body as any).error_code).toBe(
+      PROVEKO_ERROR_CODES.ERR_ACCOUNTING_IMBALANCE,
+    );
+
+    // 6. Billing Webhook: bloqueo TOCTOU + liberación de lock si falla el downstream + validación de JSON y monto
+    let shouldFailProvision = true;
+    const billingService = new BillingSubscriptionService('whsec_solid_2026', {
+      enableServicesAndMicroservices: async () => {
+        if (shouldFailProvision) {
+          throw new Error('Downstream Core-Service temporary network error');
+        }
+        return { newSubVer: 3 };
+      },
+    });
+
+    // JSON malformado firmado válidamente -> 422 ERR_VALIDATION_FAILED
+    const badJson = '{malformed-json';
+    const badJsonSig = billingService.signWebhookPayload(badJson);
+    await expect(
+      billingService.processPaymentConfirmedWebhook(badJson, badJsonSig),
+    ).rejects.toMatchObject({
+      errorCode: PROVEKO_ERROR_CODES.ERR_VALIDATION_FAILED,
+      statusCode: 422,
+    });
+
+    // Monto pagado no coincide con la cotización -> 422 ERR_PAYMENT_AMOUNT_MISMATCH
+    const mismatchPayload = JSON.stringify({
+      webhookEventId: 'evt_mismatch_01',
+      provider: 'stripe',
+      tenantId: 'tenant-solid-01',
+      enabledServices: ['srv:crm'],
+      selectedMicroservices: ['ms:crm-directory'],
+      paidAmountUsd: '1.0000',
+    });
+    await expect(
+      billingService.processPaymentConfirmedWebhook(
+        mismatchPayload,
+        billingService.signWebhookPayload(mismatchPayload),
+      ),
+    ).rejects.toMatchObject({
+      errorCode: PROVEKO_ERROR_CODES.ERR_PAYMENT_AMOUNT_MISMATCH,
+      statusCode: 422,
+    });
+
+    // Si falla el aprovisionamiento downstream, libera el lock para que el reintento del proveedor de pagos tenga éxito
+    const validPayload = JSON.stringify({
+      webhookEventId: 'evt_retry_01',
+      provider: 'stripe',
+      tenantId: 'tenant-solid-01',
+      enabledServices: ['srv:crm'],
+      selectedMicroservices: ['ms:crm-directory'],
+      paidAmountUsd: '10.7100', // 9.0000 + 19% IVA (1.7100) = 10.7100
+    });
+    const validSig = billingService.signWebhookPayload(validPayload);
+
+    await expect(
+      billingService.processPaymentConfirmedWebhook(validPayload, validSig),
+    ).rejects.toThrowError(/Downstream Core-Service temporary network error/);
+
+    shouldFailProvision = false;
+    const recoveredWebhook = await billingService.processPaymentConfirmedWebhook(
+      validPayload,
+      validSig,
+    );
+    expect(recoveredWebhook.alreadyProcessed).toBe(false);
+    expect(recoveredWebhook.newSubVer).toBe(3);
+  });
 });
+

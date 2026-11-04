@@ -267,6 +267,8 @@ function createInMemoryControlPlaneHarness() {
     cryptoVault,
     jwtVault,
     stateCache,
+    catalogRepo,
+    dbProvisioner,
     catalogUseCases,
     onboardingUseCases,
     authUseCases,
@@ -690,4 +692,72 @@ describe('Proveko — Core-Service & Inner Ring Libraries (Audit Verification Su
 
     await app.close();
   });
+
+  it('4. Auditoría SOLID & Chaos: Transacción Compensatoria Saga en Fase 2, Bloqueo Cross-Parent en Desactivación Padre, SSRF IPv4-mapped IPv6 y Nomenclatura Unificada (ms:*/mod:*)', async () => {
+    const harness = createInMemoryControlPlaneHarness();
+
+    const reg = await harness.onboardingUseCases.registerNewTenant({
+      slug: 'hotel-central-bogota',
+      legalName: 'Hotel Central Bogotá S.A.S.',
+      taxIdNit: '901222333-4',
+      adminEmail: 'admin@hotelcentral.co',
+      adminFullName: 'Laura Gómez',
+      adminPasswordPlain: 'ClaveHotel2026!',
+      tier: 'business',
+      presetKey: 'preset:gastro-bar-restaurant',
+    });
+
+    // 1. Nomenclatura Unificada: activar Microservicio Padre `ms:hotel` y Módulo `mod:hotel-rooms`
+    await harness.catalogUseCases.activateParentMicroservice(reg.tenant.id, 'ms:hotel');
+    const modRes = await harness.catalogUseCases.activateModule(reg.tenant.id, 'mod:hotel-rooms');
+    expect(modRes.services['srv:hotel']).toContain('ms:hotel-rooms');
+
+    // 2. Bloqueo Cross-Parent: intentar apagar el Microservicio Padre `ms:crm` mientras `ms:invoicing-pos` (en `srv:invoicing`)
+    // depende de `ms:crm-directory` debe ser bloqueado con 409 ERR_DEPENDENT_MICROSERVICES_ACTIVE
+    await expect(
+      harness.catalogUseCases.deactivateParentMicroservice(reg.tenant.id, 'ms:crm'),
+    ).rejects.toMatchObject({
+      errorCode: PROVEKO_ERROR_CODES.ERR_DEPENDENT_MICROSERVICES_ACTIVE,
+      statusCode: 409,
+    });
+
+    // 3. Transacción Compensatoria de la Saga: si la Fase 2 (DDL/Migraciones) falla al activar `mod:hotel-bookings`,
+    // el módulo no debe quedar huérfano en `PROVISIONING`, sino revertirse a `DISABLED`
+    const originalProvision = harness.dbProvisioner.provisionServiceSchemaAndMigrations;
+    harness.dbProvisioner.provisionServiceSchemaAndMigrations = async () => {
+      throw new Error('Simulated PostgreSQL cell connection timeout during Umzug migration');
+    };
+
+    await expect(
+      harness.catalogUseCases.activateModule(reg.tenant.id, 'mod:hotel-bookings'),
+    ).rejects.toThrowError(/Simulated PostgreSQL cell connection timeout/);
+
+    const subsAfterFailedMigration = await harness.catalogRepo.findMicroservicesByTenant(
+      reg.tenant.id,
+    );
+    const failedBookingSub = subsAfterFailedMigration.find(
+      (s) => s.microserviceKey === 'ms:hotel-bookings',
+    );
+    expect(failedBookingSub?.status).toBe('DISABLED');
+
+    // Restaurar provisioner y verificar que el reintento ahora sí pasa a ACTIVE
+    harness.dbProvisioner.provisionServiceSchemaAndMigrations = originalProvision;
+    const retryActivation = await harness.catalogUseCases.activateModule(
+      reg.tenant.id,
+      'mod:hotel-bookings',
+    );
+    expect(retryActivation.services['srv:hotel']).toContain('ms:hotel-bookings');
+
+    // 4. Bloqueo Anti-SSRF para direcciones IPv4-mapped IPv6 (`::ffff:169.254.169.254`, `::ffff:127.0.0.1`, `::ffff:7f00:1`)
+    expect(() =>
+      CustomFieldsAndWebhookGuard.assertPublicWebhookTargetIp('::ffff:169.254.169.254'),
+    ).toThrowError(ProvekoDomainError);
+    expect(() =>
+      CustomFieldsAndWebhookGuard.assertPublicWebhookTargetIp('::ffff:127.0.0.1'),
+    ).toThrowError(ProvekoDomainError);
+    expect(() =>
+      CustomFieldsAndWebhookGuard.assertPublicWebhookTargetIp('::ffff:7f00:1'),
+    ).toThrowError(ProvekoDomainError);
+  });
 });
+

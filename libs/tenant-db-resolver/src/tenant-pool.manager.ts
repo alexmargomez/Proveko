@@ -162,20 +162,6 @@ export class TenantConnectionPoolManager {
     cellId: string,
     tier: TenantTier,
   ): Promise<ManagedTenantPool> {
-    // Si alcanzamos el tope de pools activos en el pod, expulsar el menos usado con Graceful Drain
-    if (this.lruMap.size >= this.maxActivePools) {
-      const oldestKey = this.lruMap.keys().next().value;
-      if (oldestKey) {
-        const evicted = this.lruMap.get(oldestKey);
-        this.lruMap.delete(oldestKey);
-        if (evicted) {
-          const drainPromise = evicted.initiateGracefulDrain();
-          this.drainingPools.add(drainPromise);
-          void drainPromise.finally(() => this.drainingPools.delete(drainPromise));
-        }
-      }
-    }
-
     // 1. Obtener sobre cifrado (EncryptedConnectionEnvelope)
     const envelope = await this.envelopeProvider.getEncryptedEnvelope(tenantId, cellId);
 
@@ -186,6 +172,19 @@ export class TenantConnectionPoolManager {
     const maxConn = this.computeMaxConnectionsForTier(tier);
     const rawPool = this.poolFactory(credentials, maxConn);
     const managed = new ManagedTenantPool(tenantId, cellId, rawPool);
+
+    // 4. Expulsar en bucle atómico post-await si concurrentemente se alcanzó el tope de pools activos
+    while (this.lruMap.size >= this.maxActivePools) {
+      const oldestKey = this.lruMap.keys().next().value;
+      if (!oldestKey) break;
+      const evicted = this.lruMap.get(oldestKey);
+      this.lruMap.delete(oldestKey);
+      if (evicted) {
+        const drainPromise = evicted.initiateGracefulDrain();
+        this.drainingPools.add(drainPromise);
+        void drainPromise.finally(() => this.drainingPools.delete(drainPromise));
+      }
+    }
 
     this.lruMap.set(tenantId, managed);
     return managed;

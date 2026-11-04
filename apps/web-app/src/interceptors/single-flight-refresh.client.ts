@@ -14,14 +14,48 @@ export interface TokenRefreshPort {
 }
 
 /**
+ * Puerto de almacenamiento del carrito POS (SOLID DIP + SRP)
+ * Permite persistir y reconciliar el carrito en memoria, IndexedDB o estado externo
+ * sin acoplar el interceptor HTTP a la estructura interna del carrito.
+ */
+export interface CartStoragePort {
+  getCart(): PosCartStateSnapshot | undefined;
+  setCart(cart: PosCartStateSnapshot | undefined): void;
+}
+
+export class InMemoryCartStorageAdapter implements CartStoragePort {
+  constructor(private cart?: PosCartStateSnapshot) {}
+
+  public getCart(): PosCartStateSnapshot | undefined {
+    return this.cart;
+  }
+
+  public setCart(cart: PosCartStateSnapshot | undefined): void {
+    this.cart = cart;
+  }
+}
+
+function isStaleSubVerErrorResponse(body: unknown): body is { error_code: string } {
+  if (typeof body !== 'object' || body === null) {
+    return false;
+  }
+  const candidate = body as Record<string, unknown>;
+  return (
+    typeof candidate.error_code === 'string' &&
+    candidate.error_code === PROVEKO_ERROR_CODES.ERR_SUB_VER_STALE
+  );
+}
+
+/**
  * Cliente HTTP de la Estación de Trabajo Proveko con *Single-Flight Silent Refresh* (`[P3-01]`):
  * Si 10 peticiones concurrentes reciben `401 ERR_SUB_VER_STALE` porque la empresa activó
- * un nuevo microservicio en caliente (ej. Facturación Electrónica DIAN), deduplica el refresh
+ * un nuevo módulo en caliente (ej. Facturación Electrónica DIAN), deduplica el refresh
  * en 1 sola llamada de red, reconcilia el carrito POS sin perder ningún producto y reintenta todas las peticiones.
  */
 export class ProvekoWorkstationHttpClient {
   private currentAccessToken: string;
   private currentClaims: ProvekoJwtClaims;
+  private readonly cartStorage: CartStoragePort;
   private inflightRefreshPromise: Promise<{
     newAccessToken: string;
     newClaims: ProvekoJwtClaims;
@@ -32,14 +66,25 @@ export class ProvekoWorkstationHttpClient {
     initialToken: string,
     initialClaims: ProvekoJwtClaims,
     private readonly refreshPort: TokenRefreshPort,
-    private activePosCart?: PosCartStateSnapshot,
+    cartOrStorage?: PosCartStateSnapshot | CartStoragePort,
   ) {
     this.currentAccessToken = initialToken;
     this.currentClaims = initialClaims;
+    if (
+      cartOrStorage &&
+      typeof (cartOrStorage as CartStoragePort).getCart === 'function' &&
+      typeof (cartOrStorage as CartStoragePort).setCart === 'function'
+    ) {
+      this.cartStorage = cartOrStorage as CartStoragePort;
+    } else {
+      this.cartStorage = new InMemoryCartStorageAdapter(
+        cartOrStorage as PosCartStateSnapshot | undefined,
+      );
+    }
   }
 
   public getActivePosCart(): PosCartStateSnapshot | undefined {
-    return this.activePosCart;
+    return this.cartStorage.getCart();
   }
 
   public getCurrentClaims(): ProvekoJwtClaims {
@@ -49,23 +94,24 @@ export class ProvekoWorkstationHttpClient {
   public async executeWithSilentRefresh<T>(
     requestFn: (bearerToken: string) => Promise<GatewayHttpCallResponse<T>>,
   ): Promise<GatewayHttpCallResponse<T>> {
-    const firstAttempt = await requestFn(`Bearer ${this.currentAccessToken}`);
+    const tokenUsedInAttempt = this.currentAccessToken;
+    const firstAttempt = await requestFn(`Bearer ${tokenUsedInAttempt}`);
 
-    if (
-      firstAttempt.status === 401 &&
-      typeof firstAttempt.body === 'object' &&
-      firstAttempt.body !== null &&
-      (firstAttempt.body as { error_code?: string }).error_code ===
-        PROVEKO_ERROR_CODES.ERR_SUB_VER_STALE
-    ) {
-      await this.performSingleFlightRefresh();
+    if (firstAttempt.status === 401 && isStaleSubVerErrorResponse(firstAttempt.body)) {
+      await this.performSingleFlightRefresh(tokenUsedInAttempt);
       return requestFn(`Bearer ${this.currentAccessToken}`);
     }
 
     return firstAttempt;
   }
 
-  private async performSingleFlightRefresh(): Promise<void> {
+  private async performSingleFlightRefresh(staleTokenFromCaller: string): Promise<void> {
+    // Si otra petición concurrente ya completó la rotación del token mientras esta fallaba,
+    // no disparamos una segunda llamada innecesaria al servidor de identidad.
+    if (this.currentAccessToken !== staleTokenFromCaller && !this.inflightRefreshPromise) {
+      return;
+    }
+
     if (!this.inflightRefreshPromise) {
       this.refreshCallCount += 1;
       this.inflightRefreshPromise = this.refreshPort
@@ -73,10 +119,10 @@ export class ProvekoWorkstationHttpClient {
         .then((res) => {
           this.currentAccessToken = res.newAccessToken;
           this.currentClaims = res.newClaims;
-          if (this.activePosCart) {
-            this.activePosCart = PosCartCapabilityReconciler.reconcileCartOnSubVerUpdate(
-              this.activePosCart,
-              res.newClaims,
+          const currentCart = this.cartStorage.getCart();
+          if (currentCart) {
+            this.cartStorage.setCart(
+              PosCartCapabilityReconciler.reconcileCartOnSubVerUpdate(currentCart, res.newClaims),
             );
           }
           return res;
@@ -89,3 +135,4 @@ export class ProvekoWorkstationHttpClient {
     await this.inflightRefreshPromise;
   }
 }
+

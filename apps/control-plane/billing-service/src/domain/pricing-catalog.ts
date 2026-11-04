@@ -1,7 +1,12 @@
 import {
   type IndustryPresetKey,
+  MICROSERVICE_BASE_MONTHLY_PRICE_USD,
   type MicroserviceKey,
+  type ModuleKey,
   MoneyDecimal,
+  normalizeModuleKey,
+  normalizeParentMicroserviceKey,
+  type ParentMicroserviceKey,
   PROVEKO_ERROR_CODES,
   ProvekoDomainError,
   SEED_INDUSTRY_PRESETS,
@@ -10,32 +15,13 @@ import {
 } from '@proveko/shared-kernel';
 
 /**
- * Tarifario Mensual Oficial por Microservicio (`ms:*`) en USD (NUMERIC(19, 4)).
- * Los Servicios Padres (`srv:*`) son Contenedores Gatekeepers gratuitos ($0.0000),
- * ya que por sí solos no exponen pantallas, pero deben estar activos para habilitar sus hijos.
+ * Tarifario Mensual Oficial por Módulo (`mod:*` / `ms:*`) en USD (NUMERIC(19, 4)).
+ * Re-exportado desde `@proveko/shared-kernel` como fuente única de verdad (Single Source of Truth).
+ * Los Microservicios Padres (`ms:*` / `srv:*`) son Contenedores Gatekeepers gratuitos ($0.0000),
+ * ya que por sí solos no exponen pantallas, pero deben estar activos para habilitar sus módulos hijos.
  */
-export const MICROSERVICE_MONTHLY_PRICE_USD: Readonly<Record<MicroserviceKey, string>> = {
-  'ms:crm-directory': '9.0000',
-  'ms:crm-pipelines': '14.0000',
-  'ms:crm-loyalty': '12.0000',
-  'ms:invoicing-pos': '19.0000',
-  'ms:invoicing-simple-receipt': '5.0000',
-  'ms:invoicing-electronic-dian': '29.0000',
-  'ms:invoicing-quotes': '9.0000',
-  'ms:inventory-stock': '19.0000',
-  'ms:inventory-recipes': '15.0000',
-  'ms:inventory-lots': '18.0000',
-  'ms:inventory-transfers': '12.0000',
-  'ms:gastro-tables': '15.0000',
-  'ms:gastro-kds': '19.0000',
-  'ms:gastro-split-check': '9.0000',
-  'ms:hotel-rooms': '25.0000',
-  'ms:hotel-bookings': '22.0000',
-  'ms:hotel-frontdesk': '24.0000',
-  'ms:finance-cashbook': '8.0000',
-  'ms:finance-ar-ap': '16.0000',
-  'ms:finance-accounting-puc': '35.0000',
-};
+export const MICROSERVICE_MONTHLY_PRICE_USD: Readonly<Record<MicroserviceKey, string>> =
+  MICROSERVICE_BASE_MONTHLY_PRICE_USD;
 
 export const PRESET_BUNDLE_DISCOUNT_PERCENT: Readonly<Record<IndustryPresetKey, string>> = {
   'preset:gastro-bar-restaurant': '15.00',
@@ -45,8 +31,8 @@ export const PRESET_BUNDLE_DISCOUNT_PERCENT: Readonly<Record<IndustryPresetKey, 
 };
 
 export interface ModularQuoteInput {
-  enabledServices: ReadonlyArray<ServiceKey>;
-  selectedMicroservices: ReadonlyArray<MicroserviceKey>;
+  enabledServices: ReadonlyArray<ParentMicroserviceKey | ServiceKey>;
+  selectedMicroservices: ReadonlyArray<ModuleKey | MicroserviceKey>;
   presetKey?: IndustryPresetKey;
   taxRatePercent?: string; // Por defecto '19.00' (IVA)
 }
@@ -67,16 +53,27 @@ export interface ModularQuoteBreakdown {
 }
 
 /**
+ * Puerto de Dominio para el Motor Cotizador Modular (SOLID DIP + OCP)
+ */
+export interface SubscriptionQuoteCalculatorPort {
+  calculateQuote(input: ModularQuoteInput): ModularQuoteBreakdown;
+}
+
+/**
  * Motor Cotizador Modular de Proveko:
- * 1. Verifica que cada Microservicio tenga habilitado su Servicio Padre Gatekeeper (`srv:*`).
+ * 1. Verifica que cada Módulo tenga habilitado su Microservicio Padre Gatekeeper (`ms:*` / `srv:*`).
  * 2. Verifica que todas las dependencias (`requires`) estén incluidas en la selección.
- * 3. Impide cobrar dos microservicios del mismo `mutex_group` al mismo tiempo (ej. Recibo Simple + Facturación DIAN).
+ * 3. Impide cobrar dos módulos del mismo `mutex_group` al mismo tiempo (ej. Recibo Simple + Facturación DIAN).
  * 4. Calcula con precisión `MoneyDecimal` (`decimal.js`) el descuento por Preset Comercial e impuestos.
  */
-export class ModularSubscriptionQuoteEngine {
+export class ModularSubscriptionQuoteEngine implements SubscriptionQuoteCalculatorPort {
   public calculateQuote(input: ModularQuoteInput): ModularQuoteBreakdown {
-    const enabledSrvSet = new Set<ServiceKey>(input.enabledServices);
-    const selectedMsSet = new Set<MicroserviceKey>(input.selectedMicroservices);
+    const enabledSrvSet = new Set<ServiceKey>(
+      input.enabledServices.map((s) => normalizeParentMicroserviceKey(s)),
+    );
+    const selectedMsSet = new Set<MicroserviceKey>(
+      input.selectedMicroservices.map((m) => normalizeModuleKey(m)),
+    );
     const activeMutexMap = new Map<string, MicroserviceKey>();
 
     const lineItems: ModularQuoteBreakdown['selectedMicroservices'] = [];
@@ -92,7 +89,7 @@ export class ModularSubscriptionQuoteEngine {
         );
       }
 
-      // 1. Regla Gatekeeper: El Servicio Padre debe estar habilitado
+      // 1. Regla Gatekeeper: El Microservicio Padre debe estar habilitado
       if (!enabledSrvSet.has(def.parentService)) {
         throw new ProvekoDomainError(
           PROVEKO_ERROR_CODES.ERR_PARENT_SERVICE_DISABLED,
@@ -154,12 +151,17 @@ export class ModularSubscriptionQuoteEngine {
     let appliedPreset: IndustryPresetKey | null = null;
     let discount = MoneyDecimal.zero();
 
-    if (input.presetKey) {
+    if (input.presetKey !== undefined) {
       const presetDef = SEED_INDUSTRY_PRESETS.find((p) => p.key === input.presetKey);
-      if (
-        presetDef &&
-        presetDef.microservices.every((m) => selectedMsSet.has(m))
-      ) {
+      if (!presetDef) {
+        throw new ProvekoDomainError(
+          PROVEKO_ERROR_CODES.ERR_VALIDATION_FAILED,
+          422,
+          `Unknown industry preset "${String(input.presetKey)}".`,
+          { preset_key: input.presetKey },
+        );
+      }
+      if (presetDef.microservices.every((m) => selectedMsSet.has(m))) {
         appliedPreset = input.presetKey;
         const discountRate = PRESET_BUNDLE_DISCOUNT_PERCENT[input.presetKey] ?? '0.00';
         discount = subtotal.applyTaxRatePercent(discountRate);
@@ -183,3 +185,4 @@ export class ModularSubscriptionQuoteEngine {
     };
   }
 }
+

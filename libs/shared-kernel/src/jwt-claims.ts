@@ -1,8 +1,12 @@
 import {
   type MicroserviceKey,
+  type ModuleKey,
+  type ParentMicroserviceKey,
   SEED_MICROSERVICES_CATALOG,
   type ServiceKey,
   type TenantTier,
+  normalizeModuleKey,
+  normalizeParentMicroserviceKey,
 } from './catalog.types.js';
 
 export type ActiveServicesTree = Partial<Record<ServiceKey, MicroserviceKey[]>>;
@@ -48,16 +52,19 @@ export type ResolvedCapabilityAccess =
 
 /**
  * Evaluador determinista compartido entre API Gateway, @proveko/service-guard y @proveko/ui-kit
- * Valida la Regla de Doble Llave (Servicio Padre + Microservicio Hijo o Modo Readonly Archive)
+ * Valida la Regla de Doble Llave (Microservicio Padre Contenedor + Módulo Hijo o Modo Readonly Archive)
  */
 export function resolveMicroserviceAccess(
   claims: Pick<ProvekoJwtClaims, 'services' | 'readonly_microservices'>,
-  parentService: ServiceKey,
-  microservice: MicroserviceKey,
+  parentMicroserviceInput: ServiceKey | ParentMicroserviceKey,
+  moduleInput: MicroserviceKey | ModuleKey,
 ): ResolvedCapabilityAccess {
+  const parentService = normalizeParentMicroserviceKey(parentMicroserviceInput);
+  const microservice = normalizeModuleKey(moduleInput);
+
   const activeChildren = claims.services[parentService];
   if (!activeChildren) {
-    // Incluso si estaba en readonly_microservices, si el Servicio Padre se apaga cae todo en cascada
+    // Incluso si estaba en readonly_microservices, si el Microservicio Padre se apaga cae todo en cascada
     return {
       access: 'DISABLED',
       canRead: false,
@@ -75,7 +82,7 @@ export function resolveMicroserviceAccess(
   }
 
   if (claims.readonly_microservices.includes(microservice)) {
-    // Buscar cuál microservicio activo del mismo padre lo reemplazó (supersedes)
+    // Buscar cuál módulo activo del mismo padre lo reemplazó (supersedes)
     const replacer = SEED_MICROSERVICES_CATALOG.find(
       (def) =>
         def.parentService === parentService &&
@@ -98,3 +105,5 @@ export function resolveMicroserviceAccess(
     reason: 'MICROSERVICE_DISABLED',
   };
 }
+
+export const resolveModuleAccess = resolveMicroserviceAccess;

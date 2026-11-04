@@ -2,11 +2,18 @@ import crypto from 'node:crypto';
 import {
   type ActiveServicesTree,
   type MicroserviceKey,
+  type ModuleKey,
+  normalizeModuleKey,
+  normalizeParentMicroserviceKey,
+  type ParentMicroserviceKey,
   PROVEKO_ERROR_CODES,
   ProvekoDomainError,
   type ServiceKey,
 } from '@proveko/shared-kernel';
-import { buildJwtCapabilitiesProjection } from '../../domain/entities/core-entities.js';
+import {
+  type TenantMicroserviceSubscriptionEntity,
+  buildJwtCapabilitiesProjection,
+} from '../../domain/entities/core-entities.js';
 import type {
   DatabaseCellRepositoryPort,
   SubscriptionCatalogRepositoryPort,
@@ -42,12 +49,13 @@ export class CatalogCapabilityUseCases {
   ) {}
 
   /**
-   * Habilita un Servicio Padre Gatekeeper (`srv:*`) y aprovisiona su esquema `srv_*` en la Celda
+   * Habilita un Microservicio Padre Gatekeeper (`ms:*` / `srv:*`) y aprovisiona su esquema `srv_*` en la Celda
    */
   public async activateParentService(
     tenantId: string,
-    serviceKey: ServiceKey,
+    serviceKeyInput: ParentMicroserviceKey | ServiceKey,
   ): Promise<CapabilityMutationResult> {
+    const serviceKey = normalizeParentMicroserviceKey(serviceKeyInput);
     let targetCellId = '';
     let targetDbName = '';
 
@@ -132,19 +140,32 @@ export class CatalogCapabilityUseCases {
     return result;
   }
 
+  public async activateParentMicroservice(
+    tenantId: string,
+    parentKey: ParentMicroserviceKey | ServiceKey,
+  ): Promise<CapabilityMutationResult> {
+    return this.activateParentService(tenantId, parentKey);
+  }
+
   /**
-   * Corte Maestro en Cascada (Kill-Switch de Grupo Padre `srv:*`) [P2-01]
-   * Al deshabilitar el Servicio Padre, todos los microservicios hijos quedan bloqueados en el JWT.
+   * Corte Maestro en Cascada (Kill-Switch de Grupo Padre `ms:*` / `srv:*`) [P2-01]
+   * Verifica que ningún módulo activo de otro Microservicio Padre dependa de este contenedor,
+   * y luego deshabilita el Microservicio Padre bloqueando sus hijos en el JWT.
    */
   public async deactivateParentService(
     tenantId: string,
-    serviceKey: ServiceKey,
+    serviceKeyInput: ParentMicroserviceKey | ServiceKey,
   ): Promise<CapabilityMutationResult> {
+    const serviceKey = normalizeParentMicroserviceKey(serviceKeyInput);
     const result = await this.uow.runInTransaction(async (tx) => {
       const tenant = await this.tenantRepo.findByIdForUpdate(tenantId, tx);
       if (!tenant) {
         throw new ProvekoDomainError(PROVEKO_ERROR_CODES.ERR_NOT_FOUND, 404, 'Tenant not found.');
       }
+
+      const currentParents = await this.catalogRepo.findParentServicesByTenant(tenantId, tx);
+      const currentMs = await this.catalogRepo.findMicroservicesByTenant(tenantId, tx);
+      this.graphEngine.assertCanDeactivateParentService(serviceKey, currentParents, currentMs);
 
       await this.catalogRepo.upsertParentService(
         {
@@ -192,20 +213,32 @@ export class CatalogCapabilityUseCases {
     return result;
   }
 
+  public async deactivateParentMicroservice(
+    tenantId: string,
+    parentKey: ParentMicroserviceKey | ServiceKey,
+  ): Promise<CapabilityMutationResult> {
+    return this.deactivateParentService(tenantId, parentKey);
+  }
+
   /**
-   * Saga de Aprovisionamiento en 3 Fases para Activar un Microservicio (`ms:*`) [P1-04]:
+   * Saga de Aprovisionamiento en 3 Fases para Activar un Módulo (`mod:*` / `ms:*`) [P1-04]:
    * - Fase 1: Reserva `PROVISIONING` bajo `SELECT ... FOR UPDATE` validando el Grafo.
    * - Fase 2: DDL idempotente + Migraciones `Umzug` por `adminPort` con `pg_advisory_lock`.
+   *           Si la Fase 2 falla, ejecuta una Transacción Compensatoria revirtiendo el estado anterior
+   *           para que jamás quede bloqueado en `PROVISIONING`.
    * - Fase 3: Conmutación atómica a `ACTIVE`, paso de `supersedes`/`mutex_group` a `READONLY_ARCHIVE`,
    *           incremento de `sub_ver`, registro en Outbox y actualización monotónica en Redis.
    */
   public async activateMicroservice(
     tenantId: string,
-    microserviceKey: MicroserviceKey,
+    microserviceKeyInput: ModuleKey | MicroserviceKey,
   ): Promise<CapabilityMutationResult> {
+    const microserviceKey = normalizeModuleKey(microserviceKeyInput);
     let targetCellId = '';
     let targetDbName = '';
     let parentServiceKey: ServiceKey = 'srv:invoicing';
+    let targetMutexGroup: TenantMicroserviceSubscriptionEntity['mutexGroup'] = null;
+    let previousSubSnapshot: TenantMicroserviceSubscriptionEntity | null = null;
 
     // FASE 1: Reserva Transaccional en estado PROVISIONING bajo SELECT ... FOR UPDATE
     await this.uow.runInTransaction(async (tx) => {
@@ -226,6 +259,9 @@ export class CatalogCapabilityUseCases {
       targetCellId = tenant.cellId;
       targetDbName = tenant.dbName;
       parentServiceKey = plan.targetMicroservice.parentService;
+      targetMutexGroup = plan.targetMicroservice.mutexGroup;
+      previousSubSnapshot =
+        msSubs.find((m) => m.microserviceKey === microserviceKey) ?? null;
 
       await this.catalogRepo.upsertMicroservice(
         {
@@ -234,31 +270,56 @@ export class CatalogCapabilityUseCases {
           parentServiceKey: plan.targetMicroservice.parentService,
           mutexGroup: plan.targetMicroservice.mutexGroup,
           status: 'PROVISIONING',
-          supersededByKey: null,
+          supersededByKey: previousSubSnapshot?.supersededByKey ?? null,
           activatedAtIso: new Date().toISOString(),
-          archivedAtIso: null,
+          archivedAtIso: previousSubSnapshot?.archivedAtIso ?? null,
         },
         tx,
       );
     });
 
     // FASE 2: Ejecución DDL y Migraciones Idempotentes en la Celda (`adminPort` + `pg_advisory_lock`)
-    const cell = await this.cellRepo.findById(targetCellId);
-    if (!cell) {
-      throw new ProvekoDomainError(
-        PROVEKO_ERROR_CODES.ERR_NOT_FOUND,
-        404,
-        `Database cell "${targetCellId}" not found.`,
-      );
-    }
+    let appliedMigrations: string[] = [];
+    try {
+      const cell = await this.cellRepo.findById(targetCellId);
+      if (!cell) {
+        throw new ProvekoDomainError(
+          PROVEKO_ERROR_CODES.ERR_NOT_FOUND,
+          404,
+          `Database cell "${targetCellId}" not found.`,
+        );
+      }
 
-    const { appliedMigrations } =
-      await this.dbProvisioner.provisionServiceSchemaAndMigrations(
+      const provisionRes = await this.dbProvisioner.provisionServiceSchemaAndMigrations(
         cell,
         targetDbName,
         parentServiceKey,
         microserviceKey,
       );
+      appliedMigrations = provisionRes.appliedMigrations;
+    } catch (phase2Error) {
+      // Transacción Compensatoria de la Saga: restaurar el estado previo para no dejar PROVISIONING huérfano
+      await this.uow.runInTransaction(async (tx) => {
+        if (previousSubSnapshot) {
+          await this.catalogRepo.upsertMicroservice(previousSubSnapshot, tx);
+        } else {
+          await this.catalogRepo.upsertMicroservice(
+            {
+              tenantId,
+              microserviceKey,
+              parentServiceKey,
+              mutexGroup: targetMutexGroup,
+              status: 'DISABLED',
+              supersededByKey: null,
+              activatedAtIso: new Date().toISOString(),
+              archivedAtIso: new Date().toISOString(),
+            },
+            tx,
+          );
+        }
+      });
+      throw phase2Error;
+    }
 
     // FASE 3: Conmutación Atómica a ACTIVE + aplicación de supersedes/mutex_group a READONLY_ARCHIVE + sub_ver
     const result = await this.uow.runInTransaction(async (tx) => {
@@ -279,7 +340,7 @@ export class CatalogCapabilityUseCases {
       const nowIso = new Date().toISOString();
       const supersededKeys: MicroserviceKey[] = [];
 
-      // 3.1. Pasar microservicios reemplazados por supersedes o mutex_group a READONLY_ARCHIVE
+      // 3.1. Pasar módulos reemplazados por supersedes o mutex_group a READONLY_ARCHIVE
       for (const transition of plan.toReadonlyArchive) {
         const previous = msSubs.find((m) => m.microserviceKey === transition.microserviceKey);
         if (previous) {
@@ -312,7 +373,7 @@ export class CatalogCapabilityUseCases {
         }
       }
 
-      // 3.2. Activar el nuevo microservicio
+      // 3.2. Activar el nuevo módulo
       await this.catalogRepo.upsertMicroservice(
         {
           tenantId,
@@ -365,14 +426,22 @@ export class CatalogCapabilityUseCases {
     return result;
   }
 
+  public async activateModule(
+    tenantId: string,
+    moduleKey: ModuleKey | MicroserviceKey,
+  ): Promise<CapabilityMutationResult> {
+    return this.activateMicroservice(tenantId, moduleKey);
+  }
+
   /**
-   * Desactiva un Microservicio individual validando antes las dependencias inversas (`reverse_requires`) [P2-01]
+   * Desactiva un Módulo individual validando antes las dependencias inversas (`reverse_requires`) [P2-01]
    */
   public async deactivateMicroservice(
     tenantId: string,
-    microserviceKey: MicroserviceKey,
+    microserviceKeyInput: ModuleKey | MicroserviceKey,
     targetMode: 'READONLY_ARCHIVE' | 'DISABLED' = 'READONLY_ARCHIVE',
   ): Promise<CapabilityMutationResult> {
+    const microserviceKey = normalizeModuleKey(microserviceKeyInput);
     const result = await this.uow.runInTransaction(async (tx) => {
       const tenant = await this.tenantRepo.findByIdForUpdate(tenantId, tx);
       if (!tenant) {
@@ -435,4 +504,13 @@ export class CatalogCapabilityUseCases {
     await this.stateCache.setMonotonicSubVer(tenantId, result.subVer);
     return result;
   }
+
+  public async deactivateModule(
+    tenantId: string,
+    moduleKey: ModuleKey | MicroserviceKey,
+    targetMode: 'READONLY_ARCHIVE' | 'DISABLED' = 'READONLY_ARCHIVE',
+  ): Promise<CapabilityMutationResult> {
+    return this.deactivateMicroservice(tenantId, moduleKey, targetMode);
+  }
 }
+

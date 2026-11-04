@@ -467,3 +467,110 @@ export const SEED_INDUSTRY_PRESETS: readonly IndustryPresetSeedDefinition[] = [
     demoSeedProfile: 'distributor_lots_demo',
   },
 ] as const;
+
+/**
+ * Nomenclatura Jerárquica Oficial de Proveko:
+ * 1. El Servicio (La Plataforma SaaS): Proveko.
+ * 2. Microservicios Padres Contenedores (`ParentMicroserviceKey`: `ms:crm`, `ms:invoicing`, etc.).
+ * 3. Módulos Funcionales Hijos (`ModuleKey`: `mod:crm-directory`, `mod:invoicing-pos`, etc.).
+ */
+export const PARENT_MICROSERVICE_KEYS = [
+  'ms:invoicing',
+  'ms:inventory',
+  'ms:crm',
+  'ms:gastro',
+  'ms:hotel',
+  'ms:finance',
+] as const;
+
+export type ParentMicroserviceKey = (typeof PARENT_MICROSERVICE_KEYS)[number];
+
+export const MODULE_KEYS = [
+  'mod:crm-directory',
+  'mod:crm-pipelines',
+  'mod:crm-loyalty',
+  'mod:invoicing-pos',
+  'mod:invoicing-simple-receipt',
+  'mod:invoicing-electronic-dian',
+  'mod:invoicing-quotes',
+  'mod:inventory-stock',
+  'mod:inventory-recipes',
+  'mod:inventory-lots',
+  'mod:inventory-transfers',
+  'mod:gastro-tables',
+  'mod:gastro-kds',
+  'mod:gastro-split-check',
+  'mod:hotel-rooms',
+  'mod:hotel-bookings',
+  'mod:hotel-frontdesk',
+  'mod:finance-cashbook',
+  'mod:finance-ar-ap',
+  'mod:finance-accounting-puc',
+] as const;
+
+export type ModuleKey = (typeof MODULE_KEYS)[number];
+
+/**
+ * Normaliza un identificador de Microservicio Padre (`ms:invoicing` o `srv:invoicing`) a `ServiceKey` interno
+ */
+export function normalizeParentMicroserviceKey(
+  key: ServiceKey | ParentMicroserviceKey | string,
+): ServiceKey {
+  if (key.startsWith('ms:') && !key.includes('-')) {
+    return `srv:${key.slice(3)}` as ServiceKey;
+  }
+  return key as ServiceKey;
+}
+
+/**
+ * Normaliza un identificador de Módulo Hijo (`mod:invoicing-pos` o `ms:invoicing-pos`) a `MicroserviceKey` interno
+ */
+export function normalizeModuleKey(key: MicroserviceKey | ModuleKey | string): MicroserviceKey {
+  if (key.startsWith('mod:')) {
+    return `ms:${key.slice(4)}` as MicroserviceKey;
+  }
+  return key as MicroserviceKey;
+}
+
+/**
+ * Convierte a la notación canónica de Microservicio Padre (`ms:invoicing`) y Módulo (`mod:invoicing-pos`)
+ */
+export function toParentMicroserviceNotation(key: ServiceKey | ParentMicroserviceKey): ParentMicroserviceKey {
+  if (key.startsWith('srv:')) {
+    return `ms:${key.slice(4)}` as ParentMicroserviceKey;
+  }
+  return key as ParentMicroserviceKey;
+}
+
+export function toModuleNotation(key: MicroserviceKey | ModuleKey): ModuleKey {
+  if (key.startsWith('ms:')) {
+    return `mod:${key.slice(3)}` as ModuleKey;
+  }
+  return key as ModuleKey;
+}
+
+/**
+ * Única fuente de verdad para tarifas base mensuales en USD (`NUMERIC(19, 4)`) de los 20 Módulos
+ */
+export const MICROSERVICE_BASE_MONTHLY_PRICE_USD: Readonly<Record<MicroserviceKey, string>> = {
+  'ms:crm-directory': '9.0000',
+  'ms:crm-pipelines': '14.0000',
+  'ms:crm-loyalty': '12.0000',
+  'ms:invoicing-pos': '19.0000',
+  'ms:invoicing-simple-receipt': '5.0000',
+  'ms:invoicing-electronic-dian': '29.0000',
+  'ms:invoicing-quotes': '9.0000',
+  'ms:inventory-stock': '19.0000',
+  'ms:inventory-recipes': '15.0000',
+  'ms:inventory-lots': '18.0000',
+  'ms:inventory-transfers': '12.0000',
+  'ms:gastro-tables': '15.0000',
+  'ms:gastro-kds': '19.0000',
+  'ms:gastro-split-check': '9.0000',
+  'ms:hotel-rooms': '25.0000',
+  'ms:hotel-bookings': '22.0000',
+  'ms:hotel-frontdesk': '24.0000',
+  'ms:finance-cashbook': '8.0000',
+  'ms:finance-ar-ap': '16.0000',
+  'ms:finance-accounting-puc': '35.0000',
+};

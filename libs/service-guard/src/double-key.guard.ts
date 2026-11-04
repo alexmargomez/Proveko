@@ -1,9 +1,13 @@
-import { Ed25519JwtVault } from '@proveko/crypto-vault';
 import {
   type MicroserviceKey,
+  type ModuleKey,
   PROVEKO_ERROR_CODES,
+  type ParentMicroserviceKey,
   ProvekoDomainError,
+  type ProvekoJwtClaims,
   type ServiceKey,
+  normalizeModuleKey,
+  normalizeParentMicroserviceKey,
   resolveMicroserviceAccess,
 } from '@proveko/shared-kernel';
 import { TenantContextStorage, type VerifiedTenantContext } from './tenant-context.storage.js';
@@ -14,6 +18,13 @@ export interface DoubleKeyGuardRequest {
   authorizationHeader?: string;
   method: HttpMethodType;
   headers?: Record<string, string | string[] | undefined>;
+}
+
+/**
+ * Puerto de verificación criptográfica de tokens (Cumplimiento de DIP — Dependency Inversion Principle)
+ */
+export interface TokenVerifierPort {
+  verifyAccessToken(token: string, nowEpochSeconds?: number): ProvekoJwtClaims;
 }
 
 export interface SubVerLookupPort {
@@ -29,7 +40,11 @@ export function sanitizeInboundTenantHeaders(
   const cleaned: Record<string, string | string[] | undefined> = {};
   for (const [key, value] of Object.entries(headers)) {
     const lower = key.toLowerCase();
-    if (lower.startsWith('x-proveko-') || lower.startsWith('x-tenant-') || lower.startsWith('x-cell-')) {
+    if (
+      lower.startsWith('x-proveko-') ||
+      lower.startsWith('x-tenant-') ||
+      lower.startsWith('x-cell-')
+    ) {
       continue;
     }
     cleaned[key] = value;
@@ -38,18 +53,18 @@ export function sanitizeInboundTenantHeaders(
 }
 
 /**
- * Guard Zero-Trust de Doble Llave (Servicio Padre Gatekeeper + Microservicio Hijo + Modo Readonly Archive + sub_ver)
+ * Guard Zero-Trust de Doble Llave (Microservicio Padre Gatekeeper + Módulo Hijo + Modo Readonly Archive + sub_ver)
  */
 export class DoubleKeyServiceGuard {
   constructor(
-    private readonly jwtVault: Ed25519JwtVault,
+    private readonly jwtVerifier: TokenVerifierPort,
     private readonly subVerLookup?: SubVerLookupPort,
   ) {}
 
   public async verifyAndExecute<T>(
     req: DoubleKeyGuardRequest,
-    targetParentService: ServiceKey,
-    targetMicroservice: MicroserviceKey,
+    targetParentInput: ServiceKey | ParentMicroserviceKey,
+    targetModuleInput: MicroserviceKey | ModuleKey,
     handler: (ctx: Readonly<VerifiedTenantContext>) => Promise<T>,
   ): Promise<T> {
     if (!req.authorizationHeader || !req.authorizationHeader.startsWith('Bearer ')) {
@@ -60,8 +75,11 @@ export class DoubleKeyServiceGuard {
       );
     }
 
+    const targetParentService = normalizeParentMicroserviceKey(targetParentInput);
+    const targetMicroservice = normalizeModuleKey(targetModuleInput);
+
     const rawToken = req.authorizationHeader.slice('Bearer '.length).trim();
-    const claims = this.jwtVault.verifyAccessToken(rawToken);
+    const claims = this.jwtVerifier.verifyAccessToken(rawToken);
 
     // 1. Verificar versión de suscripción (sub_ver) en Redis si el puerto está provisto (API Gateway)
     if (this.subVerLookup) {
@@ -79,7 +97,7 @@ export class DoubleKeyServiceGuard {
       }
     }
 
-    // 2. Validar Doble Llave (Servicio Padre Gatekeeper + Microservicio Hijo)
+    // 2. Validar Doble Llave (Microservicio Padre Gatekeeper + Módulo Hijo)
     const resolution = resolveMicroserviceAccess(claims, targetParentService, targetMicroservice);
 
     if (resolution.access === 'DISABLED') {
@@ -87,7 +105,7 @@ export class DoubleKeyServiceGuard {
         throw new ProvekoDomainError(
           PROVEKO_ERROR_CODES.ERR_PARENT_SERVICE_DISABLED,
           403,
-          `Parent service gatekeeper "${targetParentService}" is disabled for tenant "${claims.tenant_id}".`,
+          `Parent microservice gatekeeper "${targetParentService}" is disabled for tenant "${claims.tenant_id}".`,
           { parent_service: targetParentService, microservice: targetMicroservice },
         );
       }
@@ -95,7 +113,7 @@ export class DoubleKeyServiceGuard {
       throw new ProvekoDomainError(
         PROVEKO_ERROR_CODES.ERR_MICROSERVICE_DISABLED,
         403,
-        `Microservice "${targetMicroservice}" is not active in subscription.`,
+        `Module "${targetMicroservice}" is not active in subscription.`,
         { parent_service: targetParentService, microservice: targetMicroservice },
       );
     }
@@ -107,7 +125,7 @@ export class DoubleKeyServiceGuard {
       throw new ProvekoDomainError(
         PROVEKO_ERROR_CODES.ERR_MICROSERVICE_READONLY_ARCHIVE,
         403,
-        `Microservice "${targetMicroservice}" is in historical READONLY_ARCHIVE mode and rejects write operations (${req.method}).`,
+        `Module "${targetMicroservice}" is in historical READONLY_ARCHIVE mode and rejects write operations (${req.method}).`,
         {
           microservice: targetMicroservice,
           superseded_by: resolution.supersededBy ?? null,

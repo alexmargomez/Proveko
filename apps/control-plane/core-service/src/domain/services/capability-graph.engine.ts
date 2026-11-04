@@ -217,4 +217,52 @@ export class CapabilityGraphEngine {
       );
     }
   }
+
+  /**
+   * Verifica dependencias cruzadas entre Microservicios Padres antes de permitir apagar un contenedor (`srv:*` / `ms:*`).
+   * Si algún módulo activo de OTRO Microservicio Padre requiere este contenedor o alguno de sus módulos hijos,
+   * bloquea la desactivación con `409 ERR_DEPENDENT_MICROSERVICES_ACTIVE`.
+   */
+  public assertCanDeactivateParentService(
+    targetServiceKey: ServiceKey,
+    currentServices: readonly TenantServiceSubscriptionEntity[],
+    currentMicroservices: readonly TenantMicroserviceSubscriptionEntity[],
+  ): void {
+    const activeServiceSet = new Set<ServiceKey>(
+      currentServices.filter((s) => s.status === 'ACTIVE').map((s) => s.serviceKey),
+    );
+
+    const externalActiveModules = currentMicroservices.filter(
+      (m) =>
+        m.status === 'ACTIVE' &&
+        m.parentServiceKey !== targetServiceKey &&
+        activeServiceSet.has(m.parentServiceKey),
+    );
+
+    const externalDependents: MicroserviceKey[] = [];
+    for (const extMod of externalActiveModules) {
+      const def = this.getDefinition(extMod.microserviceKey);
+      const dependsOnParentDirectly = def.requiresServices.includes(targetServiceKey);
+      const dependsOnChildOfTarget = def.requiresMicroservices.some((reqMs) => {
+        const reqDef = this.getDefinition(reqMs);
+        return reqDef.parentService === targetServiceKey;
+      });
+      if (dependsOnParentDirectly || dependsOnChildOfTarget) {
+        externalDependents.push(extMod.microserviceKey);
+      }
+    }
+
+    if (externalDependents.length > 0) {
+      throw new ProvekoDomainError(
+        PROVEKO_ERROR_CODES.ERR_DEPENDENT_MICROSERVICES_ACTIVE,
+        409,
+        `Cannot deactivate parent service "${targetServiceKey}" because active modules in other parent services depend on it: ${externalDependents.join(', ')}`,
+        {
+          parent_service: targetServiceKey,
+          dependent_microservices: externalDependents,
+        },
+      );
+    }
+  }
 }
+

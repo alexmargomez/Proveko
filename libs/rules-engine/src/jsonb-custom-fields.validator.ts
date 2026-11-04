@@ -79,12 +79,14 @@ export class CustomFieldsAndWebhookGuard {
 
   /**
    * Valida que una IP resuelta por DNS no pertenezca a rangos privados, loopback o AWS/Cloud Metadata (Anti-SSRF)
+   * Incluye protección contra bypass mediante direcciones IPv4-mapped IPv6 (`::ffff:169.254.169.254` o `::ffff:7f00:1`).
    */
   public static assertPublicWebhookTargetIp(resolvedIp: string): void {
-    const normalized = resolvedIp.trim().toLowerCase();
+    let normalized = resolvedIp.trim().toLowerCase();
 
     if (
       normalized === '::1' ||
+      normalized === '::' ||
       normalized === '0.0.0.0' ||
       normalized.startsWith('fe80:') ||
       normalized.startsWith('fc00:') ||
@@ -95,6 +97,30 @@ export class CustomFieldsAndWebhookGuard {
         422,
         `SSRF protection blocked private/loopback IPv6 address: ${resolvedIp}`,
       );
+    }
+
+    // Extraer cola IPv4 si es una dirección IPv4-mapped IPv6 (ej. ::ffff:127.0.0.1 o ::ffff:7f00:1)
+    if (normalized.startsWith('::ffff:')) {
+      const tail = normalized.slice('::ffff:'.length);
+      if (tail.includes('.')) {
+        normalized = tail;
+      } else {
+        const hexParts = tail.split(':');
+        if (hexParts.length === 2) {
+          const high = Number.parseInt(hexParts[0] ?? '', 16);
+          const low = Number.parseInt(hexParts[1] ?? '', 16);
+          if (
+            Number.isInteger(high) &&
+            Number.isInteger(low) &&
+            high >= 0 &&
+            high <= 0xffff &&
+            low >= 0 &&
+            low <= 0xffff
+          ) {
+            normalized = `${(high >> 8) & 0xff}.${high & 0xff}.${(low >> 8) & 0xff}.${low & 0xff}`;
+          }
+        }
+      }
     }
 
     const ipv4Parts = normalized.split('.').map((p) => Number(p));

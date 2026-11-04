@@ -6,6 +6,10 @@ import {
 } from '@proveko/service-guard';
 import {
   type MicroserviceKey,
+  type ModuleKey,
+  normalizeModuleKey,
+  normalizeParentMicroserviceKey,
+  type ParentMicroserviceKey,
   PROVEKO_ERROR_CODES,
   ProvekoDomainError,
   SEED_MICROSERVICES_CATALOG,
@@ -23,25 +27,47 @@ export interface UpstreamServerEndpoint {
 }
 
 /**
- * Convierte 'ms:invoicing-electronic-dian' -> 'UPSTREAM_MS_INVOICING_ELECTRONIC_DIAN'
+ * Convierte 'ms:invoicing-electronic-dian' / 'mod:invoicing-electronic-dian' -> 'UPSTREAM_MS_INVOICING_ELECTRONIC_DIAN'
  */
-export function toMicroserviceEnvVarName(msKey: MicroserviceKey): string {
+export function toMicroserviceEnvVarName(msKeyInput: MicroserviceKey | ModuleKey): string {
+  const msKey = normalizeModuleKey(msKeyInput);
   const normalized = msKey.replace(/^ms:/, '').replace(/-/g, '_').toUpperCase();
   return `UPSTREAM_MS_${normalized}`;
 }
 
 /**
- * Convierte 'srv:invoicing' -> 'UPSTREAM_SRV_INVOICING'
+ * Convierte 'mod:invoicing-electronic-dian' -> 'UPSTREAM_MOD_INVOICING_ELECTRONIC_DIAN'
  */
-export function toParentServiceEnvVarName(srvKey: ServiceKey): string {
+export function toModuleEnvVarName(modKeyInput: ModuleKey | MicroserviceKey): string {
+  const msKey = normalizeModuleKey(modKeyInput);
+  const normalized = msKey.replace(/^ms:/, '').replace(/-/g, '_').toUpperCase();
+  return `UPSTREAM_MOD_${normalized}`;
+}
+
+/**
+ * Convierte 'srv:invoicing' / 'ms:invoicing' -> 'UPSTREAM_SRV_INVOICING'
+ */
+export function toParentServiceEnvVarName(srvKeyInput: ServiceKey | ParentMicroserviceKey): string {
+  const srvKey = normalizeParentMicroserviceKey(srvKeyInput);
   const normalized = srvKey.replace(/^srv:/, '').replace(/-/g, '_').toUpperCase();
   return `UPSTREAM_SRV_${normalized}`;
 }
 
 /**
- * Registro Dinámico de 2 Niveles para distribuir Microservicios en diferentes Servidores / VPS:
- * - Nivel 1 (Prioridad Alta): Servidor dedicado para un Microservicio específico (`UPSTREAM_MS_*`).
- * - Nivel 2 (Fallback): Servidor del `host-runner` del Servicio Padre (`UPSTREAM_SRV_*`).
+ * Convierte 'ms:invoicing' -> 'UPSTREAM_MS_INVOICING'
+ */
+export function toParentMicroserviceEnvVarName(
+  parentKeyInput: ParentMicroserviceKey | ServiceKey,
+): string {
+  const srvKey = normalizeParentMicroserviceKey(parentKeyInput);
+  const normalized = srvKey.replace(/^srv:/, '').replace(/-/g, '_').toUpperCase();
+  return `UPSTREAM_MS_${normalized}`;
+}
+
+/**
+ * Registro Dinámico de 2 Niveles para distribuir Microservicios y Módulos en diferentes Servidores / VPS:
+ * - Nivel 1 (Prioridad Alta): Servidor dedicado para un Módulo específico (`UPSTREAM_MOD_*` / `UPSTREAM_MS_*`).
+ * - Nivel 2 (Fallback): Servidor del `host-runner` del Microservicio Padre (`UPSTREAM_MS_*` / `UPSTREAM_SRV_*`).
  */
 export class UpstreamRouteRegistry {
   private readonly dedicatedMicroserviceServers = new Map<
@@ -55,22 +81,28 @@ export class UpstreamRouteRegistry {
     for (const item of SEED_MICROSERVICES_CATALOG) {
       this.catalogByMicroservice.set(item.key, item.parentService);
 
-      // Cargar desde variables de entorno si están definidas
+      // Cargar desde variables de entorno si están definidas (soporta UPSTREAM_MOD_* y UPSTREAM_MS_*)
+      const modEnvKey = toModuleEnvVarName(item.key);
       const msEnvKey = toMicroserviceEnvVarName(item.key);
-      const msUrl = env[msEnvKey];
-      if (msUrl) {
+      const dedicatedUrl = env[modEnvKey] ?? env[msEnvKey];
+      const usedEnvKey = env[modEnvKey] ? modEnvKey : msEnvKey;
+
+      if (dedicatedUrl) {
         this.dedicatedMicroserviceServers.set(item.key, {
-          serverId: `env:${msEnvKey}`,
-          baseUrl: msUrl.replace(/\/+$/, ''),
+          serverId: `env:${usedEnvKey}`,
+          baseUrl: dedicatedUrl.replace(/\/+$/, ''),
           mode: 'DEDICATED_MICROSERVICE_SERVER',
         });
       }
 
+      const parentMsEnvKey = toParentMicroserviceEnvVarName(item.parentService);
       const srvEnvKey = toParentServiceEnvVarName(item.parentService);
-      const srvUrl = env[srvEnvKey];
+      const srvUrl = env[srvEnvKey] ?? env[parentMsEnvKey];
+      const usedParentEnvKey = env[srvEnvKey] ? srvEnvKey : parentMsEnvKey;
+
       if (srvUrl && !this.parentServiceHostServers.has(item.parentService)) {
         this.parentServiceHostServers.set(item.parentService, {
-          serverId: `env:${srvEnvKey}`,
+          serverId: `env:${usedParentEnvKey}`,
           baseUrl: srvUrl.replace(/\/+$/, ''),
           mode: 'PARENT_SERVICE_HOST_RUNNER',
         });
@@ -79,13 +111,14 @@ export class UpstreamRouteRegistry {
   }
 
   /**
-   * Registra o mueve en caliente un Microservicio (`ms:*`) a un Servidor Dedicado propio.
+   * Registra o mueve en caliente un Módulo (`mod:*` / `ms:*`) a un Servidor Dedicado propio.
    */
   public registerDedicatedMicroserviceServer(
-    microserviceKey: MicroserviceKey,
+    microserviceKeyInput: MicroserviceKey | ModuleKey,
     baseUrl: string,
     standaloneNode?: StandaloneMicroserviceServer,
   ): void {
+    const microserviceKey = normalizeModuleKey(microserviceKeyInput);
     if (!this.catalogByMicroservice.has(microserviceKey)) {
       throw new Error(`Unknown microservice key: ${microserviceKey}`);
     }
@@ -100,13 +133,14 @@ export class UpstreamRouteRegistry {
   }
 
   /**
-   * Registra el Servidor del `host-runner` de un Servicio Padre (`srv:*`).
+   * Registra el Servidor del `host-runner` de un Microservicio Padre (`ms:*` / `srv:*`).
    */
   public registerParentServiceHostServer(
-    parentService: ServiceKey,
+    parentServiceInput: ServiceKey | ParentMicroserviceKey,
     baseUrl: string,
     hostRunner?: ParentServiceHostRunner,
   ): void {
+    const parentService = normalizeParentMicroserviceKey(parentServiceInput);
     this.parentServiceHostServers.set(parentService, {
       serverId: hostRunner?.hostNodeId ?? `host-runner:${parentService}@${baseUrl}`,
       baseUrl: baseUrl.replace(/\/+$/, ''),
@@ -118,48 +152,52 @@ export class UpstreamRouteRegistry {
   }
 
   /**
-   * Remueve el override dedicado de un microservicio para que regrese al servidor de su Servicio Padre.
+   * Remueve el override dedicado de un módulo para que regrese al servidor de su Microservicio Padre.
    */
-  public removeDedicatedMicroserviceServer(microserviceKey: MicroserviceKey): void {
-    this.dedicatedMicroserviceServers.delete(microserviceKey);
+  public removeDedicatedMicroserviceServer(
+    microserviceKeyInput: MicroserviceKey | ModuleKey,
+  ): void {
+    this.dedicatedMicroserviceServers.delete(normalizeModuleKey(microserviceKeyInput));
   }
 
   /**
    * Resuelve a qué servidor físico/contenedor debe enviarse la petición:
-   * 1. Valida que el Microservicio pertenezca realmente al Servicio Padre indicado en la ruta.
-   * 2. Si el Microservicio tiene un Servidor Dedicado (`DEDICATED_MICROSERVICE_SERVER`), lo elige.
-   * 3. Si no, elige el Servidor `host-runner` del Servicio Padre (`PARENT_SERVICE_HOST_RUNNER`).
+   * 1. Valida que el Módulo pertenezca realmente al Microservicio Padre indicado en la ruta.
+   * 2. Si el Módulo tiene un Servidor Dedicado (`DEDICATED_MICROSERVICE_SERVER`), lo elige.
+   * 3. Si no, elige el Servidor `host-runner` del Microservicio Padre (`PARENT_SERVICE_HOST_RUNNER`).
    */
   public resolveTargetServer(
-    parentService: ServiceKey,
-    microserviceKey: MicroserviceKey,
+    parentServiceInput: ServiceKey | ParentMicroserviceKey,
+    microserviceKeyInput: MicroserviceKey | ModuleKey,
   ): UpstreamServerEndpoint {
+    const parentService = normalizeParentMicroserviceKey(parentServiceInput);
+    const microserviceKey = normalizeModuleKey(microserviceKeyInput);
     const officialParent = this.catalogByMicroservice.get(microserviceKey);
     if (!officialParent || officialParent !== parentService) {
       throw new ProvekoDomainError(
         PROVEKO_ERROR_CODES.ERR_MICROSERVICE_DISABLED,
         400,
-        `Microservice "${microserviceKey}" does not belong to parent service "${parentService}".`,
+        `Module "${microserviceKey}" does not belong to parent microservice "${parentService}".`,
         { parent_service: parentService, microservice: microserviceKey },
       );
     }
 
-    // Nivel 1: ¿Tiene este microservicio un servidor dedicado propio?
+    // Nivel 1: ¿Tiene este módulo un servidor dedicado propio?
     const dedicated = this.dedicatedMicroserviceServers.get(microserviceKey);
     if (dedicated) {
       return dedicated;
     }
 
-    // Nivel 2: Fallback al servidor del Servicio Padre (Host-Runner)
+    // Nivel 2: Fallback al servidor del Microservicio Padre (Host-Runner)
     const parentHost = this.parentServiceHostServers.get(parentService);
     if (parentHost) {
       return parentHost;
     }
 
     throw new ProvekoDomainError(
-      PROVEKO_ERROR_CODES.ERR_MICROSERVICE_DISABLED,
+      PROVEKO_ERROR_CODES.ERR_UPSTREAM_UNAVAILABLE,
       502,
-      `No upstream server configured for microservice "${microserviceKey}" nor parent "${parentService}".`,
+      `No upstream server configured for module "${microserviceKey}" nor parent "${parentService}".`,
       { parent_service: parentService, microservice: microserviceKey },
     );
   }
@@ -202,3 +240,4 @@ export class UpstreamRouteRegistry {
     });
   }
 }
+
