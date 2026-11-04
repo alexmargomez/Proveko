@@ -1,42 +1,44 @@
 # Proveko — El Servicio SaaS Modular Multi-Tenant de Alto Rendimiento
 
-**Proveko** es **el Servicio empresarial SaaS completo**, multi-tenant y multi-sucursal construido en **100% TypeScript bajo Arquitectura Hexagonal y Principios SOLID**, diseñado específicamente para escalar ante tráfico masivo de pauta publicitaria y adaptarse a múltiples giros de negocio (Bares/Restaurantes, Comercios/Ferreterías DIAN, Hoteles/Alojamiento, Distribuidoras/Farmacias FEFO).
+**Proveko** es **el Servicio empresarial SaaS completo**, multi-tenant y multi-sucursal construido en **100% TypeScript bajo Arquitectura Hexagonal y Principios SOLID**, diseñado para escalar ante tráfico masivo y adaptarse a cualquier giro de negocio mediante una arquitectura abierta de **`N` Microservicios Contenedores** y **`M` Módulos Funcionales**.
 
 ---
 
-## 1. Jerarquía Oficial de 3 Niveles: El Servicio -> Microservicios -> Módulos
+## 1. Jerarquía Abierta de 3 Niveles: El Servicio -> `N` Microservicios -> `M` Módulos
 
-En **Proveko**, la jerarquía arquitectónica y de negocio se divide en **3 niveles claros** (soportando tanto la notación canónica `ms:*` / `mod:*` como `srv:*` / `ms:*` con compatibilidad bidireccional en tokens, Gateway y guardias):
+En **Proveko**, la jerarquía arquitectónica y de negocio se estructura en **3 niveles abiertos y extensibles** (soportando tanto la notación canónica `ms:<dominio>` / `mod:<dominio>-<modulo>` como `srv:<dominio>` / `ms:<dominio>-<modulo>`):
 
 1. **Nivel 1 — El Servicio (La Plataforma SaaS Completa): `Proveko`**
-   - Es el ecosistema completo compuesto por el API Gateway, el Plano de Control (`core-service` + `billing-service`), la aplicación web (`web-app`) y el plano de datos multi-tenant.
-2. **Nivel 2 — Los 6 Microservicios Contenedores (`ms:crm`, `ms:inventory`, `ms:invoicing`, `ms:gastro`, `ms:hotel`, `ms:finance` | alias `srv:*`):**
-   - Cada uno de los 6 bloques de dominio es un **Microservicio Padre** independiente con su propio esquema de base de datos aislado (`srv_crm` / `ms_crm`, `srv_inventory`, `srv_invoicing`, `srv_gastro`, `srv_hotel`, `srv_finance`) y su propio `host-runner`.
-   - **Regla del Microservicio Padre Gatekeeper:** Activar únicamente un Microservicio Padre (ej. `ms:inventory`) sin ningún módulo hijo habilita el contenedor pero no expone pantallas operativas. Sin embargo, es requisito obligatorio que el Microservicio Padre esté activo para poder activar o ejecutar cualquiera de sus Módulos hijos. Apagar un Microservicio Padre corta en cascada todos sus Módulos hijos.
-3. **Nivel 3 — Los 20 Módulos Funcionales (`mod:*` | alias `ms:*`):**
-   - Cada funcionalidad específica dentro de un Microservicio Padre es un **Módulo** con su propio prefijo de tablas y su propia **Arquitectura Hexagonal SOLID** (`domain.ts`, `application.ts`, `infrastructure.ts`, `index.ts`).
-   - Cada Módulo puede correr embebido dentro del `host-runner` de su Microservicio Padre o extraerse a un servidor dedicado propio sin tocar una sola línea de código.
+   - Es el sistema empresarial completo integrado por el API Gateway, el Plano de Control (`core-service` + `billing-service`), la aplicación web (`web-app`) y el plano de datos multi-tenant.
+2. **Nivel 2 — Microservicios Contenedores (`ms:<dominio>` | alias `srv:<dominio>`):**
+   - El sistema soporta **`N` Microservicios Padres ilimitados** (ej. `ms:crm`, `ms:inventory`, `ms:invoicing`, `ms:gastro`, `ms:hotel`, `ms:finance`, y cualquier nuevo vertical futuro como `ms:payroll`, `ms:ecommerce`, `ms:logistics`, `ms:medical`, `ms:<nuevo-dominio>`).
+   - Cada Microservicio Padre es un contenedor independiente con su propio esquema de base de datos aislado (`srv_<dominio>` / `ms_<dominio>`) y su propio `host-runner`.
+   - **Regla del Microservicio Padre Gatekeeper:** Activar únicamente un Microservicio Padre sin ningún módulo hijo habilita el contenedor pero no expone pantallas operativas. Es requisito obligatorio que el Microservicio Padre esté activo para activar o ejecutar cualquiera de sus Módulos hijos; apagar el Microservicio Padre corta en cascada todos sus Módulos hijos.
+3. **Nivel 3 — Módulos Funcionales (`mod:<dominio>-<modulo>` | alias `ms:<dominio>-<modulo>`):**
+   - Dentro de cada Microservicio Padre pueden conectarse **`M` Módulos Funcionales ilimitados**.
+   - Cada Módulo posee su propio prefijo de tablas y su propia **Arquitectura Hexagonal SOLID** (`domain.ts`, `application.ts`, `infrastructure.ts`, `index.ts`), pudiendo ejecutarse embebido en el `host-runner` de su Microservicio Padre o extraerse a un servidor dedicado propio sin tocar una sola línea de código.
 
 ```mermaid
 flowchart TD
     Client["Web-App (Portada Comercial + Workstation /app/*)"] --> GW["API Gateway (@proveko/api-gateway)\n/api/v1/ms:<microservicio>/mod:<modulo>/*"]
 
     subgraph ControlPlane["Plano de Control (proveko_control_db)"]
-        CoreSvc["core-service (Auth Ed25519, Tenants, Warm Sandbox Pool, Grafo)"]
+        CoreSvc["core-service (Auth Ed25519, Tenants, Warm Sandbox Pool, Grafo Dinámico)"]
         BillingSvc["billing-service (Cotizador Modular, Planes, Webhooks HMAC)"]
     end
 
-    subgraph DataPlane["Plano de Datos (6 Microservicios Padres + 20 Módulos Hijos)"]
-        SrvCrm["Microservicio CRM (ms:crm / srv:crm)\n3 Módulos: directory, pipelines, loyalty"]
-        SrvInv["Microservicio Inventario (ms:inventory / srv:inventory)\n4 Módulos: stock, recipes, lots, transfers"]
-        SrvFac["Microservicio Facturación (ms:invoicing / srv:invoicing)\n4 Módulos: pos, simple-receipt, electronic-dian, quotes"]
-        SrvGas["Microservicio Gastronomía (ms:gastro / srv:gastro)\n3 Módulos: tables, kds, split-check"]
-        SrvHot["Microservicio Hotelería (ms:hotel / srv:hotel)\n3 Módulos: rooms, bookings, frontdesk"]
-        SrvFin["Microservicio Finanzas (ms:finance / srv:finance)\n3 Módulos: cashbook, ar-ap, accounting-puc"]
+    subgraph DataPlane["Plano de Datos Extensible (N Microservicios Padres + M Módulos Hijos)"]
+        SrvCrm["Microservicio CRM (ms:crm)\nMódulos: directory, pipelines, loyalty, ..."]
+        SrvInv["Microservicio Inventario (ms:inventory)\nMódulos: stock, recipes, lots, transfers, ..."]
+        SrvFac["Microservicio Facturación (ms:invoicing)\nMódulos: pos, simple-receipt, electronic-dian, quotes, ..."]
+        SrvGas["Microservicio Gastronomía (ms:gastro)\nMódulos: tables, kds, split-check, ..."]
+        SrvHot["Microservicio Hotelería (ms:hotel)\nMódulos: rooms, bookings, frontdesk, ..."]
+        SrvFin["Microservicio Finanzas (ms:finance)\nMódulos: cashbook, ar-ap, accounting-puc, ..."]
+        SrvNew["Nuevo Microservicio N (ms:<nuevo-dominio>)\nMódulos: mod:<nuevo-dominio>-<modulo-1..M>"]
     end
 
     subgraph Cells["Celdas Físicas PostgreSQL + PgBouncer (Transaction Pooling)"]
-        CellA[("db_tenant_<id>\nEsquemas por Microservicio: srv_crm, srv_inventory,\nsrv_invoicing, srv_gastro, srv_hotel, srv_finance")]
+        CellA[("db_tenant_<id>\nEsquemas Dinámicos por Microservicio:\nsrv_crm, srv_inventory, ..., srv_<nuevo_dominio>")]
         SandboxCell[("db_sandbox_001 .. 050\n(Asignación < 30ms para tráfico de pauta)")]
     end
 
@@ -48,6 +50,7 @@ flowchart TD
     GW --> SrvGas
     GW --> SrvHot
     GW --> SrvFin
+    GW -. "Plug & Play (OCP)" .-> SrvNew
 
     SrvCrm --> CellA
     SrvInv --> CellA
@@ -55,22 +58,23 @@ flowchart TD
     SrvGas --> CellA
     SrvHot --> CellA
     SrvFin --> CellA
+    SrvNew -.-> CellA
     CoreSvc -. "DDL + Umzug Saga por admin_port" .-> CellA
     CoreSvc -. "Demo Instantánea" .-> SandboxCell
 ```
 
 ---
 
-## 2. Principios SOLID y Arquitectura Hexagonal en los 20 Módulos
+## 2. Principios SOLID y Arquitectura Hexagonal en Cada Módulo
 
-Todos los 20 módulos del ecosistema cumplen estrictamente los **5 Principios SOLID** auditados por el Tribunal de Desarrollo:
+Todos los módulos del ecosistema (tanto los del catálogo inicial como cualquier nuevo módulo que se agregue) siguen los **5 Principios SOLID**:
 
 - **`S` — Single Responsibility Principle (SRP):** Cada módulo se divide en 4 archivos con responsabilidad única:
   1. `src/domain.ts`: Entidades, Value Objects, cálculos puros con `MoneyDecimal` (`NUMERIC(19,4)`), validaciones de invariantes de negocio y definición del puerto `RepositoryPort`.
   2. `src/application.ts`: Casos de uso (`*UseCases`) que orquestan el dominio recibiendo únicamente la abstracción `RepositoryPort`.
   3. `src/infrastructure.ts`: Adaptadores concretos de persistencia (`InMemory*RepositoryAdapter` / Adaptador SQL multi-tenant aislado por `tenantId`).
   4. `src/index.ts`: Punto de composición HTTP/Plugin (`build*Plugin(repository)` y `createStandalone*Server`).
-- **`O` — Open/Closed Principle (OCP):** Nuevos módulos o adaptadores de base de datos se inyectan mediante `defineProvekoModule` / `build*Plugin(customRepo)` sin modificar el motor del Gateway ni el `ParentServiceHostRunner`.
+- **`O` — Open/Closed Principle (OCP):** El sistema está **abierto a la extensión** (agregar nuevos Microservicios Padres `ms:<dominio>` y nuevos Módulos `mod:<dominio>-<modulo>`) y **cerrado a la modificación** (sin alterar el motor del API Gateway, el `DoubleKeyServiceGuard` ni el `ParentServiceHostRunner`).
 - **`L` — Liskov Substitution Principle (LSP):** Cualquier implementación de `RepositoryPort`, `RateLimiterPort`, `TokenVerifierPort`, `WebhookInboxRepositoryPort` o `UpstreamHttpClientPort` es 100% intercambiable sin alterar las invariantes de salida ni los códigos de error `RFC 9457`.
 - **`I` — Interface Segregation Principle (ISP):** Puertos segregados por capacidad (`TokenVerifierPort`, `MonotonicSubVerReader`, `CartStoragePort`, `SubscriptionQuoteCalculatorPort`, `WebhookInboxRepositoryPort`).
 - **`D` — Dependency Inversion Principle (DIP):** Ningún caso de uso instancia adaptadores ni estado mutable en memoria directamente; todo depende de interfaces/puertos inyectados por constructor.
@@ -79,14 +83,14 @@ Todos los 20 módulos del ecosistema cumplen estrictamente los **5 Principios SO
 
 ## 3. Cómo Distribuir Microservicios y Módulos en Diferentes Servidores
 
-El repositorio permite empezar con **1 o pocos servidores** (usando el `host-runner` de cada Microservicio Padre) y **extraer cualquier Módulo individual a su propio servidor/VPS dedicado** sin cambiar ni una línea de código:
+El repositorio permite empezar con **1 o pocos servidores** (usando el `host-runner` de cada Microservicio Padre) y **extraer cualquier Módulo individual o cualquier nuevo Microservicio a su propio servidor/VPS dedicado** sin cambiar ni una línea de código:
 
 1. **Nivel 1 — Servidor Dedicado para un Módulo Específico (`UPSTREAM_MOD_<MODULO>` o `UPSTREAM_MS_<MODULO>`):**
    ```bash
    # En el API Gateway:
    UPSTREAM_MOD_INVOICING_ELECTRONIC_DIAN=http://10.10.0.30:4199
    ```
-2. **Nivel 2 — Servidor Agrupado por Microservicio Padre (`UPSTREAM_MS_<MICROSERVICIO>` / `UPSTREAM_SRV_<MICROSERVICIO>` + `ENABLED_MODULES`):**
+2. **Nivel 2 — Servidor Agrupado por Microservicio Padre (`UPSTREAM_MS_<MICROSERVICIO>` / `UPSTREAM_SRV_<MICROSERVICIO>` + `ENABLED_MICROSERVICES`):**
    ```bash
    # En el API Gateway:
    UPSTREAM_MS_INVOICING=http://10.10.0.20:4100
@@ -97,10 +101,27 @@ El repositorio permite empezar con **1 o pocos servidores** (usando el `host-run
 
 ---
 
-## 4. Mapa Completo del Monorepo y Documentación Independiente
+## 4. Cómo Agregar un Nuevo Microservicio Padre (`ms:<dominio>`) o un Nuevo Módulo (`mod:<dominio>-<modulo>`)
+
+Proveko no está limitado a un número fijo de microservicios ni módulos. Para incorporar un nuevo Microservicio Padre (ej. `ms:payroll` para Nómina Electrónica o `ms:logistics` para Flotas) o un nuevo Módulo dentro de un Microservicio existente:
+
+1. **Registrar la definición en el Catálogo del Grafo (`@proveko/shared-kernel`):**
+   - Si es un nuevo **Microservicio Padre (`ms:<dominio>`)**, declarar su clave, esquema PostgreSQL (`srv_<dominio>`) y orden de visualización.
+   - Si es un nuevo **Módulo (`mod:<dominio>-<modulo>`)**, declarar su `parentService`, `tablePrefix` (ej. `pay_`), `requiresServices`, `requiresMicroservices`, `mutexGroup` (opcional) y `supersedes` (opcional).
+2. **Crear la carpeta del Módulo con las 4 capas Hexagonales SOLID (`apps/srv-<dominio>/ms-<dominio>-<modulo>/src/`):**
+   - `domain.ts` (Entidades, validaciones con `MoneyDecimal` y `*RepositoryPort`)
+   - `application.ts` (`*UseCases`)
+   - `infrastructure.ts` (`pgSchema('srv_<dominio>')` + Adaptador de repositorio)
+   - `index.ts` (`defineProvekoModule` + `createStandalone*Server`)
+3. **Montarlo en el `host-runner` o en su propio Servidor Dedicado:**
+   - El API Gateway enruta automáticamente `/api/v1/ms:<dominio>/mod:<dominio>-<modulo>/*` hacia el `host-runner` (`UPSTREAM_MS_<DOMINIO>`) o hacia su VPS dedicado (`UPSTREAM_MOD_<DOMINIO>_<MODULO>`).
+
+---
+
+## 5. Mapa del Monorepo y Catálogo Base Inicial (Extensible a `N` Microservicios y `M` Módulos)
 
 ### Anillo 0 — Librerías Compartidas (`/libs/*`)
-- `@proveko/shared-kernel`: Catálogo maestro del grafo (`ms:*` / `mod:*` y `srv:*` / `ms:*`), `MoneyDecimal` aislado con `Decimal.clone`, claims JWT y errores `RFC 9457`.
+- `@proveko/shared-kernel`: Catálogo dinámico del grafo (`ms:*` / `mod:*` y `srv:*` / `ms:*`), `MoneyDecimal` aislado con `Decimal.clone`, claims JWT y errores `RFC 9457`.
 - `@proveko/crypto-vault`: Sobre criptográfico `KEK + DEK` (`AES-256-GCM`) y firma/verificación `Ed25519`.
 - `@proveko/service-guard`: Guard Zero-Trust de Doble Llave (`TokenVerifierPort`), `AsyncLocalStorage`, `StandaloneMicroserviceServer` y `ParentServiceHostRunner`.
 - `@proveko/tenant-db-resolver`: Esquemas explícitos `pgSchema('srv_*')` y micro-pools LRU libres de condiciones de carrera con *Graceful Drain*.
@@ -114,7 +135,9 @@ El repositorio permite empezar con **1 o pocos servidores** (usando el `host-run
 - [Billing Service (`apps/control-plane/billing-service`)](./apps/control-plane/billing-service/README.md)
 - [Web App (`apps/web-app`)](./apps/web-app/README.md)
 
-### Anillo 2 — Los 6 Microservicios Padres y sus 20 Módulos Funcionales
+### Anillo 2 — Catálogo Base Inicial de Microservicios Padres y Módulos Funcionales
+
+> **Nota de Extensibilidad:** La siguiente tabla lista los microservicios y módulos base pre-construidos en el monorepo; el catálogo admite la incorporación continua de nuevos Microservicios Padres (`ms:<dominio>`) y nuevos Módulos (`mod:<dominio>-<modulo>`).
 
 | Microservicio Padre (`ms:*` / `srv:*`) | Esquema BD | Módulo Funcional (`mod:*` / `ms:*`) | Prefijo Tablas | Documentación |
 | :--- | :--- | :--- | :---: | :--- |
@@ -138,10 +161,11 @@ El repositorio permite empezar con **1 o pocos servidores** (usando el `host-run
 | **[`ms:finance` (`srv:finance`)](./apps/srv-finance/README.md)** | `srv_finance` | `mod:finance-cashbook` | `csh_` | [Ver README](./apps/srv-finance/ms-finance-cashbook/README.md) |
 | | `srv_finance` | `mod:finance-ar-ap` | `arp_` | [Ver README](./apps/srv-finance/ms-finance-ar-ap/README.md) |
 | | `srv_finance` | `mod:finance-accounting-puc` | `puc_` | [Ver README](./apps/srv-finance/ms-finance-accounting-puc/README.md) |
+| **`ms:<nuevo-dominio>` (`srv:<nuevo-dominio>`)** | `srv_<nuevo_dominio>` | `mod:<nuevo-dominio>-<modulo>` | `<pref>_` | *Extensible mediante `defineProvekoModule` (OCP)* |
 
 ---
 
-## 5. Comandos de Desarrollo y Verificación
+## 6. Comandos de Desarrollo y Verificación
 
 ```bash
 # Levantar infraestructura base (PostgreSQL Control Plane + Celda 01 + PgBouncer + Redis + NATS)
