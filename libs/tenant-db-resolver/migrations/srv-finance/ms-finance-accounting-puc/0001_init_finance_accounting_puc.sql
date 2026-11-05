@@ -35,6 +35,10 @@ CREATE TABLE IF NOT EXISTS srv_finance.puc_journal_headers (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE srv_finance.puc_journal_headers ADD COLUMN IF NOT EXISTS voucher_type VARCHAR(32) NOT NULL DEFAULT 'CAUSACION_FACTURA';
+ALTER TABLE srv_finance.puc_journal_headers ADD COLUMN IF NOT EXISTS period_month VARCHAR(16) NOT NULL DEFAULT '2026-11';
+ALTER TABLE srv_finance.puc_journal_headers ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
 CREATE TABLE IF NOT EXISTS srv_finance.puc_journal_lines (
   journal_line_id VARCHAR(64) PRIMARY KEY,
   journal_id UUID NOT NULL REFERENCES srv_finance.puc_journal_headers(id) ON DELETE CASCADE,

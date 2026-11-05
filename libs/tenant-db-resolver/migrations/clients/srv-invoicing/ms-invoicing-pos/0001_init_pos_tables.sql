@@ -25,6 +25,10 @@ CREATE TABLE IF NOT EXISTS srv_invoicing.pos_cash_shifts (
   opened_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE srv_invoicing.pos_cash_shifts ADD COLUMN IF NOT EXISTS terminal_id VARCHAR(64) REFERENCES srv_invoicing.pos_terminals(terminal_id) ON DELETE SET NULL;
+ALTER TABLE srv_invoicing.pos_cash_shifts ADD COLUMN IF NOT EXISTS cashier_name VARCHAR(140) NOT NULL DEFAULT 'Laura Gómez — Turno Mañana';
+ALTER TABLE srv_invoicing.pos_cash_shifts ADD COLUMN IF NOT EXISTS opened_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
 CREATE TABLE IF NOT EXISTS srv_invoicing.pos_blind_cash_counts (
   blind_count_id VARCHAR(64) PRIMARY KEY,
   shift_id UUID NOT NULL REFERENCES srv_invoicing.pos_cash_shifts(id) ON DELETE CASCADE,
@@ -51,6 +55,11 @@ CREATE TABLE IF NOT EXISTS srv_invoicing.pos_sale_tickets (
   emitted_via VARCHAR(48) NOT NULL DEFAULT 'POS_ELECTRONICO',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE srv_invoicing.pos_sale_tickets ADD COLUMN IF NOT EXISTS shift_id UUID REFERENCES srv_invoicing.pos_cash_shifts(id) ON DELETE SET NULL;
+ALTER TABLE srv_invoicing.pos_sale_tickets ADD COLUMN IF NOT EXISTS ticket_number VARCHAR(48) NOT NULL DEFAULT 'POS-9001';
+ALTER TABLE srv_invoicing.pos_sale_tickets ADD COLUMN IF NOT EXISTS customer_name VARCHAR(180) NOT NULL DEFAULT 'Consumidor Final';
+ALTER TABLE srv_invoicing.pos_sale_tickets ADD COLUMN IF NOT EXISTS inc_total NUMERIC(19, 4) NOT NULL DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS srv_invoicing.pos_sale_ticket_lines (
   line_id VARCHAR(64) PRIMARY KEY,

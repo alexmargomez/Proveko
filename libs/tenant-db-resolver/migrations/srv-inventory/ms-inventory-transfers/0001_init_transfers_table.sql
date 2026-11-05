@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS srv_inventory.trf_transfers (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE srv_inventory.trf_transfers ADD COLUMN IF NOT EXISTS carrier_name VARCHAR(160) NOT NULL DEFAULT 'Transportes Rápidos del Norte S.A.S.';
+ALTER TABLE srv_inventory.trf_transfers ADD COLUMN IF NOT EXISTS manager_signature VARCHAR(160) NOT NULL DEFAULT 'Autorizado: Jorge Pardo';
+
 CREATE TABLE IF NOT EXISTS srv_inventory.trf_transfer_lines (
   transfer_line_id VARCHAR(64) PRIMARY KEY,
   transfer_id UUID NOT NULL REFERENCES srv_inventory.trf_transfers(id) ON DELETE CASCADE,

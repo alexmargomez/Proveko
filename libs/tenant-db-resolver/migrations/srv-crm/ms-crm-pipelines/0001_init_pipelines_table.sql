@@ -15,6 +15,12 @@ CREATE TABLE IF NOT EXISTS srv_crm.pip_opportunities (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE srv_crm.pip_opportunities ADD COLUMN IF NOT EXISTS contact_id UUID REFERENCES srv_crm.dir_contacts(id) ON DELETE SET NULL;
+ALTER TABLE srv_crm.pip_opportunities ADD COLUMN IF NOT EXISTS probability_pct INTEGER NOT NULL DEFAULT 60;
+ALTER TABLE srv_crm.pip_opportunities ADD COLUMN IF NOT EXISTS assigned_executive VARCHAR(120) NOT NULL DEFAULT 'Ing. Carlos Ruiz';
+ALTER TABLE srv_crm.pip_opportunities ADD COLUMN IF NOT EXISTS expected_close_date DATE NOT NULL DEFAULT (CURRENT_DATE + INTERVAL '30 days');
+ALTER TABLE srv_crm.pip_opportunities ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
 CREATE TABLE IF NOT EXISTS srv_crm.pip_activities_log (
   activity_id VARCHAR(64) PRIMARY KEY,
   opportunity_id UUID NOT NULL REFERENCES srv_crm.pip_opportunities(id) ON DELETE CASCADE,

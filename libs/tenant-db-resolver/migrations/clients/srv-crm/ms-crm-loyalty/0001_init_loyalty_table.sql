@@ -13,6 +13,10 @@ CREATE TABLE IF NOT EXISTS srv_crm.loy_wallets (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE srv_crm.loy_wallets ADD COLUMN IF NOT EXISTS member_name VARCHAR(160) NOT NULL DEFAULT 'Cliente Preferencial';
+ALTER TABLE srv_crm.loy_wallets ADD COLUMN IF NOT EXISTS cashback_balance_cop NUMERIC(19, 2) NOT NULL DEFAULT 0;
+ALTER TABLE srv_crm.loy_wallets ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
 CREATE TABLE IF NOT EXISTS srv_crm.loy_point_transactions (
   tx_id VARCHAR(64) PRIMARY KEY,
   wallet_id UUID NOT NULL REFERENCES srv_crm.loy_wallets(id) ON DELETE CASCADE,

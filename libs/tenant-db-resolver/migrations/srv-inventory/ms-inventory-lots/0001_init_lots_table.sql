@@ -15,6 +15,11 @@ CREATE TABLE IF NOT EXISTS srv_inventory.lot_batches (
   fefo_semaphore VARCHAR(24) NOT NULL DEFAULT 'VERDE_OPTIMO'
 );
 
+ALTER TABLE srv_inventory.lot_batches ADD COLUMN IF NOT EXISTS warehouse_id VARCHAR(64) NOT NULL DEFAULT 'wh-central';
+ALTER TABLE srv_inventory.lot_batches ADD COLUMN IF NOT EXISTS sanitary_registry VARCHAR(64) NOT NULL DEFAULT 'INVIMA-2026-OK';
+ALTER TABLE srv_inventory.lot_batches ADD COLUMN IF NOT EXISTS manufacturing_date VARCHAR(10) NOT NULL DEFAULT '2026-01-15';
+ALTER TABLE srv_inventory.lot_batches ADD COLUMN IF NOT EXISTS fefo_semaphore VARCHAR(24) NOT NULL DEFAULT 'VERDE_OPTIMO';
+
 INSERT INTO srv_inventory.lot_batches (id, branch_id, item_id, warehouse_id, lot_number, expiration_date, quantity_remaining, fefo_semaphore)
 VALUES
   ('22222222-2222-4222-8222-222222222301', 'br-main', 'INS-00104', 'wh-central', 'LOT-2026-901', '2027-06-15', 95, 'VERDE_OPTIMO')

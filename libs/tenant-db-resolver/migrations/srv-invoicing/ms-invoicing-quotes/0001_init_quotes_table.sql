@@ -6,14 +6,26 @@ CREATE SCHEMA IF NOT EXISTS srv_invoicing;
 CREATE TABLE IF NOT EXISTS srv_invoicing.quo_quotes (
   id UUID PRIMARY KEY,
   branch_id VARCHAR(64) NOT NULL DEFAULT 'br-main',
-  quote_number VARCHAR(32) NOT NULL,
-  contact_id VARCHAR(64) NOT NULL,
+  quote_code VARCHAR(32) NOT NULL DEFAULT 'COT-2026-041',
+  quote_number VARCHAR(32) NOT NULL DEFAULT 'COT-2026-041',
+  contact_id VARCHAR(64) NOT NULL DEFAULT '11111111-1111-4111-8111-111111111101',
   customer_name VARCHAR(180) NOT NULL DEFAULT 'Ingenios Unidos S.A.',
   manager_signature VARCHAR(160) NOT NULL DEFAULT 'Ing. Carlos Ruiz',
-  estimated_total NUMERIC(19, 4) NOT NULL,
-  valid_until VARCHAR(10) NOT NULL,
+  total_amount NUMERIC(19, 4) NOT NULL DEFAULT 3200000,
+  estimated_total NUMERIC(19, 4) NOT NULL DEFAULT 3200000,
+  valid_until_date VARCHAR(10) NOT NULL DEFAULT '2026-12-31',
+  valid_until VARCHAR(10) NOT NULL DEFAULT '2026-12-31',
   status VARCHAR(24) NOT NULL DEFAULT 'OPEN'
 );
+
+ALTER TABLE srv_invoicing.quo_quotes ADD COLUMN IF NOT EXISTS quote_code VARCHAR(32) NOT NULL DEFAULT 'COT-2026-041';
+ALTER TABLE srv_invoicing.quo_quotes ADD COLUMN IF NOT EXISTS quote_number VARCHAR(32) NOT NULL DEFAULT 'COT-2026-041';
+ALTER TABLE srv_invoicing.quo_quotes ADD COLUMN IF NOT EXISTS customer_name VARCHAR(180) NOT NULL DEFAULT 'Ingenios Unidos S.A.';
+ALTER TABLE srv_invoicing.quo_quotes ADD COLUMN IF NOT EXISTS manager_signature VARCHAR(160) NOT NULL DEFAULT 'Ing. Carlos Ruiz';
+ALTER TABLE srv_invoicing.quo_quotes ADD COLUMN IF NOT EXISTS total_amount NUMERIC(19, 4) NOT NULL DEFAULT 3200000;
+ALTER TABLE srv_invoicing.quo_quotes ADD COLUMN IF NOT EXISTS estimated_total NUMERIC(19, 4) NOT NULL DEFAULT 3200000;
+ALTER TABLE srv_invoicing.quo_quotes ADD COLUMN IF NOT EXISTS valid_until_date VARCHAR(10) NOT NULL DEFAULT '2026-12-31';
+ALTER TABLE srv_invoicing.quo_quotes ADD COLUMN IF NOT EXISTS valid_until VARCHAR(10) NOT NULL DEFAULT '2026-12-31';
 
 CREATE TABLE IF NOT EXISTS srv_invoicing.inv_price_lists_tariffs (
   tariff_id VARCHAR(64) PRIMARY KEY,
