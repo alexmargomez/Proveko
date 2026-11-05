@@ -170,12 +170,10 @@ En `@proveko/tenant-db-resolver` están implementados los **6 pilares** necesari
    - Abre y administra micro-pools bajo demanda hacia `Base A`, `Base B`, `Base C`, `Base D` con presupuesto estricto de sockets por plan, deduplicación *Single-Flight* y cierre limpio (*Graceful Drain*) al expulsar de la caché LRU.
 2. **Routing por Cliente (`RoutingEnvelopeProviderPort` + `EnvelopeCryptoVault`):**
    - Resuelve en cada petición a qué Celda física (`cellId`) y a qué base de datos (`db_tenant_<id>`) pertenece el cliente tomando su contexto firmado en `AsyncLocalStorage` y descifrando sus credenciales con `AES-256-GCM` + `AAD`.
-3. **Migraciones Múltiples Separadas en 2 Carpetas (`migrations/core` vs `migrations/clients`) + Guard Inteligente Idempotente:**
+3. **Migraciones Múltiples Separadas en 2 Carpetas (`migrations/core` vs `migrations/clients`):**
    - **`libs/tenant-db-resolver/migrations/core/`:** Archivos `.sql` exclusivos de la Base Principal (`proveko_control_db` / `coreDB`, donde vive la tabla `control_plane.tenants` con la lista maestra de clientes y sus BDs).
    - **`libs/tenant-db-resolver/migrations/clients/<microservicio>/<modulo>/`:** Archivos `.sql` numerados secuencialmente (`0001_init_*.sql`, `0002_add_*.sql`) que se aplican a `db_version_prueba` y a cada `db_tenant_<cliente>`.
-   - **Guard Inteligente Anti-Doble-Creación (`ensureIdempotentDdlSql` + `schema_migrations`):**
-     1. La tabla `srv_<microservicio>.schema_migrations` guarda el historial y `checksum_sha256` por base de datos, saltando siempre las migraciones antiguas ya aplicadas (`skippedOldMigrations`) y bloqueando con `409 ERR_MIGRATION_CHECKSUM_DRIFT` cualquier alteración de archivos históricos.
-     2. El normalizador `ensureIdempotentDdlSql` inyecta automáticamente `IF NOT EXISTS` en `CREATE SCHEMA`, `CREATE TABLE`, `CREATE INDEX` y `ADD COLUMN` para que jamás falle ni intente crear dos veces una tabla existente.
+   - **Control de Versiones por Tabla `schema_migrations` + Checksum `SHA-256`:** La tabla `srv_<microservicio>.schema_migrations` dentro de cada base de datos lleva el control exacto de qué archivos `.sql` ya fueron aplicados, saltando las migraciones antiguas (`skippedOldMigrations`), validando su `checksum_sha256` (`409 ERR_MIGRATION_CHECKSUM_DRIFT` si fueron alteradas) y ejecutando únicamente las nuevas en transacción DDL (`BEGIN ... COMMIT`) bajo `pg_advisory_lock`.
 
 ### B. Operación (`libs/tenant-db-resolver/src/tenant-db-operations.manager.ts`)
 4. **Backups por Cliente (`PerTenantBackupManager`):**

@@ -94,22 +94,6 @@ export function computeMigrationChecksumSha256(sqlContent: string): string {
   return createHash('sha256').update(normalized, 'utf8').digest('hex');
 }
 
-/**
- * Guard Inteligente de Idempotencia DDL (`ensureIdempotentDdlSql`):
- * Garantiza que nunca se intente crear dos veces la misma tabla, esquema, índice o columna
- * incluso si el autor del archivo `.sql` olvidó escribir `IF NOT EXISTS`.
- */
-export function ensureIdempotentDdlSql(rawSql: string): string {
-  return rawSql
-    .replace(/\bCREATE\s+SCHEMA\s+(?!IF\s+NOT\s+EXISTS\b)/gi, 'CREATE SCHEMA IF NOT EXISTS ')
-    .replace(/\bCREATE\s+TABLE\s+(?!IF\s+NOT\s+EXISTS\b)/gi, 'CREATE TABLE IF NOT EXISTS ')
-    .replace(
-      /\bCREATE\s+(UNIQUE\s+)?INDEX\s+(?!IF\s+NOT\s+EXISTS\b)/gi,
-      (_match, uniquePart) => `CREATE ${uniquePart ?? ''}INDEX IF NOT EXISTS `,
-    )
-    .replace(/\bADD\s+COLUMN\s+(?!IF\s+NOT\s+EXISTS\b)/gi, 'ADD COLUMN IF NOT EXISTS ');
-}
-
 const MIGRATION_FILENAME_REGEX = /^(\d{4})_[a-z0-9_]+\.sql$/;
 
 /**
@@ -142,7 +126,7 @@ export function createMigrationFileDescriptor(params: {
     filename: params.filename,
     parentService: normalizeParentMicroserviceKey(params.parentService),
     moduleKey: normalizeModuleKey(params.moduleKey),
-    sqlUp: ensureIdempotentDdlSql(params.sqlUp),
+    sqlUp: params.sqlUp,
     checksumSha256: computeMigrationChecksumSha256(params.sqlUp),
   });
 }

@@ -1073,17 +1073,14 @@ describe('Proveko — Core-Service & Inner Ring Libraries (Audit Verification Su
       'db_tenant_ferreteria_central',
     ]);
 
-    // 3. GUARD INTELIGENTE ANTI-DOBLE-CREACIÓN + MIGRACIÓN LOCALIZADA EN 1 SOLA DB:
-    //    - Incluso si el SQL nuevo viene sin `IF NOT EXISTS`, `createMigrationFileDescriptor` lo normaliza automáticamente.
+    // 3. MIGRACIÓN LOCALIZADA EN 1 SOLA DB (`runLocalizedClientMigration`):
     const desc0003 = createMigrationFileDescriptor({
       filename: '0003_add_pos_cashier_shift.sql',
       parentService: 'ms:invoicing',
       moduleKey: 'mod:invoicing-pos',
       sqlUp:
-        'CREATE TABLE "srv_invoicing"."pos_shifts" (id VARCHAR(64) PRIMARY KEY); ALTER TABLE "srv_invoicing"."pos_sales" ADD COLUMN cashier_shift_id VARCHAR(64);',
+        'ALTER TABLE "srv_invoicing"."pos_sales" ADD COLUMN IF NOT EXISTS cashier_shift_id VARCHAR(64);',
     });
-    expect(desc0003.sqlUp).toContain('CREATE TABLE IF NOT EXISTS "srv_invoicing"."pos_shifts"');
-    expect(desc0003.sqlUp).toContain('ADD COLUMN IF NOT EXISTS cashier_shift_id');
     registry.registerMigrationFile(desc0003);
 
     // Ejecutar migración LOCALIZADA únicamente en `db_tenant_ferreteria_central` (sin tocar `db_version_prueba` todavía)
