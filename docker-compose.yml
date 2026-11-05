@@ -110,6 +110,8 @@ services:
       JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
       PROVEKO_CLUSTER_SECRET: ${PROVEKO_CLUSTER_SECRET:-proveko_alpanel_cluster_hmac_secret_2026}
       ENABLED_MICROSERVICES: ${ENABLED_MICROSERVICES:-*}
+    expose:
+      - "4010"
     depends_on:
       db:
         condition: service_healthy
@@ -137,6 +139,8 @@ services:
       JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
       JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
       PROVEKO_CLUSTER_SECRET: ${PROVEKO_CLUSTER_SECRET:-proveko_alpanel_cluster_hmac_secret_2026}
+    expose:
+      - "4101"
     depends_on:
       db:
         condition: service_healthy
@@ -164,6 +168,8 @@ services:
       JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
       JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
       PROVEKO_CLUSTER_SECRET: ${PROVEKO_CLUSTER_SECRET:-proveko_alpanel_cluster_hmac_secret_2026}
+    expose:
+      - "4102"
     depends_on:
       db:
         condition: service_healthy
@@ -191,6 +197,8 @@ services:
       JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
       JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
       PROVEKO_CLUSTER_SECRET: ${PROVEKO_CLUSTER_SECRET:-proveko_alpanel_cluster_hmac_secret_2026}
+    expose:
+      - "4103"
     depends_on:
       db:
         condition: service_healthy
@@ -218,6 +226,8 @@ services:
       JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
       JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
       PROVEKO_CLUSTER_SECRET: ${PROVEKO_CLUSTER_SECRET:-proveko_alpanel_cluster_hmac_secret_2026}
+    expose:
+      - "4104"
     depends_on:
       db:
         condition: service_healthy
@@ -245,6 +255,8 @@ services:
       JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
       JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
       PROVEKO_CLUSTER_SECRET: ${PROVEKO_CLUSTER_SECRET:-proveko_alpanel_cluster_hmac_secret_2026}
+    expose:
+      - "4105"
     depends_on:
       db:
         condition: service_healthy
@@ -272,6 +284,8 @@ services:
       JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
       JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
       PROVEKO_CLUSTER_SECRET: ${PROVEKO_CLUSTER_SECRET:-proveko_alpanel_cluster_hmac_secret_2026}
+    expose:
+      - "4106"
     depends_on:
       db:
         condition: service_healthy

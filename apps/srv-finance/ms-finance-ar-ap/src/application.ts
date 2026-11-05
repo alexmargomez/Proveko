@@ -16,4 +16,14 @@ export class FinanceArApUseCases {
     const result = calculateValidatedArApPayment(tenantId, branchId, dto);
     return this.repository.savePaymentApplication(result);
   }
+
+  public async listLedgers(
+    tenantId: string,
+    branchId: string,
+  ): Promise<ArApPaymentResult[]> {
+    if (!this.repository.listByTenantAndBranch) {
+      return [];
+    }
+    return this.repository.listByTenantAndBranch(tenantId, branchId);
+  }
 }

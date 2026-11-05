@@ -34,6 +34,24 @@ export function buildFinanceArApPlugin(
             (req.body ?? {}) as ApplyArApPaymentDto,
           ),
       },
+      {
+        method: 'GET',
+        subPath: '/ledgers',
+        description: 'Listar aplicaciones de cartera CxC / CxP por sucursal',
+        handler: async (ctx) => ({
+          branchId: ctx.activeBranchId,
+          ledgers: await useCases.listLedgers(ctx.tenantId, ctx.activeBranchId),
+        }),
+      },
+      {
+        method: 'GET',
+        subPath: '/ledgers/apply-payment',
+        description: 'Listar aplicaciones de cartera CxC / CxP por sucursal (alias)',
+        handler: async (ctx) => ({
+          branchId: ctx.activeBranchId,
+          ledgers: await useCases.listLedgers(ctx.tenantId, ctx.activeBranchId),
+        }),
+      },
     ],
   });
 }

@@ -21,6 +21,13 @@ export class InMemoryGastroSplitCheckRepositoryAdapter
 {
   private readonly store = new Map<string, SplitCheckResult[]>();
 
+  public async listByTenantAndBranch(
+    tenantId: string,
+    branchId: string,
+  ): Promise<SplitCheckResult[]> {
+    return [...(this.store.get(`${tenantId}:${branchId}`) ?? [])];
+  }
+
   public async saveSplitCheck(record: SplitCheckResult): Promise<SplitCheckResult> {
     const key = `${record.tenantId}:${record.branchId}`;
     const list = this.store.get(key) ?? [];

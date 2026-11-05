@@ -1,0 +1,170 @@
+import type { ModuleUiSchemaDefinition } from '../../../domain/contracts/module-ui-schema.contract.js';
+
+export const INVENTORY_MODULE_SCHEMAS: Readonly<Record<string, ModuleUiSchemaDefinition>> = {
+  'ms:inventory-stock': {
+    microserviceKey: 'ms:inventory-stock',
+    moduleNotation: 'mod:inventory-stock',
+    parentService: 'srv:inventory',
+    title: 'Kardex Multibodega y Valorización CPP (Costo Promedio)',
+    badge: 'Prefijo SQL: inv_',
+    description:
+      'Control de existencias físicas por sucursal con recálculo exacto de Costo Promedio Ponderado en cada entrada.',
+    listEndpoint: '/api/v1/inventory/stock/items',
+    createEndpoint: '/api/v1/inventory/stock/movements',
+    createButtonLabel: 'Registrar Movimiento de Kardex',
+    responseCollectionPath: 'items',
+    kpis: [
+      { label: 'Método Valuación', value: 'CPP NIIF Exacto', badgeTone: 'emerald', subtext: 'Costo Promedio Ponderado' },
+      { label: 'Protección Stock', value: 'Anti-Negativos', badgeTone: 'blue', subtext: 'Validación transaccional' },
+      { label: 'Esquema DB', value: 'srv_inventory.inv_*', badgeTone: 'slate', subtext: 'Saldos por sucursal' },
+    ],
+    formFields: [
+      { name: 'sku', label: 'Código SKU del Artículo', type: 'text', defaultValue: 'INS-CAFE-500' },
+      { name: 'name', label: 'Nombre del Producto / Insumo', type: 'text', defaultValue: 'Café Especial Tostado 500g' },
+      {
+        name: 'movementType',
+        label: 'Tipo de Movimiento de Bodega',
+        type: 'select',
+        defaultValue: 'INBOUND_PURCHASE',
+        options: [
+          { value: 'INBOUND_PURCHASE', label: 'Entrada por Compra (INBOUND_PURCHASE)' },
+          { value: 'OUTBOUND_SALE', label: 'Salida por Venta / Consumo (OUTBOUND_SALE)' },
+        ],
+      },
+      { name: 'quantityFixed4', label: 'Cantidad a Mover', type: 'decimal', defaultValue: '50.0000' },
+      { name: 'unitCostFixed4', label: 'Costo Unitario ($)', type: 'decimal', defaultValue: '18500.0000' },
+    ],
+    columns: [
+      { key: 'sku', header: 'Código SKU', format: 'code' },
+      { key: 'name', header: 'Artículo / Existencia', format: 'text' },
+      { key: 'quantityOnHandFixed4', header: 'Saldo en Bodega', format: 'tabular-currency' },
+      { key: 'averageUnitCostFixed4', header: 'Costo Promedio (CPP)', format: 'tabular-currency' },
+      { key: 'totalValuationFixed4', header: 'Valorización Total', format: 'tabular-currency' },
+    ],
+    defaultPayload: {
+      sku: 'INS-CAFE-500',
+      name: 'Café Especial Tostado 500g',
+      movementType: 'INBOUND_PURCHASE',
+      quantityFixed4: '50.0000',
+      unitCostFixed4: '18500.0000',
+    },
+  },
+  'ms:inventory-recipes': {
+    microserviceKey: 'ms:inventory-recipes',
+    moduleNotation: 'mod:inventory-recipes',
+    parentService: 'srv:inventory',
+    title: 'Recetas Estándar (BOM), Escandallos y Costeo por Porción',
+    badge: 'Prefijo SQL: rec_',
+    description:
+      'Explosión de materiales e ingredientes con porcentaje de merma para restaurantes, panaderías y manufactura.',
+    listEndpoint: '/api/v1/inventory/recipes/bom',
+    createEndpoint: '/api/v1/inventory/recipes/bom',
+    createButtonLabel: 'Guardar Escandallo / Receta BOM',
+    responseCollectionPath: 'recipes',
+    kpis: [
+      { label: 'Control de Merma', value: 'Cálculo Incluido', badgeTone: 'emerald', subtext: 'Costo real por plato/lote' },
+      { label: 'Explosión Insumos', value: 'Multinivel BOM', badgeTone: 'blue', subtext: 'Descuento automático' },
+      { label: 'Esquema DB', value: 'srv_inventory.rec_*', badgeTone: 'slate', subtext: 'Fichas técnicas' },
+    ],
+    formFields: [
+      { name: 'OutputProductSku', label: 'SKU Producto Terminado', type: 'text', defaultValue: 'PLATO-CAPPUCCINO' },
+      { name: 'recipeName', label: 'Nombre de la Ficha Técnica', type: 'text', defaultValue: 'Cappuccino Artesanal 8oz' },
+      {
+        name: 'ingredients',
+        label: 'Ingredientes y Mermas (JSON Estructurado)',
+        type: 'json-lines',
+        defaultValue: [
+          { componentSku: 'INS-CAFE-GRANO', quantityRequiredFixed4: '0.0180', unitCostFixed4: '45000.0000', wastePercent: '5.0000' },
+          { componentSku: 'INS-LECHE-ENT', quantityRequiredFixed4: '0.1800', unitCostFixed4: '4800.0000', wastePercent: '2.0000' },
+        ],
+      },
+    ],
+    columns: [
+      { key: 'OutputProductSku', header: 'SKU Terminado', format: 'code' },
+      { key: 'recipeName', header: 'Ficha Técnica / Receta', format: 'text' },
+      { key: 'ingredientsCount', header: 'No. Insumos', format: 'code' },
+      { key: 'totalRecipeCostFixed4', header: 'Costo Estándar Total', format: 'tabular-currency' },
+    ],
+    defaultPayload: {
+      OutputProductSku: 'PLATO-CAPPUCCINO',
+      recipeName: 'Cappuccino Artesanal 8oz',
+      ingredients: [
+        { componentSku: 'INS-CAFE-GRANO', quantityRequiredFixed4: '0.0180', unitCostFixed4: '45000.0000', wastePercent: '5.0000' },
+        { componentSku: 'INS-LECHE-ENT', quantityRequiredFixed4: '0.1800', unitCostFixed4: '4800.0000', wastePercent: '2.0000' },
+      ],
+    },
+  },
+  'ms:inventory-lots': {
+    microserviceKey: 'ms:inventory-lots',
+    moduleNotation: 'mod:inventory-lots',
+    parentService: 'srv:inventory',
+    title: 'Control FEFO de Lotes, Series y Fechas de Vencimiento',
+    badge: 'Prefijo SQL: lot_',
+    description:
+      'Trazabilidad sanitaria y farmacéutica (First-Expired, First-Out) con bloqueo automático de lotes vencidos.',
+    listEndpoint: '/api/v1/inventory/lots/batches',
+    createEndpoint: '/api/v1/inventory/lots/batches',
+    createButtonLabel: 'Registrar Lote con Vencimiento',
+    responseCollectionPath: 'batches',
+    kpis: [
+      { label: 'Regla Rotación', value: 'FEFO Estricto', badgeTone: 'emerald', subtext: 'Primero en vencer, primero en salir' },
+      { label: 'Alerta Sanitaria', value: 'Bloqueo Vencidos', badgeTone: 'amber', subtext: 'Cumplimiento INVIMA / Lotes' },
+      { label: 'Esquema DB', value: 'srv_inventory.lot_*', badgeTone: 'slate', subtext: 'Trazabilidad por lote' },
+    ],
+    formFields: [
+      { name: 'sku', label: 'Código SKU del Producto', type: 'text', defaultValue: 'MED-AMOX-500' },
+      { name: 'lotCode', label: 'Código de Lote del Fabricante', type: 'text', defaultValue: 'LOTE-2026-X9' },
+      { name: 'expirationDateIso', label: 'Fecha de Vencimiento (YYYY-MM-DD)', type: 'text', defaultValue: '2027-06-30' },
+      { name: 'quantityFixed4', label: 'Unidades del Lote', type: 'decimal', defaultValue: '120.0000' },
+    ],
+    columns: [
+      { key: 'lotCode', header: 'Código Lote', format: 'code' },
+      { key: 'sku', header: 'SKU', format: 'code' },
+      { key: 'expirationDateIso', header: 'Vencimiento', format: 'code' },
+      { key: 'status', header: 'Estado FEFO', format: 'badge' },
+      { key: 'quantityFixed4', header: 'Unidades Disponibles', format: 'tabular-currency' },
+    ],
+    defaultPayload: {
+      sku: 'MED-AMOX-500',
+      lotCode: 'LOTE-2026-X9',
+      expirationDateIso: '2027-06-30',
+      quantityFixed4: '120.0000',
+    },
+  },
+  'ms:inventory-transfers': {
+    microserviceKey: 'ms:inventory-transfers',
+    moduleNotation: 'mod:inventory-transfers',
+    parentService: 'srv:inventory',
+    title: 'Traslados de Mercancía en Tránsito Entre Sucursales',
+    badge: 'Prefijo SQL: trf_',
+    description:
+      'Despacho y recepción auditada de inventario entre sedes (`br-01`, `br-02`) con validación de origen/destino.',
+    listEndpoint: '/api/v1/inventory/transfers/orders',
+    createEndpoint: '/api/v1/inventory/transfers/orders',
+    createButtonLabel: 'Despachar Orden de Traslado',
+    responseCollectionPath: 'transfers',
+    kpis: [
+      { label: 'Control Tránsito', value: 'Doble Confirmación', badgeTone: 'emerald', subtext: 'Sede Origen -> Sede Destino' },
+      { label: 'Validación Sedes', value: 'Anti-AutoTraslado', badgeTone: 'blue', subtext: 'Integridad multi-sucursal' },
+      { label: 'Esquema DB', value: 'srv_inventory.trf_*', badgeTone: 'slate', subtext: 'Guías de remisión interna' },
+    ],
+    formFields: [
+      { name: 'destinationBranchId', label: 'Sucursal de Destino', type: 'text', defaultValue: 'br-02' },
+      { name: 'sku', label: 'Código SKU a Trasladar', type: 'text', defaultValue: 'INS-CAFE-500' },
+      { name: 'quantityFixed4', label: 'Cantidad Despachada', type: 'decimal', defaultValue: '15.0000' },
+    ],
+    columns: [
+      { key: 'id', header: 'ID Guía', format: 'code' },
+      { key: 'originBranchId', header: 'Sede Origen', format: 'code' },
+      { key: 'destinationBranchId', header: 'Sede Destino', format: 'code' },
+      { key: 'sku', header: 'SKU', format: 'code' },
+      { key: 'status', header: 'Estado Tránsito', format: 'badge' },
+      { key: 'quantityFixed4', header: 'Cantidad', format: 'tabular-currency' },
+    ],
+    defaultPayload: {
+      destinationBranchId: 'br-02',
+      sku: 'INS-CAFE-500',
+      quantityFixed4: '15.0000',
+    },
+  },
+};

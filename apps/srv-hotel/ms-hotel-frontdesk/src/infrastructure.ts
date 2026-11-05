@@ -28,4 +28,11 @@ export class InMemoryHotelFrontdeskRepositoryAdapter implements HotelFrontdeskRe
     this.store.set(key, list);
     return record;
   }
+
+  public async listByTenantAndBranch(
+    tenantId: string,
+    branchId: string,
+  ): Promise<RoomFolioBalanceRecord[]> {
+    return [...(this.store.get(`${tenantId}:${branchId}`) ?? [])];
+  }
 }

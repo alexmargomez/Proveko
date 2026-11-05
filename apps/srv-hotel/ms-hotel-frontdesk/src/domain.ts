@@ -18,6 +18,7 @@ export interface RoomFolioBalanceRecord {
  */
 export interface HotelFrontdeskRepositoryPort {
   saveFolioBalance(record: RoomFolioBalanceRecord): Promise<RoomFolioBalanceRecord>;
+  listByTenantAndBranch?(tenantId: string, branchId: string): Promise<RoomFolioBalanceRecord[]>;
 }
 
 export function calculateValidatedFolioCharge(

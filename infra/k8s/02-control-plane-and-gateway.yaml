@@ -1,0 +1,195 @@
+# ==============================================================================
+# PROVEKO — Control Plane (`core-service`), Perimeter (`api-gateway`) & Frontend
+# ==============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: core-service
+  namespace: proveko
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: core-service
+  template:
+    metadata:
+      labels:
+        app: core-service
+        role: core-service
+    spec:
+      containers:
+        - name: core-service
+          image: proveko/cluster-node:latest
+          ports:
+            - containerPort: 4010
+          env:
+            - name: PROVEKO_NODE_ROLE
+              value: "core-service"
+            - name: PORT
+              value: "4010"
+          envFrom:
+            - configMapRef:
+                name: proveko-cluster-config
+            - secretRef:
+                name: proveko-cluster-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 4010
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: core-service
+  namespace: proveko
+spec:
+  selector:
+    app: core-service
+  ports:
+    - port: 4010
+      targetPort: 4010
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: proveko
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+        role: api-gateway
+    spec:
+      containers:
+        - name: api-gateway
+          image: proveko/cluster-node:latest
+          ports:
+            - containerPort: 4000
+          env:
+            - name: PROVEKO_NODE_ROLE
+              value: "api-gateway"
+            - name: PORT
+              value: "4000"
+          envFrom:
+            - configMapRef:
+                name: proveko-cluster-config
+            - secretRef:
+                name: proveko-cluster-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 4000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: proveko
+spec:
+  selector:
+    app: api-gateway
+  ports:
+    - port: 4000
+      targetPort: 4000
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api-gateway-hpa
+  namespace: proveko
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api-gateway
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: proveko
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+        role: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: proveko/cluster-node:latest
+          ports:
+            - containerPort: 5173
+          env:
+            - name: PROVEKO_NODE_ROLE
+              value: "frontend"
+            - name: PORT
+              value: "5173"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5173
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: proveko
+spec:
+  selector:
+    app: frontend
+  ports:
+    - port: 5173
+      targetPort: 5173
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: proveko-ingress
+  namespace: proveko
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 4000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 5173

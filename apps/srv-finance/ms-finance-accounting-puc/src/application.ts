@@ -16,4 +16,14 @@ export class FinanceAccountingPucUseCases {
     const voucher = validateAndBalancePucJournalVoucher(tenantId, branchId, dto);
     return this.repository.saveJournalVoucher(voucher);
   }
+
+  public async listVouchers(
+    tenantId: string,
+    branchId: string,
+  ): Promise<PucJournalVoucherResult[]> {
+    if (!this.repository.listByTenantAndBranch) {
+      return [];
+    }
+    return this.repository.listByTenantAndBranch(tenantId, branchId);
+  }
 }

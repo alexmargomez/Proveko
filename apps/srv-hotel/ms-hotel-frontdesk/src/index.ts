@@ -34,6 +34,24 @@ export function buildHotelFrontdeskPlugin(
             (req.body ?? {}) as PostFolioChargeDto,
           ),
       },
+      {
+        method: 'GET',
+        subPath: '/folios',
+        description: 'Listar saldos de folios de habitaciones por sucursal',
+        handler: async (ctx) => ({
+          branchId: ctx.activeBranchId,
+          folios: await useCases.listFolios(ctx.tenantId, ctx.activeBranchId),
+        }),
+      },
+      {
+        method: 'GET',
+        subPath: '/folios/post-charge',
+        description: 'Listar saldos de folios de habitaciones por sucursal (alias)',
+        handler: async (ctx) => ({
+          branchId: ctx.activeBranchId,
+          folios: await useCases.listFolios(ctx.tenantId, ctx.activeBranchId),
+        }),
+      },
     ],
   });
 }

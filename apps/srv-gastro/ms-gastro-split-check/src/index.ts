@@ -24,6 +24,18 @@ export function buildGastroSplitCheckPlugin(
     version: '1.0.0',
     routes: [
       {
+        method: 'GET',
+        subPath: '/checks',
+        description: 'Consultar historial de cuentas divididas por mesa y sucursal',
+        handler: async (ctx) => useCases.listSplitChecks(ctx.tenantId, ctx.activeBranchId),
+      },
+      {
+        method: 'GET',
+        subPath: '/checks/split-by-seats',
+        description: 'Consultar historial de cuentas divididas por sillas',
+        handler: async (ctx) => useCases.listSplitChecks(ctx.tenantId, ctx.activeBranchId),
+      },
+      {
         method: 'POST',
         subPath: '/checks/split-by-seats',
         description:
