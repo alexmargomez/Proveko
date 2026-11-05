@@ -170,12 +170,12 @@ En `@proveko/tenant-db-resolver` están implementados los **6 pilares** necesari
    - Abre y administra micro-pools bajo demanda hacia `Base A`, `Base B`, `Base C`, `Base D` con presupuesto estricto de sockets por plan, deduplicación *Single-Flight* y cierre limpio (*Graceful Drain*) al expulsar de la caché LRU.
 2. **Routing por Cliente (`RoutingEnvelopeProviderPort` + `EnvelopeCryptoVault`):**
    - Resuelve en cada petición a qué Celda física (`cellId`) y a qué base de datos (`db_tenant_<id>`) pertenece el cliente tomando su contexto firmado en `AsyncLocalStorage` y descifrando sus credenciales con `AES-256-GCM` + `AAD`.
-3. **Migraciones Múltiples — Flujo de Migraciones Antiguas vs. Nuevas por Archivo (`FileBasedMigrationEngine` + `MultiDatabaseMigrationOrchestrator`):**
-   - Los archivos SQL se numeran secuencialmente en `libs/tenant-db-resolver/migrations/<microservicio>/<modulo>/NNNN_descripcion.sql` (`0001_init_*.sql`, `0002_add_*.sql`).
-   - En cada base de datos (`Base A`, `Base B`, etc.), la tabla `srv_<microservicio>.schema_migrations` guarda el historial de archivos ejecutados y su `checksum_sha256`.
-   - **Migraciones Antiguas:** Se valida su `checksum_sha256` (lanzando `409 ERR_MIGRATION_CHECKSUM_DRIFT` si alguien alteró un archivo antiguo ya corrido) y **se saltan (`skippedOldMigrations`)**.
-   - **Migraciones Nuevas:** Se ejecutan en orden estricto bajo `pg_advisory_lock` y transacción `BEGIN ... COMMIT` (`appliedNewMigrations`).
-   - **Aislamiento de Fallos en Flota:** Si `Base C` falla durante una corrida masiva, `Base A`, `Base B` y `Base D` completan sus migraciones sin interrupción.
+3. **Migraciones Múltiples Separadas en 2 Carpetas (`migrations/core` vs `migrations/clients`) + Guard Inteligente Idempotente:**
+   - **`libs/tenant-db-resolver/migrations/core/`:** Archivos `.sql` exclusivos de la Base Principal (`proveko_control_db` / `coreDB`, donde vive la tabla `control_plane.tenants` con la lista maestra de clientes y sus BDs).
+   - **`libs/tenant-db-resolver/migrations/clients/<microservicio>/<modulo>/`:** Archivos `.sql` numerados secuencialmente (`0001_init_*.sql`, `0002_add_*.sql`) que se aplican a `db_version_prueba` y a cada `db_tenant_<cliente>`.
+   - **Guard Inteligente Anti-Doble-Creación (`ensureIdempotentDdlSql` + `schema_migrations`):**
+     1. La tabla `srv_<microservicio>.schema_migrations` guarda el historial y `checksum_sha256` por base de datos, saltando siempre las migraciones antiguas ya aplicadas (`skippedOldMigrations`) y bloqueando con `409 ERR_MIGRATION_CHECKSUM_DRIFT` cualquier alteración de archivos históricos.
+     2. El normalizador `ensureIdempotentDdlSql` inyecta automáticamente `IF NOT EXISTS` en `CREATE SCHEMA`, `CREATE TABLE`, `CREATE INDEX` y `ADD COLUMN` para que jamás falle ni intente crear dos veces una tabla existente.
 
 ### B. Operación (`libs/tenant-db-resolver/src/tenant-db-operations.manager.ts`)
 4. **Backups por Cliente (`PerTenantBackupManager`):**
@@ -208,15 +208,28 @@ El repositorio incluye en su raíz `docker-compose.yml`, `Dockerfile` y `.env.ex
 
 ---
 
-## 8. Comandos de Desarrollo y Verificación
+## 8. Comandos de Migraciones (`core` vs `clients`), Desarrollo y Verificación
 
 ```bash
-# Levantar todos los contenedores independientes de microservicios (estándar ALpanel)
+# 1. Generar un nuevo archivo de migración para la Base Principal (migrations/core/NNNN_nombre.sql)
+npm run db:make:core -- add_billing_audit_log
+
+# 2. Generar un nuevo archivo de migración para las Bases de Clientes (migrations/clients/<srv>/<ms>/NNNN_nombre.sql)
+npm run db:make:client -- ms:invoicing mod:invoicing-pos add_pos_cashier_shift
+
+# 3. Ejecutar migraciones únicamente sobre la Base Principal (proveko_control_db / coreDB)
+npm run db:migrate:core
+
+# 4. Ejecutar migraciones MASIVAS sobre todas las BDs de clientes registradas en coreDB
+npm run db:migrate:clients
+
+# 5. Ejecutar migración LOCALIZADA en 1 sola BD específica (opcionalmente filtrando por 1 módulo)
+npm run db:migrate:client -- --db=db_version_prueba --module=mod:invoicing-pos
+
+# 6. Levantar todos los contenedores independientes de microservicios (estándar ALpanel)
 docker compose up -d --build
 
-# Verificación estricta de tipos TypeScript en todo el monorepo
+# 7. Verificación estricta de tipos TypeScript y suite completa de pruebas (Vitest)
 npm run typecheck
-
-# Ejecutar suite completa de pruebas de auditoría SOLID, Hexagonal, Migraciones, Operación Multi-BD y Cluster HTTP (Vitest)
 npm test
 ```

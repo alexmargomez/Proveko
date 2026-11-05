@@ -206,6 +206,133 @@ export class SystemStartupBootstrapper {
     };
   }
 
+  /**
+   * Comando 1: Ejecuta únicamente las migraciones de `migrations/core/` sobre la Base Principal (`proveko_control_db` / `coreDB`).
+   */
+  public async runCoreMigrations(coreMigrationsDir: string): Promise<{
+    coreDbName: string;
+    skippedOldMigrations: string[];
+    appliedNewMigrations: string[];
+  }> {
+    const res = await this.migrateCoreControlDatabase(coreMigrationsDir);
+    return {
+      coreDbName: this.coreDbName,
+      skippedOldMigrations: res.skippedOldMigrations,
+      appliedNewMigrations: res.appliedNewMigrations,
+    };
+  }
+
+  /**
+   * Comando 2: Ejecuta migraciones MASIVAS (`migrations/clients/`) sobre todas las BDs activas registradas en `proveko_control_db`.
+   */
+  public async runMassiveClientsMigrations(): Promise<MultiDatabaseFleetMigrationReport> {
+    const activeTargets: TenantMigrationTarget[] = Array.from(this.coreDbRegistry.values())
+      .filter((r) => r.status === 'ACTIVE')
+      .map((r) => ({
+        tenantId: r.tenantId,
+        cellId: r.cellId,
+        dbName: r.dbName,
+        activeServices: r.activeServices,
+      }));
+
+    return this.fleetOrchestrator.migrateTenantDatabaseFleet(activeTargets);
+  }
+
+  /**
+   * Comando 3: Ejecuta una migración LOCALIZADA en 1 sola base de datos de cliente (`dbName` o `tenantId`),
+   * permitiendo opcionalmente filtrar por un único módulo (`onlyModuleKey`), sin tocar ninguna otra base de datos.
+   */
+  public async runLocalizedClientMigration(params: {
+    dbName?: string;
+    tenantId?: string;
+    onlyModuleKey?: MicroserviceKey | ModuleKey;
+  }): Promise<{
+    targetDbName: string;
+    tenantId: string;
+    skippedOldMigrations: string[];
+    appliedNewMigrations: string[];
+  }> {
+    const record = Array.from(this.coreDbRegistry.values()).find(
+      (r) =>
+        (params.dbName && r.dbName === params.dbName) ||
+        (params.tenantId && r.tenantId === params.tenantId),
+    );
+
+    if (!record) {
+      throw new Error(
+        `Target client database not found in coreDB "${this.coreDbName}" for dbName="${params.dbName ?? ''}" / tenantId="${params.tenantId ?? ''}".`,
+      );
+    }
+
+    let scopedServices: Partial<Record<ServiceKey, MicroserviceKey[]>> = record.activeServices;
+    if (params.onlyModuleKey) {
+      const normalizedMod = normalizeModuleKey(params.onlyModuleKey);
+      const filtered: Partial<Record<ServiceKey, MicroserviceKey[]>> = {};
+      for (const [srvKey, modules] of Object.entries(record.activeServices) as Array<
+        [ServiceKey, MicroserviceKey[] | undefined]
+      >) {
+        if (modules?.includes(normalizedMod)) {
+          filtered[srvKey] = [normalizedMod];
+        }
+      }
+      scopedServices = filtered;
+    }
+
+    const report = await this.fleetOrchestrator.migrateTenantDatabaseFleet([
+      {
+        tenantId: record.tenantId,
+        cellId: record.cellId,
+        dbName: record.dbName,
+        activeServices: scopedServices,
+      },
+    ]);
+    const item = report.resultsByDatabase[record.dbName]!;
+    if (item.status === 'FAILED') {
+      throw new Error(item.errorDetail ?? `Localized migration failed on "${record.dbName}".`);
+    }
+
+    return {
+      targetDbName: record.dbName,
+      tenantId: record.tenantId,
+      skippedOldMigrations: item.skippedOldMigrations,
+      appliedNewMigrations: item.appliedNewMigrations,
+    };
+  }
+
+  /**
+   * Calcula el siguiente consecutivo (`0001`, `0002`, `0003`...) dentro de `migrations/core` o `migrations/clients/<srv>/<ms>`.
+   */
+  public static computeNextMigrationFilename(
+    targetDir: string,
+    descriptionSlug: string,
+  ): { nextVersion: string; filename: string } {
+    const cleanSlug = descriptionSlug
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+    if (!cleanSlug) {
+      throw new Error('Migration description slug cannot be empty.');
+    }
+
+    let maxNum = 0;
+    if (existsSync(targetDir)) {
+      for (const file of readdirSync(targetDir)) {
+        const m = /^(\d{4})_/.exec(file);
+        if (m && m[1]) {
+          const n = parseInt(m[1], 10);
+          if (n > maxNum) maxNum = n;
+        }
+      }
+    }
+
+    const nextVersion = String(maxNum + 1).padStart(4, '0');
+    return {
+      nextVersion,
+      filename: `${nextVersion}_${cleanSlug}.sql`,
+    };
+  }
+
   private async migrateCoreControlDatabase(controlPlaneMigrationsDir: string): Promise<{
     skippedOldMigrations: string[];
     appliedNewMigrations: string[];

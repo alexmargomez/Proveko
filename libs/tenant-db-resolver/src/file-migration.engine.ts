@@ -94,6 +94,22 @@ export function computeMigrationChecksumSha256(sqlContent: string): string {
   return createHash('sha256').update(normalized, 'utf8').digest('hex');
 }
 
+/**
+ * Guard Inteligente de Idempotencia DDL (`ensureIdempotentDdlSql`):
+ * Garantiza que nunca se intente crear dos veces la misma tabla, esquema, índice o columna
+ * incluso si el autor del archivo `.sql` olvidó escribir `IF NOT EXISTS`.
+ */
+export function ensureIdempotentDdlSql(rawSql: string): string {
+  return rawSql
+    .replace(/\bCREATE\s+SCHEMA\s+(?!IF\s+NOT\s+EXISTS\b)/gi, 'CREATE SCHEMA IF NOT EXISTS ')
+    .replace(/\bCREATE\s+TABLE\s+(?!IF\s+NOT\s+EXISTS\b)/gi, 'CREATE TABLE IF NOT EXISTS ')
+    .replace(
+      /\bCREATE\s+(UNIQUE\s+)?INDEX\s+(?!IF\s+NOT\s+EXISTS\b)/gi,
+      (_match, uniquePart) => `CREATE ${uniquePart ?? ''}INDEX IF NOT EXISTS `,
+    )
+    .replace(/\bADD\s+COLUMN\s+(?!IF\s+NOT\s+EXISTS\b)/gi, 'ADD COLUMN IF NOT EXISTS ');
+}
+
 const MIGRATION_FILENAME_REGEX = /^(\d{4})_[a-z0-9_]+\.sql$/;
 
 /**
@@ -126,7 +142,7 @@ export function createMigrationFileDescriptor(params: {
     filename: params.filename,
     parentService: normalizeParentMicroserviceKey(params.parentService),
     moduleKey: normalizeModuleKey(params.moduleKey),
-    sqlUp: params.sqlUp,
+    sqlUp: ensureIdempotentDdlSql(params.sqlUp),
     checksumSha256: computeMigrationChecksumSha256(params.sqlUp),
   });
 }
@@ -177,12 +193,19 @@ export class FileBasedMigrationRegistry {
     return this.getMigrationsForModule(moduleKeyInput);
   }
 
+  /**
+   * Carga las migraciones de clientes desde `migrations/clients/<srv-*>/<ms-*>`
+   * (con fallback automático a `migrationsRootDir/<srv-*>/<ms-*>`).
+   */
   public loadAllCatalogMigrationsFromRoot(migrationsRootDir: string): number {
+    const clientsSubdir = join(migrationsRootDir, 'clients');
+    const baseClientMigrationsDir = existsSync(clientsSubdir) ? clientsSubdir : migrationsRootDir;
+
     let loadedFilesCount = 0;
     for (const def of SEED_MICROSERVICES_CATALOG) {
       const srvFolder = def.parentService.replace(':', '-'); // ej. srv-invoicing
       const msFolder = def.key.replace(':', '-'); // ej. ms-invoicing-pos
-      const moduleDir = join(migrationsRootDir, srvFolder, msFolder);
+      const moduleDir = join(baseClientMigrationsDir, srvFolder, msFolder);
       const loaded = this.loadModuleMigrationsFromDirectory(
         moduleDir,
         def.parentService,

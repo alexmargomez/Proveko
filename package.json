@@ -13,7 +13,12 @@
     "build": "tsc -b tsconfig.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "db:make:core": "npx esbuild libs/tenant-db-resolver/src/migrations.cli.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/proveko-migrations-cli.mjs && node node_modules/.cache/proveko-migrations-cli.mjs make:core",
+    "db:make:client": "npx esbuild libs/tenant-db-resolver/src/migrations.cli.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/proveko-migrations-cli.mjs && node node_modules/.cache/proveko-migrations-cli.mjs make:client",
+    "db:migrate:core": "npx esbuild libs/tenant-db-resolver/src/migrations.cli.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/proveko-migrations-cli.mjs && node node_modules/.cache/proveko-migrations-cli.mjs migrate:core",
+    "db:migrate:clients": "npx esbuild libs/tenant-db-resolver/src/migrations.cli.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/proveko-migrations-cli.mjs && node node_modules/.cache/proveko-migrations-cli.mjs migrate:clients",
+    "db:migrate:client": "npx esbuild libs/tenant-db-resolver/src/migrations.cli.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/proveko-migrations-cli.mjs && node node_modules/.cache/proveko-migrations-cli.mjs migrate:client"
   },
   "dependencies": {
     "decimal.js": "^10.4.3",

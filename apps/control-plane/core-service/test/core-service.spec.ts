@@ -999,12 +999,25 @@ describe('Proveko — Core-Service & Inner Ring Libraries (Audit Verification Su
     ]);
   });
 
-  it('6. Ciclo de Vida Inicial y Dinámico de BDs: Arranque con proveko_control_db (coreDB) + db_version_prueba, Creación Dinámica al Registrar Cliente Nuevo y Actualización desde la Lista de coreDB', async () => {
+  it('6. Ciclo de Vida Inicial y Dinámico de BDs: Carpetas migrations/core y migrations/clients, Guard Idempotente DDL, Migración Localizada en 1 BD y Migración Masiva desde coreDB', async () => {
     const migrationsRootDir = join(
       process.cwd(),
       'libs/tenant-db-resolver/migrations',
     );
-    const controlPlaneMigrationsDir = join(migrationsRootDir, 'control-plane');
+    const coreMigrationsDir = join(migrationsRootDir, 'core');
+
+    // Verificar numeración automática de siguientes migraciones en `migrations/core` y `migrations/clients`
+    const nextCore = SystemStartupBootstrapper.computeNextMigrationFilename(
+      coreMigrationsDir,
+      'add_billing_audit_log',
+    );
+    expect(nextCore.filename).toBe('0002_add_billing_audit_log.sql');
+
+    const nextClientPos = SystemStartupBootstrapper.computeNextMigrationFilename(
+      join(migrationsRootDir, 'clients/srv-invoicing/ms-invoicing-pos'),
+      'add_pos_cashier_shift',
+    );
+    expect(nextClientPos.filename).toBe('0003_add_pos_cashier_shift.sql');
 
     const registry = new FileBasedMigrationRegistry();
     registry.loadAllCatalogMigrationsFromRoot(migrationsRootDir);
@@ -1024,9 +1037,9 @@ describe('Proveko — Core-Service & Inner Ring Libraries (Audit Verification Su
     );
 
     // 1. ARRANQUE INICIAL (Día 0, sin clientes pagados aún):
-    //    - Se migra la Base Principal `proveko_control_db` (coreDB, donde vive la lista de clientes/BDs).
-    //    - Se crea y migra únicamente `db_version_prueba`.
-    const bootDay0 = await bootstrapper.bootstrapOnSystemStartup(controlPlaneMigrationsDir);
+    //    - Se migra la Base Principal `proveko_control_db` (coreDB, desde `migrations/core`).
+    //    - Se crea y migra únicamente `db_version_prueba` (desde `migrations/clients`).
+    const bootDay0 = await bootstrapper.bootstrapOnSystemStartup(coreMigrationsDir);
     expect(bootDay0.coreDbName).toBe('proveko_control_db');
     expect(bootDay0.coreDbAppliedNewMigrations).toEqual([
       '0001_init_control_plane_core_db.sql',
@@ -1060,33 +1073,40 @@ describe('Proveko — Core-Service & Inner Ring Libraries (Audit Verification Su
       'db_tenant_ferreteria_central',
     ]);
 
-    // 3. SIGUIENTE DESPLIEGUE (cuando sale una migración nueva `0003_add_pos_cashier_shift.sql`):
-    //    - El sistema lee de `proveko_control_db` la lista actual (`db_version_prueba` + `db_tenant_ferreteria_central`),
-    //      salta todas las migraciones antiguas y corre solo la nueva `0003` en ambas bases de datos.
-    registry.registerMigrationFile(
-      createMigrationFileDescriptor({
-        filename: '0003_add_pos_cashier_shift.sql',
-        parentService: 'ms:invoicing',
-        moduleKey: 'mod:invoicing-pos',
-        sqlUp:
-          'ALTER TABLE "srv_invoicing"."pos_sales" ADD COLUMN IF NOT EXISTS cashier_shift_id VARCHAR(64);',
-      }),
-    );
+    // 3. GUARD INTELIGENTE ANTI-DOBLE-CREACIÓN + MIGRACIÓN LOCALIZADA EN 1 SOLA DB:
+    //    - Incluso si el SQL nuevo viene sin `IF NOT EXISTS`, `createMigrationFileDescriptor` lo normaliza automáticamente.
+    const desc0003 = createMigrationFileDescriptor({
+      filename: '0003_add_pos_cashier_shift.sql',
+      parentService: 'ms:invoicing',
+      moduleKey: 'mod:invoicing-pos',
+      sqlUp:
+        'CREATE TABLE "srv_invoicing"."pos_shifts" (id VARCHAR(64) PRIMARY KEY); ALTER TABLE "srv_invoicing"."pos_sales" ADD COLUMN cashier_shift_id VARCHAR(64);',
+    });
+    expect(desc0003.sqlUp).toContain('CREATE TABLE IF NOT EXISTS "srv_invoicing"."pos_shifts"');
+    expect(desc0003.sqlUp).toContain('ADD COLUMN IF NOT EXISTS cashier_shift_id');
+    registry.registerMigrationFile(desc0003);
 
-    const bootAfterUpdate = await bootstrapper.bootstrapOnSystemStartup(controlPlaneMigrationsDir);
-    expect(bootAfterUpdate.coreDbSkippedOldMigrations).toEqual([
-      '0001_init_control_plane_core_db.sql',
-    ]);
-    expect(bootAfterUpdate.coreDbAppliedNewMigrations).toEqual([]);
-    expect(bootAfterUpdate.trialDbCreatedOnStartup).toBe(false);
-    expect(bootAfterUpdate.tenantFleetMigrationReport.totalDatabasesTargeted).toBe(2);
+    // Ejecutar migración LOCALIZADA únicamente en `db_tenant_ferreteria_central` (sin tocar `db_version_prueba` todavía)
+    const localizedRes = await bootstrapper.runLocalizedClientMigration({
+      dbName: 'db_tenant_ferreteria_central',
+      onlyModuleKey: 'mod:invoicing-pos',
+    });
+    expect(localizedRes.targetDbName).toBe('db_tenant_ferreteria_central');
+    expect(localizedRes.appliedNewMigrations).toEqual(['0003_add_pos_cashier_shift.sql']);
+
+    // 4. MIGRACIÓN MASIVA EN FLOTA (`runMassiveClientsMigrations`):
+    //    - Ahora `db_tenant_ferreteria_central` salta la `0003` porque ya la tiene aplicada,
+    //      mientras que `db_version_prueba` aplica únicamente la `0003` pendiente.
+    const massiveReport = await bootstrapper.runMassiveClientsMigrations();
+    expect(massiveReport.totalDatabasesTargeted).toBe(2);
     expect(
-      bootAfterUpdate.tenantFleetMigrationReport.resultsByDatabase['db_version_prueba']
-        ?.appliedNewMigrations,
-    ).toEqual(['0003_add_pos_cashier_shift.sql']);
+      massiveReport.resultsByDatabase['db_tenant_ferreteria_central']?.appliedNewMigrations,
+    ).toEqual([]);
     expect(
-      bootAfterUpdate.tenantFleetMigrationReport.resultsByDatabase['db_tenant_ferreteria_central']
-        ?.appliedNewMigrations,
+      massiveReport.resultsByDatabase['db_tenant_ferreteria_central']?.skippedOldMigrations,
+    ).toContain('0003_add_pos_cashier_shift.sql');
+    expect(
+      massiveReport.resultsByDatabase['db_version_prueba']?.appliedNewMigrations,
     ).toEqual(['0003_add_pos_cashier_shift.sql']);
   });
 });
