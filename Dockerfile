@@ -23,6 +23,8 @@ RUN npx esbuild apps/api-gateway/src/cluster-node-runner.ts \
 FROM node:22-alpine AS runner
 WORKDIR /app
 
+RUN apk add --no-cache postgresql-client
+
 ENV NODE_ENV=production
 ENV PROVEKO_MIGRATIONS_DIR=/app/libs/tenant-db-resolver/migrations
 
@@ -31,3 +33,4 @@ COPY --from=builder /app/dist/cluster-node-runner.mjs ./dist/cluster-node-runner
 COPY --from=builder /app/libs/tenant-db-resolver/migrations ./libs/tenant-db-resolver/migrations
 
 CMD ["node", "dist/cluster-node-runner.mjs"]
+

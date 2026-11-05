@@ -937,15 +937,18 @@ describe('Proveko — Full Outward Ecosystem: API Gateway, Multi-Server Topology
     expect(safeSerialized).not.toContain('</script>');
     expect(safeSerialized).toContain('\\u003c/script\\u003e');
 
-    // Verificación de las 2 Capas del Producto (`/` Portada Comercial + `/app` Workstation Privada)
+    // Verificación de las 4 Superficies Unificadas (`/`, `/login`, `/superadmin`, `/app`) y 6 Centros Operativos
     const landingHtml = renderProvekoWorkstationHtml({
       appDomain: 'proveko.sudoalexmar.tech"><script>alert(1)</script>',
       initialSurface: 'landing',
     });
     expect(landingHtml).not.toContain('<script>alert(1)</script>');
-    expect(landingHtml).toContain('1. Portada y Configurador (/)');
-    expect(landingHtml).toContain('2. Estación de Trabajo (/app)');
-    expect(landingHtml).toContain('Registro Operativo Guiado');
+    expect(landingHtml).toContain('Armar Plan y Registro');
+    expect(landingHtml).toContain('Panel SuperAdmin Clientes');
+    expect(landingHtml).toContain('Plataforma de Gestión');
+    expect(landingHtml).toContain('Microservicio de Pagos · Modo Standby Activo');
+    expect(landingHtml).toContain('Control de Ingreso de Tractomulas, Pesaje en Báscula y Asignación de Muelle');
+    expect(landingHtml).toContain('Constructor Visual de Recetas, Escandallos y Costeo por Porción (Cero JSON)');
   });
 
   it('9. Listado GET en los 4 Módulos Completados (Split-Check, Frontdesk, CxC/CxP, Contabilidad PUC) y Cabeceras de Seguridad en Frontend', async () => {
