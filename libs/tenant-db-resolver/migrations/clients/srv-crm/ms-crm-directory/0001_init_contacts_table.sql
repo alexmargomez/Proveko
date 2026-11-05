@@ -27,6 +27,19 @@ CREATE TABLE IF NOT EXISTS srv_crm.dir_contacts (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE srv_crm.dir_contacts ADD COLUMN IF NOT EXISTS verification_digit VARCHAR(2) NOT NULL DEFAULT '0';
+ALTER TABLE srv_crm.dir_contacts ADD COLUMN IF NOT EXISTS person_type VARCHAR(16) NOT NULL DEFAULT 'JURIDICA';
+ALTER TABLE srv_crm.dir_contacts ADD COLUMN IF NOT EXISTS trade_name VARCHAR(180);
+ALTER TABLE srv_crm.dir_contacts ADD COLUMN IF NOT EXISTS party_role VARCHAR(40) NOT NULL DEFAULT 'CLIENTE_PROVEEDOR';
+ALTER TABLE srv_crm.dir_contacts ADD COLUMN IF NOT EXISTS tax_regime_code VARCHAR(16) NOT NULL DEFAULT '48_IVA';
+ALTER TABLE srv_crm.dir_contacts ADD COLUMN IF NOT EXISTS fiscal_responsibilities_json JSONB NOT NULL DEFAULT '["O-47"]'::jsonb;
+ALTER TABLE srv_crm.dir_contacts ADD COLUMN IF NOT EXISTS dane_department_code VARCHAR(8) NOT NULL DEFAULT '08';
+ALTER TABLE srv_crm.dir_contacts ADD COLUMN IF NOT EXISTS dane_municipality_code VARCHAR(10) NOT NULL DEFAULT '08001';
+ALTER TABLE srv_crm.dir_contacts ADD COLUMN IF NOT EXISTS city_name VARCHAR(80) NOT NULL DEFAULT 'Barranquilla';
+ALTER TABLE srv_crm.dir_contacts ADD COLUMN IF NOT EXISTS address_line VARCHAR(220);
+ALTER TABLE srv_crm.dir_contacts ADD COLUMN IF NOT EXISTS phone_whatsapp VARCHAR(40);
+ALTER TABLE srv_crm.dir_contacts ADD COLUMN IF NOT EXISTS billing_email_dian VARCHAR(160);
+
 CREATE TABLE IF NOT EXISTS srv_crm.dir_contact_branches (
   branch_record_id VARCHAR(64) PRIMARY KEY,
   contact_id UUID NOT NULL REFERENCES srv_crm.dir_contacts(id) ON DELETE CASCADE,

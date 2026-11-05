@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS srv_inventory.rcp_recipes (
   standard_cost_cop NUMERIC(19, 2) NOT NULL DEFAULT 18900
 );
 
+ALTER TABLE srv_inventory.rcp_recipes ADD COLUMN IF NOT EXISTS standard_cost_cop NUMERIC(19, 2) NOT NULL DEFAULT 18900;
+
 CREATE TABLE IF NOT EXISTS srv_inventory.rcp_recipe_ingredients (
   ingredient_line_id VARCHAR(64) PRIMARY KEY,
   recipe_id UUID NOT NULL REFERENCES srv_inventory.rcp_recipes(id) ON DELETE CASCADE,

@@ -55,6 +55,16 @@ CREATE TABLE IF NOT EXISTS srv_inventory.stk_items (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE srv_inventory.stk_items ADD COLUMN IF NOT EXISTS category_id VARCHAR(64) REFERENCES srv_inventory.stk_categories(category_id) ON DELETE SET NULL;
+ALTER TABLE srv_inventory.stk_items ADD COLUMN IF NOT EXISTS barcode_ean VARCHAR(64);
+ALTER TABLE srv_inventory.stk_items ADD COLUMN IF NOT EXISTS unspsc_dian_code VARCHAR(24) NOT NULL DEFAULT '30111601';
+ALTER TABLE srv_inventory.stk_items ADD COLUMN IF NOT EXISTS uom_dian_code VARCHAR(16) NOT NULL DEFAULT '94_UNIDAD';
+ALTER TABLE srv_inventory.stk_items ADD COLUMN IF NOT EXISTS sale_price_cop NUMERIC(19, 4) NOT NULL DEFAULT 0;
+ALTER TABLE srv_inventory.stk_items ADD COLUMN IF NOT EXISTS tax_rate_pct NUMERIC(5, 2) NOT NULL DEFAULT 19.00;
+ALTER TABLE srv_inventory.stk_items ADD COLUMN IF NOT EXISTS tracks_lots_fefo BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE srv_inventory.stk_items ADD COLUMN IF NOT EXISTS tracks_serials BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE srv_inventory.stk_items ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
 CREATE TABLE IF NOT EXISTS srv_inventory.stk_item_variants_serials (
   variant_id VARCHAR(64) PRIMARY KEY,
   item_id UUID NOT NULL REFERENCES srv_inventory.stk_items(id) ON DELETE CASCADE,

@@ -188,7 +188,7 @@ CREATE TABLE IF NOT EXISTS "control_plane"."tenant_branch_zones" (
 
 CREATE TABLE IF NOT EXISTS "control_plane"."platform_twofa_tokens" (
   "token_id" VARCHAR(64) PRIMARY KEY,
-  "user_id" VARCHAR(64) NOT NULL REFERENCES "control_plane"."platform_users"("id") ON DELETE CASCADE,
+  "staff_id" VARCHAR(64) NOT NULL REFERENCES "public"."platform_staff_users"("staff_id") ON DELETE CASCADE,
   "method" VARCHAR(24) NOT NULL DEFAULT 'TOTP_APP',
   "secret_encrypted" VARCHAR(255) NOT NULL,
   "backup_codes_json" JSONB NOT NULL DEFAULT '[]'::jsonb,
