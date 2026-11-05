@@ -78,8 +78,31 @@ export class UpstreamRouteRegistry {
   private readonly catalogByMicroservice = new Map<MicroserviceKey, ServiceKey>();
 
   constructor(env: Record<string, string | undefined> = process.env) {
+    const enabledFilterRaw = (env.ENABLED_MICROSERVICES || '*').trim();
+    const enabledFilterSet =
+      enabledFilterRaw === '*' || enabledFilterRaw === ''
+        ? null
+        : new Set(
+            enabledFilterRaw
+              .split(',')
+              .map((token) =>
+                token
+                  .trim()
+                  .toLowerCase()
+                  .replace(/^(ms|srv)[:_-]/, '')
+              )
+              .filter(Boolean)
+          );
+
     for (const item of SEED_MICROSERVICES_CATALOG) {
       this.catalogByMicroservice.set(item.key, item.parentService);
+
+      const parentDomainSlug = item.parentService
+        .replace(/^srv:/, '')
+        .toLowerCase();
+      if (enabledFilterSet && !enabledFilterSet.has(parentDomainSlug)) {
+        continue;
+      }
 
       // Cargar desde variables de entorno si están definidas (soporta UPSTREAM_MOD_* y UPSTREAM_MS_*)
       const modEnvKey = toModuleEnvVarName(item.key);

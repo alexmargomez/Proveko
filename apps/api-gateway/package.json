@@ -5,8 +5,8 @@
   "type": "module",
   "main": "./src/index.ts",
   "dependencies": {
-    "@proveko/shared-kernel": "workspace:*",
-    "@proveko/crypto-vault": "workspace:*",
-    "@proveko/service-guard": "workspace:*"
+    "@proveko/shared-kernel": "*",
+    "@proveko/crypto-vault": "*",
+    "@proveko/service-guard": "*"
   }
 }

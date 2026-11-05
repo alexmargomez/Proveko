@@ -8,7 +8,8 @@ COPY package.json package-lock.json tsconfig.base.json tsconfig.json ./
 COPY libs ./libs
 COPY apps ./apps
 
-RUN npm ci
+RUN find apps libs -name "package.json" -exec sed -i 's/"workspace:\*"/"*"/g' {} + && \
+    (npm ci --no-audit --no-fund || npm install --no-audit --no-fund)
 
 # Empaqueta el ejecutor multi-rol (api-gateway, core-service, ms-host-runner, frontend)
 RUN npx esbuild apps/api-gateway/src/cluster-node-runner.ts \

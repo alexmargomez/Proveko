@@ -5,7 +5,7 @@
   "type": "module",
   "main": "./src/index.ts",
   "dependencies": {
-    "@proveko/shared-kernel": "workspace:*",
-    "@proveko/ui-kit": "workspace:*"
+    "@proveko/shared-kernel": "*",
+    "@proveko/ui-kit": "*"
   }
 }
