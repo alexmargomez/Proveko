@@ -63,6 +63,7 @@ export function renderSuperAdminAndShellRuntimeJs(): string {
         reqBody.innerHTML = rHtml + '</tbody></table>';
       }
     }
+    if (typeof pkRenderGroupsCatalogAdmin === 'function') pkRenderGroupsCatalogAdmin();
   }
 
   function pkUpdateShellNavigation() {
@@ -87,7 +88,7 @@ export function renderSuperAdminAndShellRuntimeJs(): string {
       var uLabel = document.getElementById('session-user-label');
       if (STATE.session.role === 'superadmin' || STATE.session.role === 'desarrollador' || STATE.session.role === 'auxiliar') {
         if (rBadge) rBadge.textContent = 'Rol Global: ' + STATE.session.role.toUpperCase();
-        if (dBadge) dBadge.textContent = 'BD Principal: proveko_control_db';
+        if (dBadge) dBadge.textContent = 'BDs: proveko_control_db + proveko_groups_db';
         if (uLabel) uLabel.textContent = STATE.session.username;
         if (topCtx) topCtx.textContent = '| Consola Global (' + STATE.session.role + ')';
         if (sSa) sSa.classList.add('active');
@@ -138,6 +139,7 @@ export function renderSuperAdminAndShellRuntimeJs(): string {
   }
 
   function pkHandleSuperAdminAction(target) {
+    if (typeof pkHandleDeveloperCatalogAction === 'function' && pkHandleDeveloperCatalogAction(target)) return true;
     var qRoleBtn = target.closest('[data-sa-quota-role]');
     if (qRoleBtn) {
       var tidR = qRoleBtn.getAttribute('data-sa-tenant');

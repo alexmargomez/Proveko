@@ -129,6 +129,17 @@ export function renderLoginAndSuperAdminHtml(): string {
       </div>
     </div>
 
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-head">
+        <div>
+          <span class="badge badge-emerald">BASE DE DATOS DEDICADA: proveko_groups_db</span>
+          <div class="card-title" style="margin-top:4px">🧩 Grupos de Clientes (Bares, Comercio, Agro...) y Catálogo Dinámico para Desarrolladores</div>
+          <div style="font-size:12px;color:var(--pk-muted)">Guarda en BD qué Módulos Principales, Submódulos y Funcionalidades tiene cada grupo básico y permite a los desarrolladores crear nuevas funcionalidades y asociarlas a cualquier grupo.</div>
+        </div>
+      </div>
+      <div class="card-body" id="sa-groups-catalog-panel"></div>
+    </div>
+
     <div class="card">
       <div class="card-head">
         <div class="card-title">Solicitudes de Clientes — Pestaña "Necesito otra funcionalidad"</div>
