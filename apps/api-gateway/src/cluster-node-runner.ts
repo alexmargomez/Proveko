@@ -33,6 +33,7 @@ import { createSrvGastroHostRunner } from '../../srv-gastro/host-runner/src/inde
 import { createSrvHotelHostRunner } from '../../srv-hotel/host-runner/src/index.js';
 import { createSrvInventoryHostRunner } from '../../srv-inventory/host-runner/src/index.js';
 import { createSrvInvoicingHostRunner } from '../../srv-invoicing/host-runner/src/index.js';
+import { renderProvekoWorkstationHtml } from '../../web-app/src/workstation/workstation-ui.renderer.js';
 import { FetchUpstreamHttpClientAdapter, ProvekoApiGateway } from './gateway.server.js';
 import { UpstreamRouteRegistry } from './routing/upstream-registry.js';
 import { TenantTierRateLimiter } from './security/rate-limiter.js';
@@ -308,6 +309,71 @@ export async function startProvekoClusterNodeHttpServer(
           return;
         }
 
+        if (method === 'GET' && url === '/api/v1/control/catalog') {
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              microservices: SEED_SERVICES_CATALOG.map((s) => ({
+                ...s,
+                microserviceKey: toParentMicroserviceNotation(s.key),
+              })),
+              modules: SEED_MICROSERVICES_CATALOG.map((m) => ({
+                ...m,
+                parentMicroserviceKey: toParentMicroserviceNotation(m.parentService),
+                moduleKey: toModuleNotation(m.key),
+              })),
+              presets: SEED_INDUSTRY_PRESETS,
+              topology: gateway.upstreamRegistry.getTopologySnapshot(),
+            }),
+          );
+          return;
+        }
+
+        if (method === 'POST' && url === '/api/v1/control/session') {
+          const sessionReq = ((await readJsonBody(req)) ?? {}) as {
+            tenantId?: string;
+            activeBranchId?: string;
+            subVer?: number;
+            services?: Record<string, MicroserviceKey[]>;
+            readonlyMicroservices?: MicroserviceKey[];
+          };
+
+          const tenantId = sessionReq.tenantId ?? 'db_version_prueba';
+          const activeBranchId = sessionReq.activeBranchId ?? 'br-01';
+          const subVer = Number(sessionReq.subVer ?? 1);
+          const services = sessionReq.services ?? {
+            'srv:crm': ['ms:crm-directory'],
+            'srv:invoicing': ['ms:invoicing-pos', 'ms:invoicing-electronic-dian'],
+            'srv:inventory': ['ms:inventory-stock'],
+          };
+          const readonlyMicroservices = sessionReq.readonlyMicroservices ?? [];
+
+          const token = jwtVault.signAccessToken({
+            tenant_id: tenantId,
+            cell_id: 'cell-db-01',
+            user_id: 'usr-workstation-admin',
+            role_key: 'admin',
+            tier: 'business',
+            is_sandbox: tenantId === 'db_version_prueba',
+            active_branch_id: activeBranchId,
+            allowed_branch_ids: ['br-01', 'br-02'],
+            sub_ver: subVer,
+            services,
+            readonly_microservices: readonlyMicroservices,
+          });
+
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              token,
+              tenantId,
+              activeBranchId,
+              subVer,
+            }),
+          );
+          return;
+        }
+
         const body = method !== 'GET' && method !== 'HEAD' ? await readJsonBody(req) : undefined;
         const gatewayRes = await gateway.handleGatewayRequest({
           method,
@@ -363,20 +429,13 @@ export async function startProvekoClusterNodeHttpServer(
 
       // 5. Comportamiento de Contenedor Frontend Workstation (`frontend`)
       if (options.nodeRole === 'frontend') {
-        const apiUrl = env.APP_URL ?? `http://localhost:${env.BACKEND_PORT ?? '4000'}`;
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-        res.end(`<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="utf-8" />
-  <title>Proveko — Plataforma SaaS Modular Multi-Tenant</title>
-</head>
-<body style="font-family: system-ui, sans-serif; background: #0f172a; color: #f8fafc; padding: 2rem;">
-  <h1>Proveko Workstation</h1>
-  <p>Arquitectura de Microservicios Independientes (<code>ms:&lt;dominio&gt;</code>) + Módulos Activables (<code>mod:&lt;dominio&gt;-&lt;modulo&gt;</code>) + Bases de Datos por Cliente.</p>
-  <p>API Gateway conectado en: <code>${apiUrl}</code></p>
-</body>
-</html>`);
+        res.end(
+          renderProvekoWorkstationHtml({
+            appUrl: env.APP_URL,
+            appDomain: env.APP_DOMAIN,
+          }),
+        );
         return;
       }
 
