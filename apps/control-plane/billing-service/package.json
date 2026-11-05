@@ -5,8 +5,8 @@
   "type": "module",
   "main": "./src/index.ts",
   "dependencies": {
-    "@proveko/shared-kernel": "workspace:*",
-    "@proveko/crypto-vault": "workspace:*",
-    "drizzle-orm": "^0.40.0"
+    "@proveko/shared-kernel": "*",
+    "@proveko/crypto-vault": "*",
+    "drizzle-orm": "^0.39.3"
   }
 }

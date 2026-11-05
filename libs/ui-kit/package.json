@@ -6,7 +6,7 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "dependencies": {
-    "@proveko/shared-kernel": "workspace:*"
+    "@proveko/shared-kernel": "*"
   }
 }
 

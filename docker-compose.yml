@@ -33,6 +33,7 @@ services:
 
   # 2. Workstation Frontend (Detectado como Frontend en Dominios & SSL de ALpanel)
   frontend:
+    image: proveko-cluster-node:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -54,6 +55,7 @@ services:
 
   # 3. API Gateway Perimetral Zero-Trust (Detectado como Backend Principal en BACKEND_PORT de ALpanel)
   api-gateway:
+    image: proveko-cluster-node:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -71,6 +73,7 @@ services:
       JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
       JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
       PROVEKO_CLUSTER_SECRET: ${PROVEKO_CLUSTER_SECRET:-proveko_alpanel_cluster_hmac_secret_2026}
+      ENABLED_MICROSERVICES: ${ENABLED_MICROSERVICES:-*}
       # Ruteo hacia los Contenedores Independientes de Microservicios (o hacia otro VPS en ALpanel)
       UPSTREAM_MS_CRM: ${UPSTREAM_MS_CRM:-http://ms-crm:4101}
       UPSTREAM_MS_INVENTORY: ${UPSTREAM_MS_INVENTORY:-http://ms-inventory:4102}
@@ -83,23 +86,12 @@ services:
         condition: service_healthy
       core-service:
         condition: service_started
-      ms-crm:
-        condition: service_started
-      ms-inventory:
-        condition: service_started
-      ms-invoicing:
-        condition: service_started
-      ms-gastro:
-        condition: service_started
-      ms-hotel:
-        condition: service_started
-      ms-finance:
-        condition: service_started
     networks:
       - internal
 
   # 4. Control Plane (Licenciamiento, Catálogo Modular y Orquestador de Migraciones .sql por Cliente)
   core-service:
+    image: proveko-cluster-node:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -117,6 +109,7 @@ services:
       JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
       JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
       PROVEKO_CLUSTER_SECRET: ${PROVEKO_CLUSTER_SECRET:-proveko_alpanel_cluster_hmac_secret_2026}
+      ENABLED_MICROSERVICES: ${ENABLED_MICROSERVICES:-*}
     depends_on:
       db:
         condition: service_healthy
@@ -125,6 +118,7 @@ services:
 
   # 5. Microservicio Independiente: ms:crm (Módulos: mod:crm-directory, mod:crm-pipelines, mod:crm-loyalty)
   ms-crm:
+    image: proveko-cluster-node:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -151,6 +145,7 @@ services:
 
   # 6. Microservicio Independiente: ms:inventory (Módulos: mod:inventory-stock, mod:inventory-recipes, mod:inventory-lots, mod:inventory-transfers)
   ms-inventory:
+    image: proveko-cluster-node:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -177,6 +172,7 @@ services:
 
   # 7. Microservicio Independiente: ms:invoicing (Módulos: mod:invoicing-pos, mod:invoicing-simple-receipt, mod:invoicing-electronic-dian, mod:invoicing-quotes)
   ms-invoicing:
+    image: proveko-cluster-node:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -203,6 +199,7 @@ services:
 
   # 8. Microservicio Independiente: ms:gastro (Módulos: mod:gastro-tables, mod:gastro-kds, mod:gastro-split-check)
   ms-gastro:
+    image: proveko-cluster-node:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -229,6 +226,7 @@ services:
 
   # 9. Microservicio Independiente: ms:hotel (Módulos: mod:hotel-rooms, mod:hotel-bookings, mod:hotel-frontdesk)
   ms-hotel:
+    image: proveko-cluster-node:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -255,6 +253,7 @@ services:
 
   # 10. Microservicio Independiente: ms:finance (Módulos: mod:finance-cashbook, mod:finance-ar-ap, mod:finance-accounting-puc)
   ms-finance:
+    image: proveko-cluster-node:latest
     build:
       context: .
       dockerfile: Dockerfile
