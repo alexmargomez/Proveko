@@ -141,14 +141,18 @@ VALUES
   ('sa-root-001', 'superadmin@proveko.com', 'SuperAdmin Maestro Proveko', 'ed25519$ProvekoMaster2026!', 'superadmin', TRUE)
 ON CONFLICT ("superadmin_id") DO NOTHING;
 
-INSERT INTO "control_plane"."database_cells" ("cell_id", "host", "port", "db_name", "max_connections", "is_healthy")
-VALUES
-  ('cell-alpanel-primary', 'db', 5432, 'proveko_control_db', 400, TRUE)
-ON CONFLICT ("cell_id") DO NOTHING;
+ALTER TABLE "control_plane"."tenants" ALTER COLUMN "tax_id_nit" SET DEFAULT '900.000.000-1';
+ALTER TABLE "control_plane"."tenants" ALTER COLUMN "encrypted_connection_envelope" SET DEFAULT '{}'::jsonb;
+ALTER TABLE "control_plane"."tenants" ALTER COLUMN "theme_config" SET DEFAULT '{}'::jsonb;
 
-INSERT INTO "control_plane"."tenants" ("id", "slug", "legal_name", "tier", "cell_id", "db_name", "status")
+INSERT INTO "control_plane"."database_cells" ("id", "code", "host", "admin_port", "pooler_port", "max_tenants", "current_tenants", "tier_target", "is_sandbox_cell", "status")
 VALUES
-  ('tnt-demo', 'version_prueba', 'Empresa Demo Interactiva Proveko', 'ENTERPRISE', 'cell-alpanel-primary', 'db_version_prueba', 'ACTIVE')
+  ('cell-alpanel-primary', 'CELL-ALPANEL-01', 'db', 5432, 6432, 250, 1, 'ENTERPRISE', FALSE, 'ONLINE')
+ON CONFLICT ("id") DO NOTHING;
+
+INSERT INTO "control_plane"."tenants" ("id", "slug", "legal_name", "tax_id_nit", "tier", "is_sandbox", "status", "cell_id", "db_name", "encrypted_connection_envelope", "theme_config")
+VALUES
+  ('tnt-demo', 'version_prueba', 'Empresa Demo Interactiva Proveko', '900.000.000-1', 'ENTERPRISE', TRUE, 'ACTIVE', 'cell-alpanel-primary', 'db_version_prueba', '{}'::jsonb, '{}'::jsonb)
 ON CONFLICT ("id") DO NOTHING;
 
 INSERT INTO "public"."tenant_database_connections" (
