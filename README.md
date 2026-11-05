@@ -187,15 +187,36 @@ En `@proveko/tenant-db-resolver` están implementados los **6 pilares** necesari
 
 ---
 
-## 7. Comandos de Desarrollo y Verificación
+## 7. Despliegue Multi-Contenedor de Microservicios en ALpanel (`ServerPanel`)
+
+El repositorio incluye en su raíz `docker-compose.yml`, `Dockerfile` y `.env.example` siguiendo las reglas de **ALpanel** para que la plataforma corra como **contenedores de microservicios independientes** (nunca como monolito):
+
+| Contenedor en ALpanel | Rol en el Cluster | Puerto Interno / Externo | Responsabilidad |
+| :--- | :--- | :--- | :--- |
+| **`proveko_db`** | `db` (`postgres:16-alpine`) | `${DB_EXTERNAL_PORT:-5432}:5432` | Aloja `proveko_control_db` y las bases independientes por cliente (`Base A`, `Base B`, `Base C`, `Base D`...) en el volumen persistente `postgres_data`. |
+| **`proveko_frontend`** | `frontend` | `${FRONTEND_PORT:-5173}:5173` | Interfaz web Workstation vinculable al dominio principal en **Dominios & SSL** de ALpanel. |
+| **`proveko_api_gateway`** | `api-gateway` | `${BACKEND_PORT:-4000}:4000` | Puerta perimetral Zero-Trust (`BACKEND_PORT`) que valida Doble Llave Ed25519 y enruta por red hacia cada contenedor de microservicio. |
+| **`proveko_core_service`** | `core-service` | `:4010` (red interna) | Plano de control, catálogo de servicios/módulos y registro de las migraciones `.sql`. |
+| **`proveko_ms_crm`** | `ms:crm` (`ms-host-runner`) | `:4101` (red interna) | Contenedor independiente del Microservicio CRM (`mod:crm-directory`, `mod:crm-pipelines`, `mod:crm-loyalty`). |
+| **`proveko_ms_inventory`** | `ms:inventory` (`ms-host-runner`) | `:4102` (red interna) | Contenedor independiente del Microservicio de Inventario (`mod:inventory-stock`, `mod:inventory-recipes`, `mod:inventory-lots`, `mod:inventory-transfers`). |
+| **`proveko_ms_invoicing`** | `ms:invoicing` (`ms-host-runner`) | `:4103` (red interna) | Contenedor independiente del Microservicio de Facturación (`mod:invoicing-pos`, `mod:invoicing-simple-receipt`, `mod:invoicing-electronic-dian`, `mod:invoicing-quotes`). |
+| **`proveko_ms_gastro`** | `ms:gastro` (`ms-host-runner`) | `:4104` (red interna) | Contenedor independiente del Microservicio Gastronómico (`mod:gastro-tables`, `mod:gastro-kds`, `mod:gastro-split-check`). |
+| **`proveko_ms_hotel`** | `ms:hotel` (`ms-host-runner`) | `:4105` (red interna) | Contenedor independiente del Microservicio Hotelero (`mod:hotel-rooms`, `mod:hotel-bookings`, `mod:hotel-frontdesk`). |
+| **`proveko_ms_finance`** | `ms:finance` (`ms-host-runner`) | `:4106` (red interna) | Contenedor independiente del Microservicio Financiero (`mod:finance-cashbook`, `mod:finance-ar-ap`, `mod:finance-accounting-puc`). |
+
+* **Escalado a múltiples servidores VPS desde ALpanel:** Si cualquiera de los microservicios (`ms:invoicing`, `ms:inventory`, etc.) requiere su propio VPS dedicado por alto tráfico, basta con cambiar su variable `UPSTREAM_MS_<DOMINIO>` en el editor visual `.env` de ALpanel y presionar **`Restart Docker`**.
+
+---
+
+## 8. Comandos de Desarrollo y Verificación
 
 ```bash
-# Levantar infraestructura base (PostgreSQL Control Plane + Celda 01 + PgBouncer + Redis + NATS)
-docker compose -f infra/docker/docker-compose.yml up -d
+# Levantar todos los contenedores independientes de microservicios (estándar ALpanel)
+docker compose up -d --build
 
 # Verificación estricta de tipos TypeScript en todo el monorepo
 npm run typecheck
 
-# Ejecutar suite completa de pruebas de auditoría SOLID, Hexagonal, Migraciones y Operación Multi-BD (Vitest)
+# Ejecutar suite completa de pruebas de auditoría SOLID, Hexagonal, Migraciones, Operación Multi-BD y Cluster HTTP (Vitest)
 npm test
 ```

@@ -1,0 +1,279 @@
+# ==============================================================================
+# PROVEKO — Arquitectura Distribuida de Microservicios para ALpanel (ServerPanel)
+# ==============================================================================
+# - Cada Microservicio (`ms:<dominio>`) corre en su propio contenedor independiente.
+# - Los Módulos (`mod:<dominio>-<modulo>`) viven dentro del contenedor de su Microservicio
+#   para encenderse/apagarse (ON/OFF) por cliente sin crear decenas de contenedores extra.
+# - El contenedor `db` (PostgreSQL 16) aloja `proveko_control_db` y las Bases de Datos
+#   independientes por cliente (`Base A`, `Base B`, `Base C`, `Base D`...) en `postgres_data`.
+# ==============================================================================
+
+services:
+  # 1. Motor PostgreSQL Multi-Base por Cliente (Detectado por Inspector SQL y Backup de ALpanel)
+  db:
+    image: postgres:16-alpine
+    container_name: proveko_db
+    restart: unless-stopped
+    command: ["postgres", "-c", "max_connections=400"]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-proveko_control_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-proveko_master_secret_2026}
+    ports:
+      - "${DB_EXTERNAL_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-proveko_control_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+
+  # 2. Workstation Frontend (Detectado como Frontend en Dominios & SSL de ALpanel)
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: proveko_frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    environment:
+      PROVEKO_NODE_ROLE: frontend
+      PROVEKO_NODE_ID: proveko-frontend
+      PORT: 5173
+      BACKEND_PORT: ${BACKEND_PORT:-4000}
+      APP_DOMAIN: ${APP_DOMAIN:-localhost}
+      APP_URL: ${APP_URL:-http://localhost:4000}
+    depends_on:
+      - api-gateway
+    networks:
+      - internal
+
+  # 3. API Gateway Perimetral Zero-Trust (Detectado como Backend Principal en BACKEND_PORT de ALpanel)
+  api-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: proveko_api_gateway
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-4000}:4000"
+    environment:
+      PROVEKO_NODE_ROLE: api-gateway
+      PROVEKO_NODE_ID: proveko-api-gateway
+      PORT: 4000
+      APP_DOMAIN: ${APP_DOMAIN:-localhost}
+      APP_URL: ${APP_URL:-http://localhost:4000}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,api-gateway}
+      JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
+      JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
+      # Ruteo hacia los Contenedores Independientes de Microservicios (o hacia otro VPS en ALpanel)
+      UPSTREAM_MS_CRM: ${UPSTREAM_MS_CRM:-http://ms-crm:4101}
+      UPSTREAM_MS_INVENTORY: ${UPSTREAM_MS_INVENTORY:-http://ms-inventory:4102}
+      UPSTREAM_MS_INVOICING: ${UPSTREAM_MS_INVOICING:-http://ms-invoicing:4103}
+      UPSTREAM_MS_GASTRO: ${UPSTREAM_MS_GASTRO:-http://ms-gastro:4104}
+      UPSTREAM_MS_HOTEL: ${UPSTREAM_MS_HOTEL:-http://ms-hotel:4105}
+      UPSTREAM_MS_FINANCE: ${UPSTREAM_MS_FINANCE:-http://ms-finance:4106}
+    depends_on:
+      db:
+        condition: service_healthy
+      core-service:
+        condition: service_started
+      ms-crm:
+        condition: service_started
+      ms-inventory:
+        condition: service_started
+      ms-invoicing:
+        condition: service_started
+      ms-gastro:
+        condition: service_started
+      ms-hotel:
+        condition: service_started
+      ms-finance:
+        condition: service_started
+    networks:
+      - internal
+
+  # 4. Control Plane (Licenciamiento, Catálogo Modular y Orquestador de Migraciones .sql por Cliente)
+  core-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: proveko_core_service
+    restart: unless-stopped
+    environment:
+      PROVEKO_NODE_ROLE: core-service
+      PROVEKO_NODE_ID: proveko-core-service
+      PORT: 4010
+      DB_HOST: db
+      DB_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-proveko_control_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-proveko_master_secret_2026}
+      JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
+      JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+
+  # 5. Microservicio Independiente: ms:crm (Módulos: mod:crm-directory, mod:crm-pipelines, mod:crm-loyalty)
+  ms-crm:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: proveko_ms_crm
+    restart: unless-stopped
+    environment:
+      PROVEKO_NODE_ROLE: ms-host-runner
+      PROVEKO_NODE_ID: container:ms:crm
+      PROVEKO_PARENT_SERVICE: ms:crm
+      ENABLED_MODULES: ${ENABLED_MODULES_CRM:-*}
+      PORT: 4101
+      DB_HOST: db
+      DB_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-proveko_master_secret_2026}
+      JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
+      JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+
+  # 6. Microservicio Independiente: ms:inventory (Módulos: mod:inventory-stock, mod:inventory-recipes, mod:inventory-lots, mod:inventory-transfers)
+  ms-inventory:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: proveko_ms_inventory
+    restart: unless-stopped
+    environment:
+      PROVEKO_NODE_ROLE: ms-host-runner
+      PROVEKO_NODE_ID: container:ms:inventory
+      PROVEKO_PARENT_SERVICE: ms:inventory
+      ENABLED_MODULES: ${ENABLED_MODULES_INVENTORY:-*}
+      PORT: 4102
+      DB_HOST: db
+      DB_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-proveko_master_secret_2026}
+      JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
+      JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+
+  # 7. Microservicio Independiente: ms:invoicing (Módulos: mod:invoicing-pos, mod:invoicing-simple-receipt, mod:invoicing-electronic-dian, mod:invoicing-quotes)
+  ms-invoicing:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: proveko_ms_invoicing
+    restart: unless-stopped
+    environment:
+      PROVEKO_NODE_ROLE: ms-host-runner
+      PROVEKO_NODE_ID: container:ms:invoicing
+      PROVEKO_PARENT_SERVICE: ms:invoicing
+      ENABLED_MODULES: ${ENABLED_MODULES_INVOICING:-*}
+      PORT: 4103
+      DB_HOST: db
+      DB_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-proveko_master_secret_2026}
+      JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
+      JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+
+  # 8. Microservicio Independiente: ms:gastro (Módulos: mod:gastro-tables, mod:gastro-kds, mod:gastro-split-check)
+  ms-gastro:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: proveko_ms_gastro
+    restart: unless-stopped
+    environment:
+      PROVEKO_NODE_ROLE: ms-host-runner
+      PROVEKO_NODE_ID: container:ms:gastro
+      PROVEKO_PARENT_SERVICE: ms:gastro
+      ENABLED_MODULES: ${ENABLED_MODULES_GASTRO:-*}
+      PORT: 4104
+      DB_HOST: db
+      DB_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-proveko_master_secret_2026}
+      JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
+      JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+
+  # 9. Microservicio Independiente: ms:hotel (Módulos: mod:hotel-rooms, mod:hotel-bookings, mod:hotel-frontdesk)
+  ms-hotel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: proveko_ms_hotel
+    restart: unless-stopped
+    environment:
+      PROVEKO_NODE_ROLE: ms-host-runner
+      PROVEKO_NODE_ID: container:ms:hotel
+      PROVEKO_PARENT_SERVICE: ms:hotel
+      ENABLED_MODULES: ${ENABLED_MODULES_HOTEL:-*}
+      PORT: 4105
+      DB_HOST: db
+      DB_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-proveko_master_secret_2026}
+      JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
+      JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+
+  # 10. Microservicio Independiente: ms:finance (Módulos: mod:finance-cashbook, mod:finance-ar-ap, mod:finance-accounting-puc)
+  ms-finance:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: proveko_ms_finance
+    restart: unless-stopped
+    environment:
+      PROVEKO_NODE_ROLE: ms-host-runner
+      PROVEKO_NODE_ID: container:ms:finance
+      PROVEKO_PARENT_SERVICE: ms:finance
+      ENABLED_MODULES: ${ENABLED_MODULES_FINANCE:-*}
+      PORT: 4106
+      DB_HOST: db
+      DB_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-proveko_master_secret_2026}
+      JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
+      JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  postgres_data:

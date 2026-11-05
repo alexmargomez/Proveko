@@ -17,7 +17,11 @@ import {
   ProvekoWorkstationHttpClient,
   evaluateWorkstationCapabilityGate,
 } from '../../web-app/src/index.js';
-import { ProvekoApiGateway, UpstreamRouteRegistry } from '../src/index.js';
+import {
+  ProvekoApiGateway,
+  startProvekoClusterNodeHttpServer,
+  UpstreamRouteRegistry,
+} from '../src/index.js';
 
 describe('Proveko — Full Outward Ecosystem: API Gateway, Multi-Server Topology, Billing, 6 Parent Services (20 Microservices) & Workstation', () => {
   it('1. Distribución en Múltiples Servidores: Host-Runner en Servidor 2 + Microservicio DIAN aislado en Servidor 3 + Enrutamiento 2 Niveles en API Gateway', async () => {
@@ -692,6 +696,122 @@ describe('Proveko — Full Outward Ecosystem: API Gateway, Multi-Server Topology
     );
     expect(recoveredWebhook.alreadyProcessed).toBe(false);
     expect(recoveredWebhook.newSubVer).toBe(3);
+  });
+
+  it('5. Cluster Multi-Contenedor ALpanel sobre HTTP Real: Contenedores Independientes ms-invoicing, ms-inventory, core-service y api-gateway comunicándose por red TCP', async () => {
+    const sharedMasterSeed = 'proveko-alpanel-cluster-test-seed-2026';
+    const sharedKid = 'kid-alpanel-2026';
+
+    // 1. Levantar contenedor independiente de Microservicio ms-invoicing
+    const msInvoicingContainer = await startProvekoClusterNodeHttpServer({
+      nodeRole: 'ms-host-runner',
+      port: 0,
+      host: '127.0.0.1',
+      parentService: 'ms:invoicing',
+      nodeId: 'proveko_ms_invoicing',
+      jwtMasterSeed: sharedMasterSeed,
+      jwtKid: sharedKid,
+    });
+
+    // 2. Levantar contenedor independiente de Microservicio ms-inventory
+    const msInventoryContainer = await startProvekoClusterNodeHttpServer({
+      nodeRole: 'ms-host-runner',
+      port: 0,
+      host: '127.0.0.1',
+      parentService: 'ms:inventory',
+      nodeId: 'proveko_ms_inventory',
+      jwtMasterSeed: sharedMasterSeed,
+      jwtKid: sharedKid,
+    });
+
+    // 3. Levantar contenedor independiente de Control Plane core-service
+    const coreServiceContainer = await startProvekoClusterNodeHttpServer({
+      nodeRole: 'core-service',
+      port: 0,
+      host: '127.0.0.1',
+      nodeId: 'proveko_core_service',
+      jwtMasterSeed: sharedMasterSeed,
+      jwtKid: sharedKid,
+    });
+
+    // 4. Levantar contenedor api-gateway apuntando por red HTTP real a los contenedores ms-invoicing y ms-inventory
+    const apiGatewayContainer = await startProvekoClusterNodeHttpServer({
+      nodeRole: 'api-gateway',
+      port: 0,
+      host: '127.0.0.1',
+      nodeId: 'proveko_api_gateway',
+      jwtMasterSeed: sharedMasterSeed,
+      jwtKid: sharedKid,
+      env: {
+        UPSTREAM_MS_INVOICING: msInvoicingContainer.baseUrl,
+        UPSTREAM_MS_INVENTORY: msInventoryContainer.baseUrl,
+      },
+    });
+
+    try {
+      // A) Verificar healthcheck de core-service (6 microservicios, 20 módulos y 23 archivos .sql de migración)
+      const coreHealthRes = await fetch(`${coreServiceContainer.baseUrl}/health`);
+      expect(coreHealthRes.status).toBe(200);
+      const coreHealthJson = (await coreHealthRes.json()) as any;
+      expect(coreHealthJson.servicesCount).toBe(6);
+      expect(coreHealthJson.modulesCount).toBe(20);
+      expect(coreHealthJson.sqlMigrationsCount).toBe(23);
+
+      // B) Emitir token firmado con la semilla Ed25519 del cluster y enviar petición HTTP al contenedor api-gateway
+      const token = apiGatewayContainer.jwtVault.signAccessToken({
+        tenant_id: 'tenant-alpanel-01',
+        cell_id: 'cell-db-01',
+        user_id: 'usr-alpanel',
+        role_key: 'admin',
+        tier: 'business',
+        is_sandbox: false,
+        active_branch_id: 'br-01',
+        allowed_branch_ids: ['br-01'],
+        sub_ver: 1,
+        services: {
+          'srv:invoicing': ['ms:invoicing-electronic-dian', 'ms:invoicing-pos'],
+          'srv:inventory': ['ms:inventory-stock'],
+        },
+        readonly_microservices: [],
+      });
+
+      const dianHttpRes = await fetch(
+        `${apiGatewayContainer.baseUrl}/api/v1/ms:invoicing/mod:invoicing-electronic-dian/invoices/emit`,
+        {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            prefixAndNumber: 'SETP990000777',
+            issuerNit: '901999888',
+            customerNit: '222222222222',
+            subtotal: '200000.0000',
+            ivaPercent: '19.00',
+          }),
+        },
+      );
+
+      expect(dianHttpRes.status).toBe(201);
+      expect(dianHttpRes.headers.get('x-proveko-routing-mode')).toBe('PARENT_SERVICE_HOST_RUNNER');
+      expect(dianHttpRes.headers.get('x-proveko-gateway-base-url')).toBe(
+        msInvoicingContainer.baseUrl,
+      );
+      expect(dianHttpRes.headers.get('x-proveko-parent-microservice')).toBe('ms:invoicing');
+      expect(dianHttpRes.headers.get('x-proveko-module')).toBe('mod:invoicing-electronic-dian');
+
+      const dianBody = (await dianHttpRes.json()) as any;
+      expect(dianBody.grandTotal).toBe('238000.0000');
+      expect(dianBody.cufeSha384).toHaveLength(96);
+    } finally {
+      await Promise.all([
+        apiGatewayContainer.close(),
+        coreServiceContainer.close(),
+        msInventoryContainer.close(),
+        msInvoicingContainer.close(),
+      ]);
+    }
   });
 });
 

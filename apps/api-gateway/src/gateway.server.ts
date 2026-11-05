@@ -39,10 +39,12 @@ export interface UpstreamHttpClientPort {
     targetUrl: string;
     method: HttpMethodType;
     authorizationHeader?: string;
+    headers?: Record<string, string>;
     body?: TBody;
   }): Promise<{
     status: number;
     contentType: string;
+    headers?: Record<string, string>;
     body: unknown;
   }>;
 }
@@ -54,10 +56,12 @@ export class FetchUpstreamHttpClientAdapter implements UpstreamHttpClientPort {
     targetUrl: string;
     method: HttpMethodType;
     authorizationHeader?: string;
+    headers?: Record<string, string>;
     body?: TBody;
   }): Promise<{
     status: number;
     contentType: string;
+    headers?: Record<string, string>;
     body: unknown;
   }> {
     try {
@@ -65,6 +69,7 @@ export class FetchUpstreamHttpClientAdapter implements UpstreamHttpClientPort {
         method: params.method,
         headers: {
           'content-type': 'application/json',
+          ...(params.headers ?? {}),
           ...(params.authorizationHeader ? { authorization: params.authorizationHeader } : {}),
         },
         body:
@@ -74,10 +79,18 @@ export class FetchUpstreamHttpClientAdapter implements UpstreamHttpClientPort {
         signal: AbortSignal.timeout(this.timeoutMs),
       });
 
+      const responseHeaders: Record<string, string> = {};
+      fetchRes.headers.forEach((value, key) => {
+        if (key.toLowerCase().startsWith('x-proveko-')) {
+          responseHeaders[key.toLowerCase()] = value;
+        }
+      });
+
       const responseBody = await fetchRes.json().catch(() => null);
       return {
         status: fetchRes.status,
         contentType: fetchRes.headers.get('content-type') ?? 'application/json',
+        headers: responseHeaders,
         body: responseBody,
       };
     } catch (err) {
@@ -200,10 +213,15 @@ export class ProvekoApiGateway {
             targetUrl,
             method: req.method,
             authorizationHeader,
+            headers: {
+              'x-proveko-target-parent': parsedRoute.parentService,
+              'x-proveko-target-module': parsedRoute.microserviceKey,
+            },
             body: req.body,
           });
 
           const remoteHeaders: Record<string, string> = {
+            ...(fetchRes.headers ?? {}),
             'content-type': fetchRes.contentType,
             'x-proveko-gateway-routed-to': upstream.serverId,
             'x-proveko-gateway-base-url': upstream.baseUrl,

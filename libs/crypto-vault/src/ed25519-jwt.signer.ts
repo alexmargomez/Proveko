@@ -59,6 +59,30 @@ export class Ed25519JwtVault {
     };
   }
 
+  /**
+   * Deriva determinísticamente un par de llaves Ed25519 (PKCS#8 + SPKI PEM) a partir de una semilla maestra (`JWT_MASTER_SEED`),
+   * permitiendo que múltiples contenedores de microservicios independientes verifiquen firmas sin requerir PEMs multilínea en `.env`.
+   */
+  public static deriveDeterministicKeyPairEntry(
+    kid: string,
+    seedSecret: string,
+  ): Ed25519KeyPairEntry {
+    const seed32 = crypto.createHash('sha256').update(seedSecret, 'utf8').digest();
+    const pkcs8Header = Buffer.from('302e020100300506032b657004220420', 'hex');
+    const pkcs8Der = Buffer.concat([pkcs8Header, seed32]);
+    const privKeyObj = crypto.createPrivateKey({
+      key: pkcs8Der,
+      format: 'der',
+      type: 'pkcs8',
+    });
+    const pubKeyObj = crypto.createPublicKey(privKeyObj);
+    return {
+      kid,
+      privateKeyPem: privKeyObj.export({ type: 'pkcs8', format: 'pem' }).toString(),
+      publicKeyPem: pubKeyObj.export({ type: 'spki', format: 'pem' }).toString(),
+    };
+  }
+
   public signAccessToken(input: SignJwtInput, nowEpochSeconds?: number): string {
     const privateKey = this.privateKeys.get(this.activeKid);
     if (!privateKey) {

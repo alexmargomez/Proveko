@@ -199,6 +199,14 @@ export class FileBasedMigrationRegistry {
     const moduleKey = normalizeModuleKey(moduleKeyInput);
     return [...(this.filesByModule.get(moduleKey) ?? [])];
   }
+
+  public getAllMigrations(): MigrationFileDescriptor[] {
+    const all: MigrationFileDescriptor[] = [];
+    for (const list of this.filesByModule.values()) {
+      all.push(...list);
+    }
+    return all;
+  }
 }
 
 /**
