@@ -1,0 +1,64 @@
+# ==============================================================================
+# PROVEKO — Políticas de Red Zero-Trust en Kubernetes (`NetworkPolicy`)
+# ==============================================================================
+# 1. Ningún Pod de Microservicio (`role: ms-host-runner`) acepta conexiones
+#    entrantes de nadie excepto del Pod `api-gateway` (`role: api-gateway`).
+# 2. El StatefulSet de PostgreSQL (`app: proveko-db`) solo acepta conexiones TCP
+#    en el puerto 5432 desde `core-service`, `ms-host-runner` y `db-migrator`.
+# ==============================================================================
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: microservices-allow-only-api-gateway
+  namespace: proveko
+spec:
+  podSelector:
+    matchLabels:
+      role: ms-host-runner
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              role: api-gateway
+      ports:
+        - protocol: TCP
+          port: 4101
+        - protocol: TCP
+          port: 4102
+        - protocol: TCP
+          port: 4103
+        - protocol: TCP
+          port: 4104
+        - protocol: TCP
+          port: 4105
+        - protocol: TCP
+          port: 4106
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: database-allow-only-backend-pods
+  namespace: proveko
+spec:
+  podSelector:
+    matchLabels:
+      app: proveko-db
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              role: core-service
+        - podSelector:
+            matchLabels:
+              role: ms-host-runner
+        - podSelector:
+            matchLabels:
+              role: db-migrator
+      ports:
+        - protocol: TCP
+          port: 5432

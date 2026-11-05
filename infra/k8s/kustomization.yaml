@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: proveko
+resources:
+  - 00-namespace-and-secrets.yaml
+  - 01-database-statefulset.yaml
+  - 02-control-plane-and-gateway.yaml
+  - 03-microservices-deployments.yaml
+  - 04-network-policies-zerotrust.yaml

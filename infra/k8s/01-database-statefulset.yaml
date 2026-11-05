@@ -1,0 +1,86 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: proveko-db
+  namespace: proveko
+  labels:
+    app: proveko-db
+spec:
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+  clusterIP: None
+  selector:
+    app: proveko-db
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: proveko-db
+  namespace: proveko
+spec:
+  serviceName: "proveko-db"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: proveko-db
+  template:
+    metadata:
+      labels:
+        app: proveko-db
+        tier: database
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          args: ["postgres", "-c", "max_connections=400"]
+          ports:
+            - containerPort: 5432
+              name: postgres
+          envFrom:
+            - configMapRef:
+                name: proveko-cluster-config
+            - secretRef:
+                name: proveko-cluster-secrets
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 20Gi
+---
+# Job de Inicialización que migra proveko_control_db (coreDB) y db_version_prueba al desplegar en K8s
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: proveko-core-db-bootstrap
+  namespace: proveko
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: proveko-migrator
+        role: db-migrator
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: migrator
+          image: proveko/cluster-node:latest
+          command: ["npm", "run", "db:migrate:core"]
+          envFrom:
+            - configMapRef:
+                name: proveko-cluster-config
+            - secretRef:
+                name: proveko-cluster-secrets
