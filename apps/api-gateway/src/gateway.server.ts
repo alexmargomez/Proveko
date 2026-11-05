@@ -1,3 +1,4 @@
+import { ClusterHmacGuard } from '@proveko/crypto-vault';
 import {
   DoubleKeyServiceGuard,
   type HttpMethodType,
@@ -113,6 +114,7 @@ export class FetchUpstreamHttpClientAdapter implements UpstreamHttpClientPort {
  * 5. Aplica Rate Limiting con capacidad LRU acotada por nivel de suscripción.
  * 6. Enruta dinámicamente en 2 niveles: al Servidor Dedicado del Módulo (`UPSTREAM_MOD_*` / `UPSTREAM_MS_*`)
  *    o al Servidor `host-runner` del Microservicio Padre (`UPSTREAM_MS_*` / `UPSTREAM_SRV_*`).
+ * 7. Firma criptográficamente cada salto Gateway -> Microservicio con HMAC-SHA256 + Anti-Replay (`x-proveko-cluster-sig`).
  */
 export class ProvekoApiGateway {
   constructor(
@@ -120,6 +122,7 @@ export class ProvekoApiGateway {
     public readonly upstreamRegistry: UpstreamRouteRegistry,
     private readonly rateLimiter: RateLimiterPort = new TenantTierRateLimiter(),
     private readonly httpClient: UpstreamHttpClientPort = new FetchUpstreamHttpClientAdapter(),
+    private readonly clusterHmacGuard: ClusterHmacGuard = new ClusterHmacGuard(),
   ) {}
 
   public async handleGatewayRequest<TBody = unknown>(
@@ -207,8 +210,16 @@ export class ProvekoApiGateway {
             };
           }
 
-          // Si no hay transporte en memoria adjunto, realiza petición HTTP con timeout hacia el servidor remoto
+          // Si no hay transporte en memoria adjunto, realiza petición HTTP firmada con HMAC-SHA256 hacia el servidor remoto
           const targetUrl = `${upstream.baseUrl}${fullSubPathWithQuery}`;
+          const clusterHeaders = this.clusterHmacGuard.signOutboundRequest({
+            method: req.method,
+            pathAndQuery: fullSubPathWithQuery,
+            targetParent: parsedRoute.parentService,
+            targetModule: parsedRoute.microserviceKey,
+            authorizationHeader,
+          });
+
           const fetchRes = await this.httpClient.forwardHttpRequest({
             targetUrl,
             method: req.method,
@@ -216,6 +227,7 @@ export class ProvekoApiGateway {
             headers: {
               'x-proveko-target-parent': parsedRoute.parentService,
               'x-proveko-target-module': parsedRoute.microserviceKey,
+              ...clusterHeaders,
             },
             body: req.body,
           });

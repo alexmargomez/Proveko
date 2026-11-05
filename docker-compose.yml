@@ -70,6 +70,7 @@ services:
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,api-gateway}
       JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
       JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
+      PROVEKO_CLUSTER_SECRET: ${PROVEKO_CLUSTER_SECRET:-proveko_alpanel_cluster_hmac_secret_2026}
       # Ruteo hacia los Contenedores Independientes de Microservicios (o hacia otro VPS en ALpanel)
       UPSTREAM_MS_CRM: ${UPSTREAM_MS_CRM:-http://ms-crm:4101}
       UPSTREAM_MS_INVENTORY: ${UPSTREAM_MS_INVENTORY:-http://ms-inventory:4102}
@@ -115,6 +116,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-proveko_master_secret_2026}
       JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
       JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
+      PROVEKO_CLUSTER_SECRET: ${PROVEKO_CLUSTER_SECRET:-proveko_alpanel_cluster_hmac_secret_2026}
     depends_on:
       db:
         condition: service_healthy
@@ -140,6 +142,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-proveko_master_secret_2026}
       JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
       JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
+      PROVEKO_CLUSTER_SECRET: ${PROVEKO_CLUSTER_SECRET:-proveko_alpanel_cluster_hmac_secret_2026}
     depends_on:
       db:
         condition: service_healthy
@@ -165,6 +168,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-proveko_master_secret_2026}
       JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
       JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
+      PROVEKO_CLUSTER_SECRET: ${PROVEKO_CLUSTER_SECRET:-proveko_alpanel_cluster_hmac_secret_2026}
     depends_on:
       db:
         condition: service_healthy
@@ -190,6 +194,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-proveko_master_secret_2026}
       JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
       JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
+      PROVEKO_CLUSTER_SECRET: ${PROVEKO_CLUSTER_SECRET:-proveko_alpanel_cluster_hmac_secret_2026}
     depends_on:
       db:
         condition: service_healthy
@@ -215,6 +220,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-proveko_master_secret_2026}
       JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
       JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
+      PROVEKO_CLUSTER_SECRET: ${PROVEKO_CLUSTER_SECRET:-proveko_alpanel_cluster_hmac_secret_2026}
     depends_on:
       db:
         condition: service_healthy
@@ -240,6 +246,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-proveko_master_secret_2026}
       JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
       JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
+      PROVEKO_CLUSTER_SECRET: ${PROVEKO_CLUSTER_SECRET:-proveko_alpanel_cluster_hmac_secret_2026}
     depends_on:
       db:
         condition: service_healthy
@@ -265,6 +272,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-proveko_master_secret_2026}
       JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
       JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
+      PROVEKO_CLUSTER_SECRET: ${PROVEKO_CLUSTER_SECRET:-proveko_alpanel_cluster_hmac_secret_2026}
     depends_on:
       db:
         condition: service_healthy

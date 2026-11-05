@@ -2,7 +2,11 @@ import { existsSync } from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Ed25519JwtVault } from '@proveko/crypto-vault';
+import {
+  ClusterHmacGuard,
+  DEFAULT_PROVEKO_CLUSTER_SECRET,
+  Ed25519JwtVault,
+} from '@proveko/crypto-vault';
 import {
   DoubleKeyServiceGuard,
   type HttpMethodType,
@@ -15,6 +19,7 @@ import {
   normalizeModuleKey,
   normalizeParentMicroserviceKey,
   type ParentMicroserviceKey,
+  ProvekoDomainError,
   SEED_MICROSERVICES_CATALOG,
   SEED_SERVICES_CATALOG,
   type ServiceKey,
@@ -28,8 +33,9 @@ import { createSrvGastroHostRunner } from '../../srv-gastro/host-runner/src/inde
 import { createSrvHotelHostRunner } from '../../srv-hotel/host-runner/src/index.js';
 import { createSrvInventoryHostRunner } from '../../srv-inventory/host-runner/src/index.js';
 import { createSrvInvoicingHostRunner } from '../../srv-invoicing/host-runner/src/index.js';
-import { ProvekoApiGateway } from './gateway.server.js';
+import { FetchUpstreamHttpClientAdapter, ProvekoApiGateway } from './gateway.server.js';
 import { UpstreamRouteRegistry } from './routing/upstream-registry.js';
+import { TenantTierRateLimiter } from './security/rate-limiter.js';
 
 export type ProvekoClusterNodeRole =
   | 'api-gateway'
@@ -43,6 +49,7 @@ export interface StartClusterNodeOptions {
   host?: string;
   jwtMasterSeed?: string;
   jwtKid?: string;
+  clusterSecret?: string;
   parentService?: ServiceKey | ParentMicroserviceKey;
   enabledModulesFilter?: string;
   nodeId?: string;
@@ -113,10 +120,15 @@ export async function startProvekoClusterNodeHttpServer(
     options.jwtMasterSeed ??
     env.JWT_MASTER_SEED ??
     'proveko-default-cluster-ed25519-master-seed-2026';
+  const clusterSecret =
+    options.clusterSecret ??
+    env.PROVEKO_CLUSTER_SECRET ??
+    DEFAULT_PROVEKO_CLUSTER_SECRET;
 
   const keyPair = Ed25519JwtVault.deriveDeterministicKeyPairEntry(jwtKid, jwtMasterSeed);
   const jwtVault = new Ed25519JwtVault(jwtKid, [keyPair]);
   const guard = new DoubleKeyServiceGuard(jwtVault);
+  const clusterHmacGuard = new ClusterHmacGuard(clusterSecret);
 
   const nodeId =
     options.nodeId ??
@@ -139,7 +151,13 @@ export async function startProvekoClusterNodeHttpServer(
     hostRunner = createHostRunnerForParentService(rawParent, guard, enabledFilter, nodeId);
   } else if (options.nodeRole === 'api-gateway') {
     const upstreamRegistry = new UpstreamRouteRegistry(env);
-    gateway = new ProvekoApiGateway(guard, upstreamRegistry);
+    gateway = new ProvekoApiGateway(
+      guard,
+      upstreamRegistry,
+      new TenantTierRateLimiter(),
+      new FetchUpstreamHttpClientAdapter(),
+      clusterHmacGuard,
+    );
   } else if (options.nodeRole === 'core-service') {
     const cwdMigrations = path.resolve(process.cwd(), 'libs/tenant-db-resolver/migrations');
     const relativeMigrations = fileURLToPath(
@@ -228,6 +246,31 @@ export async function startProvekoClusterNodeHttpServer(
         }
 
         const targetModule = normalizeModuleKey(rawTargetModule as ModuleKey | MicroserviceKey);
+        const authHeaderRaw = req.headers['authorization'] ?? req.headers['Authorization'];
+        const authorizationHeader = Array.isArray(authHeaderRaw) ? authHeaderRaw[0] : authHeaderRaw;
+
+        // Sello Criptográfico de Clúster (HMAC-SHA256 + Anti-Replay):
+        // Bloquea cualquier acceso directo que no haya pasado por el API Gateway.
+        try {
+          clusterHmacGuard.verifyInboundRequest(req.headers, {
+            method,
+            pathAndQuery: url,
+            targetParent: hostRunner.parentService,
+            targetModule,
+            authorizationHeader,
+          });
+        } catch (hmacErr) {
+          if (hmacErr instanceof ProvekoDomainError) {
+            res.writeHead(hmacErr.statusCode, {
+              'content-type': 'application/problem+json',
+              'x-proveko-served-by': nodeId,
+            });
+            res.end(JSON.stringify(hmacErr.toProblemDetails()));
+            return;
+          }
+          throw hmacErr;
+        }
+
         const body = method !== 'GET' && method !== 'HEAD' ? await readJsonBody(req) : undefined;
 
         const qIndex = url.indexOf('?');

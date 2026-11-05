@@ -804,6 +804,55 @@ describe('Proveko — Full Outward Ecosystem: API Gateway, Multi-Server Topology
       const dianBody = (await dianHttpRes.json()) as any;
       expect(dianBody.grandTotal).toBe('238000.0000');
       expect(dianBody.cufeSha384).toHaveLength(96);
+
+      // C) Seguridad de Microservicio Instalado Fuera (Otro VPS):
+      // Si un atacante intenta llamar directo a la URL del microservicio saltándose el API Gateway
+      // (incluso teniendo un JWT Ed25519 válido), el Sello HMAC-SHA256 de Clúster lo bloquea con 403.
+      const directBypassNoHmacRes = await fetch(`${msInvoicingContainer.baseUrl}/invoices/emit`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${token}`,
+          'x-proveko-target-parent': 'ms:invoicing',
+          'x-proveko-target-module': 'mod:invoicing-electronic-dian',
+        },
+        body: JSON.stringify({
+          prefixAndNumber: 'SETP990000778',
+          issuerNit: '901999888',
+          customerNit: '222222222222',
+          subtotal: '100000.0000',
+          ivaPercent: '19.00',
+        }),
+      });
+      expect(directBypassNoHmacRes.status).toBe(403);
+      const bypassNoHmacBody = (await directBypassNoHmacRes.json()) as any;
+      expect(bypassNoHmacBody.error_code).toBe(PROVEKO_ERROR_CODES.ERR_CLUSTER_SIGNATURE_INVALID);
+
+      // D) Si intenta falsificar la firma HMAC-SHA256 sin tener PROVEKO_CLUSTER_SECRET, también recibe 403
+      const directBypassForgedHmacRes = await fetch(
+        `${msInvoicingContainer.baseUrl}/invoices/emit`,
+        {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            authorization: `Bearer ${token}`,
+            'x-proveko-target-parent': 'ms:invoicing',
+            'x-proveko-target-module': 'mod:invoicing-electronic-dian',
+            'x-proveko-cluster-ts': String(Math.floor(Date.now() / 1000)),
+            'x-proveko-cluster-sig': '0'.repeat(64),
+          },
+          body: JSON.stringify({
+            prefixAndNumber: 'SETP990000779',
+            issuerNit: '901999888',
+            customerNit: '222222222222',
+            subtotal: '100000.0000',
+            ivaPercent: '19.00',
+          }),
+        },
+      );
+      expect(directBypassForgedHmacRes.status).toBe(403);
+      const bypassForgedBody = (await directBypassForgedHmacRes.json()) as any;
+      expect(bypassForgedBody.error_code).toBe(PROVEKO_ERROR_CODES.ERR_CLUSTER_SIGNATURE_INVALID);
     } finally {
       await Promise.all([
         apiGatewayContainer.close(),
