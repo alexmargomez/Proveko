@@ -1,30 +1,21 @@
 import type { MicroserviceFrontendDefinition } from '../../web-app/src/domain/contracts/platform-hub.contract.js';
 
 /**
- * Frontend interno del Microservicio `srv-invoicing` (Módulo Principal: Facturación y Ventas).
- * Submódulos en interpestañas:
- *  - Caja POS y Tirilla Rápida (`mod-pos`)
- *  - Facturación Electrónica DIAN (`mod-dian`)
- *  - Cotizaciones y Remisiones (`mod-quotes`)
- * Funcionalidades (Componentes minis):
- *  - Ingreso de nombre de cajero (`comp-cashier-name`)
- *  - Propina sugerida en cuenta (`comp-tip`)
- *  - Descuento por línea (`comp-line-discount`)
- *  - Firma de encargado en remisión (`comp-invoice-manager-sign`)
+ * Frontend interno del Microservicio `srv-invoicing` (Módulo Principal: Facturación DIAN, POS, Tarifarios v2 y Glosas).
  */
 export const SRV_INVOICING_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
   serviceKey: 'srv-invoicing',
-  externalPrincipalModuleName: 'Facturación y Ventas',
+  externalPrincipalModuleName: 'Facturación DIAN, POS, Tarifarios (v2) y Glosas',
   icon: '🧾',
-  subtitle: 'Caja registradora POS, facturación electrónica DIAN, cotizaciones y remisiones.',
-  standaloneMonthlyUsd: 119000,
+  subtitle: 'Caja POS con arqueo ciego, facturación electrónica UBL 2.1, tarifarios v2, facturación agrupada y auditoría de glosas.',
+  standaloneMonthlyUsd: 145000,
   submodules: [
     {
       moduleKey: 'mod-pos',
       parentServiceKey: 'srv-invoicing',
-      externalSubmoduleName: 'Caja POS y Comprobantes',
+      externalSubmoduleName: 'Caja POS, Turnos y Tirilla Electrónica',
       tabIcon: '🛒',
-      summary: 'Terminal de venta rápida con carrito interactivo, cálculo de impuestos y medios de pago.',
+      summary: 'Terminal de venta rápida con carrito interactivo, pagos mixtos, arqueo ciego X/Z y cálculo de vueltas.',
       monthlyAddonUsd: 45000,
       actionButtonLabel: 'Emitir Comprobante POS',
       tableHeaders: ['Comprobante', 'Cliente', 'Cajero / Turno', 'Medio de Pago', 'Total', 'Estado'],
@@ -32,34 +23,17 @@ export const SRV_INVOICING_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       fields: [
         { key: 'customerName', label: 'Cliente / Comprador', type: 'text', placeholder: 'Consumidor Final o Razón Social' },
         { key: 'customerNit', label: 'NIT o Documento', type: 'text', placeholder: '222222222-2' },
-        {
-          key: 'cashierName',
-          label: 'Nombre de Cajero y Turno',
-          type: 'text',
-          placeholder: 'Ej: Laura Gómez — Turno Mañana',
-          requiredFeatureKey: 'comp-cashier-name',
-        },
-        {
-          key: 'paymentMethod',
-          label: 'Medio de Pago',
-          type: 'select',
-          options: ['Efectivo', 'Tarjeta Débito / Crédito', 'Transferencia / QR', 'Pago Mixto'],
-        },
-        {
-          key: 'tipPct',
-          label: 'Propina Voluntaria (%)',
-          type: 'number',
-          placeholder: '10',
-          requiredFeatureKey: 'comp-tip',
-        },
+        { key: 'cashierName', label: 'Nombre de Cajero y Turno', type: 'text', placeholder: 'Laura Gómez — Turno Mañana', requiredFeatureKey: 'comp-cashier-name' },
+        { key: 'paymentMethod', label: 'Medio de Pago', type: 'select', options: ['Efectivo', 'Tarjeta Débito / Crédito', 'Transferencia Nequi / Daviplata / QR', 'Pago Mixto'] },
+        { key: 'tipPct', label: 'Propina Voluntaria (%)', type: 'number', placeholder: '10', requiredFeatureKey: 'comp-tip' },
       ],
     },
     {
       moduleKey: 'mod-dian',
       parentServiceKey: 'srv-invoicing',
-      externalSubmoduleName: 'Facturación Electrónica DIAN',
+      externalSubmoduleName: 'Facturación Electrónica DIAN (UBL 2.1)',
       tabIcon: '🏛️',
-      summary: 'Emisión de facturas electrónicas de venta con validación previa, CUFE y envío de XML/PDF.',
+      summary: 'Emisión de facturas electrónicas FEV, Notas Crédito y Débito con validación previa, CUFE y XML/PDF.',
       monthlyAddonUsd: 69000,
       actionButtonLabel: 'Emitir Factura Electrónica',
       tableHeaders: ['Prefijo / Número', 'Adquirente', 'NIT', 'Total Gravado', 'CUFE / Estado DIAN', 'Fecha'],
@@ -68,30 +42,72 @@ export const SRV_INVOICING_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
         { key: 'buyerLegalName', label: 'Razón Social del Adquirente', type: 'text', placeholder: 'Comercializadora del Valle S.A.S.' },
         { key: 'buyerTaxId', label: 'NIT con Dígito de Verificación', type: 'text', placeholder: '901.452.110-4' },
         { key: 'buyerEmail', label: 'Correo de Recepción XML/PDF', type: 'text', placeholder: 'facturacion@empresa.co' },
-        { key: 'totalAmount', label: 'Valor Total Factura ($)', type: 'number', placeholder: '1450000' },
+        { key: 'totalAmount', label: 'Valor Total Factura ($ COP)', type: 'number', placeholder: '1450000' },
+      ],
+    },
+    {
+      moduleKey: 'mod-tariffs',
+      parentServiceKey: 'srv-invoicing',
+      externalSubmoduleName: 'Listas de Precios y Tarifarios Pactados (v2)',
+      tabIcon: '🏷️',
+      summary: 'Motor de tarifas estilo TarifaConvenio v2 con recargos/descuentos porcentuales y precios pactados por convenio.',
+      monthlyAddonUsd: 39000,
+      actionButtonLabel: 'Guardar Lista / Tarifa Pactada',
+      tableHeaders: ['Código Tarifa', 'Nombre Tarifario / Convenio', 'Regla de Cálculo', 'Vigencia', 'Precio Base / Factor'],
+      fields: [
+        { key: 'tariffCode', label: 'Código de Lista / Tarifario', type: 'text', placeholder: 'TAR-CORP-2026' },
+        { key: 'tariffName', label: 'Nombre de Lista o Convenio', type: 'text', placeholder: 'Tarifario Mayorista Institucional (-15%)' },
+        { key: 'pricingRule', label: 'Fórmula de Liquidación', type: 'select', options: ['Precio Fijo Pactado por Ítem', 'Descuento % sobre Lista Base', 'Margen % sobre Costo Promedio'] },
+        { key: 'sampleRateCop', label: 'Valor Referencia / Tarifa Base ($ COP)', type: 'number', placeholder: '125000' },
+      ],
+    },
+    {
+      moduleKey: 'mod-grouped-billing',
+      parentServiceKey: 'srv-invoicing',
+      externalSubmoduleName: 'Facturación Agrupada de Órdenes y Remisiones (v2)',
+      tabIcon: '📦',
+      summary: 'Consolida múltiples órdenes de servicio, remisiones o atenciones del mes en una sola Factura Corporativa con anexo.',
+      monthlyAddonUsd: 45000,
+      actionButtonLabel: 'Consolidar y Emitir Factura Agrupada',
+      tableHeaders: ['Lote Consolidado', 'Empresa / Contrato', 'Órdenes Incluidas', 'Corte Período', 'Total Facturado (COP)'],
+      fields: [
+        { key: 'batchCode', label: 'Consecutivo de Consolidación', type: 'text', placeholder: 'FAC-AGR-2026-089' },
+        { key: 'contractClient', label: 'Empresa y Contrato (v2)', type: 'text', placeholder: 'Grupo Industrial del Pacífico — CNT-2026-0084' },
+        { key: 'ordersIncluded', label: 'Cantidad de Remisiones / Órdenes Agrupadas', type: 'text', placeholder: '28 Remisiones Verificadas (Mes Octubre)' },
+        { key: 'consolidatedTotal', label: 'Total Factura Consolidada ($ COP)', type: 'number', placeholder: '18950000' },
+      ],
+    },
+    {
+      moduleKey: 'mod-glosas-disputes',
+      parentServiceKey: 'srv-invoicing',
+      externalSubmoduleName: 'Radicación de Facturas y Auditoría de Glosas (v2)',
+      tabIcon: '⚖️',
+      summary: 'Control de radicación ante clientes corporativos, registro de objeciones/glosas parciales, conciliación y nota crédito.',
+      monthlyAddonUsd: 45000,
+      actionButtonLabel: 'Registrar Radicado / Respuesta a Glosa',
+      tableHeaders: ['Radicado / Glosa', 'Factura Afectada', 'Causal de Objeción', 'Valor Objetado', 'Estado Conciliación'],
+      fields: [
+        { key: 'disputeCode', label: 'Número de Radicado / Glosa', type: 'text', placeholder: 'GLO-2026-00312' },
+        { key: 'invoiceRef', label: 'Factura Radicada', type: 'text', placeholder: 'FEV-10428 — Constructora Andina' },
+        { key: 'disputeReason', label: 'Causal de Glosa / Devolución', type: 'select', options: ['Diferencia en Tarifa Pactada', 'Soporte o Firma de Entrega Faltante', 'Diferencia en Cantidad Recibida', 'Radicación Exitosa Sin Glosa'] },
+        { key: 'disputedAmount', label: 'Valor Objetado / Conciliado ($ COP)', type: 'number', placeholder: '420000' },
       ],
     },
     {
       moduleKey: 'mod-quotes',
       parentServiceKey: 'srv-invoicing',
-      externalSubmoduleName: 'Cotizaciones y Remisiones',
+      externalSubmoduleName: 'Cotizaciones, Pedidos y Plan Separe',
       tabIcon: '📋',
-      summary: 'Propuestas comerciales, remisiones de entrega de mercancía y conversión a factura.',
+      summary: 'Propuestas comerciales, remisiones de entrega de mercancía, plan separe con abonos y conversión a factura.',
       monthlyAddonUsd: 39000,
-      actionButtonLabel: 'Guardar Cotización / Remisión',
+      actionButtonLabel: 'Guardar Cotización / Plan Separe',
       tableHeaders: ['Documento', 'Cliente', 'Vigencia', 'Encargado Autorizador', 'Valor Estimado', 'Estado'],
       fields: [
-        { key: 'docType', label: 'Tipo de Documento', type: 'select', options: ['Cotización Comercial', 'Remisión de Salida', 'Orden de Pedido'] },
+        { key: 'docType', label: 'Tipo de Documento', type: 'select', options: ['Cotización Comercial', 'Remisión de Salida', 'Plan Separe con Abono Inicial'] },
         { key: 'clientName', label: 'Empresa / Cliente', type: 'text', placeholder: 'Constructora Andina S.A.S.' },
         { key: 'validUntil', label: 'Válido Hasta', type: 'date' },
-        {
-          key: 'managerSignature',
-          label: 'Firma de Encargado que Autoriza',
-          type: 'text',
-          placeholder: 'Ing. Carlos Ruiz — Director Comercial',
-          requiredFeatureKey: 'comp-manager-signature',
-        },
-        { key: 'quotedTotal', label: 'Valor Cotizado ($)', type: 'number', placeholder: '3200000' },
+        { key: 'managerSignature', label: 'Firma de Encargado que Autoriza', type: 'text', placeholder: 'Ing. Carlos Ruiz', requiredFeatureKey: 'comp-manager-signature' },
+        { key: 'quotedTotal', label: 'Valor Total ($ COP)', type: 'number', placeholder: '3200000' },
       ],
     },
   ],
@@ -106,7 +122,7 @@ export const SRV_INVOICING_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
     },
     {
       componentKey: 'comp-tip',
-      externalName: 'Propina sugerida en cuenta',
+      externalName: 'Propina sugerida voluntaria en cuenta',
       description: 'Permite registrar porcentaje de propina voluntaria en la liquidación de caja.',
       parentModuleKey: 'mod-pos',
       includedByDefault: true,
@@ -114,8 +130,16 @@ export const SRV_INVOICING_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
     },
     {
       componentKey: 'comp-line-discount',
-      externalName: 'Descuento por línea en carrito',
+      externalName: 'Descuento por línea en carrito POS',
       description: 'Permite aplicar porcentaje de descuento individual por producto en el carrito POS.',
+      parentModuleKey: 'mod-pos',
+      includedByDefault: true,
+      monthlyAddonUsd: 19000,
+    },
+    {
+      componentKey: 'comp-blind-cash-count',
+      externalName: 'Arqueo ciego de caja X/Z por denominación de billetes y monedas',
+      description: 'Exige declarar el conteo físico en efectivo sin ver el saldo teórico antes de cerrar turno.',
       parentModuleKey: 'mod-pos',
       includedByDefault: true,
       monthlyAddonUsd: 19000,

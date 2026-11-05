@@ -1,19 +1,21 @@
 import type { ClientDatabaseTenantRecord } from '../../domain/contracts/platform-hub.contract.js';
+import { ALL_FEATURES_FLAT, ALL_SUBMODULES_FLAT, MICROSERVICE_FRONTEND_CATALOG } from './platform-centers.registry.js';
+import { EXPANSION_SUBMODULE_SEED_ROWS } from './platform-expansion-seed-rows.registry.js';
 
 /**
  * Estado inicial limpio:
  * - Cero empresas random pre-creadas.
- * - En Día 0 solo existe `db_version_prueba` (usada exclusivamente por el apartado Demo)
- *   además de `proveko_control_db` (Base Principal con los 4 roles: superadmin, desarrollador, auxiliar, cliente).
+ * - En Día 0 solo existe `db_version_prueba` (usada exclusivamente por el apartado Demo con los 14 Módulos Principales)
+ *   además de `proveko_control_db` y `proveko_groups_db`.
  * - Cada cliente real se crea cuando completa "Registra tu Negocio" o cuando lo registra el SuperAdmin.
  */
 export const INITIAL_CLIENT_DATABASES: readonly ClientDatabaseTenantRecord[] = [
   {
     tenantId: 'tnt-demo',
-    companyName: 'Entorno Demo Oficial Proveko',
+    companyName: 'Entorno Demo Oficial Proveko (14 Microservicios)',
     nit: '900.000.000-1',
-    businessTypeId: 'agro-logistica-bascula',
-    businessTypeName: 'Entorno Demo Integral (Todos los Módulos Principales)',
+    businessTypeId: 'erp-corporativo-integral',
+    businessTypeName: 'Entorno Demo Integral (14 Módulos Principales Activos)',
     dbName: 'db_version_prueba',
     dbHost: 'db',
     dbPort: 5432,
@@ -21,46 +23,35 @@ export const INITIAL_CLIENT_DATABASES: readonly ClientDatabaseTenantRecord[] = [
     monthlyUsd: 0,
     adminUsername: 'demo',
     adminPasswordHint: 'DemoProveko2026!',
-    maxRolesAllowed: 6,
-    maxUsersAllowed: 15,
-    activePrincipalServices: ['srv-invoicing', 'srv-inventory', 'srv-gastro', 'srv-hotel', 'srv-crm', 'srv-finance'],
-    activeSubmodules: [
-      'mod-pos', 'mod-dian', 'mod-quotes',
-      'mod-stock', 'mod-warehouses', 'mod-transfers', 'mod-recipes', 'mod-lots', 'mod-scale',
-      'mod-tables', 'mod-kds', 'mod-split',
-      'mod-bookings', 'mod-tickets', 'mod-rooms',
-      'mod-directory', 'mod-pipelines', 'mod-loyalty',
-      'mod-cashbook', 'mod-arap', 'mod-puc',
-    ],
-    activeFeatures: [
-      'comp-cashier-name', 'comp-tip', 'comp-line-discount',
-      'comp-manager-signature', 'comp-carrier-select', 'comp-scale-tare',
-      'comp-waiter-assign', 'comp-qr-ticket',
-    ],
+    maxRolesAllowed: 8,
+    maxUsersAllowed: 25,
+    activePrincipalServices: MICROSERVICE_FRONTEND_CATALOG.map((svc) => svc.serviceKey),
+    activeSubmodules: ALL_SUBMODULES_FLAT.map((sub) => sub.moduleKey),
+    activeFeatures: ALL_FEATURES_FLAT.map((feat) => feat.componentKey),
     internalRoles: [
       {
         roleId: 'rol-admin',
         name: 'Administrador General (Cuenta Admin)',
-        description: 'Control completo de la base de datos de la empresa, roles internos y usuarios.',
+        description: 'Control completo de la base de datos de la empresa, roles internos y los 14 módulos.',
         allowedSubmodules: ['*'],
       },
       {
         roleId: 'rol-cajero',
-        name: 'Cajero y Facturador',
-        description: 'Operación de Caja POS, Facturación Electrónica DIAN y Cotizaciones.',
-        allowedSubmodules: ['mod-pos', 'mod-dian', 'mod-quotes', 'mod-directory'],
+        name: 'Cajero, Facturador y Cartera',
+        description: 'Operación de Caja POS, Facturación Electrónica DIAN, Tarifarios v2, Glosas y Recibos de Caja CxC.',
+        allowedSubmodules: ['mod-pos', 'mod-dian', 'mod-tariffs', 'mod-grouped-billing', 'mod-glosas-disputes', 'mod-quotes', 'mod-directory', 'mod-receivables-cxc'],
       },
       {
         roleId: 'rol-bodega',
-        name: 'Encargado de Bodega y Báscula',
-        description: 'Existencias, Bodegas, Solicitudes de Traslado, Lotes y Báscula Camionera.',
-        allowedSubmodules: ['mod-stock', 'mod-warehouses', 'mod-transfers', 'mod-recipes', 'mod-lots', 'mod-scale'],
+        name: 'Jefe de Bodega, Compras y Báscula RNDC',
+        description: 'Existencias, Bodegas WMS, Actas v2, Toma Ciega, Compras, RADIAN y Báscula Camionera.',
+        allowedSubmodules: ['mod-stock', 'mod-warehouses', 'mod-transfers', 'mod-tech-reception', 'mod-physical-count', 'mod-recipes', 'mod-lots', 'mod-scale', 'mod-purchase-orders', 'mod-purchase-invoices', 'mod-fleet-scale', 'mod-fleet-dispatch-rndc'],
       },
       {
         roleId: 'rol-operador',
-        name: 'Operador de Servicio / Taquilla',
-        description: 'Salón de mesas, comandas KDS, reserva de cupos y emisión de tickets.',
-        allowedSubmodules: ['mod-tables', 'mod-kds', 'mod-split', 'mod-bookings', 'mod-tickets', 'mod-rooms'],
+        name: 'Coordinador Operativo (Taller / Gastro / Citas / Hotel)',
+        description: 'Órdenes de trabajo FixMotor, Salón y KDS, Agenda de Citas v2, Alojamiento y Taquilla QR.',
+        allowedSubmodules: ['mod-vehicles-assets', 'mod-work-orders-kanban', 'mod-tables', 'mod-kds', 'mod-calendar-slots', 'mod-bookings', 'mod-rooms', 'mod-event-tickets'],
       },
     ],
     internalUsers: [
@@ -122,7 +113,7 @@ export const INITIAL_SUBMODULE_ROWS: Record<string, readonly (readonly string[])
     ['RES-801', 'Valeria Mendoza', 'Salón Auditorio Empresarial', '2026-11-12 08:00 - 12:00', '40 Cupos', 'Confirmada'],
   ],
   'mod-tickets': [
-    ['TCK-99201', 'Pase General Día', 'Santiago Ospina', 'QR-PK-99201', '$ 45.000', 'Válido en Portería'],
+    ['TCK-99201', 'Pasadía Adulto (Incluye Almuerzo)', 'Santiago Ospina', 'QR-PK-99201', '$ 85.000', 'Válido en Portería'],
   ],
   'mod-rooms': [
     ['Habitación 304 — Ejecutiva', 'Camila Restrepo', '2 Noches', '$ 210.000 / noche', 'Check-In Activo'],
@@ -146,4 +137,5 @@ export const INITIAL_SUBMODULE_ROWS: Record<string, readonly (readonly string[])
   'mod-puc': [
     ['AST-9901', '130505 - Clientes Nacionales', '901.452.110-4', 'Causación Factura FEV-10421', '$ 4.850.000', 'Asentado'],
   ],
+  ...EXPANSION_SUBMODULE_SEED_ROWS,
 };

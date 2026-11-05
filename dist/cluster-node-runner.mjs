@@ -1,4 +1,4 @@
-import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);
+import { createRequire } from 'module'; const require = createRequire(import.meta.url);
 
 // apps/api-gateway/src/cluster-node-runner.ts
 import { existsSync as existsSync3 } from "node:fs";
@@ -12666,20 +12666,114 @@ function createSrvInvoicingHostRunner(guard, enabledMicroservicesEnv, hostNodeId
   );
 }
 
+// apps/srv-appointments/frontend/appointments-service.view.ts
+var SRV_APPOINTMENTS_FRONTEND_VIEW = {
+  serviceKey: "srv-appointments",
+  externalPrincipalModuleName: "Agendamiento, Turnos y Recordatorios IA (v2)",
+  icon: "\u{1F4C5}",
+  subtitle: "Motor de agendas multi-profesional y consultorios/recursos estilo v2, recordatorios interactivos WhatsApp IA y turnador.",
+  standaloneMonthlyUsd: 135e3,
+  submodules: [
+    {
+      moduleKey: "mod-calendar-slots",
+      parentServiceKey: "srv-appointments",
+      externalSubmoduleName: "Agenda Multi-Profesional y Recursos (v2)",
+      tabIcon: "\u{1F5D3}\uFE0F",
+      summary: "Calendario por bloques horarios, asignaci\xF3n de sala/consultorio/bah\xEDa, control de inasistencias y estados de cita.",
+      monthlyAddonUsd: 45e3,
+      actionButtonLabel: "Agendar Cita / Bloque Horario",
+      tableHeaders: ["C\xF3digo Cita", "Cliente / Usuario", "Profesional / Recurso", "Fecha y Hora", "Servicio Programado"],
+      fields: [
+        { key: "appointmentCode", label: "C\xF3digo de Cita", type: "text", placeholder: "CIT-2026-0412" },
+        { key: "customerName", label: "Cliente / Usuario y WhatsApp", type: "text", placeholder: "Laura Valentina R\xEDos \u2014 315 884 1200" },
+        { key: "specialistResource", label: "Profesional y Sala / Consultorio", type: "select", options: ["Dr. Alejandro Mej\xEDa \u2014 Consultorio 201", "Esp. Camila Pineda \u2014 Cabina 02", "Ing. Mateo G\xF3mez \u2014 Bah\xEDa Diagn\xF3stico 01"] },
+        { key: "slotDateTime", label: "Fecha y Bloque Horario", type: "text", placeholder: "2026-11-12 09:30 AM (45 min)" },
+        { key: "serviceName", label: "Servicio / Procedimiento Agendado", type: "text", placeholder: "Valoraci\xF3n Especializada Integral" }
+      ]
+    },
+    {
+      moduleKey: "mod-staff-schedules",
+      parentServiceKey: "srv-appointments",
+      externalSubmoduleName: "Mallas Horarias, Bloqueos y Excepciones",
+      tabIcon: "\u23F0",
+      summary: "Configuraci\xF3n de turnos semanales por especialista, vacaciones, permisos y tiempos de alistamiento.",
+      monthlyAddonUsd: 35e3,
+      actionButtonLabel: "Publicar Malla Horaria",
+      tableHeaders: ["Especialista", "Sede / Consultorio", "Franja Horaria", "Duraci\xF3n Bloque (min)", "Estado Malla"],
+      fields: [
+        { key: "specialistName", label: "Profesional / Especialista", type: "text", placeholder: "Dr. Alejandro Mej\xEDa" },
+        { key: "branchRoom", label: "Sede y Recurso F\xEDsico", type: "select", options: ["Sede Principal \u2014 Consultorio 201", "Sede Norte \u2014 Sala Especial 03", "Atenci\xF3n Virtual Teleconsulta"] },
+        { key: "workDaysSchedule", label: "D\xEDas y Franja Horaria", type: "text", placeholder: "Lunes a Viernes 07:00 AM - 05:00 PM" },
+        { key: "slotDurationMin", label: "Duraci\xF3n por Cita (Minutos)", type: "number", placeholder: "30" }
+      ]
+    },
+    {
+      moduleKey: "mod-interactive-reminders",
+      parentServiceKey: "srv-appointments",
+      externalSubmoduleName: "Recordatorios Interactivos WhatsApp / Email",
+      tabIcon: "\u{1F4AC}",
+      summary: "Env\xEDo automatizado 24h y 2h antes con botones interactivos para Confirmar, Cancelar o Reprogramar en vivo.",
+      monthlyAddonUsd: 39e3,
+      actionButtonLabel: "Disparar Recordatorio Interactivo",
+      tableHeaders: ["Env\xEDo #", "Destinatario", "Canal", "Respuesta Cliente", "Estado Cupo"],
+      fields: [
+        { key: "notificationCode", label: "C\xF3digo de Notificaci\xF3n", type: "text", placeholder: "WSP-2026-8812" },
+        { key: "customerName", label: "Cliente y Tel\xE9fono", type: "text", placeholder: "Laura Valentina R\xEDos \u2014 +57 3158841200" },
+        { key: "channel", label: "Canal de Recordatorio", type: "select", options: ["WhatsApp Interactivo IA (24h/2h)", "Correo Electr\xF3nico + ICS", "SMS Transaccional"] },
+        { key: "clientResponse", label: "Acci\xF3n del Usuario", type: "select", options: ["Confirmada por WhatsApp", "Solicit\xF3 Reprogramar", "Cancelada \u2014 Cupo Liberado"] }
+      ]
+    },
+    {
+      moduleKey: "mod-queue-turnador",
+      parentServiceKey: "srv-appointments",
+      externalSubmoduleName: "Sala de Espera, Check-In QR y Turnador TV",
+      tabIcon: "\u{1F4FA}",
+      summary: "Registro de llegada en kiosco o QR, llamado en pantalla de sala de espera por m\xF3dulo y m\xE9trica de espera.",
+      monthlyAddonUsd: 35e3,
+      actionButtonLabel: "Llamar Siguiente Turno en Pantalla",
+      tableHeaders: ["Turno Sala", "Cliente en Espera", "M\xF3dulo / Consultorio", "Espera (Min)", "Estado Llamado"],
+      fields: [
+        { key: "turnTicket", label: "C\xF3digo de Turno", type: "text", placeholder: "A-042 (Prioritario)" },
+        { key: "customerName", label: "Nombre en Sala de Espera", type: "text", placeholder: "Jorge Enrique Vargas" },
+        { key: "deskModule", label: "Consultorio / Ventanilla que Llama", type: "select", options: ["Consultorio 201", "Recepci\xF3n Admisiones 01", "Sala de Procedimientos 02"] },
+        { key: "waitingMinutes", label: "Minutos en Sala de Espera", type: "number", placeholder: "8" }
+      ]
+    }
+  ],
+  features: [
+    {
+      componentKey: "comp-overbooking-guard",
+      externalName: "Candado anti-cruce de profesional y consultorio/sala",
+      description: "Bloquea colisiones simult\xE1neas de especialista o recurso f\xEDsico al reservar o reprogramar citas.",
+      parentModuleKey: "mod-calendar-slots",
+      includedByDefault: true,
+      monthlyAddonUsd: 19e3
+    },
+    {
+      componentKey: "comp-whatsapp-ai-reschedule",
+      externalName: "Auto-reprogramaci\xF3n conversacional por WhatsApp IA",
+      description: "Libera el cupo autom\xE1ticamente al cancelar y ofrece 3 nuevos horarios disponibles al cliente.",
+      parentModuleKey: "mod-interactive-reminders",
+      includedByDefault: true,
+      monthlyAddonUsd: 25e3
+    }
+  ]
+};
+
 // apps/srv-crm/frontend/crm-service.view.ts
 var SRV_CRM_FRONTEND_VIEW = {
   serviceKey: "srv-crm",
-  externalPrincipalModuleName: "Clientes, Proveedores y Terceros (v2)",
+  externalPrincipalModuleName: "Clientes, Proveedores, Contratos (v2) y CRM 360",
   icon: "\u{1F91D}",
-  subtitle: "Listado maestro estilo v2 de clientes, proveedores y transportistas con filtros, cupos y fidelizaci\xF3n.",
-  standaloneMonthlyUsd: 95e3,
+  subtitle: "Directorio maestro estilo v2 (NIT+DV, DANE, sucursales), contratos con bolsa presupuestal, LTV 360\xB0 y fidelizaci\xF3n.",
+  standaloneMonthlyUsd: 115e3,
   submodules: [
     {
       moduleKey: "mod-directory",
       parentServiceKey: "srv-crm",
       externalSubmoduleName: "Listado de Clientes y Terceros (v2)",
       tabIcon: "\u{1F4C7}",
-      summary: "Directorio completo estilo version2: identificaci\xF3n NIT+DV, clasificaci\xF3n, r\xE9gimen fiscal, ciudad, correo FE y cupo de cr\xE9dito.",
+      summary: "Directorio completo estilo version2: identificaci\xF3n NIT+DV, responsabilidades DIAN, DANE, sucursales y cupo de cr\xE9dito.",
       monthlyAddonUsd: 29e3,
       actionButtonLabel: "Guardar Cliente / Tercero en BD",
       tableHeaders: ["NIT / Documento", "Raz\xF3n Social / Nombre", "Tipo de Tercero", "Ciudad / Tel\xE9fono", "Cupo Aprobado (COP)"],
@@ -12689,16 +12783,49 @@ var SRV_CRM_FRONTEND_VIEW = {
         { key: "legalName", label: "Raz\xF3n Social o Nombre Completo", type: "text", placeholder: "Distribuidora del Caribe S.A.S." },
         { key: "partyRole", label: "Clasificaci\xF3n del Tercero", type: "select", options: ["Cliente Corporativo", "Cliente Frecuente / Mostrador", "Proveedor de Insumos", "Empresa Transportista", "Cliente y Proveedor"] },
         { key: "taxRegime", label: "R\xE9gimen Tributario DIAN", type: "select", options: ["Responsable de IVA (R\xE9gimen Com\xFAn)", "No Responsable de IVA", "Gran Contribuyente", "R\xE9gimen Simple RST"] },
-        { key: "cityPhone", label: "Ciudad, Direcci\xF3n y WhatsApp", type: "text", placeholder: "Barranquilla \u2014 300 412 8890" },
+        { key: "cityPhone", label: "Ciudad DANE, Direcci\xF3n y WhatsApp", type: "text", placeholder: "Barranquilla (08001) \u2014 300 412 8890" },
         { key: "billingEmail", label: "Correo Recepci\xF3n Factura Electr\xF3nica", type: "text", placeholder: "facturacion@empresa.co" },
         { key: "paymentTerm", label: "Condici\xF3n y Plazo de Pago", type: "select", options: ["Contado Inmediato", "Cr\xE9dito 15 D\xEDas", "Cr\xE9dito 30 D\xEDas", "Cr\xE9dito 60 D\xEDas"] },
         { key: "creditLimit", label: "Cupo de Cr\xE9dito Aprobado ($ COP)", type: "number", placeholder: "15000000" }
       ]
     },
     {
+      moduleKey: "mod-contracts",
+      parentServiceKey: "srv-crm",
+      externalSubmoduleName: "Contratos Comerciales y Bolsas Presupuestales (v2)",
+      tabIcon: "\u{1F4DC}",
+      summary: "Convenios corporativos estilo EmpresaContrato v2 con techo presupuestal, consumo acumulado, vigencias y p\xF3lizas.",
+      monthlyAddonUsd: 45e3,
+      actionButtonLabel: "Crear / Actualizar Contrato Corporativo",
+      tableHeaders: ["N\xB0 Contrato", "Empresa / Convenio", "Vigencia", "Techo Presupuestal", "Saldo Disponible (COP)"],
+      fields: [
+        { key: "contractNumber", label: "N\xFAmero de Contrato / Convenio", type: "text", placeholder: "CNT-2026-0084" },
+        { key: "companyName", label: "Empresa Contratante", type: "text", placeholder: "Grupo Industrial del Pac\xEDfico S.A." },
+        { key: "validityRange", label: "Vigencia Inicial \u2014 Final", type: "text", placeholder: "2026-01-01 a 2026-12-31" },
+        { key: "budgetCeiling", label: "Bolsa / Techo Presupuestal ($ COP)", type: "number", placeholder: "120000000" },
+        { key: "availableBalance", label: "Saldo Disponible Actual ($ COP)", type: "number", placeholder: "84500000" }
+      ]
+    },
+    {
+      moduleKey: "mod-customer-360",
+      parentServiceKey: "srv-crm",
+      externalSubmoduleName: "Expediente 360\xB0 LTV y Segmentaci\xF3n RFM",
+      tabIcon: "\u{1F3AF}",
+      summary: "M\xE9tricas tipo FixMotor: valor hist\xF3rico comprado (LTV), ticket promedio, frecuencia de visita y alerta de inactividad.",
+      monthlyAddonUsd: 35e3,
+      actionButtonLabel: "Actualizar Ficha 360\xB0 y Segmento",
+      tableHeaders: ["Cliente", "Segmento RFM", "Total Hist\xF3rico LTV", "Ticket Promedio", "D\xEDas Sin Compra"],
+      fields: [
+        { key: "customerName", label: "Cliente Analizado", type: "text", placeholder: "Inversiones automotrices del Norte" },
+        { key: "rfmSegment", label: "Segmento RFM", type: "select", options: ["Campe\xF3n VIP (Alta Frecuencia)", "Leal Recurrente", "En Riesgo de Fuga (>60 d\xEDas)", "Nuevo Cliente"] },
+        { key: "lifetimeValueCop", label: "LTV Hist\xF3rico Acumulado ($ COP)", type: "number", placeholder: "42800000" },
+        { key: "avgTicketCop", label: "Ticket Promedio ($ COP)", type: "number", placeholder: "1850000" }
+      ]
+    },
+    {
       moduleKey: "mod-pipelines",
       parentServiceKey: "srv-crm",
-      externalSubmoduleName: "Oportunidades y Embudo",
+      externalSubmoduleName: "Oportunidades y Embudo Comercial",
       tabIcon: "\u{1F4C8}",
       summary: "Seguimiento de negocios en negociaci\xF3n, etapa comercial, ejecutivo asignado y cierre esperado.",
       monthlyAddonUsd: 39e3,
@@ -12708,13 +12835,13 @@ var SRV_CRM_FRONTEND_VIEW = {
         { key: "dealTitle", label: "Nombre del Negocio / Contrato", type: "text", placeholder: "Suministro Mensual Dotaci\xF3n Industrial" },
         { key: "prospectName", label: "Empresa Prospecto", type: "text", placeholder: "Ingenios Unidos S.A." },
         { key: "stage", label: "Etapa Actual", type: "select", options: ["Contacto Inicial", "Propuesta Enviada", "Negociaci\xF3n Final", "Ganada / Cerrada"] },
-        { key: "expectedValue", label: "Valor Estimado ($)", type: "number", placeholder: "18500000" }
+        { key: "expectedValue", label: "Valor Estimado ($ COP)", type: "number", placeholder: "18500000" }
       ]
     },
     {
       moduleKey: "mod-loyalty",
       parentServiceKey: "srv-crm",
-      externalSubmoduleName: "Fidelizaci\xF3n y Puntos",
+      externalSubmoduleName: "Fidelizaci\xF3n, Puntos y Cashback",
       tabIcon: "\u2B50",
       summary: "Acumulaci\xF3n y redenci\xF3n de puntos por compras frecuentes y categor\xEDas de cliente.",
       monthlyAddonUsd: 29e3,
@@ -12730,11 +12857,27 @@ var SRV_CRM_FRONTEND_VIEW = {
   features: [
     {
       componentKey: "comp-nit-dv-auto",
-      externalName: "C\xE1lculo autom\xE1tico de D\xEDgito de Verificaci\xF3n NIT",
+      externalName: "C\xE1lculo autom\xE1tico de D\xEDgito de Verificaci\xF3n NIT (M\xF3dulo 11 DIAN)",
       description: "Calcula autom\xE1ticamente el DV fiscal al registrar clientes, proveedores o transportistas.",
       parentModuleKey: "mod-directory",
       includedByDefault: true,
       monthlyAddonUsd: 15e3
+    },
+    {
+      componentKey: "comp-credit-quota-lock",
+      externalName: "Bloqueo autom\xE1tico de despacho por cupo de cr\xE9dito o mora",
+      description: "Impide facturar a cr\xE9dito cuando el cliente supera su cupo aprobado o presenta facturas vencidas.",
+      parentModuleKey: "mod-directory",
+      includedByDefault: true,
+      monthlyAddonUsd: 19e3
+    },
+    {
+      componentKey: "comp-contract-budget-alert",
+      externalName: "Alerta de agotamiento de bolsa presupuestal de contrato (v2)",
+      description: "Notifica cuando el consumo acumulado de un convenio supera el 80% del techo contratado.",
+      parentModuleKey: "mod-contracts",
+      includedByDefault: true,
+      monthlyAddonUsd: 19e3
     }
   ]
 };
@@ -12742,104 +12885,245 @@ var SRV_CRM_FRONTEND_VIEW = {
 // apps/srv-finance/frontend/finance-service.view.ts
 var SRV_FINANCE_FRONTEND_VIEW = {
   serviceKey: "srv-finance",
-  externalPrincipalModuleName: "Tesorer\xEDa, Cartera y Contabilidad",
-  icon: "\u{1F3E6}",
-  subtitle: "Flujo de caja y bancos, recaudo de cartera CxC, pago a proveedores CxP y asientos PUC.",
-  standaloneMonthlyUsd: 119e3,
+  externalPrincipalModuleName: "Contabilidad NIIF, PUC, Activos Fijos y Ex\xF3gena DIAN",
+  icon: "\u{1F4D8}",
+  subtitle: "Plan \xDAnico de Cuentas PUC Colombia, asientos contables, centros de costo, activos fijos y medios magn\xE9ticos Ex\xF3gena DIAN.",
+  standaloneMonthlyUsd: 139e3,
   submodules: [
+    {
+      moduleKey: "mod-puc",
+      parentServiceKey: "srv-finance",
+      externalSubmoduleName: "Plan \xDAnico de Cuentas (PUC) y Comprobantes",
+      tabIcon: "\u{1F4D8}",
+      summary: "Comprobantes de diario, causaci\xF3n autom\xE1tica por cuenta PUC de 6-8 d\xEDgitos y validaci\xF3n de partida doble.",
+      monthlyAddonUsd: 45e3,
+      actionButtonLabel: "Asentar Comprobante Contable",
+      tableHeaders: ["Asiento", "Cuenta PUC", "Tercero NIT", "Detalle", "D\xE9bito / Cr\xE9dito", "Estado"],
+      fields: [
+        { key: "pucCode", label: "Cuenta Contable PUC", type: "select", options: ["110505 - Caja General", "130505 - Clientes Nacionales", "220501 - Proveedores Nacionales", "236540 - ReteFuente Compras 2.5%", "413501 - Comercio al por Mayor y Menor"] },
+        { key: "thirdPartyNit", label: "NIT Tercero", type: "text", placeholder: "900.412.110-1" },
+        { key: "entryDetail", label: "Concepto Contable", type: "text", placeholder: "Causaci\xF3n Factura de Venta FEV-1042" },
+        { key: "entryAmount", label: "Valor Asiento ($ COP)", type: "number", placeholder: "2350000" }
+      ]
+    },
     {
       moduleKey: "mod-cashbook",
       parentServiceKey: "srv-finance",
-      externalSubmoduleName: "Caja y Bancos",
+      externalSubmoduleName: "Libro de Caja, Bancos y Movimientos",
       tabIcon: "\u{1F4B5}",
-      summary: "Ingresos, egresos de tesorer\xEDa, arqueo de turno y saldos conciliados en cuentas bancarias.",
+      summary: "Ingresos, egresos contables, arqueo de turno y saldos conciliados en cuentas bancarias.",
       monthlyAddonUsd: 39e3,
-      actionButtonLabel: "Registrar Movimiento de Caja/Banco",
+      actionButtonLabel: "Registrar Movimiento Contable",
       tableHeaders: ["Comprobante", "Cuenta / Caja", "Tipo", "Concepto", "Firma Encargado", "Monto"],
       fields: [
         { key: "accountName", label: "Caja o Cuenta Bancaria", type: "select", options: ["Caja General Principal", "Bancolombia Cuenta Corriente", "Davivienda Recaudos"] },
         { key: "movementType", label: "Naturaleza", type: "select", options: ["Ingreso / Recaudo", "Egreso / Pago", "Traslado entre Cuentas"] },
         { key: "concept", label: "Concepto del Movimiento", type: "text", placeholder: "Pago Flete Transporte Nacional" },
-        {
-          key: "managerSignature",
-          label: "Firma de Encargado que Autoriza",
-          type: "text",
-          placeholder: "Autorizado: Tesorer\xEDa General",
-          requiredFeatureKey: "comp-manager-signature"
-        },
-        { key: "amount", label: "Valor del Movimiento ($)", type: "number", placeholder: "890000" }
+        { key: "managerSignature", label: "Firma de Encargado que Autoriza", type: "text", placeholder: "Autorizado: Tesorer\xEDa General", requiredFeatureKey: "comp-manager-signature" },
+        { key: "amount", label: "Valor del Movimiento ($ COP)", type: "number", placeholder: "890000" }
       ]
     },
     {
       moduleKey: "mod-arap",
       parentServiceKey: "srv-finance",
-      externalSubmoduleName: "Cartera CxC y CxP",
+      externalSubmoduleName: "Auxiliar de Cartera Fiscal CxC y CxP",
       tabIcon: "\u{1F4D1}",
-      summary: "Seguimiento de facturas pendientes por cobrar a clientes y obligaciones por pagar a proveedores.",
-      monthlyAddonUsd: 45e3,
-      actionButtonLabel: "Registrar Abono / Obligaci\xF3n",
+      summary: "Saldos contables por tercero para cruce de cuentas 1305 (Clientes) y 2205/2335 (Proveedores y Costos por Pagar).",
+      monthlyAddonUsd: 42e3,
+      actionButtonLabel: "Registrar Cruce / Obligaci\xF3n",
       tableHeaders: ["Documento", "Tercero", "Tipo de Cartera", "Vencimiento", "Saldo Pendiente", "Estado"],
       fields: [
         { key: "thirdParty", label: "Cliente o Proveedor", type: "text", placeholder: "Agroinsumos del Norte S.A.S." },
         { key: "ledgerType", label: "Tipo de Cartera", type: "select", options: ["Cuenta por Cobrar (Cliente)", "Cuenta por Pagar (Proveedor)"] },
         { key: "dueDate", label: "Fecha de Vencimiento", type: "date" },
-        { key: "balanceAmount", label: "Valor / Abono ($)", type: "number", placeholder: "4200000" }
+        { key: "balanceAmount", label: "Valor / Abono ($ COP)", type: "number", placeholder: "4200000" }
       ]
     },
     {
-      moduleKey: "mod-puc",
+      moduleKey: "mod-cost-centers",
       parentServiceKey: "srv-finance",
-      externalSubmoduleName: "Contabilidad PUC",
-      tabIcon: "\u{1F4D8}",
-      summary: "Comprobantes de diario, causaci\xF3n autom\xE1tica por cuenta PUC y balance de prueba.",
-      monthlyAddonUsd: 45e3,
-      actionButtonLabel: "Asentar Comprobante Contable",
-      tableHeaders: ["Asiento", "Cuenta PUC", "Tercero", "Detalle", "D\xE9bito / Cr\xE9dito", "Estado"],
+      externalSubmoduleName: "Centros y Subcentros de Costo / Proyectos",
+      tabIcon: "\u{1F3D7}\uFE0F",
+      summary: "Contabilidad anal\xEDtica por sede, unidad de negocio, proyecto o veh\xEDculo para medir rentabilidad real.",
+      monthlyAddonUsd: 35e3,
+      actionButtonLabel: "Crear / Imputar Centro de Costo",
+      tableHeaders: ["C\xF3digo CC", "Centro de Costo / Proyecto", "Sede", "Presupuesto Mensual", "Ejecutado ($ COP)"],
       fields: [
-        { key: "pucCode", label: "Cuenta Contable PUC", type: "select", options: ["110505 - Caja General", "130505 - Clientes Nacionales", "220501 - Proveedores Nacionales", "413501 - Comercio al por Mayor y Menor"] },
-        { key: "thirdPartyNit", label: "NIT Tercero", type: "text", placeholder: "900.412.110-1" },
-        { key: "entryDetail", label: "Concepto Contable", type: "text", placeholder: "Causaci\xF3n Factura de Venta FEV-1042" },
-        { key: "entryAmount", label: "Valor Asiento ($)", type: "number", placeholder: "2350000" }
+        { key: "costCenterCode", label: "C\xF3digo Centro de Costo", type: "text", placeholder: "CC-200-LOGISTICA" },
+        { key: "costCenterName", label: "Nombre del Centro o Proyecto", type: "text", placeholder: "Operaci\xF3n Planta Norte y Distribuci\xF3n" },
+        { key: "monthlyBudget", label: "Presupuesto Mensual ($ COP)", type: "number", placeholder: "45000000" },
+        { key: "executedAmount", label: "Ejecuci\xF3n Acumulada ($ COP)", type: "number", placeholder: "31800000" }
+      ]
+    },
+    {
+      moduleKey: "mod-fixed-assets",
+      parentServiceKey: "srv-finance",
+      externalSubmoduleName: "Activos Fijos y Depreciaci\xF3n NIIF",
+      tabIcon: "\u{1F3E2}",
+      summary: "Hoja de vida de maquinaria, veh\xEDculos y equipos con c\xE1lculo mensual autom\xE1tico de depreciaci\xF3n NIIF.",
+      monthlyAddonUsd: 39e3,
+      actionButtonLabel: "Registrar Activo Fijo / Depreciar",
+      tableHeaders: ["Placa Activo", "Descripci\xF3n del Bien", "Vida \xDAtil (Meses)", "Costo Hist\xF3rico", "Valor Neto Libros (COP)"],
+      fields: [
+        { key: "assetTag", label: "Placa / C\xF3digo de Activo Fijo", type: "text", placeholder: "AF-MAQ-0042" },
+        { key: "assetDescription", label: "Nombre del Activo", type: "text", placeholder: "Montacargas El\xE9ctrico Toyota 2.5 Ton" },
+        { key: "usefulLifeMonths", label: "Vida \xDAtil NIIF (Meses)", type: "number", placeholder: "60" },
+        { key: "acquisitionCost", label: "Costo de Adquisici\xF3n ($ COP)", type: "number", placeholder: "95000000" }
+      ]
+    },
+    {
+      moduleKey: "mod-exogena-taxes",
+      parentServiceKey: "srv-finance",
+      externalSubmoduleName: "Certificados de Retenci\xF3n y Ex\xF3gena DIAN (1001-1009)",
+      tabIcon: "\u{1F3DB}\uFE0F",
+      summary: "Generaci\xF3n de formatos de Informaci\xF3n Ex\xF3gena DIAN (1001, 1003, 1005, 1006, 1007, 1008, 1009) y certificados.",
+      monthlyAddonUsd: 49e3,
+      actionButtonLabel: "Generar Formato Ex\xF3gena / Certificado",
+      tableHeaders: ["Formato DIAN", "Concepto Fiscal", "Terceros Reportados", "A\xF1o Gravable", "Total Reportado (COP)"],
+      fields: [
+        { key: "exogenaFormat", label: "Formato Medios Magn\xE9ticos DIAN", type: "select", options: ["Formato 1001 \u2014 Pagos y Retenciones Practicadas", "Formato 1007 \u2014 Ingresos Recibidos", "Formato 1008 \u2014 Saldo Cuentas por Cobrar", "Formato 1009 \u2014 Saldo Cuentas por Pagar", "Certificado Anual de Retenci\xF3n en la Fuente"] },
+        { key: "dianConceptCode", label: "Concepto DIAN", type: "text", placeholder: "5004 \u2014 Compra de Activos Movibles / Inventarios" },
+        { key: "reportedThirdParties", label: "Cantidad de NITs Incluidos", type: "number", placeholder: "128" },
+        { key: "totalReportedCop", label: "Monto Total Reportado ($ COP)", type: "number", placeholder: "845000000" }
       ]
     }
   ],
-  features: []
+  features: [
+    {
+      componentKey: "comp-withholding-calc",
+      externalName: "Motor autom\xE1tico de ReteFuente, ReteIVA, ReteICA y Autorretenci\xF3n por topes UVT",
+      description: "Calcula autom\xE1ticamente las retenciones seg\xFAn el r\xE9gimen tributario del emisor y del tercero.",
+      parentModuleKey: "mod-puc",
+      includedByDefault: true,
+      monthlyAddonUsd: 25e3
+    }
+  ]
+};
+
+// apps/srv-fleet/frontend/fleet-service.view.ts
+var SRV_FLEET_FRONTEND_VIEW = {
+  serviceKey: "srv-fleet",
+  externalPrincipalModuleName: "Flotas, B\xE1scula Camionera y RNDC",
+  icon: "\u{1F69B}",
+  subtitle: "B\xE1scula camionera RS-232 (Bruto/Tara/Neto), manifiestos RNDC Ministerio de Transporte, anticipos de viaje y control de llantas.",
+  standaloneMonthlyUsd: 165e3,
+  submodules: [
+    {
+      moduleKey: "mod-fleet-scale",
+      parentServiceKey: "srv-fleet",
+      externalSubmoduleName: "B\xE1scula Camionera RS-232 y Destare de Flota",
+      tabIcon: "\u2696\uFE0F",
+      summary: "Pesaje camionero Bruto / Tara / Neto en kilogramos y toneladas, descuento por humedad/impureza y transportista.",
+      monthlyAddonUsd: 65e3,
+      actionButtonLabel: "Emitir Tiquete de B\xE1scula",
+      tableHeaders: ["Tiquete", "Placa / Remolque", "Transportista / Conductor", "Peso Bruto", "Peso Tara", "Peso Neto"],
+      hasTruckScaleWeighbridge: true,
+      fields: [
+        { key: "truckPlate", label: "Placa Cabezote / Remolque", type: "text", placeholder: "SXT-942 / R-4481" },
+        { key: "driverName", label: "Conductor y C\xE9dula", type: "text", placeholder: "Hernando Valencia \u2014 CC 79.412.880" },
+        {
+          key: "carrierCompany",
+          label: "Seleccionar Transportista",
+          type: "select",
+          options: ["TransCarga Pesada de Colombia", "Cooperativa de Tractomulas del Sur", "Particular / Flota Propia"],
+          requiredFeatureKey: "comp-carrier-select"
+        },
+        { key: "cargoType", label: "Carga y Muelle Asignado", type: "text", placeholder: "Granel Ma\xEDz Amarillo \u2014 Muelle 3" }
+      ]
+    },
+    {
+      moduleKey: "mod-fleet-dispatch-rndc",
+      parentServiceKey: "srv-fleet",
+      externalSubmoduleName: "Despachos, Remesas y Manifiestos RNDC",
+      tabIcon: "\u{1F6E3}\uFE0F",
+      summary: "Emisi\xF3n de remesas terrestres de carga, manifiestos electr\xF3nicos RNDC, conductores y piso SICETAC.",
+      monthlyAddonUsd: 55e3,
+      actionButtonLabel: "Radicar Manifiesto RNDC",
+      tableHeaders: ["Manifiesto RNDC", "Ruta Origen \u2192 Destino", "Tractomula / Remolque", "Conductor", "Flete Pactado ($ COP)"],
+      fields: [
+        { key: "manifestCode", label: "Consecutivo Manifiesto RNDC", type: "text", placeholder: "MN-2026-08841" },
+        { key: "routeDetail", label: "Ruta Origen \u2192 Destino (DANE)", type: "text", placeholder: "Buenaventura (Valle) \u2192 Bogot\xE1 D.C." },
+        { key: "vehiclePlate", label: "Placa Cabezote y Tr\xE1iler", type: "text", placeholder: "WXY-812 / R-5520" },
+        { key: "driverName", label: "Conductor Asignado", type: "text", placeholder: "\xC1lvaro G\xF3mez \u2014 Lic. C3" },
+        { key: "agreedFreight", label: "Valor Flete Pactado ($ COP)", type: "number", placeholder: "4850000" }
+      ]
+    },
+    {
+      moduleKey: "mod-trip-settlements",
+      parentServiceKey: "srv-fleet",
+      externalSubmoduleName: "Anticipos de Viaje, Peajes, ACPM y Liquidaci\xF3n",
+      tabIcon: "\u26FD",
+      summary: "Legalizaci\xF3n de anticipos de conductores, peajes, ACPM (rendimiento Km/Gal\xF3n), vi\xE1ticos y cumplido de remesa.",
+      monthlyAddonUsd: 49e3,
+      actionButtonLabel: "Liquidar Viaje y Cumplido",
+      tableHeaders: ["Liquidaci\xF3n", "Manifiesto", "Anticipos Giro", "Peajes + ACPM + Vi\xE1ticos", "Saldo a Pagar ($ COP)"],
+      fields: [
+        { key: "settlementCode", label: "N\xB0 Liquidaci\xF3n de Viaje", type: "text", placeholder: "LIQ-V-2026-310" },
+        { key: "manifestRef", label: "Manifiesto RNDC Cumplido", type: "text", placeholder: "MN-2026-08841" },
+        { key: "advancePaid", label: "Anticipo Entregado ($ COP)", type: "number", placeholder: "2200000" },
+        { key: "tollsAndFuel", label: "Total Peajes + ACPM (Galones)", type: "text", placeholder: "18 Peajes + 145 Gal ACPM ($1.950.000)" },
+        { key: "netBalance", label: "Saldo Neto Propietario ($ COP)", type: "number", placeholder: "2601500" }
+      ]
+    },
+    {
+      moduleKey: "mod-tires-fleet-maint",
+      parentServiceKey: "srv-fleet",
+      externalSubmoduleName: "Control de Llantas por Eje, SOAT y Tecnomec\xE1nica",
+      tabIcon: "\u{1F6DE}",
+      summary: "Mapa de llantas por posici\xF3n de eje, profundidad de labrado (mm), reencauches y alertas SOAT/Tecnomec\xE1nica.",
+      monthlyAddonUsd: 45e3,
+      actionButtonLabel: "Registrar Inspecci\xF3n de Llanta / Veh\xEDculo",
+      tableHeaders: ["Serial Llanta", "Placa / Posici\xF3n Eje", "Labrado (mm)", "Km Acumulados", "Estado / SOAT"],
+      fields: [
+        { key: "tireSerial", label: "Serial de Llanta / Marca", type: "text", placeholder: "MICH-295-80R22-991" },
+        { key: "axlePosition", label: "Veh\xEDculo y Posici\xF3n de Eje", type: "select", options: ["Eje 1 Direccional Izq", "Eje 1 Direccional Der", "Eje 2 Tracci\xF3n Ext", "Tr\xE1iler Eje 3 Int"] },
+        { key: "treadDepthMm", label: "Profundidad Labrado (mm)", type: "text", placeholder: "8.5 mm (\xD3ptimo)" },
+        { key: "accumulatedKm", label: "Kil\xF3metros Acumulados", type: "number", placeholder: "64200" }
+      ]
+    }
+  ],
+  features: [
+    {
+      componentKey: "comp-weighbridge-humidity-discount",
+      externalName: "Descuento autom\xE1tico por humedad e impureza en b\xE1scula camionera",
+      description: "Resta autom\xE1ticamente el porcentaje de humedad e impureza de laboratorio sobre el peso neto destarado.",
+      parentModuleKey: "mod-fleet-scale",
+      includedByDefault: true,
+      monthlyAddonUsd: 25e3
+    },
+    {
+      componentKey: "comp-rndc-manifest-sync",
+      externalName: "Validaci\xF3n SICETAC y Radicaci\xF3n RNDC Ministerio de Transporte",
+      description: "Verifica piso tarifario SICETAC, retenci\xF3n 1% transporte y radicaci\xF3n de manifiesto de carga.",
+      parentModuleKey: "mod-fleet-dispatch-rndc",
+      includedByDefault: true,
+      monthlyAddonUsd: 25e3
+    }
+  ]
 };
 
 // apps/srv-gastro/frontend/gastro-service.view.ts
 var SRV_GASTRO_FRONTEND_VIEW = {
   serviceKey: "srv-gastro",
-  externalPrincipalModuleName: "Restaurantes, Mesas y Comandas",
+  externalPrincipalModuleName: "Restaurantes, Bares, Comandas KDS y Domicilios",
   icon: "\u{1F37D}\uFE0F",
-  subtitle: "Control de sal\xF3n, comandas en tiempo real para cocina/bar y divisi\xF3n de cuentas.",
-  standaloneMonthlyUsd: 119e3,
+  subtitle: "Sal\xF3n y barras, comandas KDS por estaci\xF3n, carta con modificadores, divisi\xF3n de cuentas y despacho de domicilios.",
+  standaloneMonthlyUsd: 129e3,
   submodules: [
     {
       moduleKey: "mod-tables",
       parentServiceKey: "srv-gastro",
-      externalSubmoduleName: "Sal\xF3n y Mapa de Mesas",
+      externalSubmoduleName: "Sal\xF3n, Barras y Mapa de Mesas",
       tabIcon: "\u{1FA91}",
-      summary: "Ocupaci\xF3n de mesas por terraza o sal\xF3n, comensales activos y asignaci\xF3n de mesero.",
+      summary: "Ocupaci\xF3n de mesas por terraza o sal\xF3n, comensales activos, medidas de licor y asignaci\xF3n de mesero.",
       monthlyAddonUsd: 39e3,
       actionButtonLabel: "Abrir / Actualizar Mesa",
       tableHeaders: ["Mesa / Zona", "Comensales", "Mesero Asignado", "Consumo Acumulado", "Estado"],
       fields: [
         { key: "tableCode", label: "Mesa y Zona", type: "select", options: ["Mesa 01 \u2014 Sal\xF3n Principal", "Mesa 05 \u2014 Terraza", "Mesa 12 \u2014 VIP", "Barra Principal 02"] },
         { key: "guestsCount", label: "N\xFAmero de Comensales", type: "number", placeholder: "4" },
-        {
-          key: "waiterName",
-          label: "Mesero / Bartender Asignado",
-          type: "text",
-          placeholder: "Mateo R\xEDos",
-          requiredFeatureKey: "comp-waiter-assign"
-        },
-        {
-          key: "barBottleMeasure",
-          label: "Medida de Licor / Botella (Bares)",
-          type: "select",
-          options: ["Botella Completa 750ml", "Media Botella 375ml", "Trago / Shot 1.5 Oz", "C\xF3ctel de Autor"],
-          requiredFeatureKey: "comp-bar-shot-measure"
-        },
+        { key: "waiterName", label: "Mesero / Bartender Asignado", type: "text", placeholder: "Mateo R\xEDos", requiredFeatureKey: "comp-waiter-assign" },
+        { key: "barBottleMeasure", label: "Medida de Licor / Botella (Bares)", type: "select", options: ["Botella Completa 750ml", "Media Botella 375ml", "Trago / Shot 1.5 Oz", "C\xF3ctel de Autor"], requiredFeatureKey: "comp-bar-shot-measure" },
         { key: "currentTotal", label: "Consumo Inicial ($ COP)", type: "number", placeholder: "148000" }
       ]
     },
@@ -12848,7 +13132,7 @@ var SRV_GASTRO_FRONTEND_VIEW = {
       parentServiceKey: "srv-gastro",
       externalSubmoduleName: "Monitor de Cocina y Barra (KDS)",
       tabIcon: "\u{1F525}",
-      summary: "Tablero de comandas por estaci\xF3n de preparaci\xF3n (parrilla, cocina fr\xEDa, barra de licores) y tiempos.",
+      summary: "Tablero de comandas por estaci\xF3n de preparaci\xF3n (parrilla, cocina fr\xEDa, barra de licores) y tiempos SLA.",
       monthlyAddonUsd: 45e3,
       actionButtonLabel: "Enviar Comanda a Cocina / Barra",
       tableHeaders: ["Comanda", "Mesa / Barra", "Pedido y Notas", "Estaci\xF3n", "Tiempo / Estado"],
@@ -12859,11 +13143,27 @@ var SRV_GASTRO_FRONTEND_VIEW = {
       ]
     },
     {
+      moduleKey: "mod-modifiers-menu",
+      parentServiceKey: "srv-gastro",
+      externalSubmoduleName: "Carta Digital, T\xE9rminos de Cocci\xF3n y Adiciones",
+      tabIcon: "\u{1F969}",
+      summary: 'Configuraci\xF3n de t\xE9rminos de carne, adiciones con cobro extra, exclusiones ("sin cebolla") y combos.',
+      monthlyAddonUsd: 29e3,
+      actionButtonLabel: "Guardar Grupo de Modificadores",
+      tableHeaders: ["Grupo Modificador", "Plato / Categor\xEDa", "Opciones Disponibles", "Recargo Adici\xF3n (COP)", "Estado"],
+      fields: [
+        { key: "modifierGroup", label: "Grupo de Modificador", type: "text", placeholder: "T\xE9rmino de Cocci\xF3n / Adiciones Parrilla" },
+        { key: "dishTarget", label: "Categor\xEDa Aplicable", type: "select", options: ["Cortes de Parrilla y Hamburguesas", "Cocteler\xEDa y Licores", "Pizzas y Pastas", "Desayunos y Combos"] },
+        { key: "optionsList", label: "Opciones de Selecci\xF3n", type: "text", placeholder: "Azul, Medio, Tres Cuartos (3/4), Bien Asado + Tocineta" },
+        { key: "extraPriceCop", label: "Recargo Adici\xF3n ($ COP)", type: "number", placeholder: "8500" }
+      ]
+    },
+    {
       moduleKey: "mod-split",
       parentServiceKey: "srv-gastro",
-      externalSubmoduleName: "Divisi\xF3n de Cuentas",
+      externalSubmoduleName: "Divisi\xF3n de Cuentas y Pre-Cuentas",
       tabIcon: "\u2797",
-      summary: "Separaci\xF3n de cuenta por silla, por comensal o en partes iguales antes de facturar.",
+      summary: "Separaci\xF3n de cuenta por silla, por comensal o en partes iguales con c\xE1lculo de Impoconsumo 8% y propina.",
       monthlyAddonUsd: 29e3,
       actionButtonLabel: "Registrar Divisi\xF3n de Cuenta",
       tableHeaders: ["Referencia", "Mesa", "Modalidad", "Pagadores", "Total por Pagador"],
@@ -12871,98 +13171,121 @@ var SRV_GASTRO_FRONTEND_VIEW = {
         { key: "tableRef", label: "Mesa a Dividir", type: "text", placeholder: "Mesa 12 \u2014 VIP" },
         { key: "splitMode", label: "Modalidad de Divisi\xF3n", type: "select", options: ["Por Comensal / Silla", "Partes Iguales", "Por Producto Consumido"] },
         { key: "payersCount", label: "Cantidad de Pagadores", type: "number", placeholder: "3" },
-        { key: "amountPerPayer", label: "Valor Promedio por Pagador ($)", type: "number", placeholder: "85000" }
+        { key: "amountPerPayer", label: "Valor Promedio por Pagador ($ COP)", type: "number", placeholder: "85000" }
+      ]
+    },
+    {
+      moduleKey: "mod-deliveries",
+      parentServiceKey: "srv-gastro",
+      externalSubmoduleName: "Domicilios Propios,Plataformas y Motorizados",
+      tabIcon: "\u{1F6F5}",
+      summary: "Despacho de pedidos a domicilio por WhatsApp/Web/Rappi, asignaci\xF3n de domiciliario y cuadre de efectivo.",
+      monthlyAddonUsd: 35e3,
+      actionButtonLabel: "Despachar Pedido con Domiciliario",
+      tableHeaders: ["Pedido #", "Cliente y Direcci\xF3n", "Canal", "Domiciliario", "Total + Env\xEDo (COP)"],
+      fields: [
+        { key: "orderCode", label: "Consecutivo Domicilio", type: "text", placeholder: "DOM-2026-419" },
+        { key: "customerAddress", label: "Cliente, Tel\xE9fono y Direcci\xF3n", type: "text", placeholder: "Cra 15 # 88-20 Apto 502 \u2014 310 554 1190" },
+        { key: "channel", label: "Canal de Entrada", type: "select", options: ["WhatsApp Directo Restaurante", "P\xE1gina Web Propia", "Rappi / Didi Food", "Tel\xE9fono PBX"] },
+        { key: "courierName", label: "Motorizado Asignado", type: "text", placeholder: "Kevin Andr\xE9s Mora \u2014 Moto Placa KLM-45D" },
+        { key: "totalWithDelivery", label: "Total a Recaudar ($ COP)", type: "number", placeholder: "94000" }
       ]
     }
   ],
   features: [
-    {
-      componentKey: "comp-waiter-assign",
-      externalName: "Asignaci\xF3n de mesero / bartender por mesa",
-      description: "Registra el mesero o bartender responsable en apertura de mesa y liquidaci\xF3n de propinas.",
-      parentModuleKey: "mod-tables",
-      includedByDefault: true,
-      monthlyAddonUsd: 15e3
-    },
-    {
-      componentKey: "comp-bar-shot-measure",
-      externalName: "Control de inventario por trago / botella (Bares)",
-      description: "Descuenta autom\xE1ticamente onzas o mililitros de botellas abiertas al vender tragos o c\xF3cteles.",
-      parentModuleKey: "mod-tables",
-      includedByDefault: true,
-      monthlyAddonUsd: 19e3
-    },
-    {
-      componentKey: "comp-happy-hour-pricing",
-      externalName: "Tarifas autom\xE1ticas Happy Hour (Bares)",
-      description: "Activa precios promocionales por franja horaria en barra y mesas.",
-      parentModuleKey: "mod-tables",
-      includedByDefault: true,
-      monthlyAddonUsd: 15e3
-    }
+    { componentKey: "comp-waiter-assign", externalName: "Asignaci\xF3n de mesero / bartender por mesa", description: "Registra el mesero o bartender responsable en apertura de mesa y liquidaci\xF3n de propinas.", parentModuleKey: "mod-tables", includedByDefault: true, monthlyAddonUsd: 15e3 },
+    { componentKey: "comp-bar-shot-measure", externalName: "Control de inventario por trago / botella (Bares)", description: "Descuenta autom\xE1ticamente onzas o mililitros de botellas abiertas al vender tragos o c\xF3cteles.", parentModuleKey: "mod-tables", includedByDefault: true, monthlyAddonUsd: 19e3 },
+    { componentKey: "comp-happy-hour-pricing", externalName: "Tarifas autom\xE1ticas Happy Hour (Bares)", description: "Activa precios promocionales por franja horaria en barra y mesas.", parentModuleKey: "mod-tables", includedByDefault: true, monthlyAddonUsd: 15e3 },
+    { componentKey: "comp-courtesy-auth", externalName: "PIN supervisor para cortes\xEDas y anulaciones de comanda", description: "Exige autorizaci\xF3n de administrador y motivo al anular un plato ya enviado a cocina.", parentModuleKey: "mod-kds", includedByDefault: true, monthlyAddonUsd: 15e3 }
   ]
 };
 
 // apps/srv-hotel/frontend/hotel-service.view.ts
 var SRV_HOTEL_FRONTEND_VIEW = {
   serviceKey: "srv-hotel",
-  externalPrincipalModuleName: "Reservas de Cupos, Tickets y Alojamiento",
-  icon: "\u{1F39F}\uFE0F",
-  subtitle: "Agenda de cupos por franja horaria, taquilla de tickets con c\xF3digo QR y recepci\xF3n de hu\xE9spedes.",
-  standaloneMonthlyUsd: 119e3,
+  externalPrincipalModuleName: "Hoteler\xEDa, Alojamiento, Folios y Reservas",
+  icon: "\u{1F3E8}",
+  subtitle: "Rack de habitaciones, check-in/out, folios de cargos (minibar/restaurante), tarifas por temporada y ama de llaves.",
+  standaloneMonthlyUsd: 129e3,
   submodules: [
     {
       moduleKey: "mod-bookings",
       parentServiceKey: "srv-hotel",
-      externalSubmoduleName: "Reserva de Cupos y Agenda",
+      externalSubmoduleName: "Reserva de Cupos, Caba\xF1as y Salones",
       tabIcon: "\u{1F4C5}",
-      summary: "Control de cupos disponibles por fecha, franja horaria, capacidad m\xE1xima y titular.",
+      summary: "Control de disponibilidad por fecha, temporada, anticipo garantizado y bloqueo en calendario.",
       monthlyAddonUsd: 39e3,
-      actionButtonLabel: "Confirmar Reserva de Cupo",
-      tableHeaders: ["C\xF3digo Reserva", "Titular", "Espacio / Servicio", "Fecha y Franja", "Cupos", "Estado"],
+      actionButtonLabel: "Confirmar Reserva de Alojamiento",
+      tableHeaders: ["C\xF3digo Reserva", "Titular", "Espacio / Habitaci\xF3n", "Fecha y Franja", "Cupos / Hu\xE9spedes", "Estado"],
       fields: [
         { key: "holderName", label: "Nombre del Titular", type: "text", placeholder: "Valeria Mendoza" },
-        { key: "spaceName", label: "Espacio / Recinto / Servicio", type: "select", options: ["Sal\xF3n Auditorio Empresarial", "Recorrido Guiado / Evento", "Caba\xF1a / Suite Ejecutiva"] },
-        { key: "bookingDate", label: "Fecha Programada", type: "date" },
-        { key: "slotsBooked", label: "Cantidad de Cupos Reservados", type: "number", placeholder: "4" }
-      ]
-    },
-    {
-      moduleKey: "mod-tickets",
-      parentServiceKey: "srv-hotel",
-      externalSubmoduleName: "Emisi\xF3n de Tickets y Taquilla",
-      tabIcon: "\u{1F3AB}",
-      summary: "Expedici\xF3n de tickets numerados de ingreso, pases de acceso y validaci\xF3n QR en porter\xEDa.",
-      monthlyAddonUsd: 45e3,
-      actionButtonLabel: "Emitir Ticket de Acceso",
-      tableHeaders: ["N\xB0 Ticket", "Categor\xEDa", "Visitante / Comprador", "C\xF3digo QR", "Tarifa", "Estado Porter\xEDa"],
-      fields: [
-        { key: "ticketCategory", label: "Categor\xEDa de Ticket", type: "select", options: ["Pase General D\xEDa", "Ticket VIP Preferencial", "Ticket Vehicular / Parqueadero"] },
-        { key: "visitorName", label: "Nombre del Visitante", type: "text", placeholder: "Santiago Ospina" },
-        {
-          key: "qrToken",
-          label: "C\xF3digo QR de Control",
-          type: "text",
-          placeholder: "QR-PK-88412",
-          requiredFeatureKey: "comp-qr-ticket"
-        },
-        { key: "ticketPrice", label: "Valor del Ticket ($)", type: "number", placeholder: "45000" }
+        { key: "spaceName", label: "Habitaci\xF3n / Caba\xF1a / Sal\xF3n", type: "select", options: ["Suite Ejecutiva Matrimonial", "Caba\xF1a Familiar Glamping", "Sal\xF3n Auditorio Empresarial"] },
+        { key: "bookingDate", label: "Fecha de Check-In", type: "date" },
+        { key: "slotsBooked", label: "Cantidad de Hu\xE9spedes", type: "number", placeholder: "4" }
       ]
     },
     {
       moduleKey: "mod-rooms",
       parentServiceKey: "srv-hotel",
-      externalSubmoduleName: "Recepci\xF3n y Alojamiento",
-      tabIcon: "\u{1F3E8}",
-      summary: "Check-in, check-out, estado de habitaciones/espacios y cargos a la cuenta del hu\xE9sped.",
+      externalSubmoduleName: "Recepci\xF3n, Check-In y Folio de Hu\xE9sped",
+      tabIcon: "\u{1F6CE}\uFE0F",
+      summary: "Check-in, registro TRA MinCIT, estado de habitaciones y cuenta maestra (folio) de consumos.",
       monthlyAddonUsd: 45e3,
-      actionButtonLabel: "Registrar Check-In / Habitaci\xF3n",
+      actionButtonLabel: "Registrar Check-In / Cargo a Habitaci\xF3n",
       tableHeaders: ["Habitaci\xF3n / Unidad", "Hu\xE9sped Titular", "Ingreso / Salida", "Tarifa Noche", "Estado"],
       fields: [
         { key: "roomNumber", label: "Unidad / Habitaci\xF3n", type: "text", placeholder: "Habitaci\xF3n 304 \u2014 Vista Jard\xEDn" },
         { key: "guestName", label: "Hu\xE9sped Titular y Documento", type: "text", placeholder: "Camila Restrepo \u2014 CC 1.020.441.210" },
         { key: "nightsCount", label: "Noches de Estad\xEDa", type: "number", placeholder: "2" },
-        { key: "nightlyRate", label: "Tarifa por Noche ($)", type: "number", placeholder: "210000" }
+        { key: "nightlyRate", label: "Tarifa por Noche ($ COP)", type: "number", placeholder: "210000" }
+      ]
+    },
+    {
+      moduleKey: "mod-seasonal-rates",
+      parentServiceKey: "srv-hotel",
+      externalSubmoduleName: "Tarifas por Temporada y Planes de Estad\xEDa",
+      tabIcon: "\u{1F31E}",
+      summary: "Configuraci\xF3n de tarifas din\xE1micas por temporada alta/media/baja, puentes festivos y planes con desayuno.",
+      monthlyAddonUsd: 35e3,
+      actionButtonLabel: "Guardar Plan Tarifario de Temporada",
+      tableHeaders: ["Plan / Temporada", "Tipo Habitaci\xF3n", "Vigencia", "Incluye Alimentaci\xF3n", "Tarifa Noche ($ COP)"],
+      fields: [
+        { key: "seasonPlanName", label: "Nombre de Temporada / Plan", type: "text", placeholder: "Temporada Alta Puentes Festivos \u2014 Plan Americano" },
+        { key: "roomType", label: "Categor\xEDa de Alojamiento", type: "select", options: ["Est\xE1ndar Doble", "Suite Junior VIP", "Caba\xF1a Familiar 6 Personas"] },
+        { key: "mealPlan", label: "R\xE9gimen de Alimentaci\xF3n", type: "select", options: ["Alojamiento + Desayuno Buffet", "Todo Incluido (Pensi\xF3n Completa)", "Solo Alojamiento"] },
+        { key: "seasonRateCop", label: "Tarifa Noche Temporada ($ COP)", type: "number", placeholder: "340000" }
+      ]
+    },
+    {
+      moduleKey: "mod-housekeeping",
+      parentServiceKey: "srv-hotel",
+      externalSubmoduleName: "Ama de Llaves, Aseo y Mantenimiento",
+      tabIcon: "\u{1F9F9}",
+      summary: "Tablero operativo de habitaciones (Sucia, En Limpieza, Inspeccionada, Bloqueada) y conteo de lencer\xEDa/minibar.",
+      monthlyAddonUsd: 32e3,
+      actionButtonLabel: "Actualizar Estado de Habitaci\xF3n",
+      tableHeaders: ["Habitaci\xF3n", "Camarera Asignada", "Estado Limpieza", "Novedad Minibar / Lencer\xEDa", "Hora Liberaci\xF3n"],
+      fields: [
+        { key: "roomCode", label: "Habitaci\xF3n / Caba\xF1a", type: "text", placeholder: "Habitaci\xF3n 304" },
+        { key: "staffAssigned", label: "Camarera / Auxiliar Asignado", type: "text", placeholder: "Luz Marina Pineda" },
+        { key: "cleaningState", label: "Estado de Ama de Llaves", type: "select", options: ["Inspeccionada \u2014 Lista para Check-In", "Sucia (Salida Reciente)", "En Proceso de Limpieza", "Fuera de Servicio / Mantenimiento"] },
+        { key: "minibarReport", label: "Consumo Minibar / Novedad", type: "text", placeholder: "2x Agua Cristal + 1x Chocolatina (Cargado a Folio)" }
+      ]
+    },
+    {
+      moduleKey: "mod-tickets",
+      parentServiceKey: "srv-hotel",
+      externalSubmoduleName: "Pasad\xEDas, Eventos y Tickets de Acceso QR",
+      tabIcon: "\u{1F3AB}",
+      summary: "Expedici\xF3n de pases de d\xEDa (Day Pass), acceso a piscina/zonas h\xFAmedas y validaci\xF3n QR en porter\xEDa.",
+      monthlyAddonUsd: 39e3,
+      actionButtonLabel: "Emitir Pase / Ticket QR",
+      tableHeaders: ["N\xB0 Ticket", "Categor\xEDa", "Visitante / Comprador", "C\xF3digo QR", "Tarifa", "Estado Porter\xEDa"],
+      fields: [
+        { key: "ticketCategory", label: "Categor\xEDa de Ticket", type: "select", options: ["Pasad\xEDa Adulto (Incluye Almuerzo)", "Pasad\xEDa Ni\xF1o", "Ticket Parqueadero / Evento"] },
+        { key: "visitorName", label: "Nombre del Visitante", type: "text", placeholder: "Santiago Ospina" },
+        { key: "qrToken", label: "C\xF3digo QR de Control", type: "text", placeholder: "QR-PK-88412", requiredFeatureKey: "comp-qr-ticket" },
+        { key: "ticketPrice", label: "Valor del Ticket ($ COP)", type: "number", placeholder: "85000" }
       ]
     }
   ],
@@ -12970,7 +13293,7 @@ var SRV_HOTEL_FRONTEND_VIEW = {
     {
       componentKey: "comp-qr-ticket",
       externalName: "Validador QR de ticket en porter\xEDa",
-      description: "Genera y valida token QR \xFAnico para control de acceso en eventos, cupos y parqueaderos.",
+      description: "Genera y valida token QR \xFAnico para control de acceso en eventos, pasad\xEDas y parqueaderos.",
       parentModuleKey: "mod-tickets",
       includedByDefault: true,
       monthlyAddonUsd: 19e3
@@ -12978,38 +13301,133 @@ var SRV_HOTEL_FRONTEND_VIEW = {
   ]
 };
 
+// apps/srv-hr-payroll/frontend/hr-payroll-service.view.ts
+var SRV_HR_PAYROLL_FRONTEND_VIEW = {
+  serviceKey: "srv-hr-payroll",
+  externalPrincipalModuleName: "N\xF3mina Electr\xF3nica DIAN, PILA y RRHH",
+  icon: "\u{1F465}",
+  subtitle: "Contratos laborales, liquidaci\xF3n quincenal/mensual, horas extras, seguridad social PILA, prestaciones y N\xF3mina Electr\xF3nica DIAN (CUNE).",
+  standaloneMonthlyUsd: 17e4,
+  submodules: [
+    {
+      moduleKey: "mod-employees-contracts",
+      parentServiceKey: "srv-hr-payroll",
+      externalSubmoduleName: "Empleados, Contratos, EPS, AFP, ARL y Fondos",
+      tabIcon: "\u{1FAAA}",
+      summary: "Ficha laboral completa, tipo de contrato (t\xE9rmino fijo, indefinido, aprendizaje, integral) y nivel de riesgo ARL I-V.",
+      monthlyAddonUsd: 45e3,
+      actionButtonLabel: "Registrar Contrato Laboral",
+      tableHeaders: ["Documento", "Empleado y Cargo", "Tipo Contrato", "EPS / Pensi\xF3n / ARL", "Salario Base ($ COP)"],
+      fields: [
+        { key: "employeeDoc", label: "C\xE9dula / Documento Empleado", type: "text", placeholder: "CC 1.032.488.910" },
+        { key: "fullNameRole", label: "Nombre Completo y Cargo", type: "text", placeholder: "Juli\xE1n David Torres \u2014 Jefe de Operaciones" },
+        { key: "contractType", label: "Modalidad de Contrato", type: "select", options: ["T\xE9rmino Indefinido", "T\xE9rmino Fijo", "Obra o Labor", "Aprendizaje SENA", "Salario Integral"] },
+        { key: "fundsSummary", label: "Fondos EPS / Pensi\xF3n / ARL Riesgo", type: "text", placeholder: "Sura EPS / Porvenir AFP / Sura ARL Nivel II" },
+        { key: "baseSalaryCop", label: "Salario B\xE1sico Mensual ($ COP)", type: "number", placeholder: "2850000" }
+      ]
+    },
+    {
+      moduleKey: "mod-payroll-settlement",
+      parentServiceKey: "srv-hr-payroll",
+      externalSubmoduleName: "Liquidaci\xF3n de N\xF3mina, Horas Extras y Novedades",
+      tabIcon: "\u{1F9EE}",
+      summary: "C\xE1lculo de auxilio de transporte, HED (25%), HEN (75%), HRN (35%), dominicales, incapacidades, FSP y libranzas.",
+      monthlyAddonUsd: 52e3,
+      actionButtonLabel: "Liquidar Per\xEDodo de N\xF3mina",
+      tableHeaders: ["Per\xEDodo", "Colaborador", "Total Devengado", "Deducciones Salud/Pensi\xF3n", "Neto a Pagar ($ COP)"],
+      fields: [
+        { key: "periodCode", label: "Per\xEDodo de Liquidaci\xF3n", type: "text", placeholder: "NOM-2026-11-Q1" },
+        { key: "employeeName", label: "Colaborador", type: "text", placeholder: "Juli\xE1n David Torres" },
+        { key: "accruedCop", label: "Total Devengado + Auxilio + Extras ($ COP)", type: "number", placeholder: "3120000" },
+        { key: "deductedCop", label: "Deducciones Empleado (Salud 4% + Pensi\xF3n 4%)", type: "number", placeholder: "228000" },
+        { key: "netPayCop", label: "Neto a Dispersar en Banco ($ COP)", type: "number", placeholder: "2892000" }
+      ]
+    },
+    {
+      moduleKey: "mod-social-benefits-pila",
+      parentServiceKey: "srv-hr-payroll",
+      externalSubmoduleName: "Seguridad Social PILA y Prestaciones Sociales",
+      tabIcon: "\u{1F3E6}",
+      summary: "Provisiones mensuales y liquidaci\xF3n de Prima de Servicios, Cesant\xEDas, Intereses (12%), Vacaciones y archivo plano PILA.",
+      monthlyAddonUsd: 49e3,
+      actionButtonLabel: "Generar Planilla PILA / Prestaciones",
+      tableHeaders: ["Planilla / Liquidaci\xF3n", "Concepto", "Empleados", "Exoneraci\xF3n Ley 1607", "Valor Liquidado ($ COP)"],
+      fields: [
+        { key: "benefitCode", label: "N\xFAmero Planilla PILA / Liquidaci\xF3n", type: "text", placeholder: "PILA-2026-11-8841" },
+        { key: "benefitType", label: "Concepto Liquidado", type: "select", options: ["Planilla Integrada PILA Mensual", "Prima Legal de Servicios", "Consignaci\xF3n Cesant\xEDas a Fondo", "Liquidaci\xF3n Definitiva de Contrato"] },
+        { key: "employeesCount", label: "Empleados Incluidos", type: "number", placeholder: "14" },
+        { key: "provisionTotalCop", label: "Total Aportes / Prestaciones ($ COP)", type: "number", placeholder: "9450000" }
+      ]
+    },
+    {
+      moduleKey: "mod-electronic-payroll-dian",
+      parentServiceKey: "srv-hr-payroll",
+      externalSubmoduleName: "Transmisi\xF3n N\xF3mina Electr\xF3nica DIAN (NI / CUNE)",
+      tabIcon: "\u{1F3DB}\uFE0F",
+      summary: "Generaci\xF3n XML mensual de Soporte de Pago de N\xF3mina Electr\xF3nica (NI) y Notas de Ajuste (NA) con firma digital y CUNE.",
+      monthlyAddonUsd: 55e3,
+      actionButtonLabel: "Transmitir N\xF3mina Electr\xF3nica a DIAN",
+      tableHeaders: ["Consecutivo NI", "Empleado Reportado", "CUNE DIAN", "Estado DIAN", "Neto Reportado ($ COP)"],
+      fields: [
+        { key: "niConsecutive", label: "Consecutivo Soporte N\xF3mina (NI)", type: "text", placeholder: "NE-2026-00314" },
+        { key: "employeeName", label: "Empleado Reportado", type: "text", placeholder: "Juli\xE1n David Torres" },
+        { key: "cuneHash", label: "CUNE SHA-384 Validado DIAN", type: "text", placeholder: "CUNE-9f82a41c-dian-2026-ok" },
+        { key: "reportedTotalCop", label: "Neto Reportado en XML ($ COP)", type: "number", placeholder: "2892000" }
+      ]
+    }
+  ],
+  features: [
+    {
+      componentKey: "comp-ley1607-exoneration",
+      externalName: "Exoneraci\xF3n autom\xE1tica de aportes Ley 1607 (Art. 114-1 E.T.)",
+      description: "Aplica exoneraci\xF3n autom\xE1tica de Salud Patronal (8.5%), SENA (2%) e ICBF (3%) para devengos menores a 10 SMMLV.",
+      parentModuleKey: "mod-employees-contracts",
+      includedByDefault: true,
+      monthlyAddonUsd: 19e3
+    },
+    {
+      componentKey: "comp-cune-dian-payroll",
+      externalName: "Firmador XAdES-EPES y validador CUNE de N\xF3mina Electr\xF3nica DIAN",
+      description: "Genera el C\xF3digo \xDAnico de N\xF3mina Electr\xF3nica (CUNE SHA-384) y valida reglas DIAN antes de transmitir.",
+      parentModuleKey: "mod-electronic-payroll-dian",
+      includedByDefault: true,
+      monthlyAddonUsd: 25e3
+    }
+  ]
+};
+
 // apps/srv-inventory/frontend/inventory-service.view.ts
 var SRV_INVENTORY_FRONTEND_VIEW = {
   serviceKey: "srv-inventory",
-  externalPrincipalModuleName: "Inventario, Bodegas y Log\xEDstica",
+  externalPrincipalModuleName: "Inventario, Bodegas, Lotes FEFO y Actas (v2)",
   icon: "\u{1F4E6}",
-  subtitle: "Existencias, apartado de bodegas, solicitudes para traslados, recetas, lotes y b\xE1scula camionera.",
-  standaloneMonthlyUsd: 139e3,
+  subtitle: "Kardex valorizado, bodegas, solicitudes de traslado, actas de recepci\xF3n t\xE9cnica v2, conteo f\xEDsico ciego, recetas y b\xE1scula.",
+  standaloneMonthlyUsd: 149e3,
   submodules: [
     {
       moduleKey: "mod-stock",
       parentServiceKey: "srv-inventory",
-      externalSubmoduleName: "Existencias y Cat\xE1logo",
+      externalSubmoduleName: "Existencias, Variantes y Kardex Valorizado",
       tabIcon: "\u{1F4CA}",
-      summary: "Kardex valorizado de productos, insumos, costo promedio ponderado y punto de reorden.",
+      summary: "Kardex valorizado de productos, variantes/seriales, costo promedio ponderado y punto de reorden.",
       monthlyAddonUsd: 39e3,
       actionButtonLabel: "Registrar Producto / Ajuste",
       tableHeaders: ["C\xF3digo SKU", "Producto / Insumo", "Bodega Base", "Disponible", "Stock M\xEDnimo", "Costo Unitario"],
       fields: [
-        { key: "sku", label: "C\xF3digo SKU", type: "text", placeholder: "INS-00412" },
+        { key: "sku", label: "C\xF3digo SKU / Barras", type: "text", placeholder: "INS-00412" },
         { key: "productName", label: "Nombre del Producto o Insumo", type: "text", placeholder: "Cemento Gris Estructural 50Kg" },
         { key: "warehouseName", label: "Bodega Asignada", type: "select", options: ["Bodega Central Principal", "Bodega Norte Punto Venta", "Bodega Materia Prima"] },
         { key: "onHandQty", label: "Cantidad Disponible", type: "number", placeholder: "180" },
         { key: "minStock", label: "Alerta Stock M\xEDnimo", type: "number", placeholder: "30" },
-        { key: "unitCost", label: "Costo Unitario ($)", type: "number", placeholder: "31500" }
+        { key: "unitCost", label: "Costo Unitario ($ COP)", type: "number", placeholder: "31500" }
       ]
     },
     {
       moduleKey: "mod-warehouses",
       parentServiceKey: "srv-inventory",
-      externalSubmoduleName: "Bodegas",
+      externalSubmoduleName: "Bodegas y Ubicaciones WMS",
       tabIcon: "\u{1F3ED}",
-      summary: "Administraci\xF3n de bodegas f\xEDsicas, centros de acopio, capacidad instalada y responsable.",
+      summary: "Administraci\xF3n de bodegas f\xEDsicas, pasillos/estantes, capacidad instalada y responsable.",
       monthlyAddonUsd: 45e3,
       actionButtonLabel: "Crear / Actualizar Bodega",
       tableHeaders: ["C\xF3digo", "Nombre de Bodega", "Ciudad / Sede", "Capacidad", "Encargado / Firma", "Estado"],
@@ -13017,22 +13435,16 @@ var SRV_INVENTORY_FRONTEND_VIEW = {
         { key: "warehouseCode", label: "C\xF3digo de Bodega", type: "text", placeholder: "BOD-NORTE-02" },
         { key: "warehouseTitle", label: "Nombre de la Bodega", type: "text", placeholder: "Bodega Log\xEDstica Zona Franca" },
         { key: "cityLocation", label: "Ciudad / Direcci\xF3n", type: "text", placeholder: "Yumbo \u2014 Autopista Cali Km 4" },
-        { key: "capacityTons", label: "Capacidad Operativa (Ton / Posiciones)", type: "text", placeholder: "450 Toneladas / 120 Estibas" },
-        {
-          key: "managerSignature",
-          label: "Firma de Encargado de Bodega",
-          type: "text",
-          placeholder: "Firmado: Jorge Eliecer Pardo (Jefe de Bodega)",
-          requiredFeatureKey: "comp-manager-signature"
-        }
+        { key: "capacityTons", label: "Capacidad Operativa (Ton / Estibas)", type: "text", placeholder: "450 Toneladas / 120 Estibas" },
+        { key: "managerSignature", label: "Firma de Encargado de Bodega", type: "text", placeholder: "Firmado: Jorge Eliecer Pardo", requiredFeatureKey: "comp-manager-signature" }
       ]
     },
     {
       moduleKey: "mod-transfers",
       parentServiceKey: "srv-inventory",
-      externalSubmoduleName: "Solicitudes para Traslados",
+      externalSubmoduleName: "Solicitudes para Traslados entre Bodegas",
       tabIcon: "\u{1F504}",
-      summary: "Solicitudes de traslado entre bodegas con despacho, recepci\xF3n, transportista y firma de encargado.",
+      summary: "Solicitudes de traslado entre bodegas con despacho en tr\xE1nsito, recepci\xF3n, transportista y firma.",
       monthlyAddonUsd: 55e3,
       actionButtonLabel: "Emitir Solicitud de Traslado",
       tableHeaders: ["Solicitud", "Bodega Origen", "Bodega Destino", "\xCDtem y Cantidad", "Transportista", "Firma Encargado"],
@@ -13040,26 +13452,46 @@ var SRV_INVENTORY_FRONTEND_VIEW = {
         { key: "originWarehouse", label: "Bodega Origen", type: "select", options: ["Bodega Central Principal", "Planta de Producci\xF3n", "Bodega Zona Franca"] },
         { key: "targetWarehouse", label: "Bodega Destino", type: "select", options: ["Bodega Norte Punto Venta", "Bodega Sur Despachos", "Bodega Principal"] },
         { key: "itemSummary", label: "Producto y Cantidad a Trasladar", type: "text", placeholder: "120 Sacos Harina Fortificada x 50Kg" },
-        {
-          key: "carrierName",
-          label: "Seleccionar Transportista",
-          type: "select",
-          options: ["Transportes R\xE1pidos del Norte S.A.S.", "Flota Propia \u2014 Cami\xF3n NPR Placa WXY-412", "Log\xEDstica Nacional Carga Segura"],
-          requiredFeatureKey: "comp-carrier-select"
-        },
-        {
-          key: "managerSignature",
-          label: "Firma de Encargado que Autoriza",
-          type: "text",
-          placeholder: "Autorizado: Ing. Andr\xE9s Mej\xEDa",
-          requiredFeatureKey: "comp-manager-signature"
-        }
+        { key: "carrierName", label: "Seleccionar Transportista", type: "select", options: ["Transportes R\xE1pidos del Norte S.A.S.", "Flota Propia \u2014 Cami\xF3n NPR Placa WXY-412", "Log\xEDstica Nacional Carga Segura"], requiredFeatureKey: "comp-carrier-select" },
+        { key: "managerSignature", label: "Firma de Encargado que Autoriza", type: "text", placeholder: "Autorizado: Ing. Andr\xE9s Mej\xEDa", requiredFeatureKey: "comp-manager-signature" }
+      ]
+    },
+    {
+      moduleKey: "mod-tech-reception",
+      parentServiceKey: "srv-inventory",
+      externalSubmoduleName: "Actas de Recepci\xF3n T\xE9cnica de Mercanc\xEDa (v2)",
+      tabIcon: "\u{1F321}\uFE0F",
+      summary: "Inspecci\xF3n t\xE9cnica estilo InventarioActaRecepcion v2: control de temperatura, cadena de fr\xEDo, registro sanitario y cuarentena.",
+      monthlyAddonUsd: 42e3,
+      actionButtonLabel: "Firmar Acta de Recepci\xF3n T\xE9cnica",
+      tableHeaders: ["N\xB0 Acta", "Proveedor / Factura", "Lote y Temp (\xB0C)", "Estado Empaque", "Concepto T\xE9cnico"],
+      fields: [
+        { key: "actaNumber", label: "Consecutivo Acta T\xE9cnica", type: "text", placeholder: "ACT-REC-2026-118" },
+        { key: "supplierInvoice", label: "Proveedor y Factura", type: "text", placeholder: "Laboratorios / Distribuidora Nacional \u2014 FE-9941" },
+        { key: "lotAndTemp", label: "Lote, Registro INVIMA/ICA y Temperatura (\xB0C)", type: "text", placeholder: "Lote L-8841 \u2014 Temp: 4.2 \xB0C (Cadena Fr\xEDo OK)" },
+        { key: "technicalConcept", label: "Dictamen de Recepci\xF3n", type: "select", options: ["Aprobado \u2014 Ingresa a Stock Disponible", "Aprobado con Observaciones", "Rechazado / En Bodega de Cuarentena"] }
+      ]
+    },
+    {
+      moduleKey: "mod-physical-count",
+      parentServiceKey: "srv-inventory",
+      externalSubmoduleName: "Toma F\xEDsica Ciega y Conciliaci\xF3n de Mermas",
+      tabIcon: "\u{1F4CB}",
+      summary: "Conteo f\xEDsico ciego sin mostrar saldo del sistema a los operarios, c\xE1lculo de diferencias y ajuste autom\xE1tico.",
+      monthlyAddonUsd: 39e3,
+      actionButtonLabel: "Cerrar Conteo Ciego y Ajustar",
+      tableHeaders: ["Sesi\xF3n Conteo", "Bodega Auditada", "\xCDtems Contados", "Diferencia Neta ($ COP)", "Estado Ajuste"],
+      fields: [
+        { key: "countSessionCode", label: "C\xF3digo de Toma F\xEDsica", type: "text", placeholder: "TOM-CIEGA-2026-09" },
+        { key: "warehouseAudited", label: "Bodega en Conteo", type: "select", options: ["Bodega Central Principal", "Bodega Norte Punto Venta", "Barra / Cava de Licores"] },
+        { key: "itemsCounted", label: "Referencias Verificadas", type: "number", placeholder: "145" },
+        { key: "netVarianceCop", label: "Diferencia Valorizada ($ COP)", type: "number", placeholder: "-48000" }
       ]
     },
     {
       moduleKey: "mod-recipes",
       parentServiceKey: "srv-inventory",
-      externalSubmoduleName: "Recetas y Producci\xF3n",
+      externalSubmoduleName: "Recetas y Producci\xF3n BOM",
       tabIcon: "\u{1F9EA}",
       summary: "F\xF3rmulas de producci\xF3n y escandallos con descuento autom\xE1tico de insumos por unidad.",
       monthlyAddonUsd: 55e3,
@@ -13074,9 +13506,9 @@ var SRV_INVENTORY_FRONTEND_VIEW = {
     {
       moduleKey: "mod-lots",
       parentServiceKey: "srv-inventory",
-      externalSubmoduleName: "Lotes y Vencimientos",
+      externalSubmoduleName: "Lotes y Vencimientos FEFO",
       tabIcon: "\u{1F4C5}",
-      summary: "Trazabilidad sanitaria por lote, fecha de vencimiento y despacho prioritario FEFO.",
+      summary: "Trazabilidad sanitaria por lote, fecha de vencimiento y despacho prioritario FEFO con sem\xE1foro.",
       monthlyAddonUsd: 39e3,
       actionButtonLabel: "Registrar Lote",
       tableHeaders: ["N\xB0 Lote", "Producto", "Bodega", "Vencimiento", "Cantidad", "Estado FEFO"],
@@ -13100,59 +13532,33 @@ var SRV_INVENTORY_FRONTEND_VIEW = {
       fields: [
         { key: "truckPlate", label: "Placa Cabezote / Remolque", type: "text", placeholder: "SXT-942 / R-4481" },
         { key: "driverName", label: "Conductor y C\xE9dula", type: "text", placeholder: "Hernando Valencia \u2014 CC 79.412.880" },
-        {
-          key: "carrierCompany",
-          label: "Seleccionar Transportista",
-          type: "select",
-          options: ["TransCarga Pesada de Colombia", "Cooperativa de Tractomulas del Sur", "Particular / Flota Propia"],
-          requiredFeatureKey: "comp-carrier-select"
-        },
+        { key: "carrierCompany", label: "Seleccionar Transportista", type: "select", options: ["TransCarga Pesada de Colombia", "Cooperativa de Tractomulas del Sur", "Particular / Flota Propia"], requiredFeatureKey: "comp-carrier-select" },
         { key: "cargoType", label: "Carga y Muelle Asignado", type: "text", placeholder: "Granel Ma\xEDz Amarillo \u2014 Muelle 3" }
       ]
     }
   ],
   features: [
-    {
-      componentKey: "comp-manager-signature",
-      externalName: "Firma de encargado",
-      description: "Exige registrar la firma o nombre del encargado responsable en bodegas, traslados y remisiones.",
-      parentModuleKey: "independent",
-      includedByDefault: true,
-      monthlyAddonUsd: 19e3
-    },
-    {
-      componentKey: "comp-carrier-select",
-      externalName: "Seleccionar transportista",
-      description: "Habilita el selector de empresa transportista y placa en traslados de bodega y b\xE1scula.",
-      parentModuleKey: "mod-transfers",
-      includedByDefault: true,
-      monthlyAddonUsd: 19e3
-    },
-    {
-      componentKey: "comp-scale-tare",
-      externalName: "C\xE1lculo autom\xE1tico Bruto / Tara / Neto en b\xE1scula",
-      description: "Calcula en vivo el peso neto destarado en kilogramos y toneladas para tractomulas.",
-      parentModuleKey: "mod-scale",
-      includedByDefault: true,
-      monthlyAddonUsd: 25e3
-    }
+    { componentKey: "comp-manager-signature", externalName: "Firma de encargado", description: "Exige registrar la firma o nombre del encargado responsable en bodegas, traslados y remisiones.", parentModuleKey: "independent", includedByDefault: true, monthlyAddonUsd: 19e3 },
+    { componentKey: "comp-carrier-select", externalName: "Seleccionar transportista", description: "Habilita el selector de empresa transportista y placa en traslados de bodega y b\xE1scula.", parentModuleKey: "mod-transfers", includedByDefault: true, monthlyAddonUsd: 19e3 },
+    { componentKey: "comp-scale-tare", externalName: "C\xE1lculo autom\xE1tico Bruto / Tara / Neto en b\xE1scula", description: "Calcula en vivo el peso neto destarado en kilogramos y toneladas para tractomulas.", parentModuleKey: "mod-scale", includedByDefault: true, monthlyAddonUsd: 25e3 },
+    { componentKey: "comp-expiry-semaphore", externalName: "Sem\xE1foro visual FEFO de lotes pr\xF3ximos a vencer (30/60/90 d\xEDas)", description: "Destaca en rojo/\xE1mbar/verde los lotes seg\xFAn sus d\xEDas restantes de vida \xFAtil.", parentModuleKey: "mod-lots", includedByDefault: true, monthlyAddonUsd: 15e3 }
   ]
 };
 
 // apps/srv-invoicing/frontend/invoicing-service.view.ts
 var SRV_INVOICING_FRONTEND_VIEW = {
   serviceKey: "srv-invoicing",
-  externalPrincipalModuleName: "Facturaci\xF3n y Ventas",
+  externalPrincipalModuleName: "Facturaci\xF3n DIAN, POS, Tarifarios (v2) y Glosas",
   icon: "\u{1F9FE}",
-  subtitle: "Caja registradora POS, facturaci\xF3n electr\xF3nica DIAN, cotizaciones y remisiones.",
-  standaloneMonthlyUsd: 119e3,
+  subtitle: "Caja POS con arqueo ciego, facturaci\xF3n electr\xF3nica UBL 2.1, tarifarios v2, facturaci\xF3n agrupada y auditor\xEDa de glosas.",
+  standaloneMonthlyUsd: 145e3,
   submodules: [
     {
       moduleKey: "mod-pos",
       parentServiceKey: "srv-invoicing",
-      externalSubmoduleName: "Caja POS y Comprobantes",
+      externalSubmoduleName: "Caja POS, Turnos y Tirilla Electr\xF3nica",
       tabIcon: "\u{1F6D2}",
-      summary: "Terminal de venta r\xE1pida con carrito interactivo, c\xE1lculo de impuestos y medios de pago.",
+      summary: "Terminal de venta r\xE1pida con carrito interactivo, pagos mixtos, arqueo ciego X/Z y c\xE1lculo de vueltas.",
       monthlyAddonUsd: 45e3,
       actionButtonLabel: "Emitir Comprobante POS",
       tableHeaders: ["Comprobante", "Cliente", "Cajero / Turno", "Medio de Pago", "Total", "Estado"],
@@ -13160,34 +13566,17 @@ var SRV_INVOICING_FRONTEND_VIEW = {
       fields: [
         { key: "customerName", label: "Cliente / Comprador", type: "text", placeholder: "Consumidor Final o Raz\xF3n Social" },
         { key: "customerNit", label: "NIT o Documento", type: "text", placeholder: "222222222-2" },
-        {
-          key: "cashierName",
-          label: "Nombre de Cajero y Turno",
-          type: "text",
-          placeholder: "Ej: Laura G\xF3mez \u2014 Turno Ma\xF1ana",
-          requiredFeatureKey: "comp-cashier-name"
-        },
-        {
-          key: "paymentMethod",
-          label: "Medio de Pago",
-          type: "select",
-          options: ["Efectivo", "Tarjeta D\xE9bito / Cr\xE9dito", "Transferencia / QR", "Pago Mixto"]
-        },
-        {
-          key: "tipPct",
-          label: "Propina Voluntaria (%)",
-          type: "number",
-          placeholder: "10",
-          requiredFeatureKey: "comp-tip"
-        }
+        { key: "cashierName", label: "Nombre de Cajero y Turno", type: "text", placeholder: "Laura G\xF3mez \u2014 Turno Ma\xF1ana", requiredFeatureKey: "comp-cashier-name" },
+        { key: "paymentMethod", label: "Medio de Pago", type: "select", options: ["Efectivo", "Tarjeta D\xE9bito / Cr\xE9dito", "Transferencia Nequi / Daviplata / QR", "Pago Mixto"] },
+        { key: "tipPct", label: "Propina Voluntaria (%)", type: "number", placeholder: "10", requiredFeatureKey: "comp-tip" }
       ]
     },
     {
       moduleKey: "mod-dian",
       parentServiceKey: "srv-invoicing",
-      externalSubmoduleName: "Facturaci\xF3n Electr\xF3nica DIAN",
+      externalSubmoduleName: "Facturaci\xF3n Electr\xF3nica DIAN (UBL 2.1)",
       tabIcon: "\u{1F3DB}\uFE0F",
-      summary: "Emisi\xF3n de facturas electr\xF3nicas de venta con validaci\xF3n previa, CUFE y env\xEDo de XML/PDF.",
+      summary: "Emisi\xF3n de facturas electr\xF3nicas FEV, Notas Cr\xE9dito y D\xE9bito con validaci\xF3n previa, CUFE y XML/PDF.",
       monthlyAddonUsd: 69e3,
       actionButtonLabel: "Emitir Factura Electr\xF3nica",
       tableHeaders: ["Prefijo / N\xFAmero", "Adquirente", "NIT", "Total Gravado", "CUFE / Estado DIAN", "Fecha"],
@@ -13196,30 +13585,72 @@ var SRV_INVOICING_FRONTEND_VIEW = {
         { key: "buyerLegalName", label: "Raz\xF3n Social del Adquirente", type: "text", placeholder: "Comercializadora del Valle S.A.S." },
         { key: "buyerTaxId", label: "NIT con D\xEDgito de Verificaci\xF3n", type: "text", placeholder: "901.452.110-4" },
         { key: "buyerEmail", label: "Correo de Recepci\xF3n XML/PDF", type: "text", placeholder: "facturacion@empresa.co" },
-        { key: "totalAmount", label: "Valor Total Factura ($)", type: "number", placeholder: "1450000" }
+        { key: "totalAmount", label: "Valor Total Factura ($ COP)", type: "number", placeholder: "1450000" }
+      ]
+    },
+    {
+      moduleKey: "mod-tariffs",
+      parentServiceKey: "srv-invoicing",
+      externalSubmoduleName: "Listas de Precios y Tarifarios Pactados (v2)",
+      tabIcon: "\u{1F3F7}\uFE0F",
+      summary: "Motor de tarifas estilo TarifaConvenio v2 con recargos/descuentos porcentuales y precios pactados por convenio.",
+      monthlyAddonUsd: 39e3,
+      actionButtonLabel: "Guardar Lista / Tarifa Pactada",
+      tableHeaders: ["C\xF3digo Tarifa", "Nombre Tarifario / Convenio", "Regla de C\xE1lculo", "Vigencia", "Precio Base / Factor"],
+      fields: [
+        { key: "tariffCode", label: "C\xF3digo de Lista / Tarifario", type: "text", placeholder: "TAR-CORP-2026" },
+        { key: "tariffName", label: "Nombre de Lista o Convenio", type: "text", placeholder: "Tarifario Mayorista Institucional (-15%)" },
+        { key: "pricingRule", label: "F\xF3rmula de Liquidaci\xF3n", type: "select", options: ["Precio Fijo Pactado por \xCDtem", "Descuento % sobre Lista Base", "Margen % sobre Costo Promedio"] },
+        { key: "sampleRateCop", label: "Valor Referencia / Tarifa Base ($ COP)", type: "number", placeholder: "125000" }
+      ]
+    },
+    {
+      moduleKey: "mod-grouped-billing",
+      parentServiceKey: "srv-invoicing",
+      externalSubmoduleName: "Facturaci\xF3n Agrupada de \xD3rdenes y Remisiones (v2)",
+      tabIcon: "\u{1F4E6}",
+      summary: "Consolida m\xFAltiples \xF3rdenes de servicio, remisiones o atenciones del mes en una sola Factura Corporativa con anexo.",
+      monthlyAddonUsd: 45e3,
+      actionButtonLabel: "Consolidar y Emitir Factura Agrupada",
+      tableHeaders: ["Lote Consolidado", "Empresa / Contrato", "\xD3rdenes Incluidas", "Corte Per\xEDodo", "Total Facturado (COP)"],
+      fields: [
+        { key: "batchCode", label: "Consecutivo de Consolidaci\xF3n", type: "text", placeholder: "FAC-AGR-2026-089" },
+        { key: "contractClient", label: "Empresa y Contrato (v2)", type: "text", placeholder: "Grupo Industrial del Pac\xEDfico \u2014 CNT-2026-0084" },
+        { key: "ordersIncluded", label: "Cantidad de Remisiones / \xD3rdenes Agrupadas", type: "text", placeholder: "28 Remisiones Verificadas (Mes Octubre)" },
+        { key: "consolidatedTotal", label: "Total Factura Consolidada ($ COP)", type: "number", placeholder: "18950000" }
+      ]
+    },
+    {
+      moduleKey: "mod-glosas-disputes",
+      parentServiceKey: "srv-invoicing",
+      externalSubmoduleName: "Radicaci\xF3n de Facturas y Auditor\xEDa de Glosas (v2)",
+      tabIcon: "\u2696\uFE0F",
+      summary: "Control de radicaci\xF3n ante clientes corporativos, registro de objeciones/glosas parciales, conciliaci\xF3n y nota cr\xE9dito.",
+      monthlyAddonUsd: 45e3,
+      actionButtonLabel: "Registrar Radicado / Respuesta a Glosa",
+      tableHeaders: ["Radicado / Glosa", "Factura Afectada", "Causal de Objeci\xF3n", "Valor Objetado", "Estado Conciliaci\xF3n"],
+      fields: [
+        { key: "disputeCode", label: "N\xFAmero de Radicado / Glosa", type: "text", placeholder: "GLO-2026-00312" },
+        { key: "invoiceRef", label: "Factura Radicada", type: "text", placeholder: "FEV-10428 \u2014 Constructora Andina" },
+        { key: "disputeReason", label: "Causal de Glosa / Devoluci\xF3n", type: "select", options: ["Diferencia en Tarifa Pactada", "Soporte o Firma de Entrega Faltante", "Diferencia en Cantidad Recibida", "Radicaci\xF3n Exitosa Sin Glosa"] },
+        { key: "disputedAmount", label: "Valor Objetado / Conciliado ($ COP)", type: "number", placeholder: "420000" }
       ]
     },
     {
       moduleKey: "mod-quotes",
       parentServiceKey: "srv-invoicing",
-      externalSubmoduleName: "Cotizaciones y Remisiones",
+      externalSubmoduleName: "Cotizaciones, Pedidos y Plan Separe",
       tabIcon: "\u{1F4CB}",
-      summary: "Propuestas comerciales, remisiones de entrega de mercanc\xEDa y conversi\xF3n a factura.",
+      summary: "Propuestas comerciales, remisiones de entrega de mercanc\xEDa, plan separe con abonos y conversi\xF3n a factura.",
       monthlyAddonUsd: 39e3,
-      actionButtonLabel: "Guardar Cotizaci\xF3n / Remisi\xF3n",
+      actionButtonLabel: "Guardar Cotizaci\xF3n / Plan Separe",
       tableHeaders: ["Documento", "Cliente", "Vigencia", "Encargado Autorizador", "Valor Estimado", "Estado"],
       fields: [
-        { key: "docType", label: "Tipo de Documento", type: "select", options: ["Cotizaci\xF3n Comercial", "Remisi\xF3n de Salida", "Orden de Pedido"] },
+        { key: "docType", label: "Tipo de Documento", type: "select", options: ["Cotizaci\xF3n Comercial", "Remisi\xF3n de Salida", "Plan Separe con Abono Inicial"] },
         { key: "clientName", label: "Empresa / Cliente", type: "text", placeholder: "Constructora Andina S.A.S." },
         { key: "validUntil", label: "V\xE1lido Hasta", type: "date" },
-        {
-          key: "managerSignature",
-          label: "Firma de Encargado que Autoriza",
-          type: "text",
-          placeholder: "Ing. Carlos Ruiz \u2014 Director Comercial",
-          requiredFeatureKey: "comp-manager-signature"
-        },
-        { key: "quotedTotal", label: "Valor Cotizado ($)", type: "number", placeholder: "3200000" }
+        { key: "managerSignature", label: "Firma de Encargado que Autoriza", type: "text", placeholder: "Ing. Carlos Ruiz", requiredFeatureKey: "comp-manager-signature" },
+        { key: "quotedTotal", label: "Valor Total ($ COP)", type: "number", placeholder: "3200000" }
       ]
     }
   ],
@@ -13234,7 +13665,7 @@ var SRV_INVOICING_FRONTEND_VIEW = {
     },
     {
       componentKey: "comp-tip",
-      externalName: "Propina sugerida en cuenta",
+      externalName: "Propina sugerida voluntaria en cuenta",
       description: "Permite registrar porcentaje de propina voluntaria en la liquidaci\xF3n de caja.",
       parentModuleKey: "mod-pos",
       includedByDefault: true,
@@ -13242,9 +13673,537 @@ var SRV_INVOICING_FRONTEND_VIEW = {
     },
     {
       componentKey: "comp-line-discount",
-      externalName: "Descuento por l\xEDnea en carrito",
+      externalName: "Descuento por l\xEDnea en carrito POS",
       description: "Permite aplicar porcentaje de descuento individual por producto en el carrito POS.",
       parentModuleKey: "mod-pos",
+      includedByDefault: true,
+      monthlyAddonUsd: 19e3
+    },
+    {
+      componentKey: "comp-blind-cash-count",
+      externalName: "Arqueo ciego de caja X/Z por denominaci\xF3n de billetes y monedas",
+      description: "Exige declarar el conteo f\xEDsico en efectivo sin ver el saldo te\xF3rico antes de cerrar turno.",
+      parentModuleKey: "mod-pos",
+      includedByDefault: true,
+      monthlyAddonUsd: 19e3
+    }
+  ]
+};
+
+// apps/srv-procurement/frontend/procurement-service.view.ts
+var SRV_PROCUREMENT_FRONTEND_VIEW = {
+  serviceKey: "srv-procurement",
+  externalPrincipalModuleName: "Compras, Proveedores, RADIAN y Doc Soporte",
+  icon: "\u{1F6CD}\uFE0F",
+  subtitle: "\xD3rdenes de compra a proveedores, recepci\xF3n de facturas, buz\xF3n RADIAN (030/032/033) y Documento Soporte DIAN.",
+  standaloneMonthlyUsd: 119e3,
+  submodules: [
+    {
+      moduleKey: "mod-purchase-orders",
+      parentServiceKey: "srv-procurement",
+      externalSubmoduleName: "\xD3rdenes de Compra (OC)",
+      tabIcon: "\u{1F4DD}",
+      summary: "Emisi\xF3n de \xF3rdenes de compra (EgresoOrden v2) con control de cantidad pedida vs recibida en bodega.",
+      monthlyAddonUsd: 39e3,
+      actionButtonLabel: "Emitir Orden de Compra",
+      tableHeaders: ["N\xB0 Orden", "Proveedor NIT", "Bodega Destino", "Estado Recepci\xF3n", "Total Orden ($ COP)"],
+      fields: [
+        { key: "poNumber", label: "Consecutivo Orden de Compra", type: "text", placeholder: "OC-2026-00418" },
+        { key: "supplierName", label: "Proveedor y NIT", type: "text", placeholder: "Distribuidora Nacional de Insumos S.A.S. \u2014 900.412.889-1" },
+        { key: "targetWarehouse", label: "Bodega de Recepci\xF3n", type: "select", options: ["Bodega Central Principal", "Bodega Norte Punto Venta", "Bodega Materia Prima"] },
+        { key: "itemsSummary", label: "Detalle y Cantidades Pedidas", type: "text", placeholder: "80 Und Aceite Sint\xE9tico 20W50 + 40 Filtros" },
+        {
+          key: "approvalSignature",
+          label: "Firma de Aprobaci\xF3n de Compra",
+          type: "text",
+          placeholder: "Aprobado: Gerencia de Compras",
+          requiredFeatureKey: "comp-po-approval-signature"
+        },
+        { key: "totalAmount", label: "Valor Total Orden ($ COP)", type: "number", placeholder: "4850000" }
+      ]
+    },
+    {
+      moduleKey: "mod-purchase-invoices",
+      parentServiceKey: "srv-procurement",
+      externalSubmoduleName: "Facturas de Compra y Gastos",
+      tabIcon: "\u{1F9FE}",
+      summary: "Causaci\xF3n de facturas de proveedores con cruce de OC, actualizaci\xF3n de costo promedio y retenciones.",
+      monthlyAddonUsd: 39e3,
+      actionButtonLabel: "Causar Factura de Compra",
+      tableHeaders: ["Factura Proveedor", "Proveedor", "Orden Cruzada", "IVA / Retenciones", "Neto por Pagar ($ COP)"],
+      fields: [
+        { key: "supplierInvoiceNum", label: "Prefijo y N\xFAmero Factura Proveedor", type: "text", placeholder: "FE-99412" },
+        { key: "supplierName", label: "Proveedor Emisor", type: "text", placeholder: "Importadora Andina S.A.S." },
+        { key: "poRef", label: "Orden de Compra / Entrada Almac\xE9n", type: "text", placeholder: "OC-2026-00418 / EA-109" },
+        { key: "taxSummary", label: "IVA Descontable y ReteFuente Aplicada", type: "select", options: ["IVA 19% + ReteFuente Compras 2.5%", "IVA 5% + ReteFuente 2.5%", "Servicio Gravado + ReteFuente 4%", "Exento / R\xE9gimen Simple"] },
+        { key: "netPayable", label: "Valor Neto a Pagar ($ COP)", type: "number", placeholder: "5420000" }
+      ]
+    },
+    {
+      moduleKey: "mod-support-doc-dse",
+      parentServiceKey: "srv-procurement",
+      externalSubmoduleName: "Documento Soporte DIAN (No Obligados)",
+      tabIcon: "\u{1F3DB}\uFE0F",
+      summary: "Transmisi\xF3n electr\xF3nica de Documento Soporte (CUDS) para compras y cuentas de cobro a no responsables de IVA.",
+      monthlyAddonUsd: 45e3,
+      actionButtonLabel: "Transmitir Documento Soporte DIAN",
+      tableHeaders: ["N\xB0 DSE", "Proveedor Cuenta de Cobro", "Concepto", "CUDS / Estado DIAN", "Valor ($ COP)"],
+      fields: [
+        { key: "dseNumber", label: "Consecutivo Resoluci\xF3n DSE", type: "text", placeholder: "DSE-000215" },
+        { key: "naturalSupplier", label: "Persona Natural / Cuenta de Cobro (CC)", type: "text", placeholder: "Jairo Alberto M\xE9ndez \u2014 CC 79.884.120" },
+        { key: "serviceConcept", label: "Concepto de Adquisici\xF3n o Servicio", type: "text", placeholder: "Mantenimiento El\xE9ctrico Local Norte" },
+        { key: "withholdingApplied", label: "Retenci\xF3n Practicada", type: "select", options: ["ReteFuente Servicios No Declarante 6%", "ReteFuente Honorarios 10%", "ReteFuente Compras 3.5%", "Sin Retenci\xF3n (< Tope UVT)"] },
+        { key: "dseTotal", label: "Valor Documento Soporte ($ COP)", type: "number", placeholder: "950000" }
+      ]
+    },
+    {
+      moduleKey: "mod-radian-events",
+      parentServiceKey: "srv-procurement",
+      externalSubmoduleName: "Buz\xF3n Tributario y Eventos RADIAN",
+      tabIcon: "\u{1F4E8}",
+      summary: "Recepci\xF3n de XML de proveedores y emisi\xF3n de eventos DIAN 030 (Acuse), 032 (Recibo Bien) y 033 (Aceptaci\xF3n).",
+      monthlyAddonUsd: 39e3,
+      actionButtonLabel: "Emitir Evento RADIAN a DIAN",
+      tableHeaders: ["Factura / CUFE", "Proveedor Emisor", "Evento RADIAN", "Estado DIAN", "Valor Factura ($ COP)"],
+      fields: [
+        { key: "supplierInvoice", label: "Factura Electr\xF3nica Recibida", type: "text", placeholder: "FEV-88410 (XML Adjunto)" },
+        { key: "issuerName", label: "Proveedor Emisor", type: "text", placeholder: "Licores y Bebidas Nacionales S.A." },
+        { key: "radianEventCode", label: "Evento RADIAN a Transmitir", type: "select", options: ["030 - Acuse de Recibo de Factura", "032 - Recibo del Bien o Servicio", "033 - Aceptaci\xF3n Expresa", "031 - Reclamo / Rechazo de Factura"] },
+        { key: "invoiceAmount", label: "Valor Factura ($ COP)", type: "number", placeholder: "3680000" }
+      ]
+    },
+    {
+      moduleKey: "mod-landed-costs",
+      parentServiceKey: "srv-procurement",
+      externalSubmoduleName: "Prorrateo de Fletes e Importaci\xF3n",
+      tabIcon: "\u{1F6A2}",
+      summary: "Distribuci\xF3n de costos de transporte, seguros y aranceles sobre el costo unitario del Kardex.",
+      monthlyAddonUsd: 35e3,
+      actionButtonLabel: "Prorratear Costo en Kardex",
+      tableHeaders: ["Liquidaci\xF3n", "Entrada de Almac\xE9n", "Concepto Flete/Aduana", "M\xE9todo Prorrateo", "Costo Distribuido ($ COP)"],
+      fields: [
+        { key: "allocationCode", label: "C\xF3digo de Prorrateo", type: "text", placeholder: "PRF-2026-041" },
+        { key: "receiptRef", label: "Entrada de Almac\xE9n Destino", type: "text", placeholder: "EA-2026-109 (Bodega Central)" },
+        { key: "freightConcept", label: "Factura de Flete / Nacionalizaci\xF3n", type: "text", placeholder: "Flete Tractomula Puerto Buenaventura - Cali" },
+        { key: "allocationMethod", label: "Criterio de Distribuci\xF3n", type: "select", options: ["Por Valor FOB / Costo", "Por Peso en Kilogramos", "Por Volumen (m3)", "Por Cantidad de Unidades"] },
+        { key: "freightAmount", label: "Valor Flete a Distribuir ($ COP)", type: "number", placeholder: "1850000" }
+      ]
+    }
+  ],
+  features: [
+    {
+      componentKey: "comp-margin-drop-alert",
+      externalName: "Alerta de ca\xEDda de margen por alza de costo de proveedor",
+      description: "Advierte autom\xE1ticamente al registrar una compra si el nuevo costo reduce el margen comercial esperado.",
+      parentModuleKey: "mod-purchase-invoices",
+      includedByDefault: true,
+      monthlyAddonUsd: 15e3
+    },
+    {
+      componentKey: "comp-po-approval-signature",
+      externalName: "Firma de aprobaci\xF3n gerencial en \xD3rdenes de Compra",
+      description: "Exige autorizaci\xF3n firmada del jefe de compras o gerencia antes de despachar la orden al proveedor.",
+      parentModuleKey: "mod-purchase-orders",
+      includedByDefault: true,
+      monthlyAddonUsd: 15e3
+    }
+  ]
+};
+
+// apps/srv-reports/frontend/reports-service.view.ts
+var SRV_REPORTS_FRONTEND_VIEW = {
+  serviceKey: "srv-reports",
+  externalPrincipalModuleName: "Reportes Financieros, Anal\xEDtica BI y Exportador",
+  icon: "\u{1F4CA}",
+  subtitle: "Estado de Resultados P&G en vivo, Balance de Prueba por Tercero, rentabilidad por producto, anexos DIAN y constructor BI.",
+  standaloneMonthlyUsd: 99e3,
+  submodules: [
+    {
+      moduleKey: "mod-financial-reports",
+      parentServiceKey: "srv-reports",
+      externalSubmoduleName: "Estado de Resultados (P&G) y Balance por Tercero",
+      tabIcon: "\u{1F4C8}",
+      summary: "Utilidad Neta Real (Ventas - Costo Kardex + Mano de Obra - Gastos - Comisiones), Balance General NIIF y Balance de Prueba por NIT.",
+      monthlyAddonUsd: 39e3,
+      actionButtonLabel: "Generar y Exportar Estado Financiero",
+      tableHeaders: ["Reporte Financiero", "Per\xEDodo / Corte", "Ingresos Brutos", "Costos y Gastos", "Utilidad Neta Real ($ COP)"],
+      fields: [
+        { key: "reportType", label: "Tipo de Estado Financiero", type: "select", options: ["Estado de Resultados Operativo (P&G Real FixMotor)", "Balance de Prueba por Tercero (NIT)", "Estado de Situaci\xF3n Financiera (Balance General NIIF)", "Libro Auxiliar por Cuenta y Centro de Costo"] },
+        { key: "periodRange", label: "Per\xEDodo o Rango de Fechas", type: "text", placeholder: "Noviembre 2026 (Acumulado Mensual)" },
+        { key: "grossRevenue", label: "Ingresos Totales del Per\xEDodo ($ COP)", type: "number", placeholder: "84500000" },
+        { key: "totalCostsExpenses", label: "Costo Kardex (COGS) + Gastos + Comisiones ($ COP)", type: "number", placeholder: "56200000" },
+        { key: "netProfit", label: "Utilidad Neta Real Calculada ($ COP)", type: "number", placeholder: "28300000" }
+      ]
+    },
+    {
+      moduleKey: "mod-sales-profitability-reports",
+      parentServiceKey: "srv-reports",
+      externalSubmoduleName: "Rentabilidad de Ventas y Arqueos de Caja",
+      tabIcon: "\u{1F4B9}",
+      summary: "Margen bruto por producto, categor\xEDa, vendedor y sucursal, m\xE1s consolidado de Efectivo Neto en Caja F\xEDsica vs Medios Digitales.",
+      monthlyAddonUsd: 35e3,
+      actionButtonLabel: "Generar Reporte de Rentabilidad / Arqueo",
+      tableHeaders: ["Corte / Categor\xEDa", "Sede / Cajero", "Efectivo Neto Caja", "Digitales (Nequi/Tarjeta)", "Margen Ponderado (%)"],
+      fields: [
+        { key: "analysisScope", label: "Agrupaci\xF3n del Reporte", type: "select", options: ["Rentabilidad por Producto y Categor\xEDa", "Consolidado Arqueo de Caja (Efectivo Neto vs Digital)", "Ventas y Comisiones por Vendedor / T\xE9cnico", "Ventas por Franja Horaria y D\xEDa"] },
+        { key: "branchCashier", label: "Sucursal / Caja / Vendedor", type: "text", placeholder: "Sede Principal \u2014 Todas las Cajas" },
+        { key: "netCashBox", label: "Efectivo Neto en Caja F\xEDsica ($ COP)", type: "number", placeholder: "12450000" },
+        { key: "digitalCollected", label: "Recaudo Transferencias / Nequi / Dat\xE1fono ($ COP)", type: "number", placeholder: "19800000" },
+        { key: "weightedMarginPct", label: "Margen Bruto Ponderado (%)", type: "text", placeholder: "38.4% Utilidad sobre Venta" }
+      ]
+    },
+    {
+      moduleKey: "mod-inventory-reports",
+      parentServiceKey: "srv-reports",
+      externalSubmoduleName: "Valorizaci\xF3n de Inventario, Rotaci\xF3n ABC y Vencimientos",
+      tabIcon: "\u{1F4E6}",
+      summary: "Capital invertido al costo vs venta potencial (FixMotor), rotaci\xF3n ABC (v2), alertas bajo m\xEDnimo y lotes por vencer.",
+      monthlyAddonUsd: 35e3,
+      actionButtonLabel: "Ejecutar Auditor\xEDa de Inventario",
+      tableHeaders: ["Bodega / Familia", "Capital al Costo", "Venta Potencial", "Utilidad Proyectada", "SKUs en Alerta / Vencimiento"],
+      fields: [
+        { key: "warehouseFilter", label: "Bodega Auditada", type: "select", options: ["Todas las Bodegas Consolidadas", "Bodega Central Principal", "Bodega Norte Punto Venta"] },
+        { key: "capitalAtCost", label: "Capital Invertido al Costo ($ COP)", type: "number", placeholder: "62400000" },
+        { key: "potentialRevenue", label: "Valor Potencial de Venta ($ COP)", type: "number", placeholder: "98500000" },
+        { key: "projectedProfit", label: "Utilidad Bruta Proyectada ($ COP)", type: "number", placeholder: "36100000" },
+        { key: "alertsSummary", label: "Alertas de Reorden y Vencimiento FEFO", type: "text", placeholder: "4 SKUs Bajo M\xEDnimo | 2 Lotes en Alerta Naranja (<30 d\xEDas)" }
+      ]
+    },
+    {
+      moduleKey: "mod-tax-dian-reports",
+      parentServiceKey: "srv-reports",
+      externalSubmoduleName: "Anexos Tributarios DIAN (IVA 300, ReteFuente 350, ICA)",
+      tabIcon: "\u{1F3DB}\uFE0F",
+      summary: "Borradores autom\xE1ticos de IVA Generado vs Descontable, Retenciones practicadas por rengl\xF3n e ICA municipal.",
+      monthlyAddonUsd: 39e3,
+      actionButtonLabel: "Generar Anexo Tributario DIAN",
+      tableHeaders: ["Declaraci\xF3n / Anexo", "Per\xEDodo Fiscal", "Base Gravable Total", "Impuesto / Retenci\xF3n Liquidada", "Estado Pre-Auditor\xEDa"],
+      fields: [
+        { key: "taxFormType", label: "Formulario / Anexo Oficial", type: "select", options: ["Formulario 300 \u2014 Declaraci\xF3n de IVA (Generado vs Descontable)", "Formulario 350 \u2014 Retenci\xF3n en la Fuente Mensual", "Anexo Industria y Comercio (ICA y ReteICA por Municipio)", "Certificados de Retenci\xF3n Bimestral/Anual en PDF"] },
+        { key: "taxPeriod", label: "Bimestre / Cuatrimestre / Mes", type: "text", placeholder: "2026 \u2014 Per\xEDodo 06 (Noviembre)" },
+        { key: "taxableBaseCop", label: "Base Gravable Consolidada ($ COP)", type: "number", placeholder: "142000000" },
+        { key: "taxPayableCop", label: "Saldo Neto Impuesto / Retenci\xF3n ($ COP)", type: "number", placeholder: "14850000" }
+      ]
+    },
+    {
+      moduleKey: "mod-custom-report-builder",
+      parentServiceKey: "srv-reports",
+      externalSubmoduleName: "Constructor Din\xE1mico BI y Exportaci\xF3n As\xEDncrona (v2)",
+      tabIcon: "\u{1F6E0}\uFE0F",
+      summary: "Cruce din\xE1mico de tablas (ConfiguracionReportes v2) y descarga masiva en Excel (.xlsx), CSV UTF-8 BOM y PDF.",
+      monthlyAddonUsd: 39e3,
+      actionButtonLabel: "Encolar y Descargar Reporte BI",
+      tableHeaders: ["Nombre del Reporte", "Tabla Principal y Cruces", "Formato Salida", "Filas Procesadas", "Estado Exportaci\xF3n"],
+      fields: [
+        { key: "customReportName", label: "T\xEDtulo de la Plantilla de Reporte", type: "text", placeholder: "Cruces Ventas + Kardex + Cartera por Contrato" },
+        { key: "sourceTables", label: "M\xF3dulo Principal y Relaciones Cruzadas", type: "select", options: ["Facturaci\xF3n + Clientes + Detalle \xCDtems + Kardex", "Inventario + Lotes + Recepciones T\xE9cnicas + Proveedores", "\xD3rdenes de Taller + Veh\xEDculos + Comisiones de T\xE9cnicos", "Agendamiento + Recursos + Tiempos de Espera Turnador"] },
+        { key: "exportFormat", label: "Formato de Exportaci\xF3n", type: "select", options: ["Excel Nativo (.xlsx)", "CSV Contable UTF-8 con BOM (;)", "PDF Membreteado con QR (DocForge)"] },
+        { key: "rowsCount", label: "Registros Estimados", type: "number", placeholder: "4520" }
+      ]
+    }
+  ],
+  features: [
+    {
+      componentKey: "comp-csv-utf8-bom-export",
+      externalName: "Exportaci\xF3n contable CSV con BOM UTF-8 para Excel en espa\xF1ol",
+      description: "Genera archivos planos separados por punto y coma (;) con codificaci\xF3n UTF-8-SIG listos para Excel y contadores.",
+      parentModuleKey: "mod-financial-reports",
+      includedByDefault: true,
+      monthlyAddonUsd: 15e3
+    }
+  ]
+};
+
+// apps/srv-ticketing/frontend/ticketing-service.view.ts
+var SRV_TICKETING_FRONTEND_VIEW = {
+  serviceKey: "srv-ticketing",
+  externalPrincipalModuleName: "Taquilla QR, Eventos y Mesa PQRSF SLA",
+  icon: "\u{1F3AB}",
+  subtitle: "Venta de boleter\xEDa/covers con c\xF3digo QR antifraude, control de aforo en torniquetes y mesa PQRSF con SLA en d\xEDas h\xE1biles.",
+  standaloneMonthlyUsd: 13e4,
+  submodules: [
+    {
+      moduleKey: "mod-event-tickets",
+      parentServiceKey: "srv-ticketing",
+      externalSubmoduleName: "Taquilla, Covers, Palcos y Preventa QR",
+      tabIcon: "\u{1F39F}\uFE0F",
+      summary: "Emisi\xF3n de entradas generales, VIP y palcos con consumo m\xEDnimo incluido y c\xF3digo QR \xFAnico criptogr\xE1fico.",
+      monthlyAddonUsd: 45e3,
+      actionButtonLabel: "Emitir Ticket / Cover QR",
+      tableHeaders: ["N\xB0 Ticket", "Categor\xEDa / Palco", "Visitante / Comprador", "C\xF3digo QR", "Tarifa ($ COP)"],
+      fields: [
+        { key: "ticketCategory", label: "Categor\xEDa de Ticket / Localidad", type: "select", options: ["Cover General Noche", "Palco VIP (Incluye Consumo)", "Preventa Evento Especial", "Pase Parqueadero"] },
+        { key: "visitorName", label: "Nombre del Asistente / Comprador", type: "text", placeholder: "Santiago Ospina" },
+        {
+          key: "qrToken",
+          label: "C\xF3digo QR Criptogr\xE1fico de Control",
+          type: "text",
+          placeholder: "QR-PK-88412",
+          requiredFeatureKey: "comp-anti-clone-qr-gate"
+        },
+        { key: "ticketPrice", label: "Valor del Ticket ($ COP)", type: "number", placeholder: "65000" }
+      ]
+    },
+    {
+      moduleKey: "mod-gate-scanner",
+      parentServiceKey: "srv-ticketing",
+      externalSubmoduleName: "Esc\xE1ner de Puerta, Torniquetes y Aforo en Vivo",
+      tabIcon: "\u{1F6A7}",
+      summary: "Control de acceso en tiempo real por porter\xEDa, contador de ocupaci\xF3n m\xE1xima legal y lista de cortes\xEDas.",
+      monthlyAddonUsd: 39e3,
+      actionButtonLabel: "Validar Ingreso en Porter\xEDa",
+      tableHeaders: ["Porter\xEDa / Acceso", "Evento Activo", "Ingresos Validados", "Aforo M\xE1ximo", "Estado Puerta"],
+      fields: [
+        { key: "gateCode", label: "Punto de Acceso / Torniquete", type: "select", options: ["Porter\xEDa Principal Calle 85", "Acceso VIP Palcos", "Porter\xEDa Vehicular"] },
+        { key: "eventName", label: "Evento / Noche Activa", type: "text", placeholder: "S\xE1bado Concierto en Vivo" },
+        { key: "checkedInCount", label: "Asistentes Dentro del Recinto", type: "number", placeholder: "340" },
+        { key: "maxCapacity", label: "Aforo Legal Permitido", type: "number", placeholder: "450" }
+      ]
+    },
+    {
+      moduleKey: "mod-pqrsf-helpdesk",
+      parentServiceKey: "srv-ticketing",
+      externalSubmoduleName: "Mesa de Ayuda PQRSF y SLA D\xEDas H\xE1biles (Ley 1755)",
+      tabIcon: "\u{1F6CE}\uFE0F",
+      summary: "Radicaci\xF3n de Peticiones, Quejas, Reclamos y Solicitudes con sem\xE1foro de vencimiento en d\xEDas h\xE1biles de Colombia.",
+      monthlyAddonUsd: 45e3,
+      actionButtonLabel: "Radicar Caso PQRSF",
+      tableHeaders: ["Radicado PQRSF", "Tipo (P/Q/R/S/F)", "Solicitante", "D\xEDas H\xE1biles SLA", "Estado Tr\xE1mite"],
+      fields: [
+        { key: "radicadoNumber", label: "N\xFAmero de Radicado Oficial", type: "text", placeholder: "PQRS-2026-00914" },
+        { key: "requestType", label: "Tipolog\xEDa Ley 1755", type: "select", options: ["Petici\xF3n (15 d\xEDas h\xE1biles)", "Queja de Servicio (15 d\xEDas h\xE1biles)", "Reclamo de Facturaci\xF3n / Garant\xEDa", "Solicitud de Informaci\xF3n (10 d\xEDas h\xE1biles)"] },
+        { key: "petitionerName", label: "Nombre del Solicitante y Correo", type: "text", placeholder: "Marcela Quintero \u2014 marcela@cliente.co" },
+        { key: "businessDaysLeft", label: "D\xEDas H\xE1biles Restantes (Sin Festivos)", type: "number", placeholder: "12" }
+      ]
+    }
+  ],
+  features: [
+    {
+      componentKey: "comp-anti-clone-qr-gate",
+      externalName: "Generador y validador QR criptogr\xE1fico anti-clonaci\xF3n en torniquetes",
+      description: "Invalida el token QR en milisegundos tras la primera lectura en puerta para impedir reingresos.",
+      parentModuleKey: "mod-event-tickets",
+      includedByDefault: true,
+      monthlyAddonUsd: 19e3
+    },
+    {
+      componentKey: "comp-sla-business-days",
+      externalName: "Calculadora SLA con festivos oficiales de Colombia (Ley Emiliani)",
+      description: "Descuenta domingos y festivos oficiales de Colombia al calcular t\xE9rminos legales de respuesta PQRSF.",
+      parentModuleKey: "mod-pqrsf-helpdesk",
+      includedByDefault: true,
+      monthlyAddonUsd: 19e3
+    }
+  ]
+};
+
+// apps/srv-treasury/frontend/treasury-service.view.ts
+var SRV_TREASURY_FRONTEND_VIEW = {
+  serviceKey: "srv-treasury",
+  externalPrincipalModuleName: "Tesorer\xEDa, Cartera por Edades, Bancos y Cajas Menores",
+  icon: "\u{1F4B0}",
+  subtitle: "Recibos de caja, edades de cartera CxC, comprobantes de egreso CxP, conciliaci\xF3n bancaria y gastos menores.",
+  standaloneMonthlyUsd: 119e3,
+  submodules: [
+    {
+      moduleKey: "mod-receivables-cxc",
+      parentServiceKey: "srv-treasury",
+      externalSubmoduleName: "Cartera Clientes (CxC) y Recibos de Caja",
+      tabIcon: "\u{1F4E5}",
+      summary: "Edades de cartera (Al d\xEDa, 15, 30, 60, +90 d\xEDas), abonos parciales con retenciones y cobro jur\xEDdico.",
+      monthlyAddonUsd: 39e3,
+      actionButtonLabel: "Emitir Recibo de Caja (Abono CxC)",
+      tableHeaders: ["Recibo / Factura", "Cliente", "Edad de Mora", "Retenciones Aplicadas", "Abono Recibido ($ COP)"],
+      fields: [
+        { key: "receiptNumber", label: "N\xB0 Recibo de Caja y Factura Cruzada", type: "text", placeholder: "RC-001420 -> FEV-1042" },
+        { key: "customerName", label: "Cliente Pagador", type: "text", placeholder: "Cl\xEDnica / Comercializadora del Norte S.A.S." },
+        { key: "agingBucket", label: "Tramo de Cartera / Estado", type: "select", options: ["Al D\xEDa (0-15 d\xEDas)", "Mora Temprana (16-30 d\xEDas)", "Mora Media (31-60 d\xEDas)", "Cartera Cr\xEDtica (+60 d\xEDas)", "En Cobro Jur\xEDdico"] },
+        {
+          key: "withholdingDeducted",
+          label: "Retenciones Practicadas por el Cliente al Pagar",
+          type: "text",
+          placeholder: "ReteFuente $85.000 + ReteICA $24.000",
+          requiredFeatureKey: "comp-payment-withholding-deduct"
+        },
+        { key: "amountReceived", label: "Valor Neto Ingresado a Caja/Banco ($ COP)", type: "number", placeholder: "3450000" }
+      ]
+    },
+    {
+      moduleKey: "mod-payables-cxp",
+      parentServiceKey: "srv-treasury",
+      externalSubmoduleName: "Cuentas por Pagar (CxP) y Comprobantes de Egreso",
+      tabIcon: "\u{1F4E4}",
+      summary: "Programaci\xF3n de pagos a proveedores, abonos a \xF3rdenes de compra y exportaci\xF3n de archivo plano ACH.",
+      monthlyAddonUsd: 39e3,
+      actionButtonLabel: "Emitir Comprobante de Egreso (CE)",
+      tableHeaders: ["Comprobante CE", "Proveedor Beneficiario", "Factura / OC Cruzada", "Banco / Medio", "Valor Pagado ($ COP)"],
+      fields: [
+        { key: "ceNumber", label: "Consecutivo Comprobante de Egreso", type: "text", placeholder: "CE-2026-00892" },
+        { key: "supplierBeneficiary", label: "Proveedor / Beneficiario", type: "text", placeholder: "Distribuidora Mayorista del Eje S.A.S." },
+        { key: "invoiceRef", label: "Factura de Compra / Orden Cruzada", type: "text", placeholder: "FC-99412 / OC-00418" },
+        { key: "bankSource", label: "Cuenta Bancaria o Caja Origen", type: "select", options: ["Bancolombia Cta Corriente \u2014 Dispersiones PAB", "Davivienda Empresarial ACH", "Nequi Negocios", "Caja General Principal"] },
+        { key: "paidAmount", label: "Valor Girado ($ COP)", type: "number", placeholder: "2890000" }
+      ]
+    },
+    {
+      moduleKey: "mod-banks-reconciliation",
+      parentServiceKey: "srv-treasury",
+      externalSubmoduleName: "Bancos, Traslados y Conciliaci\xF3n Bancaria",
+      tabIcon: "\u{1F3E6}",
+      summary: "Saldos en libros vs extracto bancario, traslados entre cajas/bancos e imputaci\xF3n autom\xE1tica de 4x1000.",
+      monthlyAddonUsd: 39e3,
+      actionButtonLabel: "Registrar Conciliaci\xF3n / Traslado",
+      tableHeaders: ["Cuenta Bancaria", "Per\xEDodo Corte", "Saldo en Libros", "Saldo Extracto", "Diferencia Conciliada ($ COP)"],
+      fields: [
+        { key: "bankAccount", label: "Cuenta Bancaria o Billetera", type: "select", options: ["Bancolombia Corriente #412-88901-2", "Davivienda Ahorros #0051-99120", "BBVA Empresarial #110-44521", "Billetera Nequi / QR Bre-B"] },
+        { key: "cutoffPeriod", label: "Mes de Conciliaci\xF3n / Operaci\xF3n", type: "text", placeholder: "Noviembre 2026 \u2014 Corte Mensual" },
+        { key: "bookBalance", label: "Saldo Seg\xFAn Libros ($ COP)", type: "number", placeholder: "48520000" },
+        { key: "statementBalance", label: "Saldo Seg\xFAn Extracto Bancario ($ COP)", type: "number", placeholder: "48520000" }
+      ]
+    },
+    {
+      moduleKey: "mod-petty-cash",
+      parentServiceKey: "srv-treasury",
+      externalSubmoduleName: "Cajas Menores y Gastos de Turno (FixMotor)",
+      tabIcon: "\u{1FA99}",
+      summary: "Control de salidas operativas de efectivo (Expenses FixMotor), vales provisionales y reembolso de caja menor.",
+      monthlyAddonUsd: 29e3,
+      actionButtonLabel: "Registrar Gasto / Legalizaci\xF3n",
+      tableHeaders: ["Comprobante", "Categor\xEDa de Gasto", "Concepto / Tercero", "Medio de Salida", "Valor Gasto ($ COP)"],
+      fields: [
+        { key: "expenseCategory", label: "Categor\xEDa Operativa", type: "select", options: ["Insumos y Suministros R\xE1pidos", "Transporte, Peajes y Mensajer\xEDa", "Servicios P\xFAblicos y Aseo", "Gastos Generales de Turno"] },
+        { key: "expenseDescription", label: "Concepto y NIT del Soporte", type: "text", placeholder: "Compra Jab\xF3n Desengrasante y Papeler\xEDa \u2014 NIT 800.112.440" },
+        { key: "paymentSource", label: "Pagado Desde", type: "select", options: ["Efectivo de Caja (Resta Efectivo Neto)", "Fondo Fijo Caja Menor Administraci\xF3n", "Transferencia Nequi Menor"] },
+        { key: "expenseAmount", label: "Valor del Gasto ($ COP)", type: "number", placeholder: "65000" }
+      ]
+    }
+  ],
+  features: [
+    {
+      componentKey: "comp-payment-withholding-deduct",
+      externalName: "Liquidaci\xF3n de retenciones aplicadas por el cliente en el recaudo (v2)",
+      description: "Permite descontar ReteFuente, ReteICA y ReteIVA practicadas por el cliente al registrar el Recibo de Caja.",
+      parentModuleKey: "mod-receivables-cxc",
+      includedByDefault: true,
+      monthlyAddonUsd: 15e3
+    },
+    {
+      componentKey: "comp-gmf-4x1000-auto",
+      externalName: "C\xE1lculo autom\xE1tico de GMF (4x1000) en egresos bancarios",
+      description: "Calcula y contabiliza autom\xE1ticamente el gravamen a los movimientos financieros (4x1000) en cuentas no exentas.",
+      parentModuleKey: "mod-banks-reconciliation",
+      includedByDefault: true,
+      monthlyAddonUsd: 15e3
+    }
+  ]
+};
+
+// apps/srv-workshop/frontend/workshop-service.view.ts
+var SRV_WORKSHOP_FRONTEND_VIEW = {
+  serviceKey: "srv-workshop",
+  externalPrincipalModuleName: "Talleres Automotrices, OT Kanban y Comisiones (FixMotor)",
+  icon: "\u{1F527}",
+  subtitle: "Recepci\xF3n t\xE9cnica por placa, sem\xE1foro SOAT/Tecnomec\xE1nica/Aceite, tablero Kanban de 5 etapas y liquidaci\xF3n de mec\xE1nicos.",
+  standaloneMonthlyUsd: 129e3,
+  submodules: [
+    {
+      moduleKey: "mod-vehicles-assets",
+      parentServiceKey: "srv-workshop",
+      externalSubmoduleName: "Parque Automotor / Equipos y Alertas (SOAT / Aceite)",
+      tabIcon: "\u{1F3CD}\uFE0F",
+      summary: "Hoja de vida cl\xEDnica por placa/serial, od\xF3metro actual, pr\xF3ximo cambio de aceite y vencimientos SOAT/Tecnomec\xE1nica.",
+      monthlyAddonUsd: 39e3,
+      actionButtonLabel: "Guardar Veh\xEDculo / Activo en BD",
+      tableHeaders: ["Placa / Serial", "Marca y L\xEDnea", "Propietario", "Kilometraje / Pr\xF3ximo Aceite", "Sem\xE1foro SOAT / Tecno"],
+      fields: [
+        { key: "plate", label: "Placa del Veh\xEDculo o Serial Equipo", type: "text", placeholder: "KLM-84G / WXY-912" },
+        { key: "makeModel", label: "Marca y L\xEDnea / Modelo", type: "text", placeholder: "Yamaha NMAX Connected 155 \u2014 Mod 2025" },
+        { key: "ownerName", label: "Cliente Propietario y WhatsApp", type: "text", placeholder: "Andr\xE9s Felipe Toro \u2014 315 842 9910" },
+        { key: "mileageInfo", label: "Kilometraje Actual / Pr\xF3ximo Cambio Aceite", type: "text", placeholder: "Actual: 14.200 Km | Pr\xF3ximo Aceite: 17.000 Km" },
+        {
+          key: "legalAlerts",
+          label: "Estado SOAT y Revisi\xF3n Tecnomec\xE1nica",
+          type: "select",
+          options: ["Vigente al D\xEDa (Verde)", "Pr\xF3ximo a Vencer < 15 D\xEDas (Naranja)", "SOAT / Tecnomec\xE1nica Vencido (Rojo)"],
+          requiredFeatureKey: "comp-soat-tecno-oil-alerts"
+        }
+      ]
+    },
+    {
+      moduleKey: "mod-work-orders-kanban",
+      parentServiceKey: "srv-workshop",
+      externalSubmoduleName: "Recepci\xF3n 360\xB0 y Tablero Kanban de Taller (5 Etapas)",
+      tabIcon: "\u{1F4CB}",
+      summary: "\xD3rdenes de trabajo (Recibido -> Diagn\xF3stico -> Esperando Repuesto -> En Reparaci\xF3n -> Listo para Entrega) con aviso WhatsApp.",
+      monthlyAddonUsd: 49e3,
+      actionButtonLabel: "Crear / Avanzar Orden en Kanban",
+      tableHeaders: ["N\xB0 Orden (OT)", "Placa y Cliente", "T\xE9cnico Asignado", "Etapa Kanban", "Trabajos y Total ($ COP)"],
+      fields: [
+        { key: "otNumber", label: "N\xFAmero de Orden de Trabajo", type: "text", placeholder: "OT-2026-00914" },
+        { key: "vehicleAndClient", label: "Placa y Propietario", type: "text", placeholder: "KLM-84G \u2014 Andr\xE9s Felipe Toro" },
+        { key: "assignedWorker", label: "Mec\xE1nico / T\xE9cnico Responsable", type: "select", options: ["Carlos Julio Pineda (Especialista Inyecci\xF3n)", "Robinson Morales (Frenos y Suspensi\xF3n)", "Diego Fernando R\xEDos (Electricidad y Diagn\xF3stico)"] },
+        { key: "kanbanStage", label: "Etapa en el Tablero Kanban", type: "select", options: ["1. Recibido en Taller", "2. En Diagn\xF3stico T\xE9cnico", "3. Esperando Repuesto", "4. En Reparaci\xF3n en Bah\xEDa", "5. Listo para Entrega (Notificar WhatsApp)"] },
+        { key: "servicesChecklist", label: "Trabajos Solicitados y Checklist Recepci\xF3n", type: "text", placeholder: "Cambio Aceite + Pastillas Delanteras (Deja Casco, Combustible 50%)" },
+        { key: "estimatedTotal", label: "Total Repuestos + Mano de Obra ($ COP)", type: "number", placeholder: "285000" }
+      ]
+    },
+    {
+      moduleKey: "mod-worker-commissions",
+      parentServiceKey: "srv-workshop",
+      externalSubmoduleName: "Liquidaci\xF3n de Comisiones de Mec\xE1nicos / T\xE9cnicos",
+      tabIcon: "\u{1F477}",
+      summary: "Acumulador de mano de obra producida en el turno (totalDia), porcentaje del t\xE9cnico vs taller y liquidaci\xF3n auditable.",
+      monthlyAddonUsd: 39e3,
+      actionButtonLabel: "Liquidar Corte de Comisi\xF3n a T\xE9cnico",
+      tableHeaders: ["Liquidaci\xF3n", "Mec\xE1nico / T\xE9cnico", "Mano de Obra Bruta", "% Comisi\xF3n", "Pagado a T\xE9cnico ($ COP)"],
+      fields: [
+        { key: "settlementCode", label: "C\xF3digo de Liquidaci\xF3n", type: "text", placeholder: "LIQ-TEC-00312" },
+        { key: "workerName", label: "Mec\xE1nico / T\xE9cnico", type: "text", placeholder: "Carlos Julio Pineda" },
+        { key: "grossLabor", label: "Total Bruto Mano de Obra del Turno ($ COP)", type: "number", placeholder: "640000" },
+        { key: "commissionPct", label: "Esquema de Participaci\xF3n (%)", type: "select", options: ["60% T\xE9cnico / 40% Taller", "50% T\xE9cnico / 50% Taller", "40% T\xE9cnico / 60% Taller", "70% Especialista Externo / 30% Taller"] },
+        { key: "paidToWorker", label: "Neto Pagado al T\xE9cnico ($ COP)", type: "number", placeholder: "384000" }
+      ]
+    },
+    {
+      moduleKey: "mod-warranties",
+      parentServiceKey: "srv-workshop",
+      externalSubmoduleName: "Garant\xEDas de Repuestos y Mano de Obra",
+      tabIcon: "\u{1F6E1}\uFE0F",
+      summary: "Control de reingresos por garant\xEDa vinculados a la factura original o serial del repuesto instalado.",
+      monthlyAddonUsd: 29e3,
+      actionButtonLabel: "Registrar Caso de Garant\xEDa",
+      tableHeaders: ["Radicado Garant\xEDa", "Factura / OT Origen", "Placa / Repuesto", "Dictamen T\xE9cnico", "Costo Asumido ($ COP)"],
+      fields: [
+        { key: "warrantyCode", label: "Radicado de Garant\xEDa", type: "text", placeholder: "GAR-2026-0048" },
+        { key: "originInvoiceOt", label: "Factura y OT Original", type: "text", placeholder: "FEV-1088 / OT-2026-00810" },
+        { key: "itemOrService", label: "Placa y Repuesto / Trabajo Reclamado", type: "text", placeholder: "KLM-84G \u2014 Bater\xEDa Gel 12V 7Ah (Serial BAT-9912)" },
+        { key: "resolutionType", label: "Resoluci\xF3n T\xE9cnica", type: "select", options: ["Reposici\xF3n sin Costo por Proveedor", "Ajuste Mano de Obra Taller", "Improcedente por Mal Uso"] },
+        { key: "assumedCost", label: "Valor Cubierto ($ COP)", type: "number", placeholder: "145000" }
+      ]
+    }
+  ],
+  features: [
+    {
+      componentKey: "comp-soat-tecno-oil-alerts",
+      externalName: "Sem\xE1foro preventivo de SOAT, Tecnomec\xE1nica y Cambio de Aceite",
+      description: "Muestra alertas autom\xE1ticas al digitar la placa si el veh\xEDculo tiene documentos o cambio de aceite pr\xF3ximos a vencer.",
+      parentModuleKey: "mod-vehicles-assets",
+      includedByDefault: true,
+      monthlyAddonUsd: 15e3
+    },
+    {
+      componentKey: "comp-kanban-whatsapp-notify",
+      externalName: "Notificaci\xF3n WhatsApp en 1 clic por etapa del Kanban",
+      description: "Env\xEDa mensaje autom\xE1tico al celular del cliente cuando su veh\xEDculo avanza de etapa o est\xE1 Listo para Entrega.",
+      parentModuleKey: "mod-work-orders-kanban",
+      includedByDefault: true,
+      monthlyAddonUsd: 15e3
+    },
+    {
+      componentKey: "comp-pos-ot-preload",
+      externalName: "Precarga autom\xE1tica de Orden de Trabajo en Caja POS",
+      description: "Al facturar una placa con orden pendiente en el taller, carga autom\xE1ticamente sus repuestos, mano de obra y mec\xE1nico.",
+      parentModuleKey: "mod-work-orders-kanban",
       includedByDefault: true,
       monthlyAddonUsd: 19e3
     }
@@ -13255,10 +14214,18 @@ var SRV_INVOICING_FRONTEND_VIEW = {
 var MICROSERVICE_FRONTEND_CATALOG = [
   SRV_INVOICING_FRONTEND_VIEW,
   SRV_INVENTORY_FRONTEND_VIEW,
-  SRV_GASTRO_FRONTEND_VIEW,
-  SRV_HOTEL_FRONTEND_VIEW,
+  SRV_PROCUREMENT_FRONTEND_VIEW,
+  SRV_TREASURY_FRONTEND_VIEW,
   SRV_CRM_FRONTEND_VIEW,
-  SRV_FINANCE_FRONTEND_VIEW
+  SRV_FINANCE_FRONTEND_VIEW,
+  SRV_HR_PAYROLL_FRONTEND_VIEW,
+  SRV_REPORTS_FRONTEND_VIEW,
+  SRV_GASTRO_FRONTEND_VIEW,
+  SRV_WORKSHOP_FRONTEND_VIEW,
+  SRV_FLEET_FRONTEND_VIEW,
+  SRV_APPOINTMENTS_FRONTEND_VIEW,
+  SRV_HOTEL_FRONTEND_VIEW,
+  SRV_TICKETING_FRONTEND_VIEW
 ];
 var ALL_SUBMODULES_FLAT = MICROSERVICE_FRONTEND_CATALOG.flatMap((svc) => svc.submodules);
 var ALL_FEATURES_FLAT = MICROSERVICE_FRONTEND_CATALOG.flatMap((svc) => svc.features);
@@ -13267,72 +14234,265 @@ var BUSINESS_TYPE_PRESETS = [
     id: "comercio-retail",
     name: "Comercio, Tienda & Ferreter\xEDa",
     badge: "Plan Base Completo Comercial",
-    description: "Incluye Caja POS, Cotizaciones, Existencias de Inventario, Bodega Base, Directorio de Clientes y Caja/Bancos.",
-    baseMonthlyUsd: 149e3,
-    includedPrincipalServices: ["srv-invoicing", "srv-inventory", "srv-crm", "srv-finance"],
-    includedSubmodules: ["mod-pos", "mod-quotes", "mod-stock", "mod-warehouses", "mod-directory", "mod-cashbook"],
-    includedFeatures: ["comp-cashier-name", "comp-line-discount", "comp-manager-signature"]
+    description: "Incluye Caja POS, Cotizaciones, Existencias, Bodega Base, Compras a Proveedores, Directorio de Clientes, Cartera y Reportes.",
+    baseMonthlyUsd: 169e3,
+    includedPrincipalServices: ["srv-invoicing", "srv-inventory", "srv-procurement", "srv-crm", "srv-treasury", "srv-reports"],
+    includedSubmodules: ["mod-pos", "mod-quotes", "mod-stock", "mod-warehouses", "mod-purchase-orders", "mod-directory", "mod-receivables-cxc", "mod-sales-profitability-reports"],
+    includedFeatures: ["comp-cashier-name", "comp-line-discount", "comp-manager-signature", "comp-nit-dv-auto"]
   },
   {
     id: "restaurante-gastro",
     name: "Restaurante, Gastrobar & Cafeter\xEDa",
     badge: "Plan Base Completo Gastron\xF3mico",
-    description: "Incluye Sal\xF3n y Mesas, Monitor de Cocina (KDS), Divisi\xF3n de Cuentas, Caja POS con Propina, Existencias y Recetas.",
-    baseMonthlyUsd: 189e3,
-    includedPrincipalServices: ["srv-gastro", "srv-invoicing", "srv-inventory", "srv-finance"],
-    includedSubmodules: ["mod-tables", "mod-kds", "mod-split", "mod-pos", "mod-stock", "mod-recipes", "mod-cashbook"],
-    includedFeatures: ["comp-cashier-name", "comp-tip", "comp-waiter-assign"]
+    description: "Incluye Sal\xF3n y Mesas, Monitor KDS, Modificadores de Carta, Divisi\xF3n de Cuentas, Domicilios, Caja POS con Propina y Recetas BOM.",
+    baseMonthlyUsd: 199e3,
+    includedPrincipalServices: ["srv-gastro", "srv-invoicing", "srv-inventory", "srv-procurement", "srv-treasury", "srv-reports"],
+    includedSubmodules: ["mod-tables", "mod-kds", "mod-modifiers-menu", "mod-split", "mod-deliveries", "mod-pos", "mod-stock", "mod-recipes", "mod-petty-cash", "mod-sales-profitability-reports"],
+    includedFeatures: ["comp-cashier-name", "comp-tip", "comp-waiter-assign", "comp-courtesy-auth"]
   },
   {
     id: "bares-discotecas",
     name: "Bares, Licores & Entretenimiento Nocturno",
     badge: "Plan Base Especializado Bares",
-    description: "Incluye Barra y Mesas, Comandas KDS de Barra, Control por Trago/Botella, Happy Hour, Tickets/Cover QR y Caja POS.",
-    baseMonthlyUsd: 179e3,
-    includedPrincipalServices: ["srv-gastro", "srv-invoicing", "srv-inventory", "srv-hotel", "srv-finance"],
-    includedSubmodules: ["mod-tables", "mod-kds", "mod-split", "mod-tickets", "mod-pos", "mod-stock", "mod-recipes", "mod-cashbook"],
-    includedFeatures: ["comp-bar-shot-measure", "comp-happy-hour-pricing", "comp-waiter-assign", "comp-tip", "comp-cashier-name", "comp-qr-ticket"]
+    description: "Incluye Barra y Mesas, Comandas KDS, Control por Trago/Botella, Happy Hour, Taquilla/Covers QR, Torniquetes y Caja POS.",
+    baseMonthlyUsd: 199e3,
+    includedPrincipalServices: ["srv-gastro", "srv-ticketing", "srv-invoicing", "srv-inventory", "srv-treasury", "srv-reports"],
+    includedSubmodules: ["mod-tables", "mod-kds", "mod-split", "mod-event-tickets", "mod-gate-scanner", "mod-pos", "mod-stock", "mod-recipes", "mod-petty-cash"],
+    includedFeatures: ["comp-bar-shot-measure", "comp-happy-hour-pricing", "comp-waiter-assign", "comp-tip", "comp-cashier-name", "comp-anti-clone-qr-gate"]
   },
   {
-    id: "agro-logistica-bascula",
-    name: "Agroindustria, Bodegas & B\xE1scula Camionera",
-    badge: "Plan Base Completo Log\xEDstico",
-    description: "Incluye B\xE1scula y Tractomulas (Bruto/Tara/Neto), Bodegas, Solicitudes para Traslados, Existencias, Lotes y Facturaci\xF3n.",
-    baseMonthlyUsd: 269e3,
-    includedPrincipalServices: ["srv-inventory", "srv-invoicing", "srv-crm", "srv-finance"],
-    includedSubmodules: ["mod-stock", "mod-warehouses", "mod-transfers", "mod-lots", "mod-scale", "mod-pos", "mod-dian", "mod-directory", "mod-arap"],
-    includedFeatures: ["comp-manager-signature", "comp-carrier-select", "comp-scale-tare", "comp-cashier-name"]
+    id: "talleres-fixmotor",
+    name: "Talleres Automotrices, CDA & Servicio T\xE9cnico (FixMotor)",
+    badge: "Plan Especializado FixMotor",
+    description: "Incluye Flota/Veh\xEDculos de Clientes, \xD3rdenes de Trabajo Kanban con Checklist, Comisiones de T\xE9cnicos, Garant\xEDas, Repuestos y POS/FE.",
+    baseMonthlyUsd: 229e3,
+    includedPrincipalServices: ["srv-workshop", "srv-inventory", "srv-procurement", "srv-invoicing", "srv-crm", "srv-treasury", "srv-reports"],
+    includedSubmodules: ["mod-vehicles-assets", "mod-work-orders-kanban", "mod-worker-commissions", "mod-warranties", "mod-stock", "mod-warehouses", "mod-purchase-orders", "mod-pos", "mod-dian", "mod-directory", "mod-customer-360"],
+    includedFeatures: ["comp-intake-checklist-sign", "comp-warranty-vin-alert", "comp-nit-dv-auto", "comp-cashier-name"]
+  },
+  {
+    id: "servicios-citas-v2",
+    name: "Consultorios, IPS, Centros de Servicios & Citas (v2)",
+    badge: "Plan Especializado Estilo v2",
+    description: "Incluye Agendas Multi-Profesional, Recordatorios WhatsApp IA, Turnador TV, Contratos con Bolsa v2, Tarifarios, Facturaci\xF3n Agrupada y Glosas.",
+    baseMonthlyUsd: 249e3,
+    includedPrincipalServices: ["srv-appointments", "srv-crm", "srv-invoicing", "srv-inventory", "srv-treasury", "srv-reports"],
+    includedSubmodules: ["mod-calendar-slots", "mod-staff-schedules", "mod-interactive-reminders", "mod-queue-turnador", "mod-directory", "mod-contracts", "mod-tariffs", "mod-grouped-billing", "mod-glosas-disputes", "mod-dian", "mod-tech-reception", "mod-lots"],
+    includedFeatures: ["comp-overbooking-guard", "comp-whatsapp-ai-reschedule", "comp-contract-budget-alert", "comp-expiry-semaphore"]
   },
   {
     id: "reservas-tickets-hotel",
-    name: "Reservas de Cupos, Taquilla de Tickets & Alojamiento",
-    badge: "Plan Base Completo de Cupos y Tickets",
-    description: "Incluye Agenda de Cupos, Emisi\xF3n de Tickets con QR, Recepci\xF3n de Alojamiento, Caja POS y Directorio de Clientes.",
-    baseMonthlyUsd: 209e3,
-    includedPrincipalServices: ["srv-hotel", "srv-invoicing", "srv-crm", "srv-finance"],
-    includedSubmodules: ["mod-bookings", "mod-tickets", "mod-rooms", "mod-pos", "mod-directory", "mod-cashbook"],
-    includedFeatures: ["comp-qr-ticket", "comp-cashier-name"]
+    name: "Hoteles, Glamping, Clubes & Taquilla de Eventos",
+    badge: "Plan Base Alojamiento y Cupos",
+    description: "Incluye Reserva de Caba\xF1as/Salones, Recepci\xF3n y Folio de Hu\xE9sped, Tarifas por Temporada, Ama de Llaves, Pasad\xEDas QR y Facturaci\xF3n.",
+    baseMonthlyUsd: 229e3,
+    includedPrincipalServices: ["srv-hotel", "srv-ticketing", "srv-gastro", "srv-invoicing", "srv-crm", "srv-treasury"],
+    includedSubmodules: ["mod-bookings", "mod-rooms", "mod-seasonal-rates", "mod-housekeeping", "mod-tickets", "mod-tables", "mod-pos", "mod-dian", "mod-directory"],
+    includedFeatures: ["comp-qr-ticket", "comp-cashier-name", "comp-nit-dv-auto"]
   },
   {
     id: "distribuidora-mayorista",
-    name: "Distribuidora Mayorista & Multi-Bodega",
+    name: "Distribuidora Mayorista, Importadora & Multi-Bodega",
     badge: "Plan Base Completo Mayorista",
-    description: "Incluye Facturaci\xF3n Electr\xF3nica DIAN, Cotizaciones, Bodegas, Solicitudes de Traslado, Cartera CxC/CxP y Embudo Comercial.",
-    baseMonthlyUsd: 229e3,
-    includedPrincipalServices: ["srv-invoicing", "srv-inventory", "srv-crm", "srv-finance"],
-    includedSubmodules: ["mod-pos", "mod-dian", "mod-quotes", "mod-stock", "mod-warehouses", "mod-transfers", "mod-directory", "mod-pipelines", "mod-cashbook", "mod-arap"],
-    includedFeatures: ["comp-manager-signature", "comp-carrier-select", "comp-cashier-name", "comp-line-discount"]
+    description: "Incluye Facturaci\xF3n DIAN, Tarifarios, Bodegas WMS, Traslados, Toma F\xEDsica Ciega, Compras, RADIAN, Documento Soporte, Cartera CxC/CxP y PUC.",
+    baseMonthlyUsd: 259e3,
+    includedPrincipalServices: ["srv-invoicing", "srv-inventory", "srv-procurement", "srv-treasury", "srv-crm", "srv-finance", "srv-reports"],
+    includedSubmodules: ["mod-pos", "mod-dian", "mod-tariffs", "mod-quotes", "mod-stock", "mod-warehouses", "mod-transfers", "mod-physical-count", "mod-purchase-orders", "mod-purchase-invoices", "mod-radian-events", "mod-landed-costs", "mod-receivables-cxc", "mod-payables-cxp", "mod-directory", "mod-puc"],
+    includedFeatures: ["comp-manager-signature", "comp-carrier-select", "comp-credit-quota-lock", "comp-margin-drop-alert"]
+  },
+  {
+    id: "agro-logistica-bascula",
+    name: "Agroindustria, Transporte de Carga RNDC & B\xE1scula Camionera",
+    badge: "Plan Base Completo Log\xEDstico y Pesaje",
+    description: "Incluye B\xE1scula Camionera RS-232 (Bruto/Tara/Neto), Manifiestos RNDC, Anticipos y Liquidaci\xF3n de Viajes, Llantas, Bodegas, Lotes y DIAN.",
+    baseMonthlyUsd: 289e3,
+    includedPrincipalServices: ["srv-fleet", "srv-inventory", "srv-procurement", "srv-invoicing", "srv-treasury", "srv-crm", "srv-finance"],
+    includedSubmodules: ["mod-fleet-scale", "mod-fleet-dispatch-rndc", "mod-trip-settlements", "mod-tires-fleet-maint", "mod-stock", "mod-warehouses", "mod-transfers", "mod-lots", "mod-scale", "mod-support-doc-dse", "mod-dian", "mod-receivables-cxc", "mod-payables-cxp", "mod-directory"],
+    includedFeatures: ["comp-manager-signature", "comp-carrier-select", "comp-scale-tare", "comp-weighbridge-humidity-discount", "comp-rndc-manifest-sync"]
+  },
+  {
+    id: "erp-corporativo-integral",
+    name: "ERP Corporativo Multi-Sede (NIIF + N\xF3mina DIAN + BI)",
+    badge: "Suite Empresarial Todo-en-Uno",
+    description: "Habilita Contabilidad NIIF, Ex\xF3gena DIAN, N\xF3mina Electr\xF3nica CUNE + PILA, Tesorer\xEDa, Compras RADIAN, Inventario WMS, Facturaci\xF3n y BI.",
+    baseMonthlyUsd: 389e3,
+    includedPrincipalServices: ["srv-invoicing", "srv-inventory", "srv-procurement", "srv-treasury", "srv-finance", "srv-hr-payroll", "srv-reports", "srv-crm"],
+    includedSubmodules: ["mod-pos", "mod-dian", "mod-tariffs", "mod-grouped-billing", "mod-stock", "mod-warehouses", "mod-transfers", "mod-physical-count", "mod-purchase-orders", "mod-purchase-invoices", "mod-support-doc-dse", "mod-radian-events", "mod-receivables-cxc", "mod-payables-cxp", "mod-banks-reconciliation", "mod-puc", "mod-cost-centers", "mod-fixed-assets", "mod-exogena-taxes", "mod-employees-contracts", "mod-payroll-settlement", "mod-social-benefits-pila", "mod-electronic-payroll-dian", "mod-financial-reports", "mod-tax-dian-reports", "mod-directory", "mod-contracts"],
+    includedFeatures: ["comp-nit-dv-auto", "comp-credit-quota-lock", "comp-withholding-calc", "comp-ley1607-exoneration", "comp-cune-dian-payroll", "comp-dian-xml-exporter"]
   }
 ];
+
+// apps/web-app/src/application/registries/platform-expansion-seed-rows.registry.ts
+var EXPANSION_SUBMODULE_SEED_ROWS = {
+  // srv-crm (Nuevos submódulos v2 + FixMotor)
+  "mod-contracts": [
+    ["CNT-2026-0084", "Grupo Industrial del Pac\xEDfico S.A.", "2026-01-01 a 2026-12-31", "$ 120.000.000", "$ 84.500.000"],
+    ["CNT-2026-0112", "Cl\xEDnica y Servicios Integrales S.A.S.", "2026-03-01 a 2027-02-28", "$ 95.000.000", "$ 61.200.000"]
+  ],
+  "mod-customer-360": [
+    ["Comercializadora del Valle S.A.S.", "Campe\xF3n VIP (Alta Frecuencia)", "$ 68.400.000", "$ 4.850.000", "4 D\xEDas"],
+    ["Transportes R\xE1pidos del Norte S.A.S.", "Leal Recurrente", "$ 31.200.000", "$ 2.600.000", "11 D\xEDas"]
+  ],
+  // srv-invoicing (Nuevos submódulos v2)
+  "mod-tariffs": [
+    ["TAR-CORP-2026", "Tarifario Mayorista Institucional (-15%)", "Descuento % sobre Lista Base", "2026 Anual", "$ 125.000"],
+    ["TAR-CONV-V2", "Convenio Corporativo Especial Pactado", "Precio Fijo Pactado por \xCDtem", "2026 Semestral", "$ 98.500"]
+  ],
+  "mod-grouped-billing": [
+    ["FAC-AGR-2026-089", "Grupo Industrial del Pac\xEDfico \u2014 CNT-2026-0084", "28 Remisiones Verificadas (Mes)", "Corte Mensual", "$ 18.950.000"]
+  ],
+  "mod-glosas-disputes": [
+    ["GLO-2026-00312", "FEV-10421 \u2014 Comercializadora del Valle", "Diferencia en Tarifa Pactada", "$ 420.000", "Conciliada (NC Parcial)"]
+  ],
+  // srv-inventory (Nuevos submódulos v2)
+  "mod-tech-reception": [
+    ["ACT-REC-2026-118", "Distribuidora Nacional \u2014 FE-9941", "Lote L-8841 \u2014 Temp: 4.2 \xB0C (OK)", "\xCDntegro Sellado", "Aprobado \u2014 Stock Disponible"]
+  ],
+  "mod-physical-count": [
+    ["TOM-CIEGA-2026-09", "Bodega Central Principal", "145 Referencias Auditadas", "$ -48.000", "Ajuste Contabilizado"]
+  ],
+  // srv-procurement (Nuevo Microservicio Compras + RADIAN + Doc Soporte)
+  "mod-purchase-orders": [
+    ["OC-2026-00418", "Distribuidora Nacional de Insumos \u2014 900.412.889-1", "Bodega Central Principal", "Recibida 100%", "$ 4.850.000"],
+    ["OC-2026-00419", "Importadora Andina de Repuestos \u2014 901.220.410-8", "Bodega Norte Punto Venta", "Parcial (70%)", "$ 8.200.000"]
+  ],
+  "mod-purchase-invoices": [
+    ["FE-99412", "Importadora Andina S.A.S.", "OC-2026-00418 / EA-109", "IVA 19% + ReteFuente 2.5%", "$ 5.420.000"]
+  ],
+  "mod-support-doc-dse": [
+    ["DSE-000215", "Jairo Alberto M\xE9ndez \u2014 CC 79.884.120", "Mantenimiento El\xE9ctrico Sede Norte", "CUDS Validado DIAN", "$ 950.000"]
+  ],
+  "mod-radian-events": [
+    ["FEV-88410", "Licores y Bebidas Nacionales S.A.", "030 Acuse + 032 Recibo + 033 Aceptaci\xF3n", "T\xEDtulo Valor RADIAN OK", "$ 3.680.000"]
+  ],
+  "mod-landed-costs": [
+    ["PRF-2026-041", "EA-2026-109 (Bodega Central)", "Flete Tractomula Puerto Buenaventura", "Por Peso en Kilogramos", "$ 1.850.000"]
+  ],
+  // srv-treasury (Nuevo Microservicio Tesorería, Cartera y Bancos)
+  "mod-receivables-cxc": [
+    ["RC-2026-00891", "Comercializadora del Valle S.A.S.", "FEV-10421 (Corriente <30 d\xEDas)", "Transferencia Bancolombia", "$ 4.850.000"]
+  ],
+  "mod-payables-cxp": [
+    ["CE-2026-00314", "Importadora Andina S.A.S.", "FE-99412 (Por Vencer)", "Dispersi\xF3n PAB ACH", "$ 5.420.000"]
+  ],
+  "mod-banks-reconciliation": [
+    ["CON-2026-11", "Bancolombia Cuenta Corriente 441-889201-04", "$ 48.920.000", "$ 48.920.000", "$ 0 (Conciliado)"]
+  ],
+  "mod-petty-cash": [
+    ["CM-ADMIN-01", "Elementos de Cafeter\xEDa, Papeler\xEDa y Peajes", "Claudia Patricia G\xF3mez", "$ 1.500.000", "$ 342.000"]
+  ],
+  // srv-finance (Nuevos submódulos NIIF + Exógena)
+  "mod-cost-centers": [
+    ["CC-200-LOGISTICA", "Operaci\xF3n Planta Norte y Distribuci\xF3n", "Sede Principal", "$ 45.000.000", "$ 31.800.000"]
+  ],
+  "mod-fixed-assets": [
+    ["AF-MAQ-0042", "Montacargas El\xE9ctrico Toyota 2.5 Ton", "60 Meses", "$ 95.000.000", "$ 79.166.667"]
+  ],
+  "mod-exogena-taxes": [
+    ["Formato 1001 DIAN", "5004 \u2014 Compra de Inventarios y Retenciones", "128 NITs Reportados", "A\xF1o Gravable 2026", "$ 845.000.000"]
+  ],
+  // srv-hr-payroll (Nuevo Microservicio Nómina Electrónica DIAN + PILA)
+  "mod-employees-contracts": [
+    ["CC 1.032.488.910", "Juli\xE1n David Torres \u2014 Jefe Operaciones", "T\xE9rmino Indefinido", "Sura EPS / Porvenir AFP / ARL II", "$ 2.850.000"]
+  ],
+  "mod-payroll-settlement": [
+    ["NOM-2026-11-Q1", "Juli\xE1n David Torres", "$ 3.120.000", "$ 228.000 (Salud 4% + Pensi\xF3n 4%)", "$ 2.892.000"]
+  ],
+  "mod-social-benefits-pila": [
+    ["PILA-2026-11-8841", "Planilla Integrada PILA Mensual", "14 Colaboradores", "Exonerado Ley 1607 Art 114-1", "$ 9.450.000"]
+  ],
+  "mod-electronic-payroll-dian": [
+    ["NE-2026-00314", "Juli\xE1n David Torres", "CUNE-9f82a41c-dian-2026-ok", "Aceptado DIAN Sin Observaciones", "$ 2.892.000"]
+  ],
+  // srv-reports (Nuevo Microservicio BI y Reportes Centralizados)
+  "mod-financial-reports": [
+    ["Estado de Resultados (PyG) NIIF", "Mensual Consolidado 2026-11", "Todas las Sedes", "Utilidad Neta +24.8%", "$ 84.500.000"]
+  ],
+  "mod-sales-profitability-reports": [
+    ["Corte Diario Ventas + Margen FIFO", "Sede Principal \u2014 Andr\xE9s Felipe", "Efectivo + QR + Tarjetas", "Margen Bruto 38.4%", "$ 14.850.000"]
+  ],
+  "mod-inventory-reports": [
+    ["Valorizaci\xF3n de Stock y Alertas FEFO", "Bodega Central Principal", "248 SKUs Activos", "4 Lotes < 60 d\xEDas", "$ 192.400.000"]
+  ],
+  "mod-tax-dian-reports": [
+    ["Anexo Bimestral IVA (Formulario 300)", "2026 Bimestre 05", "IVA Generado $18.4M vs Descontable $11.2M", "Validado PUC", "$ 7.200.000"]
+  ],
+  "mod-custom-report-builder": [
+    ["Rentabilidad por Cliente y L\xEDnea v2", "Ventas + Inventario + Cartera", "Excel (.xlsx) + PDF Ejecutivo", "Lun-Vie 06:00 AM", "Activo"]
+  ],
+  // srv-gastro (Nuevos submódulos)
+  "mod-modifiers-menu": [
+    ["T\xE9rmino de Cocci\xF3n / Adiciones Parrilla", "Cortes de Parrilla y Hamburguesas", "Azul, Medio, 3/4, Bien Asado + Tocineta", "$ 8.500", "Activo en KDS"]
+  ],
+  "mod-deliveries": [
+    ["DOM-2026-419", "Cra 15 # 88-20 Apto 502 \u2014 310 554 1190", "WhatsApp Directo", "Kevin Mora \u2014 Moto KLM-45D", "$ 94.000"]
+  ],
+  // srv-workshop (Nuevo Microservicio Talleres FixMotor)
+  "mod-vehicles-assets": [
+    ["KLM-482 (VIN 9FB...)", "Toyota Hilux SRX 4x4 2.8L Diesel 2024", "Inversiones del Norte S.A.S.", "42.850 Km", "SOAT Vigente 2027-04"]
+  ],
+  "mod-work-orders-kanban": [
+    ["OT-2026-00842", "KLM-482 \u2014 Toyota Hilux SRX", "En Reparaci\xF3n en Bah\xEDa 02", "Ing. Mauricio Casta\xF1o", "$ 1.850.000"]
+  ],
+  "mod-worker-commissions": [
+    ["LIQ-TEC-2026-11", "Ing. Mauricio Casta\xF1o (L\xEDder)", "14 \xD3rdenes Entregadas", "35% sobre Mano de Obra ($6.8M)", "$ 2.380.000"]
+  ],
+  "mod-warranties": [
+    ["GAR-2026-019", "OT-2026-00842 / Placa KLM-482", "Sincronizaci\xF3n e Inyectores Diesel", "90 D\xEDas o 5.000 Km", "Certificado Emitido"]
+  ],
+  // srv-fleet (Nuevo Microservicio Flotas, Báscula RS-232 y RNDC)
+  "mod-fleet-scale": [
+    ["BAS-FL-7741", "SXT-942 / R-4481", "TransCarga Pesada \u2014 Hernando Valencia", "52.400 Kg", "16.800 Kg", "35.600 Kg (35.60 Ton)"]
+  ],
+  "mod-fleet-dispatch-rndc": [
+    ["MN-2026-08841", "Buenaventura (Valle) \u2192 Bogot\xE1 D.C.", "WXY-812 / R-5520", "\xC1lvaro G\xF3mez \u2014 Lic. C3", "$ 4.850.000"]
+  ],
+  "mod-trip-settlements": [
+    ["LIQ-V-2026-310", "MN-2026-08841", "$ 2.200.000", "18 Peajes + 145 Gal ACPM ($1.95M)", "$ 2.601.500"]
+  ],
+  "mod-tires-fleet-maint": [
+    ["MICH-295-80R22-991", "WXY-812 \u2014 Eje 1 Direccional Izq", "8.5 mm (\xD3ptimo)", "64.200 Km", "SOAT y Tecno Al D\xEDa"]
+  ],
+  // srv-appointments (Nuevo Microservicio Agendamiento v2 + IA)
+  "mod-calendar-slots": [
+    ["CIT-2026-0412", "Laura Valentina R\xEDos \u2014 315 884 1200", "Dr. Alejandro Mej\xEDa \u2014 Consultorio 201", "2026-11-12 09:30 AM", "Valoraci\xF3n Especializada"]
+  ],
+  "mod-staff-schedules": [
+    ["Dr. Alejandro Mej\xEDa", "Sede Principal \u2014 Consultorio 201", "Lunes a Viernes 07:00 AM - 05:00 PM", "30 Minutos", "Publicada"]
+  ],
+  "mod-interactive-reminders": [
+    ["WSP-2026-8812", "Laura Valentina R\xEDos (+57 3158841200)", "WhatsApp Interactivo IA (24h/2h)", "Confirmada por Bot\xF3n WhatsApp", "Cupo Asegurado"]
+  ],
+  "mod-queue-turnador": [
+    ["A-042 (Prioritario)", "Jorge Enrique Vargas", "Consultorio 201", "8 Minutos", "Llamando en Pantalla TV"]
+  ],
+  // srv-hotel (Nuevos submódulos)
+  "mod-seasonal-rates": [
+    ["Temporada Alta Puentes \u2014 Plan Americano", "Suite Junior VIP", "Vigencia Puentes 2026", "Alojamiento + Desayuno Buffet", "$ 340.000"]
+  ],
+  "mod-housekeeping": [
+    ["Habitaci\xF3n 304", "Luz Marina Pineda", "Inspeccionada \u2014 Lista Check-In", "2x Agua Cristal Cargadas a Folio", "11:40 AM"]
+  ],
+  // srv-ticketing (Nuevo Microservicio Taquilla QR y Mesa PQRSF SLA)
+  "mod-event-tickets": [
+    ["TCK-EV-99201", "Palco VIP (Incluye Consumo)", "Santiago Ospina", "QR-PK-88412", "$ 65.000"]
+  ],
+  "mod-gate-scanner": [
+    ["Porter\xEDa Principal Calle 85", "S\xE1bado Concierto en Vivo", "340 Validados", "450 Aforo M\xE1x", "Ingreso Activo (75%)"]
+  ],
+  "mod-pqrsf-helpdesk": [
+    ["PQRS-2026-00914", "Petici\xF3n Ley 1755 (15 d\xEDas h\xE1biles)", "Marcela Quintero", "12 D\xEDas H\xE1biles Restantes", "En Tr\xE1mite (Verde SLA)"]
+  ]
+};
 
 // apps/web-app/src/application/registries/platform-seed-state.registry.ts
 var INITIAL_CLIENT_DATABASES = [
   {
     tenantId: "tnt-demo",
-    companyName: "Entorno Demo Oficial Proveko",
+    companyName: "Entorno Demo Oficial Proveko (14 Microservicios)",
     nit: "900.000.000-1",
-    businessTypeId: "agro-logistica-bascula",
-    businessTypeName: "Entorno Demo Integral (Todos los M\xF3dulos Principales)",
+    businessTypeId: "erp-corporativo-integral",
+    businessTypeName: "Entorno Demo Integral (14 M\xF3dulos Principales Activos)",
     dbName: "db_version_prueba",
     dbHost: "db",
     dbPort: 5432,
@@ -13340,66 +14500,35 @@ var INITIAL_CLIENT_DATABASES = [
     monthlyUsd: 0,
     adminUsername: "demo",
     adminPasswordHint: "DemoProveko2026!",
-    maxRolesAllowed: 6,
-    maxUsersAllowed: 15,
-    activePrincipalServices: ["srv-invoicing", "srv-inventory", "srv-gastro", "srv-hotel", "srv-crm", "srv-finance"],
-    activeSubmodules: [
-      "mod-pos",
-      "mod-dian",
-      "mod-quotes",
-      "mod-stock",
-      "mod-warehouses",
-      "mod-transfers",
-      "mod-recipes",
-      "mod-lots",
-      "mod-scale",
-      "mod-tables",
-      "mod-kds",
-      "mod-split",
-      "mod-bookings",
-      "mod-tickets",
-      "mod-rooms",
-      "mod-directory",
-      "mod-pipelines",
-      "mod-loyalty",
-      "mod-cashbook",
-      "mod-arap",
-      "mod-puc"
-    ],
-    activeFeatures: [
-      "comp-cashier-name",
-      "comp-tip",
-      "comp-line-discount",
-      "comp-manager-signature",
-      "comp-carrier-select",
-      "comp-scale-tare",
-      "comp-waiter-assign",
-      "comp-qr-ticket"
-    ],
+    maxRolesAllowed: 8,
+    maxUsersAllowed: 25,
+    activePrincipalServices: MICROSERVICE_FRONTEND_CATALOG.map((svc) => svc.serviceKey),
+    activeSubmodules: ALL_SUBMODULES_FLAT.map((sub2) => sub2.moduleKey),
+    activeFeatures: ALL_FEATURES_FLAT.map((feat) => feat.componentKey),
     internalRoles: [
       {
         roleId: "rol-admin",
         name: "Administrador General (Cuenta Admin)",
-        description: "Control completo de la base de datos de la empresa, roles internos y usuarios.",
+        description: "Control completo de la base de datos de la empresa, roles internos y los 14 m\xF3dulos.",
         allowedSubmodules: ["*"]
       },
       {
         roleId: "rol-cajero",
-        name: "Cajero y Facturador",
-        description: "Operaci\xF3n de Caja POS, Facturaci\xF3n Electr\xF3nica DIAN y Cotizaciones.",
-        allowedSubmodules: ["mod-pos", "mod-dian", "mod-quotes", "mod-directory"]
+        name: "Cajero, Facturador y Cartera",
+        description: "Operaci\xF3n de Caja POS, Facturaci\xF3n Electr\xF3nica DIAN, Tarifarios v2, Glosas y Recibos de Caja CxC.",
+        allowedSubmodules: ["mod-pos", "mod-dian", "mod-tariffs", "mod-grouped-billing", "mod-glosas-disputes", "mod-quotes", "mod-directory", "mod-receivables-cxc"]
       },
       {
         roleId: "rol-bodega",
-        name: "Encargado de Bodega y B\xE1scula",
-        description: "Existencias, Bodegas, Solicitudes de Traslado, Lotes y B\xE1scula Camionera.",
-        allowedSubmodules: ["mod-stock", "mod-warehouses", "mod-transfers", "mod-recipes", "mod-lots", "mod-scale"]
+        name: "Jefe de Bodega, Compras y B\xE1scula RNDC",
+        description: "Existencias, Bodegas WMS, Actas v2, Toma Ciega, Compras, RADIAN y B\xE1scula Camionera.",
+        allowedSubmodules: ["mod-stock", "mod-warehouses", "mod-transfers", "mod-tech-reception", "mod-physical-count", "mod-recipes", "mod-lots", "mod-scale", "mod-purchase-orders", "mod-purchase-invoices", "mod-fleet-scale", "mod-fleet-dispatch-rndc"]
       },
       {
         roleId: "rol-operador",
-        name: "Operador de Servicio / Taquilla",
-        description: "Sal\xF3n de mesas, comandas KDS, reserva de cupos y emisi\xF3n de tickets.",
-        allowedSubmodules: ["mod-tables", "mod-kds", "mod-split", "mod-bookings", "mod-tickets", "mod-rooms"]
+        name: "Coordinador Operativo (Taller / Gastro / Citas / Hotel)",
+        description: "\xD3rdenes de trabajo FixMotor, Sal\xF3n y KDS, Agenda de Citas v2, Alojamiento y Taquilla QR.",
+        allowedSubmodules: ["mod-vehicles-assets", "mod-work-orders-kanban", "mod-tables", "mod-kds", "mod-calendar-slots", "mod-bookings", "mod-rooms", "mod-event-tickets"]
       }
     ],
     internalUsers: [
@@ -13460,7 +14589,7 @@ var INITIAL_SUBMODULE_ROWS = {
     ["RES-801", "Valeria Mendoza", "Sal\xF3n Auditorio Empresarial", "2026-11-12 08:00 - 12:00", "40 Cupos", "Confirmada"]
   ],
   "mod-tickets": [
-    ["TCK-99201", "Pase General D\xEDa", "Santiago Ospina", "QR-PK-99201", "$ 45.000", "V\xE1lido en Porter\xEDa"]
+    ["TCK-99201", "Pasad\xEDa Adulto (Incluye Almuerzo)", "Santiago Ospina", "QR-PK-99201", "$ 85.000", "V\xE1lido en Porter\xEDa"]
   ],
   "mod-rooms": [
     ["Habitaci\xF3n 304 \u2014 Ejecutiva", "Camila Restrepo", "2 Noches", "$ 210.000 / noche", "Check-In Activo"]
@@ -13483,7 +14612,8 @@ var INITIAL_SUBMODULE_ROWS = {
   ],
   "mod-puc": [
     ["AST-9901", "130505 - Clientes Nacionales", "901.452.110-4", "Causaci\xF3n Factura FEV-10421", "$ 4.850.000", "Asentado"]
-  ]
+  ],
+  ...EXPANSION_SUBMODULE_SEED_ROWS
 };
 
 // apps/web-app/src/presentation/client-runtime/developer-groups-catalog.runtime.ts

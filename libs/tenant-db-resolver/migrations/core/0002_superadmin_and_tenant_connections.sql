@@ -165,3 +165,59 @@ VALUES
   ('rol_interno_bodega', 'CLIENT_INTERNAL_BASIC', 'Encargado de Inventario y Bodega', 'Rol básico para existencias, bodegas, traslados, lotes y báscula.'),
   ('rol_interno_operador', 'CLIENT_INTERNAL_BASIC', 'Operador de Servicio', 'Rol básico para comandas, mesas, reservas de cupos y emisión de tickets.')
 ON CONFLICT ("role_code") DO NOTHING;
+
+-- ============================================================================
+-- 7. EXPANSIÓN ENTERPRISE DEL CONTROL PLANE (DIAN, ZONAS, 2FA, SSO Y FACTURACIÓN SAAS)
+-- ============================================================================
+ALTER TABLE "control_plane"."tenants" ADD COLUMN IF NOT EXISTS "economic_activity_ciiu" VARCHAR(16) NOT NULL DEFAULT '4711';
+ALTER TABLE "control_plane"."tenants" ADD COLUMN IF NOT EXISTS "fiscal_regime_code" VARCHAR(16) NOT NULL DEFAULT '48';
+ALTER TABLE "control_plane"."tenants" ADD COLUMN IF NOT EXISTS "fiscal_responsibilities_json" JSONB NOT NULL DEFAULT '["O-47"]'::jsonb;
+ALTER TABLE "control_plane"."tenants" ADD COLUMN IF NOT EXISTS "municipality_dane_code" VARCHAR(10) NOT NULL DEFAULT '11001';
+ALTER TABLE "control_plane"."tenants" ADD COLUMN IF NOT EXISTS "electronic_billing_provider" VARCHAR(64) NOT NULL DEFAULT 'PROVEKO_DIAN_DIRECT';
+
+CREATE TABLE IF NOT EXISTS "control_plane"."tenant_branch_zones" (
+  "zone_id" VARCHAR(64) PRIMARY KEY,
+  "branch_id" VARCHAR(64) NOT NULL REFERENCES "control_plane"."tenant_branches"("id") ON DELETE CASCADE,
+  "zone_code" VARCHAR(32) NOT NULL,
+  "zone_name" VARCHAR(120) NOT NULL,
+  "zone_type" VARCHAR(40) NOT NULL DEFAULT 'SALON_PRINCIPAL',
+  "capacity_units" INTEGER NOT NULL DEFAULT 20,
+  "is_active" BOOLEAN NOT NULL DEFAULT TRUE,
+  "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS "control_plane"."platform_twofa_tokens" (
+  "token_id" VARCHAR(64) PRIMARY KEY,
+  "user_id" VARCHAR(64) NOT NULL REFERENCES "control_plane"."platform_users"("id") ON DELETE CASCADE,
+  "method" VARCHAR(24) NOT NULL DEFAULT 'TOTP_APP',
+  "secret_encrypted" VARCHAR(255) NOT NULL,
+  "backup_codes_json" JSONB NOT NULL DEFAULT '[]'::jsonb,
+  "is_verified" BOOLEAN NOT NULL DEFAULT TRUE,
+  "last_used_at" TIMESTAMPTZ,
+  "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS "control_plane"."platform_sso_configs" (
+  "sso_id" VARCHAR(64) PRIMARY KEY,
+  "tenant_id" VARCHAR(64) NOT NULL REFERENCES "control_plane"."tenants"("id") ON DELETE CASCADE,
+  "provider_type" VARCHAR(32) NOT NULL DEFAULT 'OIDC_GOOGLE_WORKSPACE',
+  "issuer_url" VARCHAR(255) NOT NULL,
+  "client_id" VARCHAR(180) NOT NULL,
+  "allowed_domains_json" JSONB NOT NULL DEFAULT '[]'::jsonb,
+  "is_enabled" BOOLEAN NOT NULL DEFAULT TRUE,
+  "updated_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS "control_plane"."tenant_subscription_invoices" (
+  "saas_invoice_id" VARCHAR(64) PRIMARY KEY,
+  "tenant_id" VARCHAR(64) NOT NULL REFERENCES "control_plane"."tenants"("id") ON DELETE CASCADE,
+  "billing_period" VARCHAR(16) NOT NULL,
+  "plan_group_key" VARCHAR(64) NOT NULL,
+  "base_amount_cop" BIGINT NOT NULL DEFAULT 169000,
+  "addons_amount_cop" BIGINT NOT NULL DEFAULT 0,
+  "iva_amount_cop" BIGINT NOT NULL DEFAULT 32110,
+  "total_cop" BIGINT NOT NULL DEFAULT 201110,
+  "payment_status" VARCHAR(32) NOT NULL DEFAULT 'PAID',
+  "issued_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
