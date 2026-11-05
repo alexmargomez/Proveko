@@ -27,6 +27,7 @@ export interface SplitCheckResult {
  * Puerto de Repositorio de División de Cuentas (SOLID DIP)
  */
 export interface GastroSplitCheckRepositoryPort {
+  listByTenantAndBranch?(tenantId: string, branchId: string): Promise<SplitCheckResult[]>;
   saveSplitCheck(record: SplitCheckResult): Promise<SplitCheckResult>;
 }
 

@@ -23,6 +23,7 @@ export interface ArApPaymentResult {
  */
 export interface FinanceArApRepositoryPort {
   savePaymentApplication(record: ArApPaymentResult): Promise<ArApPaymentResult>;
+  listByTenantAndBranch?(tenantId: string, branchId: string): Promise<ArApPaymentResult[]>;
 }
 
 const VALID_LEDGER_TYPES: ReadonlySet<string> = new Set<LedgerType>([

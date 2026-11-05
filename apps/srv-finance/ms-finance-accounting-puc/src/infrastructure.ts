@@ -32,4 +32,11 @@ export class InMemoryFinanceAccountingPucRepositoryAdapter
     this.store.set(key, list);
     return voucher;
   }
+
+  public async listByTenantAndBranch(
+    tenantId: string,
+    branchId: string,
+  ): Promise<PucJournalVoucherResult[]> {
+    return [...(this.store.get(`${tenantId}:${branchId}`) ?? [])];
+  }
 }

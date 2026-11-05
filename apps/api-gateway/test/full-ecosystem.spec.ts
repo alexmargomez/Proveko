@@ -1,7 +1,14 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { Ed25519JwtVault } from '@proveko/crypto-vault';
 import { DoubleKeyServiceGuard } from '@proveko/service-guard';
-import { PROVEKO_ERROR_CODES, type ProvekoJwtClaims } from '@proveko/shared-kernel';
+import {
+  PROVEKO_ERROR_CODES,
+  type ProvekoJwtClaims,
+  SEED_MICROSERVICES_CATALOG,
+} from '@proveko/shared-kernel';
 import {
   BillingSubscriptionService,
   ModularSubscriptionQuoteEngine,
@@ -14,8 +21,13 @@ import { createSrvInventoryHostRunner } from '../../srv-inventory/host-runner/sr
 import { createSrvInvoicingHostRunner } from '../../srv-invoicing/host-runner/src/index.js';
 import { createStandaloneInvoicingElectronicDianServer } from '../../srv-invoicing/ms-invoicing-electronic-dian/src/index.js';
 import {
+  PROVEKO_MODULE_UI_SCHEMA_REGISTRY,
   ProvekoWorkstationHttpClient,
+  buildNormalizedIndustryPresets,
   evaluateWorkstationCapabilityGate,
+  getModuleUiSchema,
+  renderProvekoWorkstationHtml,
+  serializeForInlineScript,
 } from '../../web-app/src/index.js';
 import {
   ProvekoApiGateway,
@@ -860,6 +872,154 @@ describe('Proveko — Full Outward Ecosystem: API Gateway, Multi-Server Topology
         msInventoryContainer.close(),
         msInvoicingContainer.close(),
       ]);
+    }
+  });
+
+  it('8. Gobernanza SOLID (Principio S — Cero Archivos Gigantes) + Registro Declarativo OCP de 20 Módulos y 2 Capas del Frontend', () => {
+    const repoRoot = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../../..',
+    );
+    const collectTsFiles = (dirPath: string): string[] => {
+      const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+      const results: string[] = [];
+      for (const entry of entries) {
+        const fullPath = path.join(dirPath, entry.name);
+        if (entry.isDirectory()) {
+          results.push(...collectTsFiles(fullPath));
+        } else if (entry.isFile() && entry.name.endsWith('.ts')) {
+          results.push(fullPath);
+        }
+      }
+      return results;
+    };
+
+    const frontendFiles = [
+      ...collectTsFiles(path.join(repoRoot, 'apps/web-app/src')),
+      ...collectTsFiles(path.join(repoRoot, 'libs/ui-kit/src')),
+    ];
+
+    expect(frontendFiles.length).toBeGreaterThanOrEqual(24);
+    for (const filePath of frontendFiles) {
+      const content = fs.readFileSync(filePath, 'utf8');
+      const lineCount = content.split('\n').length;
+      // Regla Inquebrantable SOLID SRP: ningún archivo del Frontend puede superar 200 líneas
+      expect(
+        lineCount,
+        `Violación SOLID SRP en ${path.relative(repoRoot, filePath)} (${lineCount} líneas > 200)`,
+      ).toBeLessThanOrEqual(200);
+    }
+
+    // Verificación OCP: Los 20 módulos del catálogo tienen esquema declarativo completo
+    expect(Object.keys(PROVEKO_MODULE_UI_SCHEMA_REGISTRY)).toHaveLength(20);
+    for (const mod of SEED_MICROSERVICES_CATALOG) {
+      const schema = getModuleUiSchema(mod.key);
+      expect(schema).toBeDefined();
+      expect(schema.microserviceKey).toBe(mod.key);
+      expect(schema.parentService).toBe(mod.parentService);
+      expect(schema.formFields.length).toBeGreaterThan(0);
+      expect(schema.columns.length).toBeGreaterThan(0);
+      expect(schema.kpis.length).toBeGreaterThan(0);
+      expect(schema.responseCollectionPath.length).toBeGreaterThan(0);
+    }
+
+    // Verificación LSP de Presets y Sanitización Anti-XSS
+    const presets = buildNormalizedIndustryPresets();
+    expect(presets).toHaveLength(4);
+    for (const p of presets) {
+      expect(p.enabledServices).toEqual(p.services);
+      expect(p.enabledMicroservices).toEqual(p.microservices);
+      expect(p.monthlyBaseCop).toBeGreaterThan(0);
+    }
+
+    const unsafePayload = { xss: '</script><script>alert(1)</script>' };
+    const safeSerialized = serializeForInlineScript(unsafePayload);
+    expect(safeSerialized).not.toContain('</script>');
+    expect(safeSerialized).toContain('\\u003c/script\\u003e');
+
+    // Verificación de las 2 Capas del Producto (`/` Portada Comercial + `/app` Workstation Privada)
+    const landingHtml = renderProvekoWorkstationHtml({
+      appDomain: 'proveko.sudoalexmar.tech"><script>alert(1)</script>',
+      initialSurface: 'landing',
+    });
+    expect(landingHtml).not.toContain('<script>alert(1)</script>');
+    expect(landingHtml).toContain('1. Portada y Configurador (/)');
+    expect(landingHtml).toContain('2. Estación de Trabajo (/app)');
+    expect(landingHtml).toContain('Registro Operativo Guiado');
+  });
+
+  it('9. Listado GET en los 4 Módulos Completados (Split-Check, Frontdesk, CxC/CxP, Contabilidad PUC) y Cabeceras de Seguridad en Frontend', async () => {
+    const keyPair = Ed25519JwtVault.generateKeyPairEntry('kid-2026-main');
+    const jwtVault = new Ed25519JwtVault('kid-2026-main', [keyPair]);
+    const guard = new DoubleKeyServiceGuard(jwtVault);
+
+    const gastroHost = createSrvGastroHostRunner(guard, '*');
+    const hotelHost = createSrvHotelHostRunner(guard, '*');
+    const financeHost = createSrvFinanceHostRunner(guard, '*');
+
+    const token = jwtVault.signAccessToken({
+      tenant_id: 'tenant-audit-get',
+      cell_id: 'cell-01',
+      user_id: 'usr-01',
+      role_key: 'admin',
+      tier: 'enterprise',
+      is_sandbox: false,
+      active_branch_id: 'br-01',
+      allowed_branch_ids: ['br-01'],
+      sub_ver: 1,
+      services: {
+        'srv:gastro': ['ms:gastro-split-check'],
+        'srv:hotel': ['ms:hotel-frontdesk'],
+        'srv:finance': ['ms:finance-ar-ap', 'ms:finance-accounting-puc'],
+      },
+      readonly_microservices: [],
+    });
+    const headers = { authorization: `Bearer ${token}` };
+
+    const splitGet = await gastroHost.dispatch('ms:gastro-split-check', {
+      method: 'GET',
+      path: '/checks',
+      headers,
+    });
+    expect(splitGet.status).toBe(200);
+    expect((splitGet.body as any).checks).toEqual([]);
+
+    const folioGet = await hotelHost.dispatch('ms:hotel-frontdesk', {
+      method: 'GET',
+      path: '/folios',
+      headers,
+    });
+    expect(folioGet.status).toBe(200);
+    expect((folioGet.body as any).folios).toEqual([]);
+
+    const arApGet = await financeHost.dispatch('ms:finance-ar-ap', {
+      method: 'GET',
+      path: '/ledgers',
+      headers,
+    });
+    expect(arApGet.status).toBe(200);
+    expect((arApGet.body as any).ledgers).toEqual([]);
+
+    const pucGet = await financeHost.dispatch('ms:finance-accounting-puc', {
+      method: 'GET',
+      path: '/journal/vouchers',
+      headers,
+    });
+    expect(pucGet.status).toBe(200);
+    expect((pucGet.body as any).vouchers).toEqual([]);
+
+    const frontendNode = await startProvekoClusterNodeHttpServer({
+      nodeRole: 'frontend',
+      host: '127.0.0.1',
+      port: 0,
+    });
+    try {
+      const resLanding = await fetch(`${frontendNode.baseUrl}/`);
+      expect(resLanding.status).toBe(200);
+      expect(resLanding.headers.get('x-content-type-options')).toBe('nosniff');
+      expect(resLanding.headers.get('x-frame-options')).toBe('DENY');
+    } finally {
+      await frontendNode.close();
     }
   });
 });

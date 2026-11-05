@@ -92,15 +92,35 @@ function createHostRunnerForParentService(
   }
 }
 
+const MAX_BODY_BYTES = 1_048_576; // 1 MiB
+
 async function readJsonBody(req: http.IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
+  let totalBytes = 0;
   for await (const chunk of req) {
-    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+    const buf = typeof chunk === 'string' ? Buffer.from(chunk) : chunk;
+    totalBytes += buf.byteLength;
+    if (totalBytes > MAX_BODY_BYTES) {
+      throw new ProvekoDomainError(
+        'ERR_VALIDATION_FAILED',
+        413,
+        `Request payload exceeds maximum allowed size (${MAX_BODY_BYTES} bytes).`,
+      );
+    }
+    chunks.push(buf);
   }
   if (chunks.length === 0) return undefined;
   const raw = Buffer.concat(chunks).toString('utf8').trim();
   if (!raw) return undefined;
-  return JSON.parse(raw);
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new ProvekoDomainError(
+      'ERR_VALIDATION_FAILED',
+      400,
+      'Invalid JSON payload in HTTP request body.',
+    );
+  }
 }
 
 /**
@@ -338,15 +358,25 @@ export async function startProvekoClusterNodeHttpServer(
             readonlyMicroservices?: MicroserviceKey[];
           };
 
-          const tenantId = sessionReq.tenantId ?? 'db_version_prueba';
-          const activeBranchId = sessionReq.activeBranchId ?? 'br-01';
-          const subVer = Number(sessionReq.subVer ?? 1);
+          const tenantId =
+            typeof sessionReq.tenantId === 'string' && sessionReq.tenantId.trim().length > 0
+              ? sessionReq.tenantId.trim()
+              : 'db_version_prueba';
+          const activeBranchId =
+            typeof sessionReq.activeBranchId === 'string' &&
+            sessionReq.activeBranchId.trim().length > 0
+              ? sessionReq.activeBranchId.trim()
+              : 'br-01';
+          const rawSubVer = Number(sessionReq.subVer ?? 1);
+          const subVer = Number.isInteger(rawSubVer) && rawSubVer >= 1 ? rawSubVer : 1;
           const services = sessionReq.services ?? {
             'srv:crm': ['ms:crm-directory'],
             'srv:invoicing': ['ms:invoicing-pos', 'ms:invoicing-electronic-dian'],
             'srv:inventory': ['ms:inventory-stock'],
           };
-          const readonlyMicroservices = sessionReq.readonlyMicroservices ?? [];
+          const readonlyMicroservices = Array.isArray(sessionReq.readonlyMicroservices)
+            ? sessionReq.readonlyMicroservices
+            : [];
 
           const token = jwtVault.signAccessToken({
             tenant_id: tenantId,
@@ -429,11 +459,18 @@ export async function startProvekoClusterNodeHttpServer(
 
       // 5. Comportamiento de Contenedor Frontend Workstation (`frontend`)
       if (options.nodeRole === 'frontend') {
-        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+        const initialSurface = url.startsWith('/app') ? 'workstation' : 'landing';
+        res.writeHead(200, {
+          'content-type': 'text/html; charset=utf-8',
+          'x-content-type-options': 'nosniff',
+          'x-frame-options': 'DENY',
+          'referrer-policy': 'strict-origin-when-cross-origin',
+        });
         res.end(
           renderProvekoWorkstationHtml({
             appUrl: env.APP_URL,
             appDomain: env.APP_DOMAIN,
+            initialSurface,
           }),
         );
         return;
@@ -442,6 +479,11 @@ export async function startProvekoClusterNodeHttpServer(
       res.writeHead(404, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ error: 'Not Found', nodeRole: options.nodeRole, url }));
     } catch (err) {
+      if (err instanceof ProvekoDomainError) {
+        res.writeHead(err.statusCode, { 'content-type': 'application/problem+json' });
+        res.end(JSON.stringify(err.toProblemDetails()));
+        return;
+      }
       res.writeHead(500, { 'content-type': 'application/json' });
       res.end(
         JSON.stringify({

@@ -1,3 +1,6 @@
+export * from './domain/contracts/module-ui-schema.contract.js';
+export * from './application/registries/module-schema.registry.js';
+export * from './infrastructure/catalog/seed-catalog.serializer.js';
 export * from './interceptors/single-flight-refresh.client.js';
 export * from './workstation/capability-gate.viewmodel.js';
 export * from './workstation/workstation-ui.renderer.js';

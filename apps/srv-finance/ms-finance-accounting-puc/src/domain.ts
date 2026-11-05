@@ -26,6 +26,7 @@ export interface PucJournalVoucherResult {
  */
 export interface FinanceAccountingPucRepositoryPort {
   saveJournalVoucher(voucher: PucJournalVoucherResult): Promise<PucJournalVoucherResult>;
+  listByTenantAndBranch?(tenantId: string, branchId: string): Promise<PucJournalVoucherResult[]>;
 }
 
 export function validateAndBalancePucJournalVoucher(

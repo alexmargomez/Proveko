@@ -38,6 +38,24 @@ export function buildFinanceAccountingPucPlugin(
             (req.body ?? {}) as PostPucJournalVoucherDto,
           ),
       },
+      {
+        method: 'GET',
+        subPath: '/journal/vouchers',
+        description: 'Listar comprobantes contables PUC/NIIF por sucursal',
+        handler: async (ctx) => ({
+          branchId: ctx.activeBranchId,
+          vouchers: await useCases.listVouchers(ctx.tenantId, ctx.activeBranchId),
+        }),
+      },
+      {
+        method: 'GET',
+        subPath: '/journal/post-voucher',
+        description: 'Listar comprobantes contables PUC/NIIF por sucursal (alias)',
+        handler: async (ctx) => ({
+          branchId: ctx.activeBranchId,
+          vouchers: await useCases.listVouchers(ctx.tenantId, ctx.activeBranchId),
+        }),
+      },
     ],
   });
 }

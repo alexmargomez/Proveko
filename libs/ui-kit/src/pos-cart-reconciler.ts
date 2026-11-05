@@ -65,6 +65,7 @@ export class PosCartCapabilityReconciler {
     for (const item of items) {
       const qty = MoneyDecimal.from(item.quantityFixed4).assertPositive('quantityFixed4');
       const unitPrice = MoneyDecimal.from(item.unitPriceFixed4).assertNonNegative('unitPriceFixed4');
+      MoneyDecimal.from(item.taxRatePercent).assertNonNegative('taxRatePercent');
       const lineSubtotal = unitPrice.mul(qty);
       const lineTax = lineSubtotal.applyTaxRatePercent(item.taxRatePercent);
       subtotalAcc = subtotalAcc.add(lineSubtotal);

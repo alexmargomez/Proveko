@@ -26,4 +26,11 @@ export class InMemoryFinanceArApRepositoryAdapter implements FinanceArApReposito
     this.store.set(key, list);
     return record;
   }
+
+  public async listByTenantAndBranch(
+    tenantId: string,
+    branchId: string,
+  ): Promise<ArApPaymentResult[]> {
+    return [...(this.store.get(`${tenantId}:${branchId}`) ?? [])];
+  }
 }
