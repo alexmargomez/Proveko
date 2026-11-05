@@ -47,6 +47,8 @@ export function renderComponentsStylesCss(): string {
     .btn-primary { background: var(--pk-primary); color: #fff; }
     .btn-emerald { background: var(--pk-emerald); color: #fff; }
     .btn-outline { background: #fff; border: 1px solid var(--pk-border); color: var(--pk-text); }
+    .btn-hero-outline { background: rgba(255, 255, 255, 0.14); border: 1px solid rgba(255, 255, 255, 0.42); color: #ffffff; }
+    .btn-hero-outline:hover { background: rgba(255, 255, 255, 0.24); }
     .btn-sm { padding: 5px 10px; font-size: 11px; }
     .badge {
       display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px;

@@ -67,7 +67,7 @@ export function renderPlatformActionsRuntimeJs(): string {
           '<span>' + pkEsc(sub.tabIcon + ' Submódulo: ' + sub.externalSubmoduleName) + '</span>' +
           (hasSub
             ? '<span class="badge badge-emerald">Activo</span>'
-            : '<button type="button" class="btn btn-primary btn-sm" data-req-tier="SUBMODULO" data-req-key="' + pkEsc(sub.moduleKey) + '" data-req-label="' + pkEsc(sub.externalSubmoduleName) + '">Solicitar / Activar (+$' + sub.monthlyAddonUsd + ')</button>') +
+            : '<button type="button" class="btn btn-primary btn-sm" data-req-tier="SUBMODULO" data-req-key="' + pkEsc(sub.moduleKey) + '" data-req-label="' + pkEsc(sub.externalSubmoduleName) + '">Solicitar / Activar (+' + pkCop(sub.monthlyAddonUsd) + ')</button>') +
           '</div>';
       }
       for (var f = 0; f < s.features.length; f++) {
@@ -77,7 +77,7 @@ export function renderPlatformActionsRuntimeJs(): string {
           '<span>✨ Funcionalidad: ' + pkEsc(feat.externalName) + '</span>' +
           (hasFeat
             ? '<span class="badge badge-blue">Activa</span>'
-            : '<button type="button" class="btn btn-outline btn-sm" data-req-tier="FUNCIONALIDAD" data-req-key="' + pkEsc(feat.componentKey) + '" data-req-label="' + pkEsc(feat.externalName) + '">Solicitar Funcionalidad (+$' + feat.monthlyAddonUsd + ')</button>') +
+            : '<button type="button" class="btn btn-outline btn-sm" data-req-tier="FUNCIONALIDAD" data-req-key="' + pkEsc(feat.componentKey) + '" data-req-label="' + pkEsc(feat.externalName) + '">Solicitar Funcionalidad (+' + pkCop(feat.monthlyAddonUsd) + ')</button>') +
           '</div>';
       }
       cards += '<div class="center-pick-card">' +
@@ -160,7 +160,7 @@ export function renderPlatformActionsRuntimeJs(): string {
                 dbHost: r.db_host || 'db',
                 dbPort: Number(r.db_port) || 5432,
                 paymentStatus: 'STANDBY_VERIFICADO',
-                monthlyUsd: 49,
+                monthlyUsd: 149000,
                 adminUsername: r.admin_username || 'admin',
                 adminPasswordHint: r.admin_password_hint || 'Prov#2026!',
                 maxRolesAllowed: Number(r.max_roles_allowed) || 5,

@@ -16,8 +16,8 @@ export function renderLandingLayerHtml(): string {
         </p>
         <div class="row-actions" style="margin-top:16px">
           <button type="button" class="btn btn-primary" id="btn-hero-go-register">🚀 Registra tu Negocio</button>
-          <button type="button" class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,0.4)" id="btn-hero-go-demo">🧪 Probar Demo Interactiva</button>
-          <button type="button" class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,0.4)" id="btn-hero-go-login">🔐 Iniciar Sesión</button>
+          <button type="button" class="btn btn-hero-outline" id="btn-hero-go-demo">🧪 Probar Demo Interactiva</button>
+          <button type="button" class="btn btn-hero-outline" id="btn-hero-go-login">🔐 Iniciar Sesión</button>
         </div>
       </div>
       <div class="quote-card">
@@ -68,7 +68,7 @@ export function renderLandingLayerHtml(): string {
           <span class="badge badge-amber">MICROSERVICIO DE PAGOS (MS-PAYMENTS) · MODO STANDBY</span>
           <h3 style="margin:6px 0 0;font-size:17px">Confirmación de Suscripción y Creación de Base de Datos</h3>
         </div>
-        <button type="button" class="btn btn-outline btn-sm" id="btn-close-payment-modal">✕</button>
+        <button type="button" class="btn btn-hero-outline btn-sm" id="btn-close-payment-modal">✕</button>
       </div>
       <div class="modal-body" id="payment-step-checkout">
         <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px;margin-bottom:14px;font-size:12px;color:#92400e">

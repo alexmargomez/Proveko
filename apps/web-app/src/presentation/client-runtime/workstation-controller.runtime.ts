@@ -83,7 +83,7 @@ ${renderSuperAdminAndShellRuntimeJs()}
       var cName = ((document.getElementById('reg-company-name') || {}).value || '').trim() || 'Nueva Empresa Cliente S.A.S.';
       var plan = pkComputeRegistrationPlan();
       document.getElementById('pay-modal-company').value = cName;
-      document.getElementById('pay-modal-amount').value = '$' + plan.totalUsd + ' USD/mes';
+      document.getElementById('pay-modal-amount').value = pkCop(plan.totalUsd) + '/mes';
       document.getElementById('payment-step-checkout').style.display = 'block';
       document.getElementById('payment-step-credentials').style.display = 'none';
       document.getElementById('standby-payment-modal').classList.add('open');

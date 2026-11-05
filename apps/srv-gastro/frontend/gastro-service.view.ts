@@ -12,7 +12,7 @@ export const SRV_GASTRO_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
   externalPrincipalModuleName: 'Restaurantes, Mesas y Comandas',
   icon: '🍽️',
   subtitle: 'Control de salón, comandas en tiempo real para cocina/bar y división de cuentas.',
-  standaloneMonthlyUsd: 29,
+  standaloneMonthlyUsd: 119000,
   submodules: [
     {
       moduleKey: 'mod-tables',
@@ -20,7 +20,7 @@ export const SRV_GASTRO_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       externalSubmoduleName: 'Salón y Mapa de Mesas',
       tabIcon: '🪑',
       summary: 'Ocupación de mesas por terraza o salón, comensales activos y asignación de mesero.',
-      monthlyAddonUsd: 10,
+      monthlyAddonUsd: 39000,
       actionButtonLabel: 'Abrir / Actualizar Mesa',
       tableHeaders: ['Mesa / Zona', 'Comensales', 'Mesero Asignado', 'Consumo Acumulado', 'Estado'],
       fields: [
@@ -42,7 +42,7 @@ export const SRV_GASTRO_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       externalSubmoduleName: 'Monitor de Cocina (KDS)',
       tabIcon: '🔥',
       summary: 'Tablero de comandas por estación de preparación (parrilla, cocina fría, bar) y tiempos.',
-      monthlyAddonUsd: 12,
+      monthlyAddonUsd: 45000,
       actionButtonLabel: 'Enviar Comanda a Cocina',
       tableHeaders: ['Comanda', 'Mesa / Origen', 'Platos y Notas', 'Estación', 'Tiempo / Estado'],
       fields: [
@@ -57,7 +57,7 @@ export const SRV_GASTRO_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       externalSubmoduleName: 'División de Cuentas',
       tabIcon: '➗',
       summary: 'Separación de cuenta por silla, por comensal o en partes iguales antes de facturar.',
-      monthlyAddonUsd: 8,
+      monthlyAddonUsd: 29000,
       actionButtonLabel: 'Registrar División de Cuenta',
       tableHeaders: ['Referencia', 'Mesa', 'Modalidad', 'Pagadores', 'Total por Pagador'],
       fields: [
@@ -75,7 +75,7 @@ export const SRV_GASTRO_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       description: 'Registra el mesero responsable en apertura de mesa y liquidación de propinas.',
       parentModuleKey: 'mod-tables',
       includedByDefault: true,
-      monthlyAddonUsd: 4,
+      monthlyAddonUsd: 15000,
     },
   ],
 };

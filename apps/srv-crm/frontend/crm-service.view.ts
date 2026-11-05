@@ -12,7 +12,7 @@ export const SRV_CRM_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
   externalPrincipalModuleName: 'Clientes, Proveedores y Comercial',
   icon: '🤝',
   subtitle: 'Directorio unificado de clientes, proveedores y transportistas, seguimiento comercial y fidelización.',
-  standaloneMonthlyUsd: 24,
+  standaloneMonthlyUsd: 95000,
   submodules: [
     {
       moduleKey: 'mod-directory',
@@ -20,7 +20,7 @@ export const SRV_CRM_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       externalSubmoduleName: 'Directorio de Terceros',
       tabIcon: '📇',
       summary: 'Ficha fiscal y comercial de clientes, proveedores, contratistas y empresas transportadoras.',
-      monthlyAddonUsd: 8,
+      monthlyAddonUsd: 29000,
       actionButtonLabel: 'Guardar Tercero',
       tableHeaders: ['NIT / Cédula', 'Razón Social / Nombre', 'Relación', 'Ciudad / Teléfono', 'Cupo de Crédito'],
       fields: [
@@ -37,7 +37,7 @@ export const SRV_CRM_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       externalSubmoduleName: 'Oportunidades y Embudo',
       tabIcon: '📈',
       summary: 'Seguimiento de negocios en negociación, etapa comercial, ejecutivo asignado y cierre esperado.',
-      monthlyAddonUsd: 10,
+      monthlyAddonUsd: 39000,
       actionButtonLabel: 'Registrar Oportunidad',
       tableHeaders: ['Negocio', 'Cliente Prospecto', 'Etapa del Embudo', 'Ejecutivo', 'Valor Estimado'],
       fields: [
@@ -53,7 +53,7 @@ export const SRV_CRM_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       externalSubmoduleName: 'Fidelización y Puntos',
       tabIcon: '⭐',
       summary: 'Acumulación y redención de puntos por compras frecuentes y categorías de cliente.',
-      monthlyAddonUsd: 8,
+      monthlyAddonUsd: 29000,
       actionButtonLabel: 'Acreditar / Redimir Puntos',
       tableHeaders: ['Cliente', 'Categoría', 'Puntos Acumulados', 'Última Compra', 'Beneficio Activo'],
       fields: [

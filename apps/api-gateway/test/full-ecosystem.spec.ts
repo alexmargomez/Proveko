@@ -960,6 +960,9 @@ describe('Proveko — Full Outward Ecosystem: API Gateway, Multi-Server Topology
     expect(landingHtml).toContain('Solicitudes para Traslados');
     expect(landingHtml).toContain('Firma de encargado');
     expect(landingHtml).toContain('Seleccionar transportista');
+    expect(landingHtml).not.toContain('USD/mes');
+    expect(landingHtml).toContain('COP/mes');
+    expect(landingHtml).toContain('btn-hero-outline');
   });
 
   it('9. Listado GET en los 4 Módulos Completados (Split-Check, Frontdesk, CxC/CxP, Contabilidad PUC) y Cabeceras de Seguridad en Frontend', async () => {

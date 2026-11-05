@@ -17,7 +17,7 @@ export const SRV_INVOICING_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
   externalPrincipalModuleName: 'Facturación y Ventas',
   icon: '🧾',
   subtitle: 'Caja registradora POS, facturación electrónica DIAN, cotizaciones y remisiones.',
-  standaloneMonthlyUsd: 29,
+  standaloneMonthlyUsd: 119000,
   submodules: [
     {
       moduleKey: 'mod-pos',
@@ -25,7 +25,7 @@ export const SRV_INVOICING_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       externalSubmoduleName: 'Caja POS y Comprobantes',
       tabIcon: '🛒',
       summary: 'Terminal de venta rápida con carrito interactivo, cálculo de impuestos y medios de pago.',
-      monthlyAddonUsd: 12,
+      monthlyAddonUsd: 45000,
       actionButtonLabel: 'Emitir Comprobante POS',
       tableHeaders: ['Comprobante', 'Cliente', 'Cajero / Turno', 'Medio de Pago', 'Total', 'Estado'],
       hasInteractivePosCart: true,
@@ -60,7 +60,7 @@ export const SRV_INVOICING_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       externalSubmoduleName: 'Facturación Electrónica DIAN',
       tabIcon: '🏛️',
       summary: 'Emisión de facturas electrónicas de venta con validación previa, CUFE y envío de XML/PDF.',
-      monthlyAddonUsd: 18,
+      monthlyAddonUsd: 69000,
       actionButtonLabel: 'Emitir Factura Electrónica',
       tableHeaders: ['Prefijo / Número', 'Adquirente', 'NIT', 'Total Gravado', 'CUFE / Estado DIAN', 'Fecha'],
       fields: [
@@ -77,7 +77,7 @@ export const SRV_INVOICING_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       externalSubmoduleName: 'Cotizaciones y Remisiones',
       tabIcon: '📋',
       summary: 'Propuestas comerciales, remisiones de entrega de mercancía y conversión a factura.',
-      monthlyAddonUsd: 10,
+      monthlyAddonUsd: 39000,
       actionButtonLabel: 'Guardar Cotización / Remisión',
       tableHeaders: ['Documento', 'Cliente', 'Vigencia', 'Encargado Autorizador', 'Valor Estimado', 'Estado'],
       fields: [
@@ -102,7 +102,7 @@ export const SRV_INVOICING_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       description: 'Habilita la identificación del cajero responsable en cada comprobante POS.',
       parentModuleKey: 'mod-pos',
       includedByDefault: true,
-      monthlyAddonUsd: 4,
+      monthlyAddonUsd: 15000,
     },
     {
       componentKey: 'comp-tip',
@@ -110,7 +110,7 @@ export const SRV_INVOICING_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       description: 'Permite registrar porcentaje de propina voluntaria en la liquidación de caja.',
       parentModuleKey: 'mod-pos',
       includedByDefault: true,
-      monthlyAddonUsd: 4,
+      monthlyAddonUsd: 15000,
     },
     {
       componentKey: 'comp-line-discount',
@@ -118,7 +118,7 @@ export const SRV_INVOICING_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       description: 'Permite aplicar porcentaje de descuento individual por producto en el carrito POS.',
       parentModuleKey: 'mod-pos',
       includedByDefault: true,
-      monthlyAddonUsd: 5,
+      monthlyAddonUsd: 19000,
     },
   ],
 };

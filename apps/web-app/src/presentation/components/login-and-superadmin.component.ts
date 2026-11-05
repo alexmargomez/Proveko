@@ -54,8 +54,8 @@ export function renderLoginAndSuperAdminHtml(): string {
             <h2 style="margin:4px 0 0;font-size:18px">Registra tu Negocio en 3 Pasos</h2>
           </div>
           <div style="text-align:right">
-            <div style="font-size:11px;color:var(--pk-muted)">Total Mensual Estimado</div>
-            <div style="font-size:24px;font-weight:800;color:var(--pk-primary)" id="reg-quote-total">$49 USD/mes</div>
+            <div style="font-size:11px;color:var(--pk-muted)">Total Mensual Estimado (Pesos Colombianos)</div>
+            <div style="font-size:24px;font-weight:800;color:var(--pk-primary)" id="reg-quote-total">$149.000 COP/mes</div>
             <div style="font-size:11px;color:var(--pk-muted)" id="reg-quote-breakdown">Plan Base Incluido</div>
           </div>
         </div>
