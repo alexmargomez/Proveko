@@ -1,107 +1,95 @@
 /**
- * Estilos de Estructura (Shell) para las 4 Superficies de Proveko (SOLID SRP):
- * 1. Portada Pública y Armador de Plan (`/`)
- * 2. Login Inteligente (`/login`)
- * 3. Consola Maestra del SuperAdmin Global (`/superadmin`)
- * 4. Plataforma Unificada de Gestión Empresarial (`/app`)
+ * Estilos de Estructura (Shell) para los 3 Apartados Públicos y Plataforma Empresarial de Proveko (SOLID SRP <= 200 líneas).
  */
-export function renderProvekoLayoutShellCss(): string {
+export function renderLayoutShellStylesCss(): string {
   return `
-    .topbar {
-      height: 62px;
-      background: var(--bg-surface);
-      border-bottom: 1px solid var(--border-hairline);
+    :root {
+      --pk-bg: #f1f5f9;
+      --pk-card: #ffffff;
+      --pk-text: #0f172a;
+      --pk-muted: #475569;
+      --pk-border: #cbd5e1;
+      --pk-primary: #1d4ed8;
+      --pk-primary-hover: #1e40af;
+      --pk-emerald: #059669;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--pk-bg);
+      color: var(--pk-text);
+    }
+    .pk-shell { min-height: 100vh; display: flex; flex-direction: column; }
+    .pk-topbar {
+      background: #ffffff;
+      border-bottom: 1px solid var(--pk-border);
+      padding: 10px 20px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 22px;
+      gap: 14px;
+      flex-wrap: wrap;
       position: sticky;
       top: 0;
       z-index: 40;
-      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
     }
-    .brand { display: flex; align-items: center; gap: 12px; cursor: pointer; }
-    .brand-mark {
-      width: 36px; height: 36px; border-radius: 9px;
-      background: linear-gradient(135deg, #1D4ED8 0%, #0F172A 100%);
-      color: #fff; display: flex; align-items: center; justify-content: center;
-      font-weight: 800; font-size: 14px; letter-spacing: 0.5px;
+    .pk-brand { display: flex; align-items: center; gap: 10px; }
+    .pk-logo {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: linear-gradient(135deg, #1e3a8a, #2563eb);
+      color: #fff; font-weight: 800; font-size: 15px;
+      display: flex; align-items: center; justify-content: center;
     }
-    .brand-title { font-weight: 800; font-size: 16px; letter-spacing: -0.02em; color: var(--text-primary); }
-    .brand-sub { font-size: 11.5px; color: var(--text-muted); font-weight: 500; }
-
-    .surface-switcher {
-      display: flex; align-items: center; gap: 5px;
-      background: var(--status-slate-bg); padding: 4px; border-radius: 9px;
-      border: 1px solid var(--border-hairline);
+    .pk-title { font-weight: 800; font-size: 16px; letter-spacing: -0.02em; }
+    .pk-subtitle { font-size: 11px; color: var(--pk-muted); }
+    .pk-surface-tabs {
+      display: flex; gap: 6px; background: #f1f5f9; padding: 4px;
+      border-radius: 10px; border: 1px solid var(--pk-border);
     }
-    .surface-tab {
-      border: none; background: transparent; color: var(--text-secondary);
-      font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 6px;
-      cursor: pointer; transition: all 0.15s;
+    .pk-tab-btn {
+      border: 0; background: transparent; padding: 7px 13px; border-radius: 7px;
+      font-size: 12px; font-weight: 700; color: var(--pk-muted); cursor: pointer;
     }
-    .surface-tab.active {
-      background: var(--bg-surface); color: var(--brand-primary);
-      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08); font-weight: 700;
+    .pk-tab-btn.active {
+      background: #fff; color: var(--pk-primary);
+      box-shadow: 0 1px 3px rgba(15,23,42,0.1);
     }
-
-    .topbar-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .ctrl-pill {
-      display: flex; align-items: center; gap: 6px;
-      background: var(--status-slate-bg); border: 1px solid var(--border-hairline);
-      padding: 5px 11px; border-radius: 7px; font-size: 12px;
-    }
-    .ctrl-pill label { color: var(--text-muted); font-weight: 700; font-size: 10.5px; text-transform: uppercase; }
-    .ctrl-pill select {
-      border: none; background: transparent; font-weight: 700; color: var(--text-primary);
-      font-size: 12px; outline: none; font-family: inherit; cursor: pointer;
-    }
-
-    /* Superficie 1: Portada Comercial y Armador de Plan */
-    .landing-shell { max-width: 1320px; margin: 0 auto; padding: 26px 24px 60px; }
+    .pk-context-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .surface { display: none; padding: 20px; max-width: 1440px; width: 100%; margin: 0 auto; }
+    .surface.active { display: block; }
     .hero-banner {
-      background: linear-gradient(135deg, #0F172A 0%, #1E3A8A 100%);
-      color: #F8FAFC; border-radius: 16px; padding: 34px;
-      display: grid; grid-template-columns: 1.45fr 1fr; gap: 28px;
-      border: 1px solid #334155; margin-bottom: 26px;
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+      color: #fff; border-radius: 16px; padding: 26px;
+      display: grid; grid-template-columns: 1.5fr 1fr; gap: 22px; margin-bottom: 20px;
     }
-    .hero-eyebrow {
-      display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase;
-      letter-spacing: 0.08em; color: #93C5FD; background: rgba(255, 255, 255, 0.1);
-      padding: 4px 12px; border-radius: 999px; margin-bottom: 12px;
+    .hero-badge {
+      display: inline-block; background: rgba(59,130,246,0.25); border: 1px solid rgba(147,197,253,0.4);
+      color: #bfdbfe; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; margin-bottom: 10px;
     }
-    .hero-title { font-size: 29px; font-weight: 800; line-height: 1.2; letter-spacing: -0.02em; margin-bottom: 10px; }
-    .hero-lead { font-size: 14px; color: #DBEAFE; margin-bottom: 20px; max-width: 660px; }
-    .quote-box {
-      background: rgba(15, 23, 42, 0.84); border: 1px solid #3B82F6;
-      border-radius: 12px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between;
+    .hero-title { font-size: 25px; font-weight: 800; margin: 0 0 8px; line-height: 1.25; }
+    .hero-sub { font-size: 13px; color: #cbd5e1; margin: 0; line-height: 1.5; }
+    .quote-card {
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 14px; padding: 18px; display: flex; flex-direction: column; justify-content: space-between;
     }
-    .quote-price { font-size: 30px; font-weight: 800; color: #fff; }
-
-    /* Superficie 4: Plataforma de Gestión Empresarial Unificada (/app) */
-    .workstation-layout { display: grid; grid-template-columns: 270px 1fr; min-height: calc(100vh - 62px); }
-    .sidebar {
-      background: var(--nav-bg); color: var(--nav-text-active);
-      padding: 18px 12px; display: flex; flex-direction: column; gap: 14px;
-      border-right: 1px solid #1E293B;
+    .ws-layout { display: grid; grid-template-columns: 280px 1fr; gap: 18px; align-items: start; }
+    .ws-sidebar {
+      background: #fff; border: 1px solid var(--pk-border); border-radius: 14px;
+      padding: 12px; position: sticky; top: 74px;
     }
-    .sidebar-section-title {
-      font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em;
-      color: var(--nav-text-muted); font-weight: 700; padding: 0 10px;
+    .ws-nav-head { font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--pk-muted); padding: 6px 8px; }
+    .ws-nav-list { display: flex; flex-direction: column; gap: 5px; }
+    .ws-nav-btn {
+      text-align: left; border: 1px solid transparent; background: transparent;
+      padding: 10px 12px; border-radius: 10px; cursor: pointer; transition: 0.15s;
     }
-    .center-nav-btn {
-      width: 100%; text-align: left; border: 1px solid transparent;
-      background: rgba(30, 41, 59, 0.45); color: #CBD5E1;
-      padding: 11px 12px; border-radius: 9px; cursor: pointer;
-      display: flex; align-items: center; gap: 10px; transition: all 0.14s;
-      margin-bottom: 6px; font-family: inherit;
-    }
-    .center-nav-btn:hover { background: var(--nav-bg-hover); color: #fff; }
-    .center-nav-btn.active {
-      background: var(--brand-primary); color: #fff; font-weight: 700;
-      box-shadow: 0 4px 12px rgba(29, 78, 216, 0.35);
-    }
-    .main-stage { padding: 22px 26px; display: flex; flex-direction: column; gap: 18px; overflow-x: hidden; }
-    .kpi-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .ws-nav-btn:hover { background: #f8fafc; border-color: var(--pk-border); }
+    .ws-nav-btn.active { background: #eff6ff; border-color: #93c5fd; color: var(--pk-primary); }
+    .ws-nav-title { font-size: 13px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+    .ws-nav-sub { font-size: 11px; color: var(--pk-muted); margin-top: 2px; }
+    .ws-main { display: flex; flex-direction: column; gap: 16px; }
   `;
 }
+
+export const renderProvekoLayoutShellCss = renderLayoutShellStylesCss;

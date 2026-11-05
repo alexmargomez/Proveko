@@ -1,86 +1,92 @@
-import { PROVEKO_MODULE_UI_SCHEMA_REGISTRY } from '../../application/registries/module-schema.registry.js';
 import {
-  PROVEKO_OPERATIONAL_CENTERS,
-  PROVEKO_ROLE_PROFILES,
+  ALL_FEATURES_FLAT,
+  ALL_SUBMODULES_FLAT,
+  BUSINESS_TYPE_PRESETS,
+  MICROSERVICE_FRONTEND_CATALOG,
 } from '../../application/registries/platform-centers.registry.js';
-import { buildInitialPlatformSeedState } from '../../application/registries/platform-seed-state.registry.js';
-import type { RenderWorkstationUiOptions } from '../../domain/contracts/module-ui-schema.contract.js';
 import {
-  buildSerializedCatalogBundle,
-  serializeForInlineScript,
-} from '../../infrastructure/catalog/seed-catalog.serializer.js';
-import { renderDomSanitizerAndCatalogRuntimeJs } from '../client-runtime/dom-sanitizer.runtime.js';
-import { renderGuidedFormAndTableRuntimeJs } from '../client-runtime/form-and-table.runtime.js';
-import { renderGatewayTransportRuntimeJs } from '../client-runtime/gateway-transport.runtime.js';
-import { renderPlatformActionsRuntimeJs } from '../client-runtime/platform-actions.runtime.js';
-import { renderSuperAdminAndShellRuntimeJs } from '../client-runtime/superadmin-and-shell.runtime.js';
-import { renderWorkstationControllerRuntimeJs } from '../client-runtime/workstation-controller.runtime.js';
-import { renderCommercialLandingLayerHtml } from '../components/landing-layer.component.js';
-import { renderLoginAndSuperAdminLayerHtml } from '../components/login-and-superadmin.component.js';
+  INITIAL_CLIENT_DATABASES,
+  INITIAL_SUBMODULE_ROWS,
+} from '../../application/registries/platform-seed-state.registry.js';
+import { renderClientRuntimeBundleJs } from '../client-runtime/workstation-controller.runtime.js';
+import { renderLandingLayerHtml } from '../components/landing-layer.component.js';
+import { renderLoginAndSuperAdminHtml } from '../components/login-and-superadmin.component.js';
 import { renderWorkstationLayerHtml } from '../components/workstation-layer.component.js';
-import { renderProvekoComponentsCss } from '../styles/components.styles.js';
+import { renderComponentsStylesCss } from '../styles/components.styles.js';
 import { renderProvekoDesignTokensCss } from '../styles/design-tokens.styles.js';
-import { renderProvekoLayoutShellCss } from '../styles/layout-shell.styles.js';
+import { renderLayoutShellStylesCss } from '../styles/layout-shell.styles.js';
 
-function escapeHtmlServerSide(raw: string): string {
-  return raw
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+export interface RenderProvekoWorkstationHtmlOptions {
+  appUrl?: string;
+  appDomain?: string;
+  initialSurface?: 'landing' | 'workstation' | 'login' | 'superadmin' | 'demo';
 }
 
-/**
- * Ensamblador Principal del Documento HTML de la Plataforma Unificada Proveko (SOLID SRP + DIP).
- * Conecta las 4 Superficies: Portada/Checkout (`/`), Login (`/login`), Consola SuperAdmin (`/superadmin`)
- * y Plataforma de Gestión Empresarial (`/app`) con sus 6 Centros Operativos y Componentes Conmutables.
- */
-export function renderProvekoWorkstationHtml(options: RenderWorkstationUiOptions = {}): string {
-  const rawDomain = options.appDomain ?? options.appUrl ?? 'proveko.local';
-  const domainBadge = escapeHtmlServerSide(rawDomain);
-  const initialSurface = options.initialSurface ?? 'workstation';
-  const initialLandingActive = initialSurface === 'landing';
+export function renderProvekoWorkstationHtml(
+  options: RenderProvekoWorkstationHtmlOptions = {},
+): string {
+  const appDomain = options.appDomain ?? 'proveko.sudoalexmar.tech';
+  const initialSurface = options.initialSurface ?? 'landing';
 
-  const { servicesJson, modulesJson, presetsJson, uiSchemasJson } = buildSerializedCatalogBundle(
-    PROVEKO_MODULE_UI_SCHEMA_REGISTRY,
-  );
-  const centersJson = serializeForInlineScript(PROVEKO_OPERATIONAL_CENTERS);
-  const rolesJson = serializeForInlineScript(PROVEKO_ROLE_PROFILES);
-  const initialSeedDbJson = serializeForInlineScript(buildInitialPlatformSeedState());
+  const bootPayloadJson = JSON.stringify({
+    initialSurface,
+    services: MICROSERVICE_FRONTEND_CATALOG,
+    submodules: ALL_SUBMODULES_FLAT,
+    features: ALL_FEATURES_FLAT,
+    businessTypes: BUSINESS_TYPE_PRESETS,
+    initialClients: INITIAL_CLIENT_DATABASES,
+    initialRows: INITIAL_SUBMODULE_ROWS,
+  }).replace(/</g, '\\u003c');
 
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Proveko — Plataforma Integrada de Gestión Empresarial</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Proveko — Plataforma Empresarial de Gestión Multi-Base</title>
   <style>
-    ${renderProvekoDesignTokensCss()}
-    ${renderProvekoLayoutShellCss()}
-    ${renderProvekoComponentsCss()}
+${renderProvekoDesignTokensCss()}
+${renderLayoutShellStylesCss()}
+${renderComponentsStylesCss()}
   </style>
 </head>
 <body>
-  ${renderWorkstationLayerHtml({ domainBadge, initialLandingActive })}
-  ${renderCommercialLandingLayerHtml(!initialLandingActive)}
-  ${renderLoginAndSuperAdminLayerHtml()}
+  <div class="pk-shell">
+    <header class="pk-topbar">
+      <div class="pk-brand">
+        <div class="pk-logo">PK</div>
+        <div>
+          <div class="pk-title">PROVEKO <span style="color:var(--pk-primary)" id="top-context-label">| Plataforma Empresarial</span></div>
+          <div class="pk-subtitle">Gestión Integrada Multi-Base · Dominio: ${appDomain}</div>
+        </div>
+      </div>
+
+      <!-- NAVEGACIÓN PÚBLICA: LOS 3 APARTADOS OFICIALES (1. MUESTRA, 2. LOGIN / REGISTRA TU NEGOCIO, 3. DEMO) -->
+      <div class="pk-surface-tabs" id="public-nav-tabs">
+        <button type="button" class="pk-tab-btn active" id="tab-nav-showcase">🏢 Muestra de la Plataforma</button>
+        <button type="button" class="pk-tab-btn" id="tab-nav-auth">🔐 Login / Registra tu Negocio</button>
+        <button type="button" class="pk-tab-btn" id="tab-nav-demo">🧪 Demo</button>
+      </div>
+
+      <!-- BARRA DE SESIÓN AUTENTICADA (SOLO VISIBLE CUANDO UN USUARIO INICIA SESIÓN REAL) -->
+      <div class="pk-context-bar" id="authenticated-session-bar" style="display:none">
+        <span class="badge badge-blue" id="session-role-badge">Rol</span>
+        <span class="badge badge-emerald" id="session-db-badge">BD</span>
+        <span style="font-size:12px;font-weight:700;color:var(--pk-text)" id="session-user-label"></span>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-logout-session">Cerrar Sesión</button>
+      </div>
+    </header>
+
+    ${renderLandingLayerHtml()}
+    ${renderLoginAndSuperAdminHtml()}
+    ${renderWorkstationLayerHtml()}
+  </div>
+
+  <div class="toast" id="pk-toast"></div>
 
   <script>
-    const SERVICES_CATALOG = ${servicesJson};
-    const MODULES_CATALOG = ${modulesJson};
-    const PRESETS_CATALOG = ${presetsJson};
-    const UI_SCHEMAS = ${uiSchemasJson};
-    const CENTERS_CATALOG = ${centersJson};
-    const ROLES_CATALOG = ${rolesJson};
-    const INITIAL_SEED_DB = ${initialSeedDbJson};
-
-    ${renderDomSanitizerAndCatalogRuntimeJs()}
-    ${renderGuidedFormAndTableRuntimeJs()}
-    ${renderWorkstationControllerRuntimeJs(initialSurface)}
-    ${renderGatewayTransportRuntimeJs()}
-    ${renderPlatformActionsRuntimeJs()}
-    ${renderSuperAdminAndShellRuntimeJs(initialSurface)}
+    window.__PROVEKO_BOOT__ = ${bootPayloadJson};
+${renderClientRuntimeBundleJs()}
   </script>
 </body>
 </html>`;

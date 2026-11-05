@@ -421,8 +421,15 @@ export async function startProvekoClusterNodeHttpServer(
             companyName?: string;
             nit?: string;
             adminEmail?: string;
-            enabledCenters?: string[];
-            enabledComponents?: string[];
+            adminUsername?: string;
+            adminPasswordHint?: string;
+            businessTypeId?: string;
+            monthlyUsd?: number;
+            maxRolesAllowed?: number;
+            maxUsersAllowed?: number;
+            activePrincipalServices?: string[];
+            activeSubmodules?: string[];
+            activeFeatures?: string[];
           };
           const companyName =
             typeof checkoutReq.companyName === 'string' && checkoutReq.companyName.trim().length > 0
@@ -432,20 +439,51 @@ export async function startProvekoClusterNodeHttpServer(
             typeof checkoutReq.nit === 'string' && checkoutReq.nit.trim().length > 0
               ? checkoutReq.nit.trim()
               : '900.000.000-1';
-          const adminEmail =
-            typeof checkoutReq.adminEmail === 'string' && checkoutReq.adminEmail.trim().length > 0
-              ? checkoutReq.adminEmail.trim()
-              : 'admin@empresa.co';
-          const slug = `emp-${companyName
+          const rawSlug = companyName
             .toLowerCase()
-            .replace(/[^a-z0-9]+/g, '-')
-            .slice(0, 20)}`;
-          const temporaryPassword = `Prov#2026!`;
+            .replace(/[^a-z0-9]+/g, '_')
+            .replace(/^_|_$/g, '')
+            .slice(0, 20) || 'cliente';
+          const tenantId = `tnt-${rawSlug}`;
+          const dbName = `db_${rawSlug}`;
+          const adminUsername =
+            typeof checkoutReq.adminUsername === 'string' && checkoutReq.adminUsername.trim().length > 0
+              ? checkoutReq.adminUsername.trim()
+              : typeof checkoutReq.adminEmail === 'string' && checkoutReq.adminEmail.trim().length > 0
+                ? checkoutReq.adminEmail.trim()
+                : `admin.${rawSlug}`;
+          const temporaryPassword =
+            typeof checkoutReq.adminPasswordHint === 'string' && checkoutReq.adminPasswordHint.trim().length > 0
+              ? checkoutReq.adminPasswordHint.trim()
+              : `Prov#2026!`;
+          const paymentReference = `STBY-${Date.now()}`;
+
+          if (env.DB_HOST) {
+            PostgresPsqlBootstrapRunner.provisionNewClientDatabaseInPostgres({
+              tenantId,
+              slug: rawSlug,
+              companyName,
+              nit,
+              businessType: checkoutReq.businessTypeId ?? 'comercio-retail',
+              dbName,
+              adminUsername,
+              adminPassword: temporaryPassword,
+              maxRolesAllowed: checkoutReq.maxRolesAllowed ?? 5,
+              maxUsersAllowed: checkoutReq.maxUsersAllowed ?? 10,
+              enabledServices: checkoutReq.activePrincipalServices ?? ['srv-invoicing', 'srv-inventory'],
+              enabledSubmodules: checkoutReq.activeSubmodules ?? ['mod-pos', 'mod-stock', 'mod-warehouses'],
+              enabledFeatures: checkoutReq.activeFeatures ?? ['comp-cashier-name', 'comp-manager-signature'],
+              monthlyAmountUsd: checkoutReq.monthlyUsd ?? 39,
+              paymentReference,
+              migrationsRootDir,
+            });
+          }
+
           const token = jwtVault.signAccessToken({
-            tenant_id: slug,
+            tenant_id: tenantId,
             cell_id: 'cell-db-01',
-            user_id: `usr-admin-${slug}`,
-            role_key: 'ADMIN_CLIENTE',
+            user_id: `usr-admin-${rawSlug}`,
+            role_key: 'cliente',
             tier: 'enterprise',
             is_sandbox: false,
             active_branch_id: 'br-01',
@@ -464,14 +502,16 @@ export async function startProvekoClusterNodeHttpServer(
             JSON.stringify({
               paymentStatus: 'STANDBY_APPROVED',
               paymentService: 'ms-payments',
-              paymentReference: `STBY-${Date.now()}`,
+              paymentReference,
+              dbName,
               credential: {
-                tenantId: slug,
+                tenantId,
                 companyName,
                 nit,
-                adminUsername: adminEmail,
+                dbName,
+                adminUsername,
                 temporaryPassword,
-                roleKey: 'ADMIN_CLIENTE',
+                roleKey: 'cliente',
               },
               token,
             }),

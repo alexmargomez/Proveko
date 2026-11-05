@@ -897,9 +897,15 @@ describe('Proveko — Full Outward Ecosystem: API Gateway, Multi-Server Topology
     const frontendFiles = [
       ...collectTsFiles(path.join(repoRoot, 'apps/web-app/src')),
       ...collectTsFiles(path.join(repoRoot, 'libs/ui-kit/src')),
+      ...collectTsFiles(path.join(repoRoot, 'apps/srv-invoicing/frontend')),
+      ...collectTsFiles(path.join(repoRoot, 'apps/srv-inventory/frontend')),
+      ...collectTsFiles(path.join(repoRoot, 'apps/srv-gastro/frontend')),
+      ...collectTsFiles(path.join(repoRoot, 'apps/srv-hotel/frontend')),
+      ...collectTsFiles(path.join(repoRoot, 'apps/srv-crm/frontend')),
+      ...collectTsFiles(path.join(repoRoot, 'apps/srv-finance/frontend')),
     ];
 
-    expect(frontendFiles.length).toBeGreaterThanOrEqual(24);
+    expect(frontendFiles.length).toBeGreaterThanOrEqual(30);
     for (const filePath of frontendFiles) {
       const content = fs.readFileSync(filePath, 'utf8');
       const lineCount = content.split('\n').length;
@@ -937,18 +943,23 @@ describe('Proveko — Full Outward Ecosystem: API Gateway, Multi-Server Topology
     expect(safeSerialized).not.toContain('</script>');
     expect(safeSerialized).toContain('\\u003c/script\\u003e');
 
-    // Verificación de las 4 Superficies Unificadas (`/`, `/login`, `/superadmin`, `/app`) y 6 Centros Operativos
+    // Verificación de los 3 Apartados Públicos, 4 Roles Oficiales, Cero Selectores Educativos y Cero Empresas Random
     const landingHtml = renderProvekoWorkstationHtml({
-      appDomain: 'proveko.sudoalexmar.tech"><script>alert(1)</script>',
+      appDomain: 'proveko.sudoalexmar.tech',
       initialSurface: 'landing',
     });
-    expect(landingHtml).not.toContain('<script>alert(1)</script>');
-    expect(landingHtml).toContain('Armar Plan y Registro');
-    expect(landingHtml).toContain('Panel SuperAdmin Clientes');
-    expect(landingHtml).toContain('Plataforma de Gestión');
-    expect(landingHtml).toContain('Microservicio de Pagos · Modo Standby Activo');
-    expect(landingHtml).toContain('Control de Ingreso de Tractomulas, Pesaje en Báscula y Asignación de Muelle');
-    expect(landingHtml).toContain('Constructor Visual de Recetas, Escandallos y Costeo por Porción (Cero JSON)');
+    expect(landingHtml).not.toContain('VISTA DE ROL');
+    expect(landingHtml).not.toContain('db_agrovalle');
+    expect(landingHtml).not.toContain('db_labrasa');
+    expect(landingHtml).toContain('Muestra de la Plataforma');
+    expect(landingHtml).toContain('Login / Registra tu Negocio');
+    expect(landingHtml).toContain('Demo');
+    expect(landingHtml).toContain('Paso 1. Selecciona tu Tipo de Negocio');
+    expect(landingHtml).toContain('Paso 2. ¿Quieres agregar Módulos Principales o Submódulos adicionales?');
+    expect(landingHtml).toContain('Necesito otra funcionalidad');
+    expect(landingHtml).toContain('Solicitudes para Traslados');
+    expect(landingHtml).toContain('Firma de encargado');
+    expect(landingHtml).toContain('Seleccionar transportista');
   });
 
   it('9. Listado GET en los 4 Módulos Completados (Split-Check, Frontdesk, CxC/CxP, Contabilidad PUC) y Cabeceras de Seguridad en Frontend', async () => {

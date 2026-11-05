@@ -1,116 +1,192 @@
+import { renderDomSanitizerRuntimeJs } from './dom-sanitizer.runtime.js';
+import { renderFormAndTableRuntimeJs } from './form-and-table.runtime.js';
+import { renderGatewayTransportRuntimeJs } from './gateway-transport.runtime.js';
+import { renderPlatformActionsRuntimeJs } from './platform-actions.runtime.js';
+import { renderSuperAdminAndShellRuntimeJs } from './superadmin-and-shell.runtime.js';
+
 /**
- * Runtime de Cliente — Centro 3 (Comandas, Mesas, Reserva de Cupos y Tickets)
- * y Centro 4 (Control de Tractomulas, Báscula Camionera y Muelles de Patio) (SOLID SRP).
+ * Ensamblador y Controlador de Eventos del Runtime Cliente (Cumpliendo SOLID SRP <= 200 líneas).
  */
-export function renderWorkstationControllerRuntimeJs(_initialSurface: 'landing' | 'workstation'): string {
-  return `
-    function renderGastroAndReservationsCenter() {
-      const showKds = hasComponent('comp:gastro-tables-kds');
-      const showSplit = hasComponent('comp:split-check-seats');
-      const showSlots = hasComponent('comp:slot-reservations');
-      const showTickets = hasComponent('comp:ticket-issuance');
+export function renderClientRuntimeBundleJs(): string {
+  return `(function() {
+${renderDomSanitizerRuntimeJs()}
+${renderFormAndTableRuntimeJs()}
+${renderGatewayTransportRuntimeJs()}
+${renderPlatformActionsRuntimeJs()}
+${renderSuperAdminAndShellRuntimeJs()}
 
-      document.getElementById('center-kpi-strip').innerHTML =
-        '<div class="kpi-card"><span class="kpi-label">Mesas y Comandas</span><div class="kpi-value tabular-nums">' + STATE.db.tablesAndOrders.length + ' Mesas</div><span class="kpi-sub">Control de salón y cocina en vivo</span></div>' +
-        '<div class="kpi-card"><span class="kpi-label">Reservas y Cupos Activos</span><div class="kpi-value tabular-nums">' + STATE.db.reservationsAndTickets.length + ' Cupos</div><span class="kpi-sub">Agenda y control de aforo</span></div>' +
-        '<div class="kpi-card"><span class="kpi-label">Tickets / Boletas Emitidas</span><div class="kpi-value">' + (showTickets ? 'Taquilla Activa' : 'Opcional') + '</div><span class="kpi-sub">Verificación por código</span></div>' +
-        '<div class="kpi-card"><span class="kpi-label">División de Cuentas</span><div class="kpi-value">' + (showSplit ? 'Por Silla / Partes' : 'Cuenta Única') + '</div><span class="kpi-sub">Cuadre exacto sin centavos perdidos</span></div>';
+  function pkGoRegister(presetId) {
+    if (presetId) {
+      STATE.selectedBusinessTypeId = presetId;
+      STATE.extraServiceKeys = {};
+      STATE.extraSubmoduleKeys = {};
+    }
+    STATE.publicTab = 'auth';
+    STATE.authMode = 'register';
+    pkUpdateShellNavigation();
+  }
 
-      const canvas = document.getElementById('center-workspace-canvas');
-      canvas.innerHTML =
-        (showKds ?
-          '<div class="card" style="margin-bottom:16px;">' +
-            '<div class="card-header"><span class="card-title">🍽️ Mapa de Mesas, Toma de Comandas y Despacho a Cocina</span><button type="button" class="btn btn-primary" onclick="window.provekoCreateTableOrder()">+ Abrir Nueva Mesa / Comanda</button></div>' +
-            '<div class="card-body">' +
-              '<div class="form-grid-4" style="margin-bottom:12px;">' +
-                '<div class="form-group"><label class="form-label">Mesa / Ubicación</label><input id="tbl-name" class="form-control" value="Mesa 04 · Terraza Cubierta" /></div>' +
-                '<div class="form-group"><label class="form-label">Comensales (Cupos)</label><input id="tbl-diners" type="number" class="form-control tabular-nums" value="4" /></div>' +
-                '<div class="form-group"><label class="form-label">Mesero / Anfitrión</label><input id="tbl-waiter" class="form-control" value="Camila Londoño" /></div>' +
-                '<div class="form-group"><label class="form-label">Pedido Inicial a Cocina</label><input id="tbl-order" class="form-control" value="2x Lomo al Trapo, 2x Jugo Natural" /></div>' +
-              '</div>' +
-              '<div class="form-grid-3">' +
-                STATE.db.tablesAndOrders.map((t, idx) =>
-                  '<div class="card" style="border-left:4px solid ' + (t.status === 'DISPONIBLE' ? '#15803D' : '#1D4ED8') + ';">' +
-                    '<div class="card-body">' +
-                      '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">' +
-                        '<strong>' + escapeHtml(t.name) + '</strong>' +
-                        '<span class="badge ' + (t.status === 'DISPONIBLE' ? 'badge-emerald' : 'badge-amber') + '">' + escapeHtml(t.status) + '</span>' +
-                      '</div>' +
-                      '<div style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">Comensales: <strong>' + t.diners + '</strong> · Mesero: ' + escapeHtml(t.waiter) + '</div>' +
-                      '<div style="font-size:12px; margin-bottom:8px;">' + (t.currentOrder.length ? escapeHtml(t.currentOrder.join(' · ')) : 'Sin pedidos activos') + '</div>' +
-                      '<div style="display:flex; justify-content:space-between; align-items:center;">' +
-                        '<span class="tabular-nums" style="font-weight:800; font-size:15px;">' + formatCop(t.total) + '</span>' +
-                        (showSplit && t.total > 0 ? '<span class="badge badge-blue">' + formatCop(Math.round(t.total / Math.max(1, t.diners))) + ' / silla</span>' : '') +
-                        '<button type="button" class="btn btn-outline" style="padding:4px 8px; font-size:11px;" onclick="window.provekoAdvanceTableStatus(' + idx + ')">Avanzar Estado</button>' +
-                      '</div>' +
-                    '</div>' +
-                  '</div>'
-                ).join('') +
-              '</div>' +
-            '</div>' +
-          '</div>' : '') +
-        ((showSlots || showTickets) ?
-          '<div class="card"><div class="card-header"><span class="card-title">🎟️ Reserva de Cupos, Alojamiento y Emisión de Tickets / Boletas</span><button type="button" class="btn btn-emerald" onclick="window.provekoCreateReservationOrTicket()">+ Registrar Reserva / Emitir Ticket</button></div>' +
-            '<div class="card-body"><div class="form-grid-3" style="margin-bottom:12px;">' +
-              '<div class="form-group"><label class="form-label">Modalidad</label><select id="res-kind" class="form-control"><option value="RESERVA_CUPO">Reserva de Cupos / Espacio / Habitación</option><option value="TICKET_ENTRADA">Emisión de Ticket / Boleta de Entrada</option></select></div>' +
-              '<div class="form-group"><label class="form-label">Titular / Huésped / Cliente</label><input id="res-holder" class="form-control" value="Dr. Alejandro Vargas" /></div>' +
-              '<div class="form-group"><label class="form-label">Documento / NIT</label><input id="res-doc" class="form-control" value="79.441.802" /></div>' +
-              '<div class="form-group"><label class="form-label">Espacio, Habitación o Evento</label><input id="res-resource" class="form-control" value="Cupo VIP Terraza / Habitación 204" /></div>' +
-              '<div class="form-group"><label class="form-label">Fecha, Hora y Cupos</label><input id="res-date" class="form-control" value="2026-11-08 20:00 (4 Cupos)" /></div>' +
-              '<div class="form-group"><label class="form-label">Valor Total ($)</label><input id="res-amount" type="number" class="form-control tabular-nums" value="340000" /></div>' +
-            '</div>' +
-            '<table class="data-table"><thead><tr><th>Código Ticket</th><th>Modalidad</th><th>Titular</th><th>Espacio / Recurso</th><th>Fecha y Hora</th><th>Cupos</th><th>Valor</th><th>Estado</th></tr></thead><tbody>' +
-              STATE.db.reservationsAndTickets.map((r) => '<tr><td class="mono" style="font-weight:700; color:#1D4ED8;">' + escapeHtml(r.ticketCode) + '</td><td><span class="badge badge-blue">' + escapeHtml(r.kind) + '</span></td><td style="font-weight:700;">' + escapeHtml(r.holderName) + '</td><td>' + escapeHtml(r.resourceName) + '</td><td>' + escapeHtml(r.dateSlot) + '</td><td class="tabular-nums">' + r.spots + '</td><td class="tabular-nums" style="font-weight:800;">' + formatCop(r.amount) + '</td><td><span class="badge badge-emerald">' + escapeHtml(r.status) + '</span></td></tr>').join('') +
-            '</tbody></table></div></div>' : '');
+  document.addEventListener('click', function(ev) {
+    var target = ev.target;
+    if (!target || !target.closest) return;
+
+    if (target.closest('#tab-nav-showcase')) { STATE.publicTab = 'showcase'; pkUpdateShellNavigation(); return; }
+    if (target.closest('#tab-nav-auth') || target.closest('#btn-hero-go-login')) {
+      STATE.publicTab = 'auth'; STATE.authMode = 'login'; pkUpdateShellNavigation(); return;
+    }
+    if (target.closest('#tab-nav-demo') || target.closest('#btn-hero-go-demo')) {
+      STATE.publicTab = 'demo'; STATE.activeWorkstationPane = 'module'; pkUpdateShellNavigation(); return;
+    }
+    if (target.closest('#btn-hero-go-register') || target.closest('#btn-card-go-register') ||
+        target.closest('#btn-showcase-mid-register') || target.closest('#btn-demo-go-register') ||
+        target.closest('#btn-login-switch-to-register') || target.closest('#btn-auth-mode-register')) {
+      pkGoRegister(); return;
+    }
+    if (target.closest('#btn-auth-mode-login')) { STATE.authMode = 'login'; pkUpdateShellNavigation(); return; }
+    if (target.closest('#btn-logout-session')) {
+      STATE.session = null; STATE.publicTab = 'showcase'; pkUpdateShellNavigation(); pkToast('Sesión cerrada.'); return;
     }
 
-    function renderLogisticsAndFleetCenter() {
-      const showScale = hasComponent('comp:weighbridge-scale');
-      const showDock = hasComponent('comp:dock-turn-queue');
-      const showSeal = hasComponent('comp:seal-manifest');
-      const totalNetKg = STATE.db.trucksInYard.reduce((a, b) => a + b.netWeightKg, 0);
+    var shPreset = target.closest('[data-showcase-preset]');
+    if (shPreset) { pkGoRegister(shPreset.getAttribute('data-showcase-preset')); return; }
 
-      document.getElementById('center-kpi-strip').innerHTML =
-        '<div class="kpi-card"><span class="kpi-label">Tractomulas en Patio</span><div class="kpi-value tabular-nums">' + STATE.db.trucksInYard.length + ' Vehículos</div><span class="kpi-sub">Control de portería, báscula y muelles</span></div>' +
-        '<div class="kpi-card"><span class="kpi-label">Carga Neta Pesada Hoy</span><div class="kpi-value tabular-nums">' + totalNetKg.toLocaleString('es-CO') + ' kg</div><span class="kpi-sub">' + (totalNetKg / 1000).toFixed(2) + ' Toneladas métricas</span></div>' +
-        '<div class="kpi-card"><span class="kpi-label">Báscula Camionera</span><div class="kpi-value">' + (showScale ? 'En Línea (Bruto/Tara)' : 'Manual') + '</div><span class="kpi-sub">Cálculo automático de Peso Neto</span></div>' +
-        '<div class="kpi-card"><span class="kpi-label">Control de Precintos</span><div class="kpi-value">' + (showSeal ? 'Verificado' : 'Estándar') + '</div><span class="kpi-sub">Trazabilidad de seguridad</span></div>';
-
-      const canvas = document.getElementById('center-workspace-canvas');
-      canvas.innerHTML =
-        '<div class="card"><div class="card-header"><span class="card-title">🚛 Control de Ingreso de Tractomulas, Pesaje en Báscula y Asignación de Muelle</span><button type="button" class="btn btn-primary" onclick="window.provekoRegisterTruckInYard()">+ Registrar Ingreso / Pesaje de Tractomula</button></div>' +
-          '<div class="card-body">' +
-            '<div class="form-grid-4" style="margin-bottom:14px;">' +
-              '<div class="form-group"><label class="form-label">Placa Cabezote</label><input id="trk-plate" class="form-control mono" value="SZN-814" /></div>' +
-              '<div class="form-group"><label class="form-label">Placa Remolque / Tráiler</label><input id="trk-trailer" class="form-control mono" value="R-60912" /></div>' +
-              '<div class="form-group"><label class="form-label">Configuración Vehicular</label><select id="trk-type" class="form-control"><option>Tractomula 3S3 (6 Ejes - 52 Ton)</option><option>Minimula 2S2 (4 Ejes)</option><option>Dobletroque Rígido</option><option>Camión Sencillo / Turbo</option></select></div>' +
-              '<div class="form-group"><label class="form-label">Conductor y Cédula</label><input id="trk-driver" class="form-control" value="Álvaro Morales · CC 14.889.201" /></div>' +
-              '<div class="form-group"><label class="form-label">Empresa Transportadora</label><input id="trk-carrier" class="form-control" value="Expreso de Carga Nacional S.A." /></div>' +
-              '<div class="form-group"><label class="form-label">Producto / Carga Transportada</label><input id="trk-cargo" class="form-control" value="Maíz Amarillo Industrial a Granel" /></div>' +
-              (showDock ? '<div class="form-group"><label class="form-label">Muelle / Silo Asignado (Componente)</label><select id="trk-dock" class="form-control"><option>Muelle #1 - Descargue Granel</option><option>Muelle #2 - Silos Norte</option><option>Muelle #3 - Despacho Producto Terminado</option></select></div>' : '') +
-              (showSeal ? '<div class="form-group"><label class="form-label">Precinto / Sello de Seguridad</label><input id="trk-seal" class="form-control mono" value="PREC-99904" /></div>' : '') +
-              (showScale ?
-                '<div class="form-group"><label class="form-label">Peso Bruto Báscula (kg)</label><input id="trk-gross" type="number" class="form-control tabular-nums" value="51800" oninput="window.provekoRecalcNetWeight()" /></div>' +
-                '<div class="form-group"><label class="form-label">Peso Tara Vehículo Vacío (kg)</label><input id="trk-tare" type="number" class="form-control tabular-nums" value="17300" oninput="window.provekoRecalcNetWeight()" /></div>' +
-                '<div class="form-group"><label class="form-label">Peso Neto Carga Calculado (kg)</label><input id="trk-net" class="form-control tabular-nums mono" disabled value="34500" style="font-weight:800; color:#15803D; background:#DCFCE7;" /></div>'
-                : '') +
-            '</div>' +
-            '<table class="data-table"><thead><tr><th>Cabezote / Remolque</th><th>Vehículo</th><th>Conductor y Transportadora</th><th>Carga</th>' + (showDock ? '<th>Muelle</th>' : '') + (showScale ? '<th>Bruto (kg)</th><th>Tara (kg)</th><th>Peso Neto (kg)</th>' : '') + (showSeal ? '<th>Precinto</th>' : '') + '<th>Estado en Patio</th><th>Acción</th></tr></thead><tbody>' +
-              STATE.db.trucksInYard.map((trk, idx) =>
-                '<tr>' +
-                  '<td class="mono" style="font-weight:800;">' + escapeHtml(trk.tractorPlate) + ' / ' + escapeHtml(trk.trailerPlate) + '</td>' +
-                  '<td>' + escapeHtml(trk.vehicleType) + '</td>' +
-                  '<td><strong>' + escapeHtml(trk.driverName) + '</strong><div style="font-size:11px; color:var(--text-muted);">' + escapeHtml(trk.carrier) + '</div></td>' +
-                  '<td>' + escapeHtml(trk.cargoProduct) + '</td>' +
-                  (showDock ? '<td><span class="badge badge-blue">' + escapeHtml(trk.dock) + '</span></td>' : '') +
-                  (showScale ? '<td class="tabular-nums">' + trk.grossWeightKg.toLocaleString('es-CO') + '</td><td class="tabular-nums">' + trk.tareWeightKg.toLocaleString('es-CO') + '</td><td class="tabular-nums mono" style="font-weight:800; color:#15803D;">' + trk.netWeightKg.toLocaleString('es-CO') + ' kg</td>' : '') +
-                  (showSeal ? '<td class="mono">' + escapeHtml(trk.sealCode) + '</td>' : '') +
-                  '<td><span class="badge badge-emerald">' + escapeHtml(trk.yardStatus) + '</span></td>' +
-                  '<td><button type="button" class="btn btn-outline" style="padding:4px 8px; font-size:11px;" onclick="window.provekoAdvanceTruckStatus(' + idx + ')">Avanzar Turno</button></td>' +
-                '</tr>'
-              ).join('') +
-            '</tbody></table>' +
-          '</div></div>';
+    var bTypeBtn = target.closest('[data-select-btype]');
+    if (bTypeBtn) {
+      STATE.selectedBusinessTypeId = bTypeBtn.getAttribute('data-select-btype');
+      STATE.extraServiceKeys = {}; STATE.extraSubmoduleKeys = {};
+      pkRenderRegistrationWizard(); return;
     }
-  `;
+
+    if (target.closest('#btn-submit-login')) {
+      var uVal = ((document.getElementById('login-username') || {}).value || '').trim().toLowerCase();
+      if (!uVal) { pkToast('Ingresa tu usuario o correo.'); return; }
+      if (uVal.indexOf('superadmin') !== -1) {
+        STATE.session = { role: 'superadmin', username: uVal };
+      } else if (uVal.indexOf('dev') !== -1 || uVal.indexOf('desarrollador') !== -1) {
+        STATE.session = { role: 'desarrollador', username: uVal };
+      } else if (uVal.indexOf('aux') !== -1) {
+        STATE.session = { role: 'auxiliar', username: uVal };
+      } else {
+        var matchedClient = STATE.clients[STATE.clients.length - 1] || STATE.clients[0];
+        for (var i = 0; i < STATE.clients.length; i++) {
+          if (STATE.clients[i].adminUsername.toLowerCase() === uVal) matchedClient = STATE.clients[i];
+        }
+        STATE.activeTenantId = matchedClient.tenantId;
+        STATE.session = { role: 'cliente', username: uVal, tenantId: matchedClient.tenantId, internalRoleName: 'Administrador General' };
+      }
+      pkUpdateShellNavigation();
+      pkToast('Bienvenido a Proveko (' + STATE.session.role + ').');
+      return;
+    }
+
+    if (target.closest('#btn-open-standby-checkout') || target.closest('#btn-sa-new-client')) {
+      var cName = ((document.getElementById('reg-company-name') || {}).value || '').trim() || 'Nueva Empresa Cliente S.A.S.';
+      var plan = pkComputeRegistrationPlan();
+      document.getElementById('pay-modal-company').value = cName;
+      document.getElementById('pay-modal-amount').value = '$' + plan.totalUsd + ' USD/mes';
+      document.getElementById('payment-step-checkout').style.display = 'block';
+      document.getElementById('payment-step-credentials').style.display = 'none';
+      document.getElementById('standby-payment-modal').classList.add('open');
+      return;
+    }
+    if (target.closest('#btn-close-payment-modal')) {
+      document.getElementById('standby-payment-modal').classList.remove('open'); return;
+    }
+    if (target.closest('#btn-confirm-standby-payment')) { pkConfirmStandbyCheckout(); return; }
+    if (target.closest('#btn-enter-with-generated-creds') && STATE.lastGeneratedClient) {
+      var gc = STATE.lastGeneratedClient;
+      document.getElementById('standby-payment-modal').classList.remove('open');
+      STATE.activeTenantId = gc.tenantId;
+      STATE.session = { role: 'cliente', username: gc.adminUsername, tenantId: gc.tenantId, internalRoleName: 'Administrador General (Cuenta Admin)' };
+      pkUpdateShellNavigation();
+      return;
+    }
+
+    var wsSvc = target.closest('[data-ws-service]');
+    if (wsSvc) {
+      STATE.activeWorkstationPane = 'module';
+      STATE.activeServiceKey = wsSvc.getAttribute('data-ws-service');
+      STATE.activeSubmoduleKey = '';
+      pkRenderWorkstation(); return;
+    }
+    var wsSub = target.closest('[data-ws-submodule]');
+    if (wsSub) {
+      STATE.activeSubmoduleKey = wsSub.getAttribute('data-ws-submodule');
+      pkRenderWorkstation(); return;
+    }
+    if (target.closest('#btn-nav-internal-rbac')) { STATE.activeWorkstationPane = 'rbac'; pkRenderWorkstation(); return; }
+    if (target.closest('#btn-nav-need-feature')) { STATE.activeWorkstationPane = 'need-feature'; pkRenderWorkstation(); return; }
+
+    if (target.closest('#btn-ws-save-record')) {
+      var inputs = document.querySelectorAll('[data-ws-field]');
+      var row = ['REG-' + String(Date.now()).slice(-4)];
+      for (var f = 0; f < inputs.length; f++) row.push(inputs[f].value || 'Registrado');
+      if (!STATE.submoduleRows[STATE.activeSubmoduleKey]) STATE.submoduleRows[STATE.activeSubmoduleKey] = [];
+      STATE.submoduleRows[STATE.activeSubmoduleKey].unshift(row);
+      pkRenderWorkstation();
+      pkToast('Registro guardado en la Base de Datos de tu empresa.');
+      return;
+    }
+
+    if (target.closest('#btn-create-internal-role')) {
+      var clR = pkGetActiveClient();
+      if (clR.internalRoles.length >= clR.maxRolesAllowed) {
+        pkToast('Has alcanzado el límite máximo de roles (' + clR.maxRolesAllowed + ') permitido por SuperAdmin.'); return;
+      }
+      var rName = ((document.getElementById('new-role-name') || {}).value || '').trim();
+      var rDesc = ((document.getElementById('new-role-desc') || {}).value || '').trim() || 'Rol personalizado';
+      if (!rName) { pkToast('Ingresa el nombre del rol.'); return; }
+      clR.internalRoles.push({ roleId: 'rol-' + Date.now(), name: rName, description: rDesc, allowedSubmodules: clR.activeSubmodules.slice(0, 3) });
+      pkRenderWorkstation(); pkToast('Rol interno creado en ' + clR.dbName); return;
+    }
+
+    if (target.closest('#btn-create-internal-user')) {
+      var clU = pkGetActiveClient();
+      if (clU.internalUsers.length >= clU.maxUsersAllowed) {
+        pkToast('Has alcanzado el límite máximo de usuarios (' + clU.maxUsersAllowed + ') permitido por SuperAdmin.'); return;
+      }
+      var uFull = ((document.getElementById('new-user-fullname') || {}).value || '').trim();
+      var uName = ((document.getElementById('new-user-username') || {}).value || '').trim();
+      if (!uFull || !uName) { pkToast('Completa nombre y usuario.'); return; }
+      clU.internalUsers.push({ userId: 'u-' + Date.now(), username: uName, fullName: uFull, email: uName + '@empresa.co', internalRoleId: 'rol-operador', internalRoleName: 'Rol Asignado', passwordHint: 'Usr#2026!', isClientAdmin: false });
+      pkRenderWorkstation(); pkToast('Usuario creado en ' + clU.dbName); return;
+    }
+
+    var reqBtn = target.closest('[data-req-key]');
+    if (reqBtn) {
+      var clF = pkGetActiveClient();
+      var rTier = reqBtn.getAttribute('data-req-tier');
+      var rKey = reqBtn.getAttribute('data-req-key');
+      var rLbl = reqBtn.getAttribute('data-req-label');
+      if (rTier === 'SUBMODULO' && clF.activeSubmodules.indexOf(rKey) === -1) clF.activeSubmodules.push(rKey);
+      if (rTier === 'FUNCIONALIDAD' && clF.activeFeatures.indexOf(rKey) === -1) clF.activeFeatures.push(rKey);
+      STATE.featureRequests.push({ companyName: clF.companyName, tier: rTier, key: rKey, label: rLbl });
+      pkRenderWorkstation(); pkToast('Activado: ' + rLbl); return;
+    }
+
+    if (pkHandleSuperAdminAction(target)) return;
+  });
+
+  document.addEventListener('change', function(ev) {
+    var t = ev.target;
+    if (!t) return;
+    var exSvc = t.getAttribute('data-extra-service');
+    if (exSvc) { STATE.extraServiceKeys[exSvc] = !!t.checked; pkRenderRegistrationWizard(); return; }
+    var exSub = t.getAttribute('data-extra-submodule');
+    if (exSub) { STATE.extraSubmoduleKeys[exSub] = !!t.checked; pkRenderRegistrationWizard(); return; }
+  });
+
+  document.addEventListener('input', function(ev) {
+    var t = ev.target;
+    if (t && (t.id === 'scale-gross-kg' || t.id === 'scale-tare-kg')) {
+      var g = Number((document.getElementById('scale-gross-kg') || {}).value || 0);
+      var tr = Number((document.getElementById('scale-tare-kg') || {}).value || 0);
+      var net = Math.max(0, g - tr);
+      var disp = document.getElementById('scale-net-display');
+      if (disp) disp.value = net.toLocaleString('es-CO') + ' Kg (' + (net / 1000).toFixed(2) + ' Ton)';
+    }
+  });
+
+  pkUpdateShellNavigation();
+})();`;
 }

@@ -1,81 +1,140 @@
 /**
- * Superficies 2 y 3 (`/login` y `/superadmin`):
- * - Login Inteligente por Rol (separa SuperAdmin Global de Usuarios de Empresas Clientes).
- * - Consola Maestra del SuperAdmin Global para gestionar clientes, planes, componentes y credenciales (SOLID SRP).
+ * Apartado 2 Público: Login + Asistente por Pasos "Registra tu Negocio"
+ * y Consola Maestra para los Roles Globales (`superadmin`, `desarrollador`, `auxiliar`).
  */
-export function renderLoginAndSuperAdminLayerHtml(): string {
+export function renderLoginAndSuperAdminHtml(): string {
   return `
-  <!-- Superficie 2: Login Unificado (/login) -->
-  <section id="surface-login" class="landing-shell hidden" aria-label="Inicio de Sesión Proveko">
-    <div style="max-width:520px; margin:24px auto;" class="card">
-      <div class="card-header" style="background:#0F172A; color:#fff;">
-        <div>
-          <div style="font-size:11px; color:#93C5FD; font-weight:700; text-transform:uppercase;">Acceso Seguro Multi-Empresa</div>
-          <div class="card-title" style="color:#fff; font-size:17px;">Iniciar Sesión en Proveko</div>
+  <!-- APARTADO 2: INICIAR SESIÓN O REGISTRA TU NEGOCIO -->
+  <section class="surface" id="surface-auth">
+    <div style="display:flex;justify-content:center;gap:10px;margin-bottom:18px">
+      <button type="button" class="btn btn-primary" id="btn-auth-mode-login">🔐 Iniciar Sesión</button>
+      <button type="button" class="btn btn-outline" id="btn-auth-mode-register">🚀 Registra tu Negocio (Paso a Paso)</button>
+    </div>
+
+    <!-- MODO 2A: FORMULARIO DE LOGIN PROFESIONAL (CERO SELECTORES EDUCATIVOS) -->
+    <div id="auth-pane-login" style="max-width:480px;margin:0 auto">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <span class="badge badge-blue">ACCESO SEGURO MULTI-BASE</span>
+            <h2 style="margin:6px 0 0;font-size:18px">Iniciar Sesión en Proveko</h2>
+          </div>
         </div>
-        <span class="badge badge-blue">RBAC Activo</span>
+        <div class="card-body">
+          <p style="font-size:12px;color:var(--pk-muted);margin:0 0 14px">
+            Ingresa con tu usuario o correo corporativo. El sistema identifica automáticamente tu rol
+            (<strong>superadmin</strong>, <strong>desarrollador</strong>, <strong>auxiliar</strong> o <strong>cliente</strong>)
+            y conecta con la base de datos aislada de tu empresa.
+          </p>
+          <div class="field" style="margin-bottom:12px">
+            <label>Usuario o Correo Electrónico</label>
+            <input type="text" id="login-username" placeholder="Ej: admin@tuempresa.com o superadmin@proveko.com" />
+          </div>
+          <div class="field" style="margin-bottom:16px">
+            <label>Contraseña</label>
+            <input type="password" id="login-password" placeholder="••••••••••••" />
+          </div>
+          <button type="button" class="btn btn-primary" style="width:100%;padding:11px" id="btn-submit-login">
+            Ingresar a la Plataforma
+          </button>
+          <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--pk-border);display:flex;justify-content:space-between;align-items:center;font-size:12px">
+            <span style="color:var(--pk-muted)">¿Aún no tienes cuenta empresarial?</span>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-login-switch-to-register">Registra tu Negocio &rarr;</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODO 2B: ASISTENTE "REGISTRA TU NEGOCIO" (3 PASOS + PAGO AL FINAL) -->
+    <div id="auth-pane-register" style="display:none">
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-head">
+          <div>
+            <span class="badge badge-emerald">ALTA DE EMPRESA Y BASE DE DATOS PROPIA</span>
+            <h2 style="margin:4px 0 0;font-size:18px">Registra tu Negocio en 3 Pasos</h2>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:11px;color:var(--pk-muted)">Total Mensual Estimado</div>
+            <div style="font-size:24px;font-weight:800;color:var(--pk-primary)" id="reg-quote-total">$49 USD/mes</div>
+            <div style="font-size:11px;color:var(--pk-muted)" id="reg-quote-breakdown">Plan Base Incluido</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <!-- PASO 1: TIPO DE NEGOCIO -->
+          <div style="margin-bottom:20px">
+            <div style="font-weight:800;font-size:14px;margin-bottom:4px">
+              Paso 1. Selecciona tu Tipo de Negocio (Habilita todos los módulos básicos de tu operación)
+            </div>
+            <div style="font-size:12px;color:var(--pk-muted);margin-bottom:10px">
+              El plan base de tu tipo de negocio ya incluye todos los Módulos Principales y Submódulos esenciales para operar sin cobros ocultos.
+            </div>
+            <div class="preset-row" id="reg-business-types-row"></div>
+            <div id="reg-included-summary" style="background:#f8fafc;border:1px solid var(--pk-border);border-radius:10px;padding:12px;font-size:12px"></div>
+          </div>
+
+          <!-- PASO 2: ¿QUIERES AGREGAR MÓDULOS PRINCIPALES O SUBMÓDULOS ADICIONALES? -->
+          <div style="margin-bottom:20px">
+            <div style="font-weight:800;font-size:14px;margin-bottom:4px">
+              Paso 2. ¿Quieres agregar Módulos Principales o Submódulos adicionales? (Opcional)
+            </div>
+            <div style="font-size:12px;color:var(--pk-muted);margin-bottom:10px">
+              Solo si necesitas capacidades fuera de tu giro base, selecciona aquí Módulos Principales o Submódulos adicionales (las funcionalidades internas vienen gobernadas por el sistema).
+            </div>
+            <div class="center-selector-grid" id="reg-addons-grid"></div>
+          </div>
+
+          <!-- PASO 3: DATOS DE LA EMPRESA Y PAGO FINAL -->
+          <div style="background:#f8fafc;border:1px solid var(--pk-border);border-radius:12px;padding:16px">
+            <div style="font-weight:800;font-size:14px;margin-bottom:10px">
+              Paso 3. Datos de tu Empresa y Pago de Activación
+            </div>
+            <div class="grid-3">
+              <div class="field">
+                <label>Razón Social o Nombre del Negocio</label>
+                <input type="text" id="reg-company-name" placeholder="Ej: Comercializadora del Norte S.A.S." />
+              </div>
+              <div class="field">
+                <label>NIT / Identificación Fiscal</label>
+                <input type="text" id="reg-company-nit" placeholder="Ej: 901.552.310-8" />
+              </div>
+              <div class="field">
+                <label>Correo del Administrador</label>
+                <input type="email" id="reg-company-email" placeholder="gerencia@tuempresa.com" />
+              </div>
+            </div>
+            <div class="row-actions" style="margin-top:14px;justify-content:flex-end">
+              <button type="button" class="btn btn-emerald" id="btn-open-standby-checkout">
+                💳 Ir al Pago y Crear Base de Datos de mi Empresa &rarr;
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONSOLA GLOBAL PARA ROLES DE PLATAFORMA: SUPERADMIN, DESARROLLADOR Y AUXILIAR -->
+  <section class="surface" id="surface-superadmin">
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-head">
+        <div>
+          <span class="badge badge-blue" id="staff-console-badge">ROL GLOBAL: SUPERADMIN</span>
+          <h2 style="margin:4px 0 0;font-size:18px" id="staff-console-title">Control Maestro de Clientes, Bases de Datos y Cuotas de Roles/Usuarios</h2>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm" id="btn-sa-new-client">+ Crear Nuevo Cliente y su Base de Datos</button>
       </div>
       <div class="card-body">
-        <p style="font-size:12.5px; color:var(--text-muted); margin-bottom:14px;">
-          Si ingresas como <strong>SuperAdmin Global</strong> entrarás al Panel de Control de Clientes. Si ingresas con la <strong>credencial de tu empresa</strong> entrarás directo a tu plataforma operativa sin pasar por la portada.
-        </p>
-        <div class="form-group">
-          <label class="form-label" for="login-username">Usuario o Correo Corporativo</label>
-          <input id="login-username" type="text" class="form-control" value="admin@agrovalle.co" placeholder="usuario@empresa.co" />
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="login-password">Contraseña de Acceso</label>
-          <input id="login-password" type="password" class="form-control" value="AgroValle2026!" />
-        </div>
-        <div id="login-feedback" class="hidden" style="margin-bottom:10px; padding:9px 12px; border-radius:7px; font-size:12px;"></div>
-        <button type="button" class="btn btn-primary" style="width:100%; margin-bottom:14px;" onclick="window.provekoSubmitLogin()">
-          Entrar a Mi Plataforma →
-        </button>
-
-        <div style="border-top:1px solid var(--border-hairline); padding-top:12px;">
-          <div style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--text-muted); margin-bottom:8px;">
-            Accesos Rápidos de Demostración (1 Clic):
-          </div>
-          <div style="display:flex; flex-direction:column; gap:6px;">
-            <button type="button" class="btn btn-outline" style="justify-content:space-between;" onclick="window.provekoQuickLogin('SUPERADMIN_GLOBAL')">
-              <span>👑 Entrar como <strong>SuperAdmin Global de Proveko</strong></span>
-              <span class="badge badge-blue">Consola de Clientes</span>
-            </button>
-            <button type="button" class="btn btn-outline" style="justify-content:space-between;" onclick="window.provekoQuickLogin('ADMIN_AGROVALLE')">
-              <span>🏢 Entrar como <strong>Admin Cliente</strong> (Agroindustrial & Logístico)</span>
-              <span class="badge badge-emerald">Todos los Centros</span>
-            </button>
-            <button type="button" class="btn btn-outline" style="justify-content:space-between;" onclick="window.provekoQuickLogin('CAJERO_AGROVALLE')">
-              <span>🧾 Entrar como <strong>Cajero / Facturador</strong> (Vista por Rol)</span>
-              <span class="badge badge-amber">Solo Facturación y Terceros</span>
-            </button>
-            <button type="button" class="btn btn-outline" style="justify-content:space-between;" onclick="window.provekoQuickLogin('BASCULA_AGROVALLE')">
-              <span>🚛 Entrar como <strong>Operador de Tractomulas y Báscula</strong></span>
-              <span class="badge badge-slate">Solo Patio e Inventario</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Superficie 3: Consola Maestra del SuperAdmin Global (/superadmin) -->
-  <section id="surface-superadmin" class="landing-shell hidden" aria-label="Consola Maestra del SuperAdmin Global">
-    <div class="card" style="margin-bottom:18px; border-color:#1D4ED8;">
-      <div class="card-header" style="background:linear-gradient(135deg, #0F172A 0%, #1E3A8A 100%); color:#fff;">
-        <div>
-          <span class="badge badge-blue" style="margin-bottom:4px;">ROL: SUPERADMIN GLOBAL PROVEKO</span>
-          <h1 style="font-size:20px; font-weight:800; color:#fff;">Consola Maestra de Empresas Clientes, Credenciales y Suscripciones</h1>
-          <p style="font-size:12.5px; color:#CBD5E1;">Crea empresas clientes, genera las credenciales de su usuario SuperAdmin, habilita o deshabilita componentes y audita cualquier cuenta.</p>
-        </div>
-        <button type="button" class="btn btn-emerald" onclick="window.provekoOpenCheckoutModal()">
-          + Crear Nueva Empresa Cliente y Generar Credencial
-        </button>
+        <div class="kpi-row" id="sa-kpi-row"></div>
+        <div id="sa-tenants-grid" style="display:grid;gap:14px"></div>
       </div>
     </div>
 
-    <div id="superadmin-kpis" class="kpi-strip" style="margin-bottom:18px;"></div>
-    <div id="superadmin-tenants-container"></div>
-  </section>
-  `;
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">Solicitudes de Clientes — Pestaña "Necesito otra funcionalidad"</div>
+        <span class="badge badge-amber" id="sa-requests-count">0 solicitudes</span>
+      </div>
+      <div class="card-body" id="sa-feature-requests-body"></div>
+    </div>
+  </section>`;
 }

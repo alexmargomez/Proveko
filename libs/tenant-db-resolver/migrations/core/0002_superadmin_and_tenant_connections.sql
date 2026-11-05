@@ -1,226 +1,184 @@
--- =============================================================================
--- PROVEKO — Core Control Plane Migration (proveko_control_db / coreDB)
--- Migration: 0002_superadmin_and_tenant_connections.sql
--- Purpose:
---   1. Crea las tablas maestras en `public` y `control_plane` para que sean
---      visibles directamente en el Inspector SQL de ALpanel y por todos los nodos:
---      - `superadmin_users` (Credenciales del SuperAdmin Global de Proveko)
---      - `tenant_database_connections` (Datos de conexión reales a la DB de cada cliente)
---      - `role_definitions` y `tenant_users` (Roles RBAC y credenciales de cada cliente)
---      - `subscription_payments` (Registro de pagos del microservicio ms-payments en Standby)
---      - `operational_centers` y `tenant_component_toggles` (Módulos y Componentes activos)
---   2. Inserta las semillas iniciales idempotentes (ON CONFLICT DO NOTHING).
--- =============================================================================
+-- ============================================================================
+-- PROVEKO CONTROL PLANE (CORE DB) — MIGRATION 0002
+-- 4 Roles Oficiales (superadmin, desarrollador, auxiliar, cliente),
+-- Llaves de Conexión a las BDs de cada Cliente, Cuotas de Roles/Usuarios
+-- y Solicitudes de "Necesito otra funcionalidad".
+-- (Cero empresas random pre-creadas: en Día 0 solo existe db_version_prueba para Demo)
+-- ============================================================================
 
-CREATE SCHEMA IF NOT EXISTS control_plane;
+-- Limpieza idempotente de empresas random previas si existían
+DELETE FROM "control_plane"."tenants" WHERE "id" IN ('tnt-agrovalle', 'tnt-labrasa');
 
--- 1. Tabla de SuperAdministradores Globales de la Plataforma Proveko
-CREATE TABLE IF NOT EXISTS public.superadmin_users (
-  id VARCHAR(64) PRIMARY KEY,
-  email VARCHAR(180) NOT NULL UNIQUE,
-  username VARCHAR(120) NOT NULL UNIQUE,
-  password_credential VARCHAR(255) NOT NULL,
-  full_name VARCHAR(180) NOT NULL,
-  role_key VARCHAR(64) NOT NULL DEFAULT 'SUPERADMIN_GLOBAL',
-  can_create_tenants BOOLEAN NOT NULL DEFAULT TRUE,
-  can_manage_client_dbs BOOLEAN NOT NULL DEFAULT TRUE,
-  can_impersonate_tenants BOOLEAN NOT NULL DEFAULT TRUE,
-  status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
-  last_login_at TIMESTAMPTZ NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- 1. Cuentas Globales de Plataforma (Roles: superadmin, desarrollador, auxiliar)
+CREATE TABLE IF NOT EXISTS "public"."platform_staff_users" (
+  "staff_id" VARCHAR(64) PRIMARY KEY,
+  "email" VARCHAR(180) NOT NULL UNIQUE,
+  "username" VARCHAR(80) NOT NULL UNIQUE,
+  "full_name" VARCHAR(180) NOT NULL,
+  "password_hash" VARCHAR(255) NOT NULL,
+  "platform_role" VARCHAR(32) NOT NULL CHECK ("platform_role" IN ('superadmin', 'desarrollador', 'auxiliar')),
+  "is_active" BOOLEAN NOT NULL DEFAULT TRUE,
+  "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 2. Tabla Maestra de Empresas Clientes y Datos de Conexión a Cada Base de Datos Cliente
-CREATE TABLE IF NOT EXISTS public.tenant_database_connections (
-  tenant_id VARCHAR(64) PRIMARY KEY,
-  company_name VARCHAR(255) NOT NULL,
-  tax_id_nit VARCHAR(64) NOT NULL,
-  city VARCHAR(120) NOT NULL DEFAULT 'Bogotá D.C.',
-  plan_name VARCHAR(160) NOT NULL,
-  db_cell_id VARCHAR(64) NOT NULL DEFAULT 'cell-alpanel-01',
-  db_host VARCHAR(255) NOT NULL DEFAULT 'db',
-  db_port INTEGER NOT NULL DEFAULT 5432,
-  db_name VARCHAR(128) NOT NULL UNIQUE,
-  db_user VARCHAR(128) NOT NULL DEFAULT 'postgres',
-  db_schema_mode VARCHAR(64) NOT NULL DEFAULT 'ISOLATED_DATABASE',
-  connection_uri VARCHAR(500) NOT NULL,
-  admin_username VARCHAR(180) NOT NULL,
-  admin_generated_password VARCHAR(180) NOT NULL,
-  payment_status VARCHAR(64) NOT NULL DEFAULT 'STANDBY_APPROVED',
-  monthly_amount_cop NUMERIC(19, 4) NOT NULL DEFAULT 0,
-  sub_ver INTEGER NOT NULL DEFAULT 1,
-  status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- Compatibilidad con vista previa superadmin_users
+CREATE TABLE IF NOT EXISTS "public"."superadmin_users" (
+  "superadmin_id" VARCHAR(64) PRIMARY KEY,
+  "email" VARCHAR(180) NOT NULL UNIQUE,
+  "full_name" VARCHAR(180) NOT NULL,
+  "password_hash" VARCHAR(255) NOT NULL,
+  "role_code" VARCHAR(40) NOT NULL DEFAULT 'superadmin',
+  "is_active" BOOLEAN NOT NULL DEFAULT TRUE,
+  "last_login_at" TIMESTAMPTZ,
+  "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 3. Catálogo de Roles y Permisos de Gestión (RBAC)
-CREATE TABLE IF NOT EXISTS public.role_definitions (
-  role_key VARCHAR(64) PRIMARY KEY,
-  role_label VARCHAR(160) NOT NULL,
-  description VARCHAR(500) NOT NULL,
-  allowed_centers JSONB NOT NULL DEFAULT '[]'::jsonb,
-  is_system_role BOOLEAN NOT NULL DEFAULT TRUE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- 2. Llaves de Conexión a la Base de Datos Propia de cada Cliente (Rol: cliente)
+--    Controla además cuántos roles (max_roles_allowed) y cuántos usuarios (max_users_allowed)
+--    puede crear internamente cada cliente en su propia BD.
+CREATE TABLE IF NOT EXISTS "public"."tenant_database_connections" (
+  "connection_id" VARCHAR(64) PRIMARY KEY,
+  "tenant_id" VARCHAR(64) NOT NULL UNIQUE,
+  "company_name" VARCHAR(180) NOT NULL,
+  "nit" VARCHAR(40) NOT NULL,
+  "business_type" VARCHAR(64) NOT NULL DEFAULT 'comercio-retail',
+  "db_host" VARCHAR(120) NOT NULL DEFAULT 'db',
+  "db_port" INTEGER NOT NULL DEFAULT 5432,
+  "db_name" VARCHAR(120) NOT NULL UNIQUE,
+  "db_user" VARCHAR(80) NOT NULL DEFAULT 'postgres',
+  "db_password_secret_ref" VARCHAR(180) NOT NULL DEFAULT 'env:POSTGRES_PASSWORD',
+  "admin_username" VARCHAR(120) NOT NULL DEFAULT 'admin',
+  "admin_password_hint" VARCHAR(120) NOT NULL DEFAULT 'AdminProveko2026!',
+  "max_roles_allowed" INTEGER NOT NULL DEFAULT 5,
+  "max_users_allowed" INTEGER NOT NULL DEFAULT 10,
+  "enabled_services_json" JSONB NOT NULL DEFAULT '[]'::jsonb,
+  "enabled_submodules_json" JSONB NOT NULL DEFAULT '[]'::jsonb,
+  "enabled_features_json" JSONB NOT NULL DEFAULT '[]'::jsonb,
+  "pool_max_connections" INTEGER NOT NULL DEFAULT 15,
+  "status" VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
+  "last_migration_version" VARCHAR(32) NOT NULL DEFAULT '0002',
+  "updated_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 4. Usuarios y Credenciales por Empresa Cliente (Incluye el SuperAdmin de cada Cliente y sus Empleados)
-CREATE TABLE IF NOT EXISTS public.tenant_users (
-  id VARCHAR(64) PRIMARY KEY,
-  tenant_id VARCHAR(64) NOT NULL REFERENCES public.tenant_database_connections(tenant_id) ON DELETE CASCADE,
-  full_name VARCHAR(180) NOT NULL,
-  username VARCHAR(180) NOT NULL,
-  password_credential VARCHAR(255) NOT NULL,
-  role_key VARCHAR(64) NOT NULL REFERENCES public.role_definitions(role_key),
-  branch_name VARCHAR(160) NOT NULL DEFAULT 'Sede Principal',
-  is_tenant_superadmin BOOLEAN NOT NULL DEFAULT FALSE,
-  status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (tenant_id, username)
+ALTER TABLE "public"."tenant_database_connections" ADD COLUMN IF NOT EXISTS "business_type" VARCHAR(64) NOT NULL DEFAULT 'comercio-retail';
+ALTER TABLE "public"."tenant_database_connections" ADD COLUMN IF NOT EXISTS "admin_username" VARCHAR(120) NOT NULL DEFAULT 'admin';
+ALTER TABLE "public"."tenant_database_connections" ADD COLUMN IF NOT EXISTS "admin_password_hint" VARCHAR(120) NOT NULL DEFAULT 'AdminProveko2026!';
+ALTER TABLE "public"."tenant_database_connections" ADD COLUMN IF NOT EXISTS "max_roles_allowed" INTEGER NOT NULL DEFAULT 5;
+ALTER TABLE "public"."tenant_database_connections" ADD COLUMN IF NOT EXISTS "max_users_allowed" INTEGER NOT NULL DEFAULT 10;
+ALTER TABLE "public"."tenant_database_connections" ADD COLUMN IF NOT EXISTS "enabled_services_json" JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE "public"."tenant_database_connections" ADD COLUMN IF NOT EXISTS "enabled_submodules_json" JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE "public"."tenant_database_connections" ADD COLUMN IF NOT EXISTS "enabled_features_json" JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+-- Eliminar empresas random si habían quedado en ejecuciones previas
+DELETE FROM "public"."tenant_database_connections" WHERE "db_name" IN ('db_agrovalle', 'db_labrasa');
+
+-- 3. Definición de los 4 Roles Globales + Plantilla de Roles Básicos Internos por Cliente
+CREATE TABLE IF NOT EXISTS "public"."role_definitions" (
+  "role_code" VARCHAR(64) PRIMARY KEY,
+  "role_scope" VARCHAR(32) NOT NULL CHECK ("role_scope" IN ('PLATFORM_GLOBAL', 'CLIENT_INTERNAL_BASIC')),
+  "role_label" VARCHAR(120) NOT NULL,
+  "description" TEXT NOT NULL,
+  "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 5. Registro de Pagos y Suscripciones (Microservicio ms-payments en Standby)
-CREATE TABLE IF NOT EXISTS public.subscription_payments (
-  payment_id VARCHAR(64) PRIMARY KEY,
-  tenant_id VARCHAR(64) NOT NULL REFERENCES public.tenant_database_connections(tenant_id) ON DELETE CASCADE,
-  payment_reference VARCHAR(120) NOT NULL UNIQUE,
-  payment_gateway VARCHAR(80) NOT NULL DEFAULT 'ms-payments-standby',
-  payment_method VARCHAR(80) NOT NULL DEFAULT 'STANDBY_CHECKOUT',
-  amount_cop NUMERIC(19, 4) NOT NULL,
-  status VARCHAR(40) NOT NULL DEFAULT 'STANDBY_APPROVED',
-  selected_centers JSONB NOT NULL DEFAULT '[]'::jsonb,
-  selected_components JSONB NOT NULL DEFAULT '[]'::jsonb,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- 4. Cuentas de Acceso (Credencial Admin generada al crear cada cliente + Usuarios internos)
+CREATE TABLE IF NOT EXISTS "public"."tenant_users" (
+  "user_id" VARCHAR(64) PRIMARY KEY,
+  "tenant_id" VARCHAR(64) NOT NULL,
+  "username" VARCHAR(120) NOT NULL UNIQUE,
+  "email" VARCHAR(180) NOT NULL,
+  "full_name" VARCHAR(180) NOT NULL,
+  "role_code" VARCHAR(64) NOT NULL,
+  "internal_role_name" VARCHAR(80) NOT NULL DEFAULT 'Administrador',
+  "generated_password_hint" VARCHAR(120) NOT NULL,
+  "is_tenant_superadmin" BOOLEAN NOT NULL DEFAULT FALSE,
+  "status" VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
+  "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 6. Configuración de Centros Operativos y Componentes Conmutables por Empresa Cliente
-CREATE TABLE IF NOT EXISTS public.tenant_component_toggles (
-  tenant_id VARCHAR(64) NOT NULL REFERENCES public.tenant_database_connections(tenant_id) ON DELETE CASCADE,
-  center_key VARCHAR(80) NOT NULL,
-  component_key VARCHAR(80) NOT NULL,
-  component_name VARCHAR(180) NOT NULL,
-  is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (tenant_id, component_key)
+ALTER TABLE "public"."tenant_users" ADD COLUMN IF NOT EXISTS "internal_role_name" VARCHAR(80) NOT NULL DEFAULT 'Administrador';
+DELETE FROM "public"."tenant_users" WHERE "tenant_id" IN ('tnt-agrovalle', 'tnt-labrasa');
+
+-- 5. Ventana de Pagos (Microservicio ms-payments en Standby)
+CREATE TABLE IF NOT EXISTS "public"."subscription_payments" (
+  "payment_id" VARCHAR(64) PRIMARY KEY,
+  "tenant_id" VARCHAR(64) NOT NULL,
+  "plan_name" VARCHAR(120) NOT NULL,
+  "monthly_amount_usd" NUMERIC(10, 2) NOT NULL,
+  "payment_gateway_state" VARCHAR(40) NOT NULL DEFAULT 'STANDBY_MICROSERVICE',
+  "payment_reference" VARCHAR(120) NOT NULL,
+  "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- =============================================================================
--- SEMILLAS INICIALES OBLIGATORIAS EN LA BASE PRINCIPAL (proveko_control_db)
--- =============================================================================
+DELETE FROM "public"."subscription_payments" WHERE "tenant_id" IN ('tnt-agrovalle', 'tnt-labrasa');
 
--- A) SuperAdmin Global de Proveko
-INSERT INTO public.superadmin_users (
-  id, email, username, password_credential, full_name, role_key,
-  can_create_tenants, can_manage_client_dbs, can_impersonate_tenants, status
-) VALUES (
-  'sa-proveko-master-01',
-  'superadmin@proveko.com',
-  'superadmin@proveko.com',
-  'ProvekoMaster2026!',
-  'SuperAdmin Maestro Proveko Cloud',
-  'SUPERADMIN_GLOBAL',
-  TRUE, TRUE, TRUE, 'ACTIVE'
-) ON CONFLICT (id) DO NOTHING;
+-- 6. Solicitudes de "Necesito otra funcionalidad" enviadas por los clientes
+CREATE TABLE IF NOT EXISTS "public"."feature_upgrade_requests" (
+  "request_id" VARCHAR(64) PRIMARY KEY,
+  "tenant_id" VARCHAR(64) NOT NULL,
+  "company_name" VARCHAR(180) NOT NULL,
+  "requested_tier" VARCHAR(32) NOT NULL CHECK ("requested_tier" IN ('MODULO_PRINCIPAL', 'SUBMODULO', 'FUNCIONALIDAD')),
+  "requested_key" VARCHAR(120) NOT NULL,
+  "requested_label" VARCHAR(180) NOT NULL,
+  "notes" TEXT NOT NULL DEFAULT '',
+  "status" VARCHAR(32) NOT NULL DEFAULT 'PENDIENTE',
+  "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
--- B) Celda Principal PostgreSQL en control_plane.database_cells
-INSERT INTO control_plane.database_cells (
-  id, code, host, admin_port, pooler_port, max_tenants, current_tenants, tier_target, is_sandbox_cell, status
-) VALUES (
-  'cell-alpanel-01', 'ALPANEL-PG16-MAIN', 'db', 5432, 5432, 100, 3, 'ENTERPRISE', FALSE, 'ONLINE'
-) ON CONFLICT (id) DO NOTHING;
+-- ============================================================================
+-- DATOS SEMILLA OFICIALES (Cuentas de los 4 Roles + Base Demo db_version_prueba)
+-- ============================================================================
 
--- C) Roles RBAC de la Plataforma
-INSERT INTO public.role_definitions (role_key, role_label, description, allowed_centers) VALUES
-  ('SUPERADMIN_GLOBAL', 'SuperAdmin Global Proveko', 'Control total de todas las empresas clientes, bases de datos, planes y credenciales.', '["center:invoicing-pos","center:inventory-recipes","center:gastro-reservations","center:logistics-fleet","center:crm-finance","center:users-rbac"]'::jsonb),
-  ('ADMIN_CLIENTE', 'Administrador General de Empresa (SuperAdmin Cliente)', 'Control total de la empresa cliente, usuarios, roles y activación de componentes.', '["center:invoicing-pos","center:inventory-recipes","center:gastro-reservations","center:logistics-fleet","center:crm-finance","center:users-rbac"]'::jsonb),
-  ('CAJERO_FACTURADOR', 'Cajero / Facturador de Punto de Venta', 'Emisión de facturas, tirillas POS, cotizaciones, arqueo de caja y consulta de clientes.', '["center:invoicing-pos","center:crm-finance"]'::jsonb),
-  ('JEFE_BODEGA', 'Jefe de Inventario, Producción y Recetas', 'Catálogo de productos, Kardex, constructor visual de recetas, lotes y traslados.', '["center:inventory-recipes","center:logistics-fleet"]'::jsonb),
-  ('MESERO_COMANDAS', 'Anfitrión de Mesas y Comandera de Cocina', 'Atención de mesas, toma de comandas, marcha a cocina y división de cuentas.', '["center:gastro-reservations","center:invoicing-pos"]'::jsonb),
-  ('CONTROL_TRACTOMULAS', 'Operador de Báscula, Patio y Tractomulas', 'Ingreso de tractomulas, pesaje bruto/tara/neto en báscula, muelles y despachos.', '["center:logistics-fleet","center:inventory-recipes"]'::jsonb),
-  ('RECEPCION_RESERVAS', 'Recepcionista de Reservas, Cupos y Tickets', 'Agenda de reservas de cupos/alojamiento, emisión de tickets y check-in.', '["center:gastro-reservations","center:invoicing-pos"]'::jsonb),
-  ('CONTADOR_FINANZAS', 'Contador y Analista de Cartera / Tesorería', 'Gestión de terceros, recaudos CxC, pagos CxP, caja y asientos contables.', '["center:crm-finance","center:invoicing-pos"]'::jsonb)
-ON CONFLICT (role_key) DO NOTHING;
+INSERT INTO "public"."platform_staff_users" ("staff_id", "email", "username", "full_name", "password_hash", "platform_role", "is_active")
+VALUES
+  ('staff-superadmin-01', 'superadmin@proveko.com', 'superadmin', 'SuperAdmin Maestro Proveko', 'ed25519$ProvekoMaster2026!', 'superadmin', TRUE),
+  ('staff-dev-01', 'dev@proveko.com', 'desarrollador', 'Ingeniero Desarrollador Proveko', 'ed25519$ProvekoDev2026!', 'desarrollador', TRUE),
+  ('staff-aux-01', 'auxiliar@proveko.com', 'auxiliar', 'Auxiliar de Soporte y Onboarding', 'ed25519$ProvekoAux2026!', 'auxiliar', TRUE)
+ON CONFLICT ("staff_id") DO NOTHING;
 
--- D) Empresas Clientes y sus Datos de Conexión a cada Base de Datos Independiente
-INSERT INTO public.tenant_database_connections (
-  tenant_id, company_name, tax_id_nit, city, plan_name, db_cell_id,
-  db_host, db_port, db_name, db_user, connection_uri,
-  admin_username, admin_generated_password, payment_status, monthly_amount_cop, sub_ver
-) VALUES
-  (
-    'emp-agroindustrial-del-valle',
-    'Grupo Agroindustrial & Logístico del Valle S.A.S.',
-    '901.482.310-4',
-    'Cali, Colombia',
-    'Plan Corporativo Integral Multi-Operación',
-    'cell-alpanel-01',
-    'db', 5432, 'db_agrovalle', 'postgres',
-    'postgresql://postgres:***@db:5432/db_agrovalle',
-    'admin@agrovalle.co', 'AgroValle2026!', 'STANDBY_APPROVED', 313000.0000, 1
-  ),
-  (
-    'emp-restaurante-la-brasa',
-    'Gastrobar & Eventos La Brasa Imperial S.A.S.',
-    '900.812.904-1',
-    'Medellín, Colombia',
-    'Plan Gastronomía, Reservas, Tickets e Inventario',
-    'cell-alpanel-01',
-    'db', 5432, 'db_labrasa', 'postgres',
-    'postgresql://postgres:***@db:5432/db_labrasa',
-    'admin@labrasaimperial.co', 'Brasa2026!', 'STANDBY_APPROVED', 186000.0000, 1
-  ),
-  (
-    'db_version_prueba',
-    'Empresa Demostración Sandbox Proveko',
-    '900.111.222-3',
-    'Bogotá D.C.',
-    'Plan Sandbox Evaluación Completa',
-    'cell-alpanel-01',
-    'db', 5432, 'db_version_prueba', 'postgres',
-    'postgresql://postgres:***@db:5432/db_version_prueba',
-    'demo@proveko.com', 'Demo2026!', 'STANDBY_APPROVED', 0.0000, 1
-  )
-ON CONFLICT (tenant_id) DO NOTHING;
+INSERT INTO "public"."superadmin_users" ("superadmin_id", "email", "full_name", "password_hash", "role_code", "is_active")
+VALUES
+  ('sa-root-001', 'superadmin@proveko.com', 'SuperAdmin Maestro Proveko', 'ed25519$ProvekoMaster2026!', 'superadmin', TRUE)
+ON CONFLICT ("superadmin_id") DO NOTHING;
 
--- Sincronizar también en control_plane.tenants
-INSERT INTO control_plane.tenants (
-  id, slug, legal_name, tax_id_nit, tier, is_sandbox, status, cell_id,
-  db_name, encrypted_connection_envelope, sub_ver, theme_config
-) VALUES
-  (
-    'emp-agroindustrial-del-valle', 'agrovalle', 'Grupo Agroindustrial & Logístico del Valle S.A.S.',
-    '901.482.310-4', 'ENTERPRISE', FALSE, 'ACTIVE', 'cell-alpanel-01',
-    'db_agrovalle', '{"host":"db","port":5432,"database":"db_agrovalle","user":"postgres"}'::jsonb,
-    1, '{"brandColor":"#1D4ED8"}'::jsonb
-  ),
-  (
-    'emp-restaurante-la-brasa', 'labrasa', 'Gastrobar & Eventos La Brasa Imperial S.A.S.',
-    '900.812.904-1', 'BUSINESS', FALSE, 'ACTIVE', 'cell-alpanel-01',
-    'db_labrasa', '{"host":"db","port":5432,"database":"db_labrasa","user":"postgres"}'::jsonb,
-    1, '{"brandColor":"#1D4ED8"}'::jsonb
-  ),
-  (
-    'db_version_prueba', 'sandbox-prueba', 'Empresa Demostración Sandbox Proveko',
-    '900.111.222-3', 'SANDBOX', TRUE, 'ACTIVE', 'cell-alpanel-01',
-    'db_version_prueba', '{"host":"db","port":5432,"database":"db_version_prueba","user":"postgres"}'::jsonb,
-    1, '{"brandColor":"#1D4ED8"}'::jsonb
-  )
-ON CONFLICT (id) DO NOTHING;
+INSERT INTO "control_plane"."database_cells" ("cell_id", "host", "port", "db_name", "max_connections", "is_healthy")
+VALUES
+  ('cell-alpanel-primary', 'db', 5432, 'proveko_control_db', 400, TRUE)
+ON CONFLICT ("cell_id") DO NOTHING;
 
--- E) Usuarios y Credenciales Generadas de cada Empresa Cliente
-INSERT INTO public.tenant_users (
-  id, tenant_id, full_name, username, password_credential, role_key, branch_name, is_tenant_superadmin, status
-) VALUES
-  ('usr-agro-admin', 'emp-agroindustrial-del-valle', 'Carlos Eduardo Mendoza', 'admin@agrovalle.co', 'AgroValle2026!', 'ADMIN_CLIENTE', 'Planta & Sedes Principales', TRUE, 'ACTIVE'),
-  ('usr-agro-cajero', 'emp-agroindustrial-del-valle', 'Laura Valentina Ríos', 'cajero@agrovalle.co', 'Cajero2026!', 'CAJERO_FACTURADOR', 'Punto de Venta Central', FALSE, 'ACTIVE'),
-  ('usr-agro-bascula', 'emp-agroindustrial-del-valle', 'Jorge Hernán Ospina', 'bascula@agrovalle.co', 'Bascula2026!', 'CONTROL_TRACTOMULAS', 'Patio de Tractomulas Norte', FALSE, 'ACTIVE'),
-  ('usr-brasa-admin', 'emp-restaurante-la-brasa', 'Juliana Restrepo', 'admin@labrasaimperial.co', 'Brasa2026!', 'ADMIN_CLIENTE', 'Sede Poblado', TRUE, 'ACTIVE'),
-  ('usr-demo-admin', 'db_version_prueba', 'Usuario Administrador Demo', 'demo@proveko.com', 'Demo2026!', 'ADMIN_CLIENTE', 'Sede Principal', TRUE, 'ACTIVE')
-ON CONFLICT (id) DO NOTHING;
+INSERT INTO "control_plane"."tenants" ("id", "slug", "legal_name", "tier", "cell_id", "db_name", "status")
+VALUES
+  ('tnt-demo', 'version_prueba', 'Empresa Demo Interactiva Proveko', 'ENTERPRISE', 'cell-alpanel-primary', 'db_version_prueba', 'ACTIVE')
+ON CONFLICT ("id") DO NOTHING;
 
--- F) Pagos en Standby Registrados (Microservicio ms-payments)
-INSERT INTO public.subscription_payments (
-  payment_id, tenant_id, payment_reference, payment_gateway, payment_method, amount_cop, status
-) VALUES
-  ('pay-stby-001', 'emp-agroindustrial-del-valle', 'STBY-AGRO-2026-01', 'ms-payments-standby', 'Pasarela Corporativa (Standby)', 313000.0000, 'STANDBY_APPROVED'),
-  ('pay-stby-002', 'emp-restaurante-la-brasa', 'STBY-BRASA-2026-02', 'ms-payments-standby', 'PSE Empresarial (Standby)', 186000.0000, 'STANDBY_APPROVED')
-ON CONFLICT (payment_id) DO NOTHING;
+INSERT INTO "public"."tenant_database_connections" (
+  "connection_id", "tenant_id", "company_name", "nit", "business_type",
+  "db_host", "db_port", "db_name", "db_user", "db_password_secret_ref",
+  "admin_username", "admin_password_hint", "max_roles_allowed", "max_users_allowed",
+  "enabled_services_json", "enabled_submodules_json", "enabled_features_json",
+  "pool_max_connections", "status", "last_migration_version"
+)
+VALUES (
+  'conn-demo-01', 'tnt-demo', 'Empresa Demo Interactiva Proveko', '900.000.000-1', 'empresarial-completo',
+  'db', 5432, 'db_version_prueba', 'postgres', 'env:POSTGRES_PASSWORD',
+  'demo', 'DemoProveko2026!', 8, 25,
+  '["srv-invoicing","srv-inventory","srv-gastro","srv-hotel","srv-crm","srv-finance"]'::jsonb,
+  '["mod-pos","mod-dian","mod-quotes","mod-stock","mod-warehouses","mod-transfers","mod-recipes","mod-lots","mod-scale","mod-tables","mod-kds","mod-split","mod-bookings","mod-tickets","mod-rooms","mod-directory","mod-pipelines","mod-cashbook","mod-arap","mod-puc"]'::jsonb,
+  '["comp-cashier-name","comp-tip","comp-line-discount","comp-manager-signature","comp-carrier-select","comp-scale-tare","comp-qr-ticket"]'::jsonb,
+  20, 'ACTIVE', '0002'
+)
+ON CONFLICT ("connection_id") DO UPDATE SET
+  "company_name" = EXCLUDED."company_name",
+  "db_name" = EXCLUDED."db_name";
+
+INSERT INTO "public"."role_definitions" ("role_code", "role_scope", "role_label", "description")
+VALUES
+  ('superadmin', 'PLATFORM_GLOBAL', 'SuperAdmin Global', 'Control maestro de clientes, bases de datos por cliente, límites de roles/usuarios y activación de módulos/funcionalidades.'),
+  ('desarrollador', 'PLATFORM_GLOBAL', 'Desarrollador de Plataforma', 'Supervisión técnica de microservicios, esquemas SQL, migraciones por base de datos y telemetría.'),
+  ('auxiliar', 'PLATFORM_GLOBAL', 'Auxiliar de Plataforma', 'Soporte operativo a clientes, acompañamiento de registro y atención de solicitudes de nuevas funcionalidades.'),
+  ('cliente', 'PLATFORM_GLOBAL', 'Cliente (Llave a su propia BD)', 'Cuenta empresarial con conexión aislada a su propia base de datos PostgreSQL y gestión interna de sus roles y usuarios.'),
+  ('rol_interno_admin', 'CLIENT_INTERNAL_BASIC', 'Administrador de Empresa (Cuenta Admin)', 'Rol básico creado por defecto en la BD del cliente con acceso a todos sus módulos contratados y gestión de usuarios/roles.'),
+  ('rol_interno_cajero', 'CLIENT_INTERNAL_BASIC', 'Cajero / Facturador', 'Rol básico para operación de caja, facturación y atención al cliente.'),
+  ('rol_interno_bodega', 'CLIENT_INTERNAL_BASIC', 'Encargado de Inventario y Bodega', 'Rol básico para existencias, bodegas, traslados, lotes y báscula.'),
+  ('rol_interno_operador', 'CLIENT_INTERNAL_BASIC', 'Operador de Servicio', 'Rol básico para comandas, mesas, reservas de cupos y emisión de tickets.')
+ON CONFLICT ("role_code") DO NOTHING;
