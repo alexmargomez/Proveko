@@ -12,7 +12,7 @@ export const SRV_FINANCE_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
   externalPrincipalModuleName: 'Tesorería, Cartera y Contabilidad',
   icon: '🏦',
   subtitle: 'Flujo de caja y bancos, recaudo de cartera CxC, pago a proveedores CxP y asientos PUC.',
-  standaloneMonthlyUsd: 29,
+  standaloneMonthlyUsd: 119000,
   submodules: [
     {
       moduleKey: 'mod-cashbook',
@@ -20,7 +20,7 @@ export const SRV_FINANCE_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       externalSubmoduleName: 'Caja y Bancos',
       tabIcon: '💵',
       summary: 'Ingresos, egresos de tesorería, arqueo de turno y saldos conciliados en cuentas bancarias.',
-      monthlyAddonUsd: 10,
+      monthlyAddonUsd: 39000,
       actionButtonLabel: 'Registrar Movimiento de Caja/Banco',
       tableHeaders: ['Comprobante', 'Cuenta / Caja', 'Tipo', 'Concepto', 'Firma Encargado', 'Monto'],
       fields: [
@@ -43,7 +43,7 @@ export const SRV_FINANCE_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       externalSubmoduleName: 'Cartera CxC y CxP',
       tabIcon: '📑',
       summary: 'Seguimiento de facturas pendientes por cobrar a clientes y obligaciones por pagar a proveedores.',
-      monthlyAddonUsd: 12,
+      monthlyAddonUsd: 45000,
       actionButtonLabel: 'Registrar Abono / Obligación',
       tableHeaders: ['Documento', 'Tercero', 'Tipo de Cartera', 'Vencimiento', 'Saldo Pendiente', 'Estado'],
       fields: [
@@ -59,7 +59,7 @@ export const SRV_FINANCE_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       externalSubmoduleName: 'Contabilidad PUC',
       tabIcon: '📘',
       summary: 'Comprobantes de diario, causación automática por cuenta PUC y balance de prueba.',
-      monthlyAddonUsd: 12,
+      monthlyAddonUsd: 45000,
       actionButtonLabel: 'Asentar Comprobante Contable',
       tableHeaders: ['Asiento', 'Cuenta PUC', 'Tercero', 'Detalle', 'Débito / Crédito', 'Estado'],
       fields: [

@@ -1,3 +1,4 @@
+import { renderDeveloperGroupsCatalogRuntimeJs } from './developer-groups-catalog.runtime.js';
 import { renderDomSanitizerRuntimeJs } from './dom-sanitizer.runtime.js';
 import { renderFormAndTableRuntimeJs } from './form-and-table.runtime.js';
 import { renderGatewayTransportRuntimeJs } from './gateway-transport.runtime.js';
@@ -13,6 +14,7 @@ ${renderDomSanitizerRuntimeJs()}
 ${renderFormAndTableRuntimeJs()}
 ${renderGatewayTransportRuntimeJs()}
 ${renderPlatformActionsRuntimeJs()}
+${renderDeveloperGroupsCatalogRuntimeJs()}
 ${renderSuperAdminAndShellRuntimeJs()}
 
   function pkGoRegister(presetId) {
@@ -83,7 +85,7 @@ ${renderSuperAdminAndShellRuntimeJs()}
       var cName = ((document.getElementById('reg-company-name') || {}).value || '').trim() || 'Nueva Empresa Cliente S.A.S.';
       var plan = pkComputeRegistrationPlan();
       document.getElementById('pay-modal-company').value = cName;
-      document.getElementById('pay-modal-amount').value = '$' + plan.totalUsd + ' USD/mes';
+      document.getElementById('pay-modal-amount').value = pkCop(plan.totalUsd) + '/mes';
       document.getElementById('payment-step-checkout').style.display = 'block';
       document.getElementById('payment-step-credentials').style.display = 'none';
       document.getElementById('standby-payment-modal').classList.add('open');
@@ -103,19 +105,14 @@ ${renderSuperAdminAndShellRuntimeJs()}
     }
 
     var wsSvc = target.closest('[data-ws-service]');
-    if (wsSvc) {
-      STATE.activeWorkstationPane = 'module';
-      STATE.activeServiceKey = wsSvc.getAttribute('data-ws-service');
-      STATE.activeSubmoduleKey = '';
-      pkRenderWorkstation(); return;
-    }
+    if (wsSvc) { STATE.activeWorkstationPane = 'module'; STATE.activeServiceKey = wsSvc.getAttribute('data-ws-service'); STATE.activeSubmoduleKey = ''; pkRenderWorkstation(); return; }
     var wsSub = target.closest('[data-ws-submodule]');
-    if (wsSub) {
-      STATE.activeSubmoduleKey = wsSub.getAttribute('data-ws-submodule');
-      pkRenderWorkstation(); return;
-    }
+    if (wsSub) { STATE.activeSubmoduleKey = wsSub.getAttribute('data-ws-submodule'); pkRenderWorkstation(); return; }
     if (target.closest('#btn-nav-internal-rbac')) { STATE.activeWorkstationPane = 'rbac'; pkRenderWorkstation(); return; }
     if (target.closest('#btn-nav-need-feature')) { STATE.activeWorkstationPane = 'need-feature'; pkRenderWorkstation(); return; }
+    if (target.closest('#btn-ws-clear-filter')) {
+      STATE.v2FilterText = ''; var fIn = document.getElementById('ws-v2-filter-input'); if (fIn) fIn.value = ''; pkRenderWorkstation(); return;
+    }
 
     if (target.closest('#btn-ws-save-record')) {
       var inputs = document.querySelectorAll('[data-ws-field]');
@@ -178,6 +175,11 @@ ${renderSuperAdminAndShellRuntimeJs()}
 
   document.addEventListener('input', function(ev) {
     var t = ev.target;
+    if (t && t.id === 'ws-v2-filter-input') {
+      STATE.v2FilterText = t.value || '';
+      pkRenderWorkstation();
+      return;
+    }
     if (t && (t.id === 'scale-gross-kg' || t.id === 'scale-tare-kg')) {
       var g = Number((document.getElementById('scale-gross-kg') || {}).value || 0);
       var tr = Number((document.getElementById('scale-tare-kg') || {}).value || 0);

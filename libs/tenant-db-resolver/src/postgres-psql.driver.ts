@@ -16,6 +16,12 @@ import {
 } from './postgres-migration-driver.adapter.js';
 import { SystemStartupBootstrapper } from './system-startup.bootstrapper.js';
 import {
+  type ClientGroupsCatalogSnapshot,
+  PostgresClientGroupsCatalogRepository,
+  type RegisterDeveloperCatalogItemInput,
+  type UpsertClientBusinessGroupInput,
+} from './client-groups-catalog.repository.js';
+import {
   type ClusterDatabaseCatalogSnapshot,
   PostgresTenantControlCatalogRepository,
   type RegisterTenantCatalogInput,
@@ -26,6 +32,7 @@ export type { PostgresEnvConfig };
 export interface PostgresBootstrapSummary {
   readonly executedAgainstRealPostgres: boolean;
   readonly coreDbName: string;
+  readonly groupsDbName?: string;
   readonly coreFilesSkippedOld: readonly string[];
   readonly coreFilesApplied: readonly string[];
   readonly clientDatabasesProvisioned: readonly string[];
@@ -52,7 +59,8 @@ function buildFullCatalogServicesMap(): Partial<Record<ServiceKey, MicroserviceK
  * Composition Root / Facade para el Ciclo de Vida PostgreSQL (SOLID DIP + SRP + OCP).
  * - Cero SQL DDL/DML quemado: delega 100% en `SystemStartupBootstrapper`, `FileBasedMigrationEngine`
  *   (con salto O(1) de migraciones antiguas vía checksum SHA-256 en `schema_migrations`),
- *   `PostgresMigrationDatabaseDriverAdapter` y `PostgresTenantControlCatalogRepository`.
+ *   `PostgresMigrationDatabaseDriverAdapter`, `PostgresTenantControlCatalogRepository`
+ *   y `PostgresClientGroupsCatalogRepository` (`proveko_groups_db`).
  */
 export class PostgresPsqlBootstrapRunner {
   private static createHexagonalPipeline(
@@ -60,9 +68,11 @@ export class PostgresPsqlBootstrapRunner {
     migrationsRootDir: string,
   ): {
     driver: PostgresMigrationDatabaseDriverAdapter;
+    engine: FileBasedMigrationEngine;
     orchestrator: MultiDatabaseMigrationOrchestrator;
     bootstrapper: SystemStartupBootstrapper;
     catalogRepo: PostgresTenantControlCatalogRepository;
+    groupsRepo: PostgresClientGroupsCatalogRepository;
   } {
     const driver = new PostgresMigrationDatabaseDriverAdapter(cfg);
     const registry = new FileBasedMigrationRegistry();
@@ -78,7 +88,8 @@ export class PostgresPsqlBootstrapRunner {
       cfg.coreDbName,
     );
     const catalogRepo = new PostgresTenantControlCatalogRepository(driver);
-    return { driver, orchestrator, bootstrapper, catalogRepo };
+    const groupsRepo = new PostgresClientGroupsCatalogRepository(driver);
+    return { driver, engine, orchestrator, bootstrapper, catalogRepo, groupsRepo };
   }
 
   public static async runStartupMigrations(
@@ -89,6 +100,7 @@ export class PostgresPsqlBootstrapRunner {
       return {
         executedAgainstRealPostgres: false,
         coreDbName: SystemStartupBootstrapper.DEFAULT_CORE_DB_NAME,
+        groupsDbName: PostgresClientGroupsCatalogRepository.DEFAULT_GROUPS_DB_NAME,
         coreFilesSkippedOld: [],
         coreFilesApplied: [],
         clientDatabasesProvisioned: [],
@@ -96,15 +108,14 @@ export class PostgresPsqlBootstrapRunner {
       };
     }
 
-    const { driver, orchestrator, bootstrapper, catalogRepo } = this.createHexagonalPipeline(
-      cfg,
-      migrationsRootDir,
-    );
+    const { driver, engine, orchestrator, bootstrapper, catalogRepo } =
+      this.createHexagonalPipeline(cfg, migrationsRootDir);
     const ping = driver.isReachable();
     if (!ping.ok) {
       return {
         executedAgainstRealPostgres: false,
         coreDbName: cfg.coreDbName,
+        groupsDbName: PostgresClientGroupsCatalogRepository.DEFAULT_GROUPS_DB_NAME,
         coreFilesSkippedOld: [],
         coreFilesApplied: [],
         clientDatabasesProvisioned: [],
@@ -113,10 +124,19 @@ export class PostgresPsqlBootstrapRunner {
     }
 
     driver.ensureDatabaseExists(cfg.coreDbName);
+    driver.ensureDatabaseExists(PostgresClientGroupsCatalogRepository.DEFAULT_GROUPS_DB_NAME);
     driver.dropLegacyRandomDatabaseIfExists('db_agrovalle');
     driver.dropLegacyRandomDatabaseIfExists('db_labrasa');
 
     const coreResult = await bootstrapper.runCoreMigrations(join(migrationsRootDir, 'core'));
+    const groupsBootstrapper = new SystemStartupBootstrapper(
+      driver,
+      engine,
+      orchestrator,
+      PostgresClientGroupsCatalogRepository.DEFAULT_GROUPS_DB_NAME,
+    );
+    await groupsBootstrapper.runCoreMigrations(join(migrationsRootDir, 'groups'));
+
     const activeClientDbNames = catalogRepo.listActiveTenantDatabaseNames(cfg.coreDbName);
     const fullServicesMap = buildFullCatalogServicesMap();
 
@@ -135,6 +155,7 @@ export class PostgresPsqlBootstrapRunner {
     return {
       executedAgainstRealPostgres: true,
       coreDbName: cfg.coreDbName,
+      groupsDbName: PostgresClientGroupsCatalogRepository.DEFAULT_GROUPS_DB_NAME,
       coreFilesSkippedOld: coreResult.skippedOldMigrations,
       coreFilesApplied: coreResult.appliedNewMigrations,
       clientDatabasesProvisioned: activeClientDbNames,
@@ -173,5 +194,54 @@ export class PostgresPsqlBootstrapRunner {
     if (!driver.isReachable().ok) return { databases: [], rows: [] };
     const catalogRepo = new PostgresTenantControlCatalogRepository(driver);
     return catalogRepo.getClusterDatabaseCatalogSnapshot(cfg.coreDbName);
+  }
+
+  public static getClientGroupsCatalogFromPostgres(): ClientGroupsCatalogSnapshot {
+    const cfg = PostgresMigrationDatabaseDriverAdapter.resolveEnvConfig();
+    if (!cfg) {
+      return {
+        groupsDbName: PostgresClientGroupsCatalogRepository.DEFAULT_GROUPS_DB_NAME,
+        groups: [],
+        principalModules: [],
+        submodules: [],
+        features: [],
+        bundleItems: [],
+      };
+    }
+    const driver = new PostgresMigrationDatabaseDriverAdapter(cfg);
+    if (!driver.isReachable().ok) {
+      return {
+        groupsDbName: PostgresClientGroupsCatalogRepository.DEFAULT_GROUPS_DB_NAME,
+        groups: [],
+        principalModules: [],
+        submodules: [],
+        features: [],
+        bundleItems: [],
+      };
+    }
+    const groupsRepo = new PostgresClientGroupsCatalogRepository(driver);
+    return groupsRepo.getGroupsAndCatalogSnapshot();
+  }
+
+  public static upsertClientBusinessGroupInPostgres(
+    input: UpsertClientBusinessGroupInput,
+  ): boolean {
+    const cfg = PostgresMigrationDatabaseDriverAdapter.resolveEnvConfig();
+    if (!cfg) return false;
+    const driver = new PostgresMigrationDatabaseDriverAdapter(cfg);
+    if (!driver.isReachable().ok) return false;
+    const groupsRepo = new PostgresClientGroupsCatalogRepository(driver);
+    return groupsRepo.upsertClientBusinessGroup(input);
+  }
+
+  public static registerDeveloperCatalogItemInPostgres(
+    input: RegisterDeveloperCatalogItemInput,
+  ): boolean {
+    const cfg = PostgresMigrationDatabaseDriverAdapter.resolveEnvConfig();
+    if (!cfg) return false;
+    const driver = new PostgresMigrationDatabaseDriverAdapter(cfg);
+    if (!driver.isReachable().ok) return false;
+    const groupsRepo = new PostgresClientGroupsCatalogRepository(driver);
+    return groupsRepo.registerDeveloperCatalogItem(input);
   }
 }

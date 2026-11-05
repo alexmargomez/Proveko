@@ -12,7 +12,7 @@ export const SRV_HOTEL_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
   externalPrincipalModuleName: 'Reservas de Cupos, Tickets y Alojamiento',
   icon: '🎟️',
   subtitle: 'Agenda de cupos por franja horaria, taquilla de tickets con código QR y recepción de huéspedes.',
-  standaloneMonthlyUsd: 29,
+  standaloneMonthlyUsd: 119000,
   submodules: [
     {
       moduleKey: 'mod-bookings',
@@ -20,7 +20,7 @@ export const SRV_HOTEL_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       externalSubmoduleName: 'Reserva de Cupos y Agenda',
       tabIcon: '📅',
       summary: 'Control de cupos disponibles por fecha, franja horaria, capacidad máxima y titular.',
-      monthlyAddonUsd: 10,
+      monthlyAddonUsd: 39000,
       actionButtonLabel: 'Confirmar Reserva de Cupo',
       tableHeaders: ['Código Reserva', 'Titular', 'Espacio / Servicio', 'Fecha y Franja', 'Cupos', 'Estado'],
       fields: [
@@ -36,7 +36,7 @@ export const SRV_HOTEL_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       externalSubmoduleName: 'Emisión de Tickets y Taquilla',
       tabIcon: '🎫',
       summary: 'Expedición de tickets numerados de ingreso, pases de acceso y validación QR en portería.',
-      monthlyAddonUsd: 12,
+      monthlyAddonUsd: 45000,
       actionButtonLabel: 'Emitir Ticket de Acceso',
       tableHeaders: ['N° Ticket', 'Categoría', 'Visitante / Comprador', 'Código QR', 'Tarifa', 'Estado Portería'],
       fields: [
@@ -58,7 +58,7 @@ export const SRV_HOTEL_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       externalSubmoduleName: 'Recepción y Alojamiento',
       tabIcon: '🏨',
       summary: 'Check-in, check-out, estado de habitaciones/espacios y cargos a la cuenta del huésped.',
-      monthlyAddonUsd: 12,
+      monthlyAddonUsd: 45000,
       actionButtonLabel: 'Registrar Check-In / Habitación',
       tableHeaders: ['Habitación / Unidad', 'Huésped Titular', 'Ingreso / Salida', 'Tarifa Noche', 'Estado'],
       fields: [
@@ -76,7 +76,7 @@ export const SRV_HOTEL_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       description: 'Genera y valida token QR único para control de acceso en eventos, cupos y parqueaderos.',
       parentModuleKey: 'mod-tickets',
       includedByDefault: true,
-      monthlyAddonUsd: 5,
+      monthlyAddonUsd: 19000,
     },
   ],
 };

@@ -40,6 +40,57 @@ export async function handleControlPlaneAndCheckoutRoutes(params: {
     return true;
   }
 
+  if (method === 'GET' && url === '/api/v1/control/groups-catalog') {
+    const snapshot = PostgresPsqlBootstrapRunner.getClientGroupsCatalogFromPostgres();
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(snapshot));
+    return true;
+  }
+
+  if (method === 'POST' && url === '/api/v1/control/groups-catalog/group') {
+    const body = ((await readJsonBody(req)) ?? {}) as Record<string, unknown>;
+    const ok = PostgresPsqlBootstrapRunner.upsertClientBusinessGroupInPostgres({
+      groupKey: String(body.groupKey ?? 'nuevo-grupo'),
+      groupName: String(body.groupName ?? 'Nuevo Grupo de Clientes'),
+      badgeLabel: String(body.badgeLabel ?? 'Plan Base Completo'),
+      description: String(body.description ?? ''),
+      baseMonthlyCop: Number(body.baseMonthlyCop ?? 149000),
+      includedPrincipalServices: Array.isArray(body.includedPrincipalServices)
+        ? (body.includedPrincipalServices as string[])
+        : [],
+      includedSubmodules: Array.isArray(body.includedSubmodules)
+        ? (body.includedSubmodules as string[])
+        : [],
+      includedFeatures: Array.isArray(body.includedFeatures)
+        ? (body.includedFeatures as string[])
+        : [],
+    });
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ ok }));
+    return true;
+  }
+
+  if (method === 'POST' && url === '/api/v1/control/groups-catalog/item') {
+    const body = ((await readJsonBody(req)) ?? {}) as Record<string, unknown>;
+    const rawTier = String(body.itemTier ?? 'FUNCIONALIDAD');
+    const itemTier =
+      rawTier === 'MODULO_PRINCIPAL' || rawTier === 'SUBMODULO' ? rawTier : 'FUNCIONALIDAD';
+    const ok = PostgresPsqlBootstrapRunner.registerDeveloperCatalogItemInPostgres({
+      itemTier,
+      itemKey: String(body.itemKey ?? `comp-dev-${Date.now()}`),
+      parentServiceKey: String(body.parentServiceKey ?? 'srv-gastro'),
+      parentSubmoduleKey: String(body.parentSubmoduleKey ?? 'independent'),
+      externalName: String(body.externalName ?? 'Nueva Funcionalidad'),
+      iconEmoji: String(body.iconEmoji ?? '✨'),
+      description: String(body.description ?? ''),
+      monthlyCop: Number(body.monthlyCop ?? 19000),
+      targetGroupKey: typeof body.targetGroupKey === 'string' ? body.targetGroupKey : undefined,
+    });
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ ok }));
+    return true;
+  }
+
   if (method === 'POST' && url === '/api/v1/payments/checkout/standby') {
     const checkoutReq = ((await readJsonBody(req)) ?? {}) as StandbyCheckoutRequestDto;
     const companyName =

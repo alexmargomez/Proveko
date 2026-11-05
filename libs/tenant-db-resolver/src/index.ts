@@ -6,4 +6,5 @@ export * from './system-startup.bootstrapper.js';
 export * from './migrations.cli.js';
 export * from './postgres-migration-driver.adapter.js';
 export * from './tenant-control-catalog.repository.js';
+export * from './client-groups-catalog.repository.js';
 export * from './postgres-psql.driver.js';

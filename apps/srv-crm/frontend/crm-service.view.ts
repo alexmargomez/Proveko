@@ -9,26 +9,30 @@ import type { MicroserviceFrontendDefinition } from '../../web-app/src/domain/co
  */
 export const SRV_CRM_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
   serviceKey: 'srv-crm',
-  externalPrincipalModuleName: 'Clientes, Proveedores y Comercial',
+  externalPrincipalModuleName: 'Clientes, Proveedores y Terceros (v2)',
   icon: '🤝',
-  subtitle: 'Directorio unificado de clientes, proveedores y transportistas, seguimiento comercial y fidelización.',
-  standaloneMonthlyUsd: 24,
+  subtitle: 'Listado maestro estilo v2 de clientes, proveedores y transportistas con filtros, cupos y fidelización.',
+  standaloneMonthlyUsd: 95000,
   submodules: [
     {
       moduleKey: 'mod-directory',
       parentServiceKey: 'srv-crm',
-      externalSubmoduleName: 'Directorio de Terceros',
+      externalSubmoduleName: 'Listado de Clientes y Terceros (v2)',
       tabIcon: '📇',
-      summary: 'Ficha fiscal y comercial de clientes, proveedores, contratistas y empresas transportadoras.',
-      monthlyAddonUsd: 8,
-      actionButtonLabel: 'Guardar Tercero',
-      tableHeaders: ['NIT / Cédula', 'Razón Social / Nombre', 'Relación', 'Ciudad / Teléfono', 'Cupo de Crédito'],
+      summary: 'Directorio completo estilo version2: identificación NIT+DV, clasificación, régimen fiscal, ciudad, correo FE y cupo de crédito.',
+      monthlyAddonUsd: 29000,
+      actionButtonLabel: 'Guardar Cliente / Tercero en BD',
+      tableHeaders: ['NIT / Documento', 'Razón Social / Nombre', 'Tipo de Tercero', 'Ciudad / Teléfono', 'Cupo Aprobado (COP)'],
       fields: [
-        { key: 'taxId', label: 'NIT o Documento', type: 'text', placeholder: '900.812.441-9' },
+        { key: 'docType', label: 'Tipo de Documento', type: 'select', options: ['NIT Empresarial', 'Cédula de Ciudadanía (CC)', 'Cédula de Extranjería (CE)', 'Pasaporte'] },
+        { key: 'taxId', label: 'Número NIT / Documento (Con DV)', type: 'text', placeholder: '900.812.441-9' },
         { key: 'legalName', label: 'Razón Social o Nombre Completo', type: 'text', placeholder: 'Distribuidora del Caribe S.A.S.' },
-        { key: 'partyRole', label: 'Tipo de Relación', type: 'select', options: ['Cliente Corporativo', 'Proveedor de Insumos', 'Empresa Transportista', 'Cliente / Proveedor'] },
-        { key: 'cityPhone', label: 'Ciudad y Teléfono', type: 'text', placeholder: 'Barranquilla — 300 412 8890' },
-        { key: 'creditLimit', label: 'Cupo de Crédito Aprobado ($)', type: 'number', placeholder: '15000000' },
+        { key: 'partyRole', label: 'Clasificación del Tercero', type: 'select', options: ['Cliente Corporativo', 'Cliente Frecuente / Mostrador', 'Proveedor de Insumos', 'Empresa Transportista', 'Cliente y Proveedor'] },
+        { key: 'taxRegime', label: 'Régimen Tributario DIAN', type: 'select', options: ['Responsable de IVA (Régimen Común)', 'No Responsable de IVA', 'Gran Contribuyente', 'Régimen Simple RST'] },
+        { key: 'cityPhone', label: 'Ciudad, Dirección y WhatsApp', type: 'text', placeholder: 'Barranquilla — 300 412 8890' },
+        { key: 'billingEmail', label: 'Correo Recepción Factura Electrónica', type: 'text', placeholder: 'facturacion@empresa.co' },
+        { key: 'paymentTerm', label: 'Condición y Plazo de Pago', type: 'select', options: ['Contado Inmediato', 'Crédito 15 Días', 'Crédito 30 Días', 'Crédito 60 Días'] },
+        { key: 'creditLimit', label: 'Cupo de Crédito Aprobado ($ COP)', type: 'number', placeholder: '15000000' },
       ],
     },
     {
@@ -37,7 +41,7 @@ export const SRV_CRM_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       externalSubmoduleName: 'Oportunidades y Embudo',
       tabIcon: '📈',
       summary: 'Seguimiento de negocios en negociación, etapa comercial, ejecutivo asignado y cierre esperado.',
-      monthlyAddonUsd: 10,
+      monthlyAddonUsd: 39000,
       actionButtonLabel: 'Registrar Oportunidad',
       tableHeaders: ['Negocio', 'Cliente Prospecto', 'Etapa del Embudo', 'Ejecutivo', 'Valor Estimado'],
       fields: [
@@ -53,7 +57,7 @@ export const SRV_CRM_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       externalSubmoduleName: 'Fidelización y Puntos',
       tabIcon: '⭐',
       summary: 'Acumulación y redención de puntos por compras frecuentes y categorías de cliente.',
-      monthlyAddonUsd: 8,
+      monthlyAddonUsd: 29000,
       actionButtonLabel: 'Acreditar / Redimir Puntos',
       tableHeaders: ['Cliente', 'Categoría', 'Puntos Acumulados', 'Última Compra', 'Beneficio Activo'],
       fields: [
@@ -63,5 +67,14 @@ export const SRV_CRM_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       ],
     },
   ],
-  features: [],
+  features: [
+    {
+      componentKey: 'comp-nit-dv-auto',
+      externalName: 'Cálculo automático de Dígito de Verificación NIT',
+      description: 'Calcula automáticamente el DV fiscal al registrar clientes, proveedores o transportistas.',
+      parentModuleKey: 'mod-directory',
+      includedByDefault: true,
+      monthlyAddonUsd: 15000,
+    },
+  ],
 };

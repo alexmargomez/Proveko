@@ -70,6 +70,18 @@ export function renderWorkstationLayerHtml(): string {
                 </div>
               </div>
 
+              <!-- BARRA DE FILTROS MULTICRITERIO ESTILO VERSION2 (v2) -->
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;padding:10px 12px;background:#f1f5f9;border:1px solid var(--pk-border);border-radius:10px">
+                <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:240px">
+                  <span style="font-size:12px;font-weight:800;color:var(--pk-text)">🔍 Filtro Rápido (v2):</span>
+                  <input type="text" id="ws-v2-filter-input" placeholder="Buscar por NIT, cliente, código, bodega, placa o estado..." style="flex:1;padding:7px 10px;border:1px solid var(--pk-border);border-radius:7px;font-size:12px;background:#fff" />
+                </div>
+                <div class="row-actions">
+                  <span class="badge badge-blue" id="ws-v2-count-badge">0 registros</span>
+                  <button type="button" class="btn btn-outline btn-sm" id="btn-ws-clear-filter">Limpiar Filtro</button>
+                </div>
+              </div>
+
               <!-- TABLA DE REGISTROS DEL SUBMÓDULO -->
               <div class="table-wrap">
                 <table>

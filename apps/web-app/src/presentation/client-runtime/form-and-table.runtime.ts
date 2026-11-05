@@ -14,14 +14,14 @@ export function renderFormAndTableRuntimeJs(): string {
         var p = presets[i];
         var isSel = p.id === STATE.selectedBusinessTypeId;
         bHtml += '<button type="button" class="preset-chip ' + (isSel ? 'active' : '') + '" data-select-btype="' + pkEsc(p.id) + '">' +
-          pkEsc(p.name) + ' ($' + p.baseMonthlyUsd + '/mes)</button>';
+          pkEsc(p.name) + ' (' + pkCop(p.baseMonthlyUsd) + '/mes)</button>';
       }
       rowEl.innerHTML = bHtml;
     }
 
     var incBox = document.getElementById('reg-included-summary');
     if (incBox && plan.preset) {
-      incBox.innerHTML = '<strong>✅ Incluido en tu Plan Base (' + pkEsc(plan.preset.name) + ' — $' + plan.baseUsd + ' USD/mes):</strong> ' +
+      incBox.innerHTML = '<strong>✅ Incluido en tu Plan Base (' + pkEsc(plan.preset.name) + ' — ' + pkCop(plan.baseUsd) + '/mes):</strong> ' +
         pkEsc(plan.preset.description);
     }
 
@@ -42,14 +42,14 @@ export function renderFormAndTableRuntimeJs(): string {
             '<input type="checkbox" data-extra-submodule="' + pkEsc(sub.moduleKey) + '" ' +
             (subChecked ? 'checked ' : '') + (subIncluded ? 'disabled ' : '') + '/>' +
             '<span>' + pkEsc(sub.tabIcon + ' ' + sub.externalSubmoduleName) + '</span>' +
-            '<strong style="color:var(--pk-primary)">' + (subIncluded ? 'Básico Incluido' : '+$' + sub.monthlyAddonUsd) + '</strong></label>';
+            '<strong style="color:var(--pk-primary)">' + (subIncluded ? 'Básico Incluido' : '+' + pkCop(sub.monthlyAddonUsd)) + '</strong></label>';
         }
         aHtml += '<div class="center-pick-card ' + ((svcIncluded || svcExtraChecked) ? 'selected' : '') + '">' +
           '<div class="center-pick-head">' +
           '<div class="center-pick-title">' + pkEsc(svc.icon + ' ' + svc.externalPrincipalModuleName) + '</div>' +
           (svcIncluded
             ? '<span class="badge badge-emerald">Módulo Base Incluido</span>'
-            : '<label style="font-size:12px;font-weight:700;cursor:pointer"><input type="checkbox" data-extra-service="' + pkEsc(svc.serviceKey) + '" ' + (svcExtraChecked ? 'checked' : '') + '/> Agregar Módulo (+$' + svc.standaloneMonthlyUsd + ')</label>') +
+            : '<label style="font-size:12px;font-weight:700;cursor:pointer"><input type="checkbox" data-extra-service="' + pkEsc(svc.serviceKey) + '" ' + (svcExtraChecked ? 'checked' : '') + '/> Agregar Módulo (+' + pkCop(svc.standaloneMonthlyUsd) + ')</label>') +
           '</div><div class="center-pick-desc">' + pkEsc(svc.subtitle) + '</div>' +
           '<div class="comp-toggle-list">' + subItems + '</div></div>';
       }
@@ -57,10 +57,10 @@ export function renderFormAndTableRuntimeJs(): string {
     }
 
     var totalEl = document.getElementById('reg-quote-total');
-    if (totalEl) totalEl.textContent = '$' + plan.totalUsd + ' USD/mes';
+    if (totalEl) totalEl.textContent = pkCop(plan.totalUsd) + '/mes';
     var breakEl = document.getElementById('reg-quote-breakdown');
     if (breakEl) {
-      breakEl.textContent = 'Plan Base: $' + plan.baseUsd + ' USD + Adicionales seleccionados: $' + plan.extraUsd + ' USD';
+      breakEl.textContent = 'Plan Base: ' + pkCop(plan.baseUsd) + ' + Adicionales seleccionados: ' + pkCop(plan.extraUsd);
     }
   }
 

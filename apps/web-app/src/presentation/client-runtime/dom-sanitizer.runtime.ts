@@ -38,6 +38,10 @@ export function renderDomSanitizerRuntimeJs(): string {
       .replace(/"/g, '&quot;');
   }
 
+  function pkCop(val) {
+    return '$' + Number(val || 0).toLocaleString('es-CO') + ' COP';
+  }
+
   function pkToast(msg) {
     var el = document.getElementById('pk-toast');
     if (!el) return;
@@ -91,7 +95,7 @@ export function renderDomSanitizerRuntimeJs(): string {
         var p = presets[k];
         pHtml += '<div class="center-pick-card">' +
           '<div class="center-pick-head"><div class="center-pick-title">' + pkEsc(p.name) + '</div>' +
-          '<span class="center-pick-price">$' + p.baseMonthlyUsd + ' USD/mes</span></div>' +
+          '<span class="center-pick-price">' + pkCop(p.baseMonthlyUsd) + '/mes</span></div>' +
           '<div style="margin-bottom:6px"><span class="badge badge-emerald">' + pkEsc(p.badge) + '</span></div>' +
           '<div class="center-pick-desc">' + pkEsc(p.description) + '</div>' +
           '<button type="button" class="btn btn-primary btn-sm" data-showcase-preset="' + pkEsc(p.id) + '">Elegir este Tipo de Negocio &rarr;</button></div>';
@@ -102,7 +106,7 @@ export function renderDomSanitizerRuntimeJs(): string {
 
   function pkComputeRegistrationPlan() {
     var preset = pkGetPreset(STATE.selectedBusinessTypeId);
-    var baseUsd = preset ? preset.baseMonthlyUsd : 39;
+    var baseUsd = preset ? preset.baseMonthlyUsd : 149000;
     var incSvcs = preset ? preset.includedPrincipalServices : [];
     var incSubs = preset ? preset.includedSubmodules : [];
     var incFeats = preset ? preset.includedFeatures : [];

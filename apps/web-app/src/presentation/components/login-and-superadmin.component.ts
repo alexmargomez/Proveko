@@ -54,8 +54,8 @@ export function renderLoginAndSuperAdminHtml(): string {
             <h2 style="margin:4px 0 0;font-size:18px">Registra tu Negocio en 3 Pasos</h2>
           </div>
           <div style="text-align:right">
-            <div style="font-size:11px;color:var(--pk-muted)">Total Mensual Estimado</div>
-            <div style="font-size:24px;font-weight:800;color:var(--pk-primary)" id="reg-quote-total">$49 USD/mes</div>
+            <div style="font-size:11px;color:var(--pk-muted)">Total Mensual Estimado (Pesos Colombianos)</div>
+            <div style="font-size:24px;font-weight:800;color:var(--pk-primary)" id="reg-quote-total">$149.000 COP/mes</div>
             <div style="font-size:11px;color:var(--pk-muted)" id="reg-quote-breakdown">Plan Base Incluido</div>
           </div>
         </div>
@@ -127,6 +127,17 @@ export function renderLoginAndSuperAdminHtml(): string {
         <div class="kpi-row" id="sa-kpi-row"></div>
         <div id="sa-tenants-grid" style="display:grid;gap:14px"></div>
       </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-head">
+        <div>
+          <span class="badge badge-emerald">BASE DE DATOS DEDICADA: proveko_groups_db</span>
+          <div class="card-title" style="margin-top:4px">🧩 Grupos de Clientes (Bares, Comercio, Agro...) y Catálogo Dinámico para Desarrolladores</div>
+          <div style="font-size:12px;color:var(--pk-muted)">Guarda en BD qué Módulos Principales, Submódulos y Funcionalidades tiene cada grupo básico y permite a los desarrolladores crear nuevas funcionalidades y asociarlas a cualquier grupo.</div>
+        </div>
+      </div>
+      <div class="card-body" id="sa-groups-catalog-panel"></div>
     </div>
 
     <div class="card">

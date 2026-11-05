@@ -150,8 +150,13 @@ export function renderGatewayTransportRuntimeJs(): string {
     var tbody = document.getElementById('ws-submodule-tbody');
     if (tbody) {
       var rows = STATE.submoduleRows[activeSub.moduleKey] || [];
+      var qFilter = (STATE.v2FilterText || '').trim().toLowerCase();
       var rHtml = '';
+      var matchedCount = 0;
       for (var r = 0; r < rows.length; r++) {
+        var rowStr = rows[r].join(' ').toLowerCase();
+        if (qFilter && rowStr.indexOf(qFilter) === -1) continue;
+        matchedCount++;
         rHtml += '<tr>';
         for (var c = 0; c < rows[r].length; c++) {
           rHtml += '<td>' + (c === 0 ? '<strong>' + pkEsc(rows[r][c]) + '</strong>' : pkEsc(rows[r][c])) + '</td>';
@@ -159,6 +164,8 @@ export function renderGatewayTransportRuntimeJs(): string {
         rHtml += '</tr>';
       }
       tbody.innerHTML = rHtml;
+      var cntBadge = document.getElementById('ws-v2-count-badge');
+      if (cntBadge) cntBadge.textContent = matchedCount + ' / ' + rows.length + ' registros';
     }
   }
 `;

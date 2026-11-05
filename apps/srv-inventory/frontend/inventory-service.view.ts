@@ -19,7 +19,7 @@ export const SRV_INVENTORY_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
   externalPrincipalModuleName: 'Inventario, Bodegas y Logística',
   icon: '📦',
   subtitle: 'Existencias, apartado de bodegas, solicitudes para traslados, recetas, lotes y báscula camionera.',
-  standaloneMonthlyUsd: 34,
+  standaloneMonthlyUsd: 139000,
   submodules: [
     {
       moduleKey: 'mod-stock',
@@ -27,7 +27,7 @@ export const SRV_INVENTORY_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       externalSubmoduleName: 'Existencias y Catálogo',
       tabIcon: '📊',
       summary: 'Kardex valorizado de productos, insumos, costo promedio ponderado y punto de reorden.',
-      monthlyAddonUsd: 10,
+      monthlyAddonUsd: 39000,
       actionButtonLabel: 'Registrar Producto / Ajuste',
       tableHeaders: ['Código SKU', 'Producto / Insumo', 'Bodega Base', 'Disponible', 'Stock Mínimo', 'Costo Unitario'],
       fields: [
@@ -45,7 +45,7 @@ export const SRV_INVENTORY_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       externalSubmoduleName: 'Bodegas',
       tabIcon: '🏭',
       summary: 'Administración de bodegas físicas, centros de acopio, capacidad instalada y responsable.',
-      monthlyAddonUsd: 12,
+      monthlyAddonUsd: 45000,
       actionButtonLabel: 'Crear / Actualizar Bodega',
       tableHeaders: ['Código', 'Nombre de Bodega', 'Ciudad / Sede', 'Capacidad', 'Encargado / Firma', 'Estado'],
       fields: [
@@ -68,7 +68,7 @@ export const SRV_INVENTORY_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       externalSubmoduleName: 'Solicitudes para Traslados',
       tabIcon: '🔄',
       summary: 'Solicitudes de traslado entre bodegas con despacho, recepción, transportista y firma de encargado.',
-      monthlyAddonUsd: 14,
+      monthlyAddonUsd: 55000,
       actionButtonLabel: 'Emitir Solicitud de Traslado',
       tableHeaders: ['Solicitud', 'Bodega Origen', 'Bodega Destino', 'Ítem y Cantidad', 'Transportista', 'Firma Encargado'],
       fields: [
@@ -97,7 +97,7 @@ export const SRV_INVENTORY_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       externalSubmoduleName: 'Recetas y Producción',
       tabIcon: '🧪',
       summary: 'Fórmulas de producción y escandallos con descuento automático de insumos por unidad.',
-      monthlyAddonUsd: 14,
+      monthlyAddonUsd: 55000,
       actionButtonLabel: 'Guardar Receta / Fórmula',
       tableHeaders: ['Código', 'Producto Terminado', 'Insumos de la Receta', 'Rendimiento', 'Costo Total'],
       hasVisualRecipeBuilder: true,
@@ -112,7 +112,7 @@ export const SRV_INVENTORY_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       externalSubmoduleName: 'Lotes y Vencimientos',
       tabIcon: '📅',
       summary: 'Trazabilidad sanitaria por lote, fecha de vencimiento y despacho prioritario FEFO.',
-      monthlyAddonUsd: 10,
+      monthlyAddonUsd: 39000,
       actionButtonLabel: 'Registrar Lote',
       tableHeaders: ['N° Lote', 'Producto', 'Bodega', 'Vencimiento', 'Cantidad', 'Estado FEFO'],
       fields: [
@@ -128,7 +128,7 @@ export const SRV_INVENTORY_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       externalSubmoduleName: 'Báscula y Tractomulas',
       tabIcon: '🚛',
       summary: 'Control de tractomulas en báscula camionera, pesaje Bruto/Tara/Neto, transportista y muelle.',
-      monthlyAddonUsd: 19,
+      monthlyAddonUsd: 75000,
       actionButtonLabel: 'Emitir Tiquete de Báscula',
       tableHeaders: ['Tiquete', 'Placa / Remolque', 'Transportista / Conductor', 'Peso Bruto', 'Peso Tara', 'Peso Neto'],
       hasTruckScaleWeighbridge: true,
@@ -153,7 +153,7 @@ export const SRV_INVENTORY_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       description: 'Exige registrar la firma o nombre del encargado responsable en bodegas, traslados y remisiones.',
       parentModuleKey: 'independent',
       includedByDefault: true,
-      monthlyAddonUsd: 5,
+      monthlyAddonUsd: 19000,
     },
     {
       componentKey: 'comp-carrier-select',
@@ -161,7 +161,7 @@ export const SRV_INVENTORY_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       description: 'Habilita el selector de empresa transportista y placa en traslados de bodega y báscula.',
       parentModuleKey: 'mod-transfers',
       includedByDefault: true,
-      monthlyAddonUsd: 5,
+      monthlyAddonUsd: 19000,
     },
     {
       componentKey: 'comp-scale-tare',
@@ -169,7 +169,7 @@ export const SRV_INVENTORY_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       description: 'Calcula en vivo el peso neto destarado en kilogramos y toneladas para tractomulas.',
       parentModuleKey: 'mod-scale',
       includedByDefault: true,
-      monthlyAddonUsd: 6,
+      monthlyAddonUsd: 25000,
     },
   ],
 };
