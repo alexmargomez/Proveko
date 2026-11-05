@@ -1,143 +1,89 @@
+import { SRV_CRM_FRONTEND_VIEW } from '../../../../srv-crm/frontend/crm-service.view.js';
+import { SRV_FINANCE_FRONTEND_VIEW } from '../../../../srv-finance/frontend/finance-service.view.js';
+import { SRV_GASTRO_FRONTEND_VIEW } from '../../../../srv-gastro/frontend/gastro-service.view.js';
+import { SRV_HOTEL_FRONTEND_VIEW } from '../../../../srv-hotel/frontend/hotel-service.view.js';
+import { SRV_INVENTORY_FRONTEND_VIEW } from '../../../../srv-inventory/frontend/inventory-service.view.js';
+import { SRV_INVOICING_FRONTEND_VIEW } from '../../../../srv-invoicing/frontend/invoicing-service.view.js';
 import type {
-  PlatformOperationalCenterDefinition,
-  RolePermissionProfile,
+  BusinessTypePreset,
+  MicroserviceComponentFeature,
+  MicroserviceFrontendDefinition,
+  MicroserviceSubmoduleTab,
 } from '../../domain/contracts/platform-hub.contract.js';
 
-export const PROVEKO_ROLE_PROFILES: readonly RolePermissionProfile[] = [
-  {
-    roleKey: 'ADMIN_CLIENTE',
-    label: 'Administrador General de Empresa (SuperAdmin Cliente)',
-    description: 'Control total de los centros contratados, usuarios, roles y activación de componentes.',
-    allowedCenters: [
-      'center:invoicing-pos',
-      'center:inventory-recipes',
-      'center:gastro-reservations',
-      'center:logistics-fleet',
-      'center:crm-finance',
-      'center:users-rbac',
-    ],
-  },
-  {
-    roleKey: 'CAJERO_FACTURADOR',
-    label: 'Cajero / Facturador de Punto de Venta',
-    description: 'Emisión de facturas, tirillas POS, cotizaciones, arqueo de caja y consulta de clientes.',
-    allowedCenters: ['center:invoicing-pos', 'center:crm-finance'],
-  },
-  {
-    roleKey: 'JEFE_BODEGA',
-    label: 'Jefe de Inventario, Producción y Recetas',
-    description: 'Gestión de catálogo de productos, existencias, escandallos/recetas, lotes y traslados.',
-    allowedCenters: ['center:inventory-recipes', 'center:logistics-fleet'],
-  },
-  {
-    roleKey: 'MESERO_COMANDAS',
-    label: 'Anfitrión de Mesas y Comandera de Cocina',
-    description: 'Atención de salón, toma de comandas, marcha a cocina/barra y división de cuentas.',
-    allowedCenters: ['center:gastro-reservations', 'center:invoicing-pos'],
-  },
-  {
-    roleKey: 'CONTROL_TRACTOMULAS',
-    label: 'Operador de Báscula, Patio y Tractomulas',
-    description: 'Ingreso vehicular, pesaje bruto/tara/neto en báscula, muelles de carga y despachos.',
-    allowedCenters: ['center:logistics-fleet', 'center:inventory-recipes'],
-  },
-  {
-    roleKey: 'RECEPCION_RESERVAS',
-    label: 'Recepcionista de Reservas, Cupos y Tickets',
-    description: 'Control de reservas de cupos/alojamiento, emisión de tickets/boletas y check-in.',
-    allowedCenters: ['center:gastro-reservations', 'center:invoicing-pos'],
-  },
-  {
-    roleKey: 'CONTADOR_FINANZAS',
-    label: 'Contador y Analista de Cartera / Tesorería',
-    description: 'Gestión de terceros, recaudos CxC, pagos CxP, flujo de caja y asientos contables.',
-    allowedCenters: ['center:crm-finance', 'center:invoicing-pos'],
-  },
+/**
+ * Registro central que ensambla los Frontends que viven dentro de cada Microservicio (apps/srv-[servicio]/frontend/).
+ */
+export const MICROSERVICE_FRONTEND_CATALOG: readonly MicroserviceFrontendDefinition[] = [
+  SRV_INVOICING_FRONTEND_VIEW,
+  SRV_INVENTORY_FRONTEND_VIEW,
+  SRV_GASTRO_FRONTEND_VIEW,
+  SRV_HOTEL_FRONTEND_VIEW,
+  SRV_CRM_FRONTEND_VIEW,
+  SRV_FINANCE_FRONTEND_VIEW,
 ];
 
-export const PROVEKO_OPERATIONAL_CENTERS: readonly PlatformOperationalCenterDefinition[] = [
+export const ALL_SUBMODULES_FLAT: readonly MicroserviceSubmoduleTab[] =
+  MICROSERVICE_FRONTEND_CATALOG.flatMap((svc) => svc.submodules);
+
+export const ALL_FEATURES_FLAT: readonly MicroserviceComponentFeature[] =
+  MICROSERVICE_FRONTEND_CATALOG.flatMap((svc) => svc.features);
+
+/**
+ * Tipos de Negocio Oficiales:
+ * Al seleccionar el Tipo de Negocio, se habilitan los Módulos Principales, Submódulos y Funcionalidades
+ * básicas para que el negocio opere de forma completa por el valor base.
+ * Si el cliente desea agregar Módulos Principales o Submódulos adicionales en el Paso 2, ahí se suman costos.
+ */
+export const BUSINESS_TYPE_PRESETS: readonly BusinessTypePreset[] = [
   {
-    key: 'center:invoicing-pos',
-    title: 'Facturación, Punto de Venta (POS) y Caja',
-    shortLabel: 'Facturación y POS',
-    icon: '🧾',
-    summary: 'Facturación ágil con carrito multicelda, impuestos, descuentos, medios de pago y arqueo de turno.',
-    monthlyBaseCop: 65000,
-    allowedRoles: ['ADMIN_CLIENTE', 'CAJERO_FACTURADOR', 'MESERO_COMANDAS', 'RECEPCION_RESERVAS', 'CONTADOR_FINANZAS'],
-    components: [
-      { key: 'comp:cashier-shift', centerKey: 'center:invoicing-pos', name: 'Identificación de Cajero y Turno en Pantalla', description: 'Permite ingresar/seleccionar el nombre del cajero y controlar la base de efectivo del turno.', defaultEnabled: true },
-      { key: 'comp:dian-electronic', centerKey: 'center:invoicing-pos', name: 'Facturación Electrónica DIAN (CUFE) y Tirilla', description: 'Alterna entre Recibo POS Rápido y Factura Electrónica con cálculo fiscal.', defaultEnabled: true },
-      { key: 'comp:line-discounts', centerKey: 'center:invoicing-pos', name: 'Descuentos Porcentuales por Línea', description: 'Habilita columna de % descuento en cada producto de la factura.', defaultEnabled: true },
-      { key: 'comp:tip-service', centerKey: 'center:invoicing-pos', name: 'Propina Voluntaria / Cargo por Servicio', description: 'Agrega liquidación automática de propina sugerida en el cierre de cuenta.', defaultEnabled: true },
-      { key: 'comp:seller-commission', centerKey: 'center:invoicing-pos', name: 'Asignación de Vendedor y Notas de Entrega', description: 'Permite asociar asesor comercial y observaciones de despacho en la factura.', defaultEnabled: false },
-      { key: 'comp:quotes-converter', centerKey: 'center:invoicing-pos', name: 'Modo Cotizaciones Convertibles a Venta', description: 'Permite guardar cotizaciones formales y convertirlas en factura en 1 clic.', defaultEnabled: true },
-    ],
+    id: 'comercio-retail',
+    name: 'Comercio, Tienda & Ferretería',
+    badge: 'Plan Base Completo Comercial',
+    description: 'Incluye Caja POS, Cotizaciones, Existencias de Inventario, Bodega Base, Directorio de Clientes y Caja/Bancos.',
+    baseMonthlyUsd: 39,
+    includedPrincipalServices: ['srv-invoicing', 'srv-inventory', 'srv-crm', 'srv-finance'],
+    includedSubmodules: ['mod-pos', 'mod-quotes', 'mod-stock', 'mod-warehouses', 'mod-directory', 'mod-cashbook'],
+    includedFeatures: ['comp-cashier-name', 'comp-line-discount', 'comp-manager-signature'],
   },
   {
-    key: 'center:inventory-recipes',
-    title: 'Inventario, Productos y Recetas (Escandallos)',
-    shortLabel: 'Inventario y Recetas',
-    icon: '📦',
-    summary: 'Catálogo maestro con márgenes, Kardex multibodega, constructor visual de recetas sin JSON y lotes.',
-    monthlyBaseCop: 59000,
-    allowedRoles: ['ADMIN_CLIENTE', 'JEFE_BODEGA', 'CONTROL_TRACTOMULAS'],
-    components: [
-      { key: 'comp:recipes-bom', centerKey: 'center:inventory-recipes', name: 'Constructor Visual de Recetas y Escandallos', description: 'Tabla interactiva de ingredientes, gramajes, mermas y costo por porción.', defaultEnabled: true },
-      { key: 'comp:lots-fefo', centerKey: 'center:inventory-recipes', name: 'Control de Lotes y Fechas de Vencimiento (FEFO)', description: 'Trazabilidad de lotes, registro sanitario y alertas de próximo vencimiento.', defaultEnabled: true },
-      { key: 'comp:warehouse-transfers', centerKey: 'center:inventory-recipes', name: 'Traslados de Mercancía Entre Bodegas', description: 'Órdenes de despacho y recepción entre sucursales o almacenes.', defaultEnabled: true },
-    ],
+    id: 'restaurante-gastro',
+    name: 'Restaurante, Bar & Gastronomía',
+    badge: 'Plan Base Completo Gastronómico',
+    description: 'Incluye Salón y Mesas, Monitor de Cocina (KDS), División de Cuentas, Caja POS con Propina, Existencias y Recetas.',
+    baseMonthlyUsd: 49,
+    includedPrincipalServices: ['srv-gastro', 'srv-invoicing', 'srv-inventory', 'srv-finance'],
+    includedSubmodules: ['mod-tables', 'mod-kds', 'mod-split', 'mod-pos', 'mod-stock', 'mod-recipes', 'mod-cashbook'],
+    includedFeatures: ['comp-cashier-name', 'comp-tip', 'comp-waiter-assign'],
   },
   {
-    key: 'center:gastro-reservations',
-    title: 'Comandas, Mesas, Reserva de Cupos y Tickets',
-    shortLabel: 'Comandas, Cupos y Tickets',
-    icon: '🍽️',
-    summary: 'Mapa interactivo de mesas, comandera de cocina, división de cuentas, reserva de cupos y boletería/tickets.',
-    monthlyBaseCop: 62000,
-    allowedRoles: ['ADMIN_CLIENTE', 'MESERO_COMANDAS', 'RECEPCION_RESERVAS'],
-    components: [
-      { key: 'comp:gastro-tables-kds', centerKey: 'center:gastro-reservations', name: 'Plano de Mesas y Comandera de Cocina (KDS)', description: 'Control de ocupación de mesas y tablero de preparación de pedidos en cocina.', defaultEnabled: true },
-      { key: 'comp:split-check-seats', centerKey: 'center:gastro-reservations', name: 'División Interactiva de Cuentas por Silla', description: 'Separa consumos por comensal o partes iguales con cuadre exacto.', defaultEnabled: true },
-      { key: 'comp:slot-reservations', centerKey: 'center:gastro-reservations', name: 'Reserva de Cupos, Espacios y Alojamiento', description: 'Agenda de cupos por fecha/hora, habitaciones o recursos con control de capacidad.', defaultEnabled: true },
-      { key: 'comp:ticket-issuance', centerKey: 'center:gastro-reservations', name: 'Emisión de Tickets, Boletas y Control de Acceso', description: 'Generación de tickets numerados con categoría, tarifa y validación de ingreso.', defaultEnabled: true },
-    ],
+    id: 'agro-logistica-bascula',
+    name: 'Agroindustria, Bodegas & Báscula Camionera',
+    badge: 'Plan Base Completo Logístico',
+    description: 'Incluye Báscula y Tractomulas (Bruto/Tara/Neto), Bodegas, Solicitudes para Traslados, Existencias, Lotes y Facturación.',
+    baseMonthlyUsd: 69,
+    includedPrincipalServices: ['srv-inventory', 'srv-invoicing', 'srv-crm', 'srv-finance'],
+    includedSubmodules: ['mod-stock', 'mod-warehouses', 'mod-transfers', 'mod-lots', 'mod-scale', 'mod-pos', 'mod-dian', 'mod-directory', 'mod-arap'],
+    includedFeatures: ['comp-manager-signature', 'comp-carrier-select', 'comp-scale-tare', 'comp-cashier-name'],
   },
   {
-    key: 'center:logistics-fleet',
-    title: 'Control de Tractomulas, Báscula y Despachos',
-    shortLabel: 'Tractomulas y Báscula',
-    icon: '🚛',
-    summary: 'Control de ingreso de tractomulas, pesaje bruto/tara/neto en báscula, turnos de muelle y guías de carga.',
-    monthlyBaseCop: 69000,
-    allowedRoles: ['ADMIN_CLIENTE', 'CONTROL_TRACTOMULAS', 'JEFE_BODEGA'],
-    components: [
-      { key: 'comp:weighbridge-scale', centerKey: 'center:logistics-fleet', name: 'Báscula Camionera (Peso Bruto, Tara y Neto)', description: 'Cálculo automático de peso neto de carga y tiquete de pesaje certificado.', defaultEnabled: true },
-      { key: 'comp:dock-turn-queue', centerKey: 'center:logistics-fleet', name: 'Asignación de Muelles y Turnos en Patio', description: 'Tablero de estado en patio: Portería -> Báscula -> Muelle -> Despachado.', defaultEnabled: true },
-      { key: 'comp:seal-manifest', centerKey: 'center:logistics-fleet', name: 'Precintos de Seguridad y Manifiesto de Transporte', description: 'Registro de sellos de seguridad, remolque, conductor y transportadora.', defaultEnabled: true },
-    ],
+    id: 'reservas-tickets-hotel',
+    name: 'Reservas de Cupos, Taquilla de Tickets & Alojamiento',
+    badge: 'Plan Base Completo de Cupos y Tickets',
+    description: 'Incluye Agenda de Cupos, Emisión de Tickets con QR, Recepción de Alojamiento, Caja POS y Directorio de Clientes.',
+    baseMonthlyUsd: 54,
+    includedPrincipalServices: ['srv-hotel', 'srv-invoicing', 'srv-crm', 'srv-finance'],
+    includedSubmodules: ['mod-bookings', 'mod-tickets', 'mod-rooms', 'mod-pos', 'mod-directory', 'mod-cashbook'],
+    includedFeatures: ['comp-qr-ticket', 'comp-cashier-name'],
   },
   {
-    key: 'center:crm-finance',
-    title: 'Terceros, Cartera (CxC/CxP) y Contabilidad',
-    shortLabel: 'Terceros y Finanzas',
-    icon: '🏦',
-    summary: 'Directorio completo de clientes/proveedores/conductores, control de cartera, caja y asientos contables.',
-    monthlyBaseCop: 58000,
-    allowedRoles: ['ADMIN_CLIENTE', 'CONTADOR_FINANZAS', 'CAJERO_FACTURADOR'],
-    components: [
-      { key: 'comp:credit-portfolio', centerKey: 'center:crm-finance', name: 'Cartera CxC / CxP, Cupos y Registro de Abonos', description: 'Seguimiento de saldos pendientes, edades de mora y aplicación de pagos.', defaultEnabled: true },
-      { key: 'comp:double-entry-puc', centerKey: 'center:crm-finance', name: 'Comprobantes Contables de Partida Doble (PUC)', description: 'Constructor visual de asientos contables con validación Débito == Crédito.', defaultEnabled: true },
-      { key: 'comp:loyalty-points', centerKey: 'center:crm-finance', name: 'Programa de Puntos y Fidelización de Clientes', description: 'Acumulación automática de puntos y categorización VIP de clientes.', defaultEnabled: false },
-    ],
-  },
-  {
-    key: 'center:users-rbac',
-    title: 'Usuarios de la Empresa, Roles y Componentes',
-    shortLabel: 'Usuarios y Componentes',
-    icon: '🔐',
-    summary: 'Creación de usuarios de la empresa, asignación de roles y activación o desactivación de componentes.',
-    monthlyBaseCop: 0,
-    allowedRoles: ['ADMIN_CLIENTE'],
-    components: [],
+    id: 'distribuidora-mayorista',
+    name: 'Distribuidora Mayorista & Multi-Bodega',
+    badge: 'Plan Base Completo Mayorista',
+    description: 'Incluye Facturación Electrónica DIAN, Cotizaciones, Bodegas, Solicitudes de Traslado, Cartera CxC/CxP y Embudo Comercial.',
+    baseMonthlyUsd: 59,
+    includedPrincipalServices: ['srv-invoicing', 'srv-inventory', 'srv-crm', 'srv-finance'],
+    includedSubmodules: ['mod-pos', 'mod-dian', 'mod-quotes', 'mod-stock', 'mod-warehouses', 'mod-transfers', 'mod-directory', 'mod-pipelines', 'mod-cashbook', 'mod-arap'],
+    includedFeatures: ['comp-manager-signature', 'comp-carrier-select', 'comp-cashier-name', 'comp-line-discount'],
   },
 ];

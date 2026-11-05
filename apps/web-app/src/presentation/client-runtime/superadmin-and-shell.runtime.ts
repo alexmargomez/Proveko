@@ -1,190 +1,176 @@
 /**
- * Runtime de Cliente — Estado Global, Login por Rol y Orquestación del Shell de la Plataforma (`/app`) (SOLID SRP).
+ * Runtime Cliente (Parte 5): Consola Global (`superadmin`, `desarrollador`, `auxiliar`),
+ * Control de Cuotas de Roles y Usuarios por Cliente, Login de los 4 Roles y Pago Standby.
  */
-export function renderSuperAdminAndShellRuntimeJs(initialSurface: 'landing' | 'workstation'): string {
+export function renderSuperAdminAndShellRuntimeJs(): string {
   return `
-    const STATE = {
-      surface: '${initialSurface}',
-      isSuperAdminSession: false,
-      activeTenantId: 'emp-agroindustrial-del-valle',
-      activeRoleKey: 'ADMIN_CLIENTE',
-      selectedCenterKey: 'center:invoicing-pos',
-      builderCenters: ['center:invoicing-pos', 'center:inventory-recipes', 'center:gastro-reservations', 'center:logistics-fleet', 'center:crm-finance'],
-      builderComponents: ['comp:cashier-shift', 'comp:dian-electronic', 'comp:line-discounts', 'comp:tip-service', 'comp:quotes-converter', 'comp:recipes-bom', 'comp:lots-fefo', 'comp:warehouse-transfers', 'comp:gastro-tables-kds', 'comp:split-check-seats', 'comp:slot-reservations', 'comp:ticket-issuance', 'comp:weighbridge-scale', 'comp:dock-turn-queue', 'comp:seal-manifest', 'comp:credit-portfolio', 'comp:double-entry-puc'],
-      posDraft: {
-        customerName: 'Comercializadora Andina S.A.S.',
-        docType: 'Factura Electrónica DIAN',
-        paymentMethod: 'Efectivo en Caja',
-        cashierName: 'Laura Valentina Ríos (Turno Mañana)',
-        sellerName: 'Carlos Eduardo Mendoza',
-        tipPct: 10,
-        lines: [
-          { description: 'Café Origen Especial Tostado 500g', qty: 3, unitPrice: 34000, discountPct: 0, taxRate: 19 },
-          { description: 'Lomo Fino Madurado (Porción 350g)', qty: 2, unitPrice: 68000, discountPct: 5, taxRate: 8 },
-        ],
-      },
-      recipeDraft: {
-        code: 'ESC-CAPPUCCINO-ART',
-        productName: 'Cappuccino Artesanal de Origen (1 Taza 8oz)',
-        salePrice: 14500,
-        ingredients: [
-          { name: 'Café Especial Molido en Espresso', qty: 0.02, unit: 'KG', unitCost: 37000, wastePct: 5 },
-          { name: 'Leche Entera Texturizada', qty: 0.18, unit: 'LT', unitCost: 4800, wastePct: 2 },
-          { name: 'Cacao Orgánico y Vaso Térmico', qty: 1, unit: 'UND', unitCost: 950, wastePct: 0 },
-        ],
-      },
-      db: INITIAL_SEED_DB,
-    };
-
-    window.provekoSwitchSurface = function(target) {
-      STATE.surface = target;
-      ['landing', 'login', 'superadmin', 'workstation'].forEach((s) => {
-        const sec = document.getElementById('surface-' + s);
-        const tab = document.getElementById('tab-surface-' + s);
-        if (sec) sec.classList.toggle('hidden', s !== target);
-        if (tab) tab.classList.toggle('active', s === target);
-      });
-      if (target === 'landing') renderLandingConfigurator();
-      if (target === 'superadmin') window.provekoRenderSuperAdmin();
-      if (target === 'workstation') renderWorkstationShell();
-    };
-
-    window.provekoToggleBuilderCenter = function(centerKey) {
-      if (STATE.builderCenters.includes(centerKey)) {
-        STATE.builderCenters = STATE.builderCenters.filter((k) => k !== centerKey);
-      } else {
-        STATE.builderCenters.push(centerKey);
+  function pkRenderSuperAdmin() {
+    var kpiEl = document.getElementById('sa-kpi-row');
+    if (kpiEl) {
+      var realClientsCount = 0;
+      for (var c = 0; c < STATE.clients.length; c++) {
+        if (STATE.clients[c].tenantId !== 'tnt-demo') realClientsCount++;
       }
-      renderLandingConfigurator();
-    };
-
-    window.provekoToggleBuilderComp = function(compKey) {
-      if (STATE.builderComponents.includes(compKey)) {
-        STATE.builderComponents = STATE.builderComponents.filter((k) => k !== compKey);
-      } else {
-        STATE.builderComponents.push(compKey);
-      }
-      renderLandingConfigurator();
-    };
-
-    window.provekoSelectBuilderPreset = function(mode) {
-      if (mode === 'ALL') {
-        STATE.builderCenters = CENTERS_CATALOG.filter((c) => c.key !== 'center:users-rbac').map((c) => c.key);
-      } else if (mode === 'GASTRO') {
-        STATE.builderCenters = ['center:invoicing-pos', 'center:inventory-recipes', 'center:gastro-reservations', 'center:crm-finance'];
-      } else {
-        STATE.builderCenters = ['center:invoicing-pos', 'center:inventory-recipes', 'center:logistics-fleet', 'center:crm-finance'];
-      }
-      renderLandingConfigurator();
-    };
-
-    window.provekoQuickLogin = function(preset) {
-      if (preset === 'SUPERADMIN_GLOBAL') {
-        STATE.isSuperAdminSession = true;
-        document.getElementById('tab-surface-superadmin').classList.remove('hidden');
-        document.getElementById('btn-back-to-superadmin').classList.remove('hidden');
-        document.getElementById('active-user-pill').textContent = '👑 SuperAdmin Global';
-        window.provekoSwitchSurface('superadmin');
-        return;
-      }
-      STATE.isSuperAdminSession = false;
-      STATE.activeTenantId = 'emp-agroindustrial-del-valle';
-      STATE.activeRoleKey = preset === 'CAJERO_AGROVALLE' ? 'CAJERO_FACTURADOR' : (preset === 'BASCULA_AGROVALLE' ? 'CONTROL_TRACTOMULAS' : 'ADMIN_CLIENTE');
-      document.getElementById('tab-surface-landing').classList.add('hidden');
-      window.provekoSwitchSurface('workstation');
-    };
-
-    window.provekoSubmitLogin = function() {
-      const u = (document.getElementById('login-username').value || '').trim().toLowerCase();
-      if (u.includes('superadmin') || u === 'root@proveko.com') {
-        window.provekoQuickLogin('SUPERADMIN_GLOBAL');
-        return;
-      }
-      const foundUser = STATE.db.users.find((item) => item.username.toLowerCase() === u);
-      if (foundUser) {
-        STATE.activeTenantId = foundUser.tenantId;
-        STATE.activeRoleKey = foundUser.roleKey;
-      }
-      document.getElementById('tab-surface-landing').classList.add('hidden');
-      window.provekoSwitchSurface('workstation');
-    };
-
-    window.provekoEnterAsTenant = function(tenantId) {
-      window.provekoCloseCheckoutModal();
-      STATE.activeTenantId = tenantId;
-      STATE.activeRoleKey = 'ADMIN_CLIENTE';
-      document.getElementById('tab-surface-landing').classList.add('hidden');
-      window.provekoSwitchSurface('workstation');
-    };
-
-    window.provekoSwitchActiveTenant = function(tenantId) {
-      STATE.activeTenantId = tenantId;
-      renderWorkstationShell();
-    };
-
-    window.provekoSwitchActiveRole = function(roleKey) {
-      STATE.activeRoleKey = roleKey;
-      renderWorkstationShell();
-    };
-
-    window.provekoToggleComponentInPlace = function(compKey) {
-      const tenant = getActiveTenant();
-      if (tenant.enabledComponents.includes(compKey)) {
-        tenant.enabledComponents = tenant.enabledComponents.filter((k) => k !== compKey);
-      } else {
-        tenant.enabledComponents.push(compKey);
-      }
-      renderWorkstationShell();
-    };
-
-    function renderWorkstationShell() {
-      const tenant = getActiveTenant();
-      const roleProfile = ROLES_CATALOG.find((r) => r.roleKey === STATE.activeRoleKey) || ROLES_CATALOG[0];
-      document.getElementById('tenant-select').innerHTML = STATE.db.tenants.map((t) => '<option value="' + escapeHtml(t.tenantId) + '" ' + (t.tenantId === tenant.tenantId ? 'selected' : '') + '>' + escapeHtml(t.companyName) + '</option>').join('');
-      document.getElementById('role-select').innerHTML = ROLES_CATALOG.map((r) => '<option value="' + r.roleKey + '" ' + (r.roleKey === STATE.activeRoleKey ? 'selected' : '') + '>' + escapeHtml(r.label) + '</option>').join('');
-      document.getElementById('topbar-company-name').textContent = '| ' + tenant.companyName;
-      document.getElementById('sidebar-company-label').textContent = tenant.companyName;
-      document.getElementById('sidebar-role-label').textContent = 'Rol: ' + roleProfile.label;
-      document.getElementById('active-user-pill').textContent = roleProfile.label.split(' ')[0] + ' · ' + tenant.city;
-
-      const visibleCenters = CENTERS_CATALOG.filter((c) => tenant.enabledCenters.includes(c.key) && roleProfile.allowedCenters.includes(c.key));
-      if (!visibleCenters.some((c) => c.key === STATE.selectedCenterKey) && visibleCenters.length > 0) {
-        STATE.selectedCenterKey = visibleCenters[0].key;
-      }
-      document.getElementById('sidebar-centers-nav').innerHTML = visibleCenters.map((c) =>
-        '<button type="button" class="center-nav-btn ' + (c.key === STATE.selectedCenterKey ? 'active' : '') + '" onclick="STATE.selectedCenterKey=\\'' + c.key + '\\'; renderWorkstationShell();">' +
-          '<span style="font-size:18px;">' + c.icon + '</span>' +
-          '<div><div style="font-size:13px;">' + escapeHtml(c.shortLabel) + '</div><div style="font-size:10.5px; opacity:0.8;">' + c.components.length + ' componentes</div></div>' +
-        '</button>'
-      ).join('');
-
-      const activeCenter = CENTERS_CATALOG.find((c) => c.key === STATE.selectedCenterKey) || CENTERS_CATALOG[0];
-      document.getElementById('center-title').textContent = activeCenter.icon + ' ' + activeCenter.title;
-      document.getElementById('center-summary').textContent = activeCenter.summary;
-      document.getElementById('center-badge-branch').textContent = tenant.activeBranch;
-
-      const compBar = document.getElementById('center-components-bar');
-      if (activeCenter.components.length === 0) {
-        compBar.classList.add('hidden');
-      } else {
-        compBar.classList.remove('hidden');
-        compBar.innerHTML = '<div class="comp-toggles-bar"><span style="font-size:11.5px; font-weight:800; color:var(--text-secondary);">⚙️ Componentes de esta pantalla (Activar / Desactivar en vivo):</span>' +
-          activeCenter.components.map((comp) => {
-            const on = hasComponent(comp.key);
-            return '<button type="button" class="comp-chip ' + (on ? 'on' : '') + '" onclick="window.provekoToggleComponentInPlace(\\'' + comp.key + '\\')">' +
-              '<span>' + (on ? '☑' : '☐') + ' ' + escapeHtml(comp.name) + '</span>' +
-            '</button>';
-          }).join('') + '</div>';
-      }
-
-      if (activeCenter.key === 'center:invoicing-pos') renderInvoicingPosCenter();
-      else if (activeCenter.key === 'center:inventory-recipes') renderInventoryAndRecipesCenter();
-      else if (activeCenter.key === 'center:gastro-reservations') renderGastroAndReservationsCenter();
-      else if (activeCenter.key === 'center:logistics-fleet') renderLogisticsAndFleetCenter();
-      else if (activeCenter.key === 'center:crm-finance') renderCrmAndFinanceCenter();
-      else renderUsersAndRbacCenter();
+      kpiEl.innerHTML =
+        '<div class="kpi-box"><div class="kpi-label">Base Principal Control Plane</div><div class="kpi-val" style="font-size:16px">proveko_control_db</div></div>' +
+        '<div class="kpi-box"><div class="kpi-label">Bases de Datos de Clientes + Demo</div><div class="kpi-val">' + STATE.clients.length + ' BDs PostgreSQL</div></div>' +
+        '<div class="kpi-box"><div class="kpi-label">Empresas Clientes Registradas</div><div class="kpi-val" style="color:var(--pk-emerald)">' + realClientsCount + '</div></div>' +
+        '<div class="kpi-box"><div class="kpi-label">Roles Globales Oficiales</div><div class="kpi-val" style="font-size:14px">superadmin · desarrollador · auxiliar · cliente</div></div>';
     }
 
-    window.addEventListener('DOMContentLoaded', () => { window.provekoSwitchSurface(STATE.surface); });
-  `;
+    var gridEl = document.getElementById('sa-tenants-grid');
+    if (gridEl) {
+      var gHtml = '';
+      for (var i = 0; i < STATE.clients.length; i++) {
+        var t = STATE.clients[i];
+        gHtml += '<div class="card"><div class="card-head">' +
+          '<div><div style="display:flex;align-items:center;gap:8px">' +
+          '<strong style="font-size:15px">' + pkEsc(t.companyName) + '</strong>' +
+          '<span class="badge badge-blue">NIT: ' + pkEsc(t.nit) + '</span>' +
+          '<span class="badge badge-emerald">BD PostgreSQL: ' + pkEsc(t.dbName) + ' (' + pkEsc(t.dbHost + ':' + t.dbPort) + ')</span></div>' +
+          '<div style="font-size:12px;color:var(--pk-muted);margin-top:4px">Cuenta Admin generada: <code>' + pkEsc(t.adminUsername) + '</code> · Clave: <code>' + pkEsc(t.adminPasswordHint) + '</code></div></div>' +
+          '<div class="row-actions">' +
+          '<button type="button" class="btn btn-outline btn-sm" data-sa-regen="' + pkEsc(t.tenantId) + '">🔑 Regenerar Clave Admin</button>' +
+          '<button type="button" class="btn btn-primary btn-sm" data-sa-open="' + pkEsc(t.tenantId) + '">🏢 Abrir Plataforma</button></div></div>' +
+          '<div class="card-body"><div class="grid-2">' +
+          '<div style="background:#f8fafc;border:1px solid var(--pk-border);border-radius:10px;padding:10px;display:flex;justify-content:space-between;align-items:center">' +
+          '<div><div style="font-size:11px;color:var(--pk-muted);font-weight:700">CUOTA MÁXIMA DE ROLES INTERNOS</div>' +
+          '<div style="font-size:14px;font-weight:800">Usados: ' + t.internalRoles.length + ' / Máximo permitido: ' + t.maxRolesAllowed + '</div></div>' +
+          '<div class="row-actions"><button type="button" class="btn btn-outline btn-sm" data-sa-quota-role="-1" data-sa-tenant="' + pkEsc(t.tenantId) + '">-1</button>' +
+          '<button type="button" class="btn btn-outline btn-sm" data-sa-quota-role="1" data-sa-tenant="' + pkEsc(t.tenantId) + '">+1</button></div></div>' +
+          '<div style="background:#f8fafc;border:1px solid var(--pk-border);border-radius:10px;padding:10px;display:flex;justify-content:space-between;align-items:center">' +
+          '<div><div style="font-size:11px;color:var(--pk-muted);font-weight:700">CUOTA MÁXIMA DE USUARIOS DEL CLIENTE</div>' +
+          '<div style="font-size:14px;font-weight:800">Usados: ' + t.internalUsers.length + ' / Máximo permitido: ' + t.maxUsersAllowed + '</div></div>' +
+          '<div class="row-actions"><button type="button" class="btn btn-outline btn-sm" data-sa-quota-user="-1" data-sa-tenant="' + pkEsc(t.tenantId) + '">-1</button>' +
+          '<button type="button" class="btn btn-outline btn-sm" data-sa-quota-user="1" data-sa-tenant="' + pkEsc(t.tenantId) + '">+1</button></div></div>' +
+          '</div></div></div>';
+      }
+      gridEl.innerHTML = gHtml;
+    }
+
+    var reqCount = document.getElementById('sa-requests-count');
+    if (reqCount) reqCount.textContent = STATE.featureRequests.length + ' solicitudes';
+    var reqBody = document.getElementById('sa-feature-requests-body');
+    if (reqBody) {
+      if (STATE.featureRequests.length === 0) {
+        reqBody.innerHTML = '<div style="font-size:12px;color:var(--pk-muted)">No hay solicitudes pendientes en la pestaña "Necesito otra funcionalidad".</div>';
+      } else {
+        var rHtml = '<table><thead><tr><th>Empresa</th><th>Tipo</th><th>Solicitud</th><th>Estado</th></tr></thead><tbody>';
+        for (var r = 0; r < STATE.featureRequests.length; r++) {
+          var rq = STATE.featureRequests[r];
+          rHtml += '<tr><td><strong>' + pkEsc(rq.companyName) + '</strong></td><td>' + pkEsc(rq.tier) + '</td><td>' + pkEsc(rq.label) + '</td><td><span class="badge badge-emerald">Activada</span></td></tr>';
+        }
+        reqBody.innerHTML = rHtml + '</tbody></table>';
+      }
+    }
+  }
+
+  function pkUpdateShellNavigation() {
+    var pubNav = document.getElementById('public-nav-tabs');
+    var sessBar = document.getElementById('authenticated-session-bar');
+    var topCtx = document.getElementById('top-context-label');
+
+    var sShow = document.getElementById('surface-showcase');
+    var sAuth = document.getElementById('surface-auth');
+    var sSa = document.getElementById('surface-superadmin');
+    var sWs = document.getElementById('surface-workstation');
+    if (sShow) sShow.classList.remove('active');
+    if (sAuth) sAuth.classList.remove('active');
+    if (sSa) sSa.classList.remove('active');
+    if (sWs) sWs.classList.remove('active');
+
+    if (STATE.session) {
+      if (pubNav) pubNav.style.display = 'none';
+      if (sessBar) sessBar.style.display = 'flex';
+      var rBadge = document.getElementById('session-role-badge');
+      var dBadge = document.getElementById('session-db-badge');
+      var uLabel = document.getElementById('session-user-label');
+      if (STATE.session.role === 'superadmin' || STATE.session.role === 'desarrollador' || STATE.session.role === 'auxiliar') {
+        if (rBadge) rBadge.textContent = 'Rol Global: ' + STATE.session.role.toUpperCase();
+        if (dBadge) dBadge.textContent = 'BD Principal: proveko_control_db';
+        if (uLabel) uLabel.textContent = STATE.session.username;
+        if (topCtx) topCtx.textContent = '| Consola Global (' + STATE.session.role + ')';
+        if (sSa) sSa.classList.add('active');
+        pkRenderSuperAdmin();
+      } else {
+        var cl = pkGetActiveClient();
+        if (rBadge) rBadge.textContent = 'Rol: cliente (' + (STATE.session.internalRoleName || 'Admin') + ')';
+        if (dBadge) dBadge.textContent = 'BD Propia: ' + (cl ? cl.dbName : '');
+        if (uLabel) uLabel.textContent = (cl ? cl.companyName : '') + ' — ' + STATE.session.username;
+        if (topCtx) topCtx.textContent = '| ' + (cl ? cl.companyName : 'Plataforma Cliente');
+        if (sWs) sWs.classList.add('active');
+        pkRenderWorkstation();
+      }
+      return;
+    }
+
+    if (pubNav) pubNav.style.display = 'flex';
+    if (sessBar) sessBar.style.display = 'none';
+    var tShow = document.getElementById('tab-nav-showcase');
+    var tAuth = document.getElementById('tab-nav-auth');
+    var tDemo = document.getElementById('tab-nav-demo');
+    if (tShow) tShow.className = 'pk-tab-btn ' + (STATE.publicTab === 'showcase' ? 'active' : '');
+    if (tAuth) tAuth.className = 'pk-tab-btn ' + (STATE.publicTab === 'auth' ? 'active' : '');
+    if (tDemo) tDemo.className = 'pk-tab-btn ' + (STATE.publicTab === 'demo' ? 'active' : '');
+
+    if (STATE.publicTab === 'showcase') {
+      if (topCtx) topCtx.textContent = '| Muestra de la Plataforma';
+      if (sShow) sShow.classList.add('active');
+      pkRenderShowcase();
+    } else if (STATE.publicTab === 'auth') {
+      if (topCtx) topCtx.textContent = STATE.authMode === 'register' ? '| Registra tu Negocio' : '| Iniciar Sesión';
+      if (sAuth) sAuth.classList.add('active');
+      var pLogin = document.getElementById('auth-pane-login');
+      var pReg = document.getElementById('auth-pane-register');
+      var bLogin = document.getElementById('btn-auth-mode-login');
+      var bReg = document.getElementById('btn-auth-mode-register');
+      if (pLogin) pLogin.style.display = STATE.authMode === 'login' ? 'block' : 'none';
+      if (pReg) pReg.style.display = STATE.authMode === 'register' ? 'block' : 'none';
+      if (bLogin) bLogin.className = 'btn ' + (STATE.authMode === 'login' ? 'btn-primary' : 'btn-outline');
+      if (bReg) bReg.className = 'btn ' + (STATE.authMode === 'register' ? 'btn-primary' : 'btn-outline');
+      pkRenderRegistrationWizard();
+    } else if (STATE.publicTab === 'demo') {
+      STATE.activeTenantId = 'tnt-demo';
+      if (topCtx) topCtx.textContent = '| Demo Interactiva (db_version_prueba)';
+      if (sWs) sWs.classList.add('active');
+      pkRenderWorkstation();
+    }
+  }
+
+  function pkHandleSuperAdminAction(target) {
+    var qRoleBtn = target.closest('[data-sa-quota-role]');
+    if (qRoleBtn) {
+      var tidR = qRoleBtn.getAttribute('data-sa-tenant');
+      var deltaR = Number(qRoleBtn.getAttribute('data-sa-quota-role'));
+      for (var qr = 0; qr < STATE.clients.length; qr++) {
+        if (STATE.clients[qr].tenantId === tidR) STATE.clients[qr].maxRolesAllowed = Math.max(1, STATE.clients[qr].maxRolesAllowed + deltaR);
+      }
+      pkRenderSuperAdmin(); return true;
+    }
+    var qUserBtn = target.closest('[data-sa-quota-user]');
+    if (qUserBtn) {
+      var tidU = qUserBtn.getAttribute('data-sa-tenant');
+      var deltaU = Number(qUserBtn.getAttribute('data-sa-quota-user'));
+      for (var qu = 0; qu < STATE.clients.length; qu++) {
+        if (STATE.clients[qu].tenantId === tidU) STATE.clients[qu].maxUsersAllowed = Math.max(1, STATE.clients[qu].maxUsersAllowed + deltaU);
+      }
+      pkRenderSuperAdmin(); return true;
+    }
+    var saOpen = target.closest('[data-sa-open]');
+    if (saOpen) {
+      STATE.activeTenantId = saOpen.getAttribute('data-sa-open');
+      STATE.session = { role: 'cliente', username: 'superadmin->cliente', tenantId: STATE.activeTenantId, internalRoleName: 'SuperAdmin Auditando BD' };
+      pkUpdateShellNavigation(); return true;
+    }
+    var saRegen = target.closest('[data-sa-regen]');
+    if (saRegen) {
+      var tidG = saRegen.getAttribute('data-sa-regen');
+      for (var g = 0; g < STATE.clients.length; g++) {
+        if (STATE.clients[g].tenantId === tidG) STATE.clients[g].adminPasswordHint = 'PkReset#' + String(Date.now()).slice(-4) + '!';
+      }
+      pkRenderSuperAdmin(); pkToast('Credencial Admin regenerada.'); return true;
+    }
+    return false;
+  }
+`;
 }

@@ -1,55 +1,107 @@
-export type ProvekoRoleKey =
-  | 'SUPERADMIN_GLOBAL'
-  | 'ADMIN_CLIENTE'
-  | 'CAJERO_FACTURADOR'
-  | 'JEFE_BODEGA'
-  | 'MESERO_COMANDAS'
-  | 'CONTROL_TRACTOMULAS'
-  | 'RECEPCION_RESERVAS'
-  | 'CONTADOR_FINANZAS';
+/**
+ * Taxonomía Oficial de 3 Niveles de Proveko:
+ * - Nivel 1: Interno = Servicio (Microservicio `srv-*`) | Externo = Módulo Principal
+ * - Nivel 2: Interno = Módulo (`mod-*`)                 | Externo = Submódulo (interpestaña grande)
+ * - Nivel 3: Interno = Componente (`comp-*` / mini)     | Externo = Funcionalidad (independiente o dependiente de un submódulo)
+ */
 
-export type PlatformCenterKey =
-  | 'center:invoicing-pos'
-  | 'center:inventory-recipes'
-  | 'center:gastro-reservations'
-  | 'center:logistics-fleet'
-  | 'center:crm-finance'
-  | 'center:users-rbac';
+export type GlobalPlatformRole = 'superadmin' | 'desarrollador' | 'auxiliar' | 'cliente';
 
-export interface PlatformComponentToggleDefinition {
+export interface SubmoduleFieldSpec {
   readonly key: string;
-  readonly centerKey: PlatformCenterKey;
+  readonly label: string;
+  readonly type: 'text' | 'number' | 'select' | 'date';
+  readonly placeholder?: string;
+  readonly options?: readonly string[];
+  /** Si el campo pertenece a una Funcionalidad (componente mini), solo aparece cuando esa funcionalidad está activa */
+  readonly requiredFeatureKey?: string;
+}
+
+/** Nivel 3: Componente (Interno) / Funcionalidad (Externo) */
+export interface MicroserviceComponentFeature {
+  readonly componentKey: string;
+  readonly externalName: string; // Ej: "Firma de encargado", "Seleccionar transportista"
+  readonly description: string;
+  readonly parentModuleKey: string | 'independent';
+  readonly includedByDefault: boolean;
+  readonly monthlyAddonUsd: number;
+}
+
+/** Nivel 2: Módulo (Interno) / Submódulo con Interpestaña (Externo) */
+export interface MicroserviceSubmoduleTab {
+  readonly moduleKey: string;
+  readonly parentServiceKey: string;
+  readonly externalSubmoduleName: string; // Ej: "Bodegas", "Solicitudes para Traslados"
+  readonly tabIcon: string;
+  readonly summary: string;
+  readonly monthlyAddonUsd: number;
+  readonly actionButtonLabel: string;
+  readonly tableHeaders: readonly string[];
+  readonly fields: readonly SubmoduleFieldSpec[];
+  readonly hasInteractivePosCart?: boolean;
+  readonly hasVisualRecipeBuilder?: boolean;
+  readonly hasTruckScaleWeighbridge?: boolean;
+}
+
+/** Nivel 1: Servicio Microservicio (Interno) / Módulo Principal (Externo) */
+export interface MicroserviceFrontendDefinition {
+  readonly serviceKey: string;
+  readonly externalPrincipalModuleName: string;
+  readonly icon: string;
+  readonly subtitle: string;
+  readonly standaloneMonthlyUsd: number;
+  readonly submodules: readonly MicroserviceSubmoduleTab[];
+  readonly features: readonly MicroserviceComponentFeature[];
+}
+
+/** Tipo de Negocio: Habilita los básicos completos de ese negocio y permite sumar adicionales con costo */
+export interface BusinessTypePreset {
+  readonly id: string;
+  readonly name: string;
+  readonly badge: string;
+  readonly description: string;
+  readonly baseMonthlyUsd: number;
+  readonly includedPrincipalServices: readonly string[];
+  readonly includedSubmodules: readonly string[];
+  readonly includedFeatures: readonly string[];
+}
+
+export interface ClientInternalRoleRecord {
+  readonly roleId: string;
   readonly name: string;
   readonly description: string;
-  readonly defaultEnabled: boolean;
+  readonly allowedSubmodules: readonly string[];
 }
 
-export interface PlatformOperationalCenterDefinition {
-  readonly key: PlatformCenterKey;
-  readonly title: string;
-  readonly shortLabel: string;
-  readonly icon: string;
-  readonly summary: string;
-  readonly monthlyBaseCop: number;
-  readonly allowedRoles: readonly ProvekoRoleKey[];
-  readonly components: readonly PlatformComponentToggleDefinition[];
+export interface ClientInternalUserRecord {
+  readonly userId: string;
+  readonly username: string;
+  readonly fullName: string;
+  readonly email: string;
+  readonly internalRoleId: string;
+  readonly internalRoleName: string;
+  readonly passwordHint: string;
+  readonly isClientAdmin: boolean;
 }
 
-export interface RolePermissionProfile {
-  readonly roleKey: ProvekoRoleKey;
-  readonly label: string;
-  readonly description: string;
-  readonly allowedCenters: readonly PlatformCenterKey[];
-}
-
-export interface GeneratedTenantAdminCredential {
+export interface ClientDatabaseTenantRecord {
   readonly tenantId: string;
   readonly companyName: string;
   readonly nit: string;
-  readonly adminEmail: string;
+  readonly businessTypeId: string;
+  readonly businessTypeName: string;
+  readonly dbName: string;
+  readonly dbHost: string;
+  readonly dbPort: number;
+  readonly paymentStatus: 'STANDBY_VERIFICADO' | 'ACTIVO' | 'DEMO';
+  readonly monthlyUsd: number;
   readonly adminUsername: string;
-  readonly temporaryPassword: string;
-  readonly paymentStatus: 'STANDBY_APPROVED' | 'ACTIVE_SUBSCRIPTION';
-  readonly paymentReference: string;
-  readonly issuedAtIso: string;
+  readonly adminPasswordHint: string;
+  readonly maxRolesAllowed: number;
+  readonly maxUsersAllowed: number;
+  readonly activePrincipalServices: readonly string[];
+  readonly activeSubmodules: readonly string[];
+  readonly activeFeatures: readonly string[];
+  readonly internalRoles: readonly ClientInternalRoleRecord[];
+  readonly internalUsers: readonly ClientInternalUserRecord[];
 }

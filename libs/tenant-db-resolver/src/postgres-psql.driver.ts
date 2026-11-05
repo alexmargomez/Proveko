@@ -18,20 +18,30 @@ export interface PostgresBootstrapSummary {
   readonly reasonIfSkipped?: string;
 }
 
-/**
- * Ejecutor real de migraciones SQL sobre PostgreSQL en Docker / ALpanel (`psql`).
- * Garantiza que al construir o reiniciar los contenedores (`core-service` / `api-gateway`),
- * la base principal `proveko_control_db` (`proveko_db`) ejecute `migrations/core/*.sql`
- * (creando SuperAdmin, conexiones a cada BD de cliente, usuarios, roles y pagos Standby)
- * y aprovisione las bases de datos individuales de cada cliente con `migrations/clients/`.
- */
+export interface NewClientPostgresProvisionInput {
+  readonly tenantId: string;
+  readonly slug: string;
+  readonly companyName: string;
+  readonly nit: string;
+  readonly businessType: string;
+  readonly dbName: string;
+  readonly adminUsername: string;
+  readonly adminPassword: string;
+  readonly maxRolesAllowed: number;
+  readonly maxUsersAllowed: number;
+  readonly enabledServices: readonly string[];
+  readonly enabledSubmodules: readonly string[];
+  readonly enabledFeatures: readonly string[];
+  readonly monthlyAmountUsd: number;
+  readonly paymentReference: string;
+  readonly migrationsRootDir: string;
+}
+
 export class PostgresPsqlBootstrapRunner {
   public static resolveEnvConfig(): PostgresEnvConfig | null {
     const host = process.env['DB_HOST']?.trim();
     const password = process.env['POSTGRES_PASSWORD']?.trim();
-    if (!host || !password) {
-      return null;
-    }
+    if (!host || !password) return null;
     return {
       host,
       port: process.env['DB_PORT']?.trim() || '5432',
@@ -56,11 +66,7 @@ export class PostgresPsqlBootstrapRunner {
       },
     );
     if (res.error || res.status !== 0) {
-      return {
-        ok: false,
-        stdout: res.stdout ?? '',
-        stderr: res.stderr || res.error?.message || 'psql error',
-      };
+      return { ok: false, stdout: res.stdout ?? '', stderr: res.stderr || res.error?.message || 'psql error' };
     }
     return { ok: true, stdout: res.stdout ?? '', stderr: res.stderr ?? '' };
   }
@@ -68,17 +74,13 @@ export class PostgresPsqlBootstrapRunner {
   public static ensureDatabaseExists(cfg: PostgresEnvConfig, targetDbName: string): boolean {
     const safeDb = targetDbName.replace(/[^a-zA-Z0-9_]/g, '');
     if (!safeDb) return false;
-    const check = this.runPsql(cfg, cfg.coreDbName, [
+    const check = this.runPsql(cfg, 'postgres', [
       '-tAc',
       `SELECT 1 FROM pg_database WHERE datname = '${safeDb}';`,
     ]);
     if (!check.ok) return false;
     if (check.stdout.trim() === '1') return true;
-    const created = this.runPsql(cfg, cfg.coreDbName, [
-      '-c',
-      `CREATE DATABASE "${safeDb}";`,
-    ]);
-    return created.ok;
+    return this.runPsql(cfg, 'postgres', ['-c', `CREATE DATABASE "${safeDb}";`]).ok;
   }
 
   private static collectSqlFilesSorted(dirPath: string): string[] {
@@ -89,11 +91,8 @@ export class PostgresPsqlBootstrapRunner {
     );
     for (const entry of entries) {
       const fullPath = join(dirPath, entry.name);
-      if (entry.isDirectory()) {
-        results.push(...this.collectSqlFilesSorted(fullPath));
-      } else if (entry.isFile() && entry.name.endsWith('.sql')) {
-        results.push(fullPath);
-      }
+      if (entry.isDirectory()) results.push(...this.collectSqlFilesSorted(fullPath));
+      else if (entry.isFile() && entry.name.endsWith('.sql')) results.push(fullPath);
     }
     return results;
   }
@@ -121,50 +120,34 @@ export class PostgresPsqlBootstrapRunner {
       };
     }
 
-    // 1. Asegurar que la BD principal `proveko_control_db` exista
-    const checkCore = this.runPsql(cfg, 'postgres', [
-      '-tAc',
-      `SELECT 1 FROM pg_database WHERE datname = '${cfg.coreDbName.replace(/[^a-zA-Z0-9_]/g, '')}';`,
-    ]);
-    if (checkCore.ok && checkCore.stdout.trim() !== '1') {
-      this.runPsql(cfg, 'postgres', [
-        '-c',
-        `CREATE DATABASE "${cfg.coreDbName.replace(/[^a-zA-Z0-9_]/g, '')}";`,
-      ]);
-    }
+    this.ensureDatabaseExists(cfg, cfg.coreDbName);
+    // Eliminar BDs random previas si existían
+    this.runPsql(cfg, 'postgres', ['-c', 'DROP DATABASE IF EXISTS "db_agrovalle";']);
+    this.runPsql(cfg, 'postgres', ['-c', 'DROP DATABASE IF EXISTS "db_labrasa";']);
 
-    // 2. Ejecutar todas las migraciones de `migrations/core/*.sql` en `proveko_control_db`
-    const coreDir = join(migrationsRootDir, 'core');
-    const coreFiles = this.collectSqlFilesSorted(coreDir);
+    const coreFiles = this.collectSqlFilesSorted(join(migrationsRootDir, 'core'));
     const appliedCore: string[] = [];
     for (const filePath of coreFiles) {
       const sqlContent = readFileSync(filePath, 'utf8');
-      const execRes = this.runPsql(cfg, cfg.coreDbName, ['-c', sqlContent]);
-      if (execRes.ok) {
+      if (this.runPsql(cfg, cfg.coreDbName, ['-c', sqlContent]).ok) {
         appliedCore.push(filePath.split('/').pop() ?? filePath);
       }
     }
 
-    // 3. Consultar las BDs de clientes registradas en `public.tenant_database_connections`
     const clientDbsQuery = this.runPsql(cfg, cfg.coreDbName, [
       '-tAc',
       "SELECT db_name FROM public.tenant_database_connections WHERE status = 'ACTIVE' ORDER BY db_name ASC;",
     ]);
     const clientDbNames = clientDbsQuery.ok
-      ? clientDbsQuery.stdout
-          .split('\n')
-          .map((line) => line.trim())
-          .filter(Boolean)
+      ? clientDbsQuery.stdout.split('\n').map((l) => l.trim()).filter(Boolean)
       : ['db_version_prueba'];
 
-    // 4. Crear cada BD de cliente si no existe y aplicarle `migrations/clients/**/*.sql`
     const clientFiles = this.collectSqlFilesSorted(join(migrationsRootDir, 'clients'));
     const provisionedClientDbs: string[] = [];
     for (const clientDb of clientDbNames) {
       if (this.ensureDatabaseExists(cfg, clientDb)) {
         for (const clientSqlPath of clientFiles) {
-          const sql = readFileSync(clientSqlPath, 'utf8');
-          this.runPsql(cfg, clientDb, ['-c', sql]);
+          this.runPsql(cfg, clientDb, ['-c', readFileSync(clientSqlPath, 'utf8')]);
         }
         provisionedClientDbs.push(clientDb);
       }
@@ -176,5 +159,39 @@ export class PostgresPsqlBootstrapRunner {
       coreFilesApplied: appliedCore,
       clientDatabasesProvisioned: provisionedClientDbs,
     };
+  }
+
+  public static provisionNewClientDatabaseInPostgres(input: NewClientPostgresProvisionInput): boolean {
+    const cfg = this.resolveEnvConfig();
+    if (!cfg) return false;
+    const safeDb = input.dbName.replace(/[^a-zA-Z0-9_]/g, '');
+    if (!this.ensureDatabaseExists(cfg, safeDb)) return false;
+
+    const clientFiles = this.collectSqlFilesSorted(join(input.migrationsRootDir, 'clients'));
+    for (const clientSqlPath of clientFiles) {
+      this.runPsql(cfg, safeDb, ['-c', readFileSync(clientSqlPath, 'utf8')]);
+    }
+
+    const esc = (v: string) => v.replace(/'/g, "''");
+    const insertSql = `
+      INSERT INTO "control_plane"."tenants" ("id", "slug", "legal_name", "tier", "cell_id", "db_name", "status")
+      VALUES ('${esc(input.tenantId)}', '${esc(input.slug)}', '${esc(input.companyName)}', 'PRO', 'cell-alpanel-primary', '${safeDb}', 'ACTIVE')
+      ON CONFLICT ("id") DO NOTHING;
+      INSERT INTO "public"."tenant_database_connections" (
+        "connection_id", "tenant_id", "company_name", "nit", "business_type",
+        "db_host", "db_port", "db_name", "db_user", "db_password_secret_ref",
+        "admin_username", "admin_password_hint", "max_roles_allowed", "max_users_allowed",
+        "enabled_services_json", "enabled_submodules_json", "enabled_features_json", "status"
+      ) VALUES (
+        'conn-${esc(input.tenantId)}', '${esc(input.tenantId)}', '${esc(input.companyName)}', '${esc(input.nit)}', '${esc(input.businessType)}',
+        'db', 5432, '${safeDb}', 'postgres', 'env:POSTGRES_PASSWORD',
+        '${esc(input.adminUsername)}', '${esc(input.adminPassword)}', ${Number(input.maxRolesAllowed) || 5}, ${Number(input.maxUsersAllowed) || 10},
+        '${esc(JSON.stringify(input.enabledServices))}'::jsonb, '${esc(JSON.stringify(input.enabledSubmodules))}'::jsonb, '${esc(JSON.stringify(input.enabledFeatures))}'::jsonb, 'ACTIVE'
+      ) ON CONFLICT ("tenant_id") DO NOTHING;
+      INSERT INTO "public"."subscription_payments" ("payment_id", "tenant_id", "plan_name", "monthly_amount_usd", "payment_gateway_state", "payment_reference")
+      VALUES ('pay-${esc(input.tenantId)}', '${esc(input.tenantId)}', '${esc(input.businessType)}', ${Number(input.monthlyAmountUsd) || 0}, 'STANDBY_MICROSERVICE', '${esc(input.paymentReference)}')
+      ON CONFLICT ("payment_id") DO NOTHING;
+    `;
+    return this.runPsql(cfg, cfg.coreDbName, ['-c', insertSql]).ok;
   }
 }

@@ -1,191 +1,140 @@
 /**
- * Runtime de Cliente — Acciones Interactivas de los 6 Centros Operativos (SOLID SRP).
+ * Runtime Cliente (Parte 4): Gestión de Roles/Usuarios Internos en la BD del Cliente (con cuotas),
+ * Pestaña "Necesito otra funcionalidad" y Creación de Cliente + BD desde Ventana de Pago Standby.
  */
 export function renderPlatformActionsRuntimeJs(): string {
   return `
-    window.provekoUpdatePosHeader = function(field, val) { STATE.posDraft[field] = val; };
+  function pkRenderInternalRbacPane(client) {
+    var el = document.getElementById('ws-pane-internal-rbac');
+    if (!el) return;
+    var rRows = '';
+    for (var i = 0; i < client.internalRoles.length; i++) {
+      var rl = client.internalRoles[i];
+      rRows += '<tr><td><strong>' + pkEsc(rl.name) + '</strong></td><td>' + pkEsc(rl.description) + '</td>' +
+        '<td><span class="badge badge-blue">' + pkEsc(rl.allowedSubmodules.join(', ')) + '</span></td></tr>';
+    }
+    var uRows = '';
+    for (var j = 0; j < client.internalUsers.length; j++) {
+      var u = client.internalUsers[j];
+      uRows += '<tr><td><strong>' + pkEsc(u.username) + '</strong></td><td>' + pkEsc(u.fullName) + '</td>' +
+        '<td><span class="badge badge-emerald">' + pkEsc(u.internalRoleName) + '</span></td>' +
+        '<td><code>' + pkEsc(u.passwordHint) + '</code></td></tr>';
+    }
+    var roleOpts = '';
+    for (var k = 0; k < client.internalRoles.length; k++) {
+      roleOpts += '<option value="' + pkEsc(client.internalRoles[k].roleId) + '">' + pkEsc(client.internalRoles[k].name) + '</option>';
+    }
+    el.innerHTML =
+      '<div class="card" style="margin-bottom:14px">' +
+      '<div class="card-head"><div><div class="card-title">👥 Roles Internos en tu Base de Datos (' + pkEsc(client.dbName) + ')</div>' +
+      '<div style="font-size:12px;color:var(--pk-muted)">Se crean los roles básicos por defecto y puedes modificarlos o agregar nuevos dentro del cupo asignado por SuperAdmin.</div></div>' +
+      '<span class="badge badge-blue">Cupo de Roles: ' + client.internalRoles.length + ' / ' + client.maxRolesAllowed + '</span></div>' +
+      '<div class="card-body">' +
+      '<div class="grid-3" style="margin-bottom:12px">' +
+      '<div class="field"><label>Nombre del Nuevo Rol Interno</label><input type="text" id="new-role-name" placeholder="Ej: Auditor de Bodega" /></div>' +
+      '<div class="field"><label>Descripción de Permisos</label><input type="text" id="new-role-desc" placeholder="Ej: Revisión de traslados y existencias" /></div>' +
+      '<div class="field" style="justify-content:flex-end"><button type="button" class="btn btn-primary" id="btn-create-internal-role">+ Crear Rol Interno</button></div>' +
+      '</div>' +
+      '<div class="table-wrap"><table><thead><tr><th>Rol Interno</th><th>Alcance</th><th>Submódulos Permitidos</th></tr></thead><tbody>' + rRows + '</tbody></table></div>' +
+      '</div></div>' +
+      '<div class="card">' +
+      '<div class="card-head"><div><div class="card-title">🔐 Usuarios de tu Empresa (Conectados a ' + pkEsc(client.dbName) + ')</div>' +
+      '<div style="font-size:12px;color:var(--pk-muted)">Cuenta Admin generada automáticamente + usuarios operativos asignados a tus roles internos.</div></div>' +
+      '<span class="badge badge-emerald">Cupo de Usuarios: ' + client.internalUsers.length + ' / ' + client.maxUsersAllowed + '</span></div>' +
+      '<div class="card-body">' +
+      '<div class="grid-3" style="margin-bottom:12px">' +
+      '<div class="field"><label>Nombre Completo</label><input type="text" id="new-user-fullname" placeholder="Ej: Camilo Vargas" /></div>' +
+      '<div class="field"><label>Usuario de Acceso</label><input type="text" id="new-user-username" placeholder="Ej: cajero.camilo" /></div>' +
+      '<div class="field"><label>Rol Interno Asignado</label><select id="new-user-role">' + roleOpts + '</select></div>' +
+      '</div>' +
+      '<div class="row-actions" style="justify-content:flex-end;margin-bottom:12px"><button type="button" class="btn btn-emerald" id="btn-create-internal-user">+ Crear Usuario en mi Empresa</button></div>' +
+      '<div class="table-wrap"><table><thead><tr><th>Usuario</th><th>Nombre</th><th>Rol Interno</th><th>Credencial</th></tr></thead><tbody>' + uRows + '</tbody></table></div>' +
+      '</div></div>';
+  }
 
-    window.provekoAddPosLine = function() {
-      STATE.posDraft.lines.push({ description: 'Nuevo Producto / Servicio Comercial', qty: 1, unitPrice: 45000, discountPct: 0, taxRate: 19 });
-      renderInvoicingPosCenter();
-    };
+  function pkRenderNeedFeaturePane(client) {
+    var el = document.getElementById('ws-pane-need-feature');
+    if (!el) return;
+    var cards = '';
+    var svcs = BOOT.services || [];
+    for (var i = 0; i < svcs.length; i++) {
+      var s = svcs[i];
+      var subHtml = '';
+      for (var j = 0; j < s.submodules.length; j++) {
+        var sub = s.submodules[j];
+        var hasSub = client.activeSubmodules.indexOf(sub.moduleKey) !== -1;
+        subHtml += '<div class="comp-toggle-pill">' +
+          '<span>' + pkEsc(sub.tabIcon + ' Submódulo: ' + sub.externalSubmoduleName) + '</span>' +
+          (hasSub
+            ? '<span class="badge badge-emerald">Activo</span>'
+            : '<button type="button" class="btn btn-primary btn-sm" data-req-tier="SUBMODULO" data-req-key="' + pkEsc(sub.moduleKey) + '" data-req-label="' + pkEsc(sub.externalSubmoduleName) + '">Solicitar / Activar (+$' + sub.monthlyAddonUsd + ')</button>') +
+          '</div>';
+      }
+      for (var f = 0; f < s.features.length; f++) {
+        var feat = s.features[f];
+        var hasFeat = client.activeFeatures.indexOf(feat.componentKey) !== -1;
+        subHtml += '<div class="comp-toggle-pill">' +
+          '<span>✨ Funcionalidad: ' + pkEsc(feat.externalName) + '</span>' +
+          (hasFeat
+            ? '<span class="badge badge-blue">Activa</span>'
+            : '<button type="button" class="btn btn-outline btn-sm" data-req-tier="FUNCIONALIDAD" data-req-key="' + pkEsc(feat.componentKey) + '" data-req-label="' + pkEsc(feat.externalName) + '">Solicitar Funcionalidad (+$' + feat.monthlyAddonUsd + ')</button>') +
+          '</div>';
+      }
+      cards += '<div class="center-pick-card">' +
+        '<div class="center-pick-head"><div class="center-pick-title">' + pkEsc(s.icon + ' ' + s.externalPrincipalModuleName) + '</div></div>' +
+        '<div class="center-pick-desc">' + pkEsc(s.subtitle) + '</div>' +
+        '<div class="comp-toggle-list">' + subHtml + '</div></div>';
+    }
+    el.innerHTML =
+      '<div class="card">' +
+      '<div class="card-head"><div><span class="badge badge-amber">AMPLIACIÓN DE CAPACIDADES EMPRESARIALES</span>' +
+      '<h2 style="margin:4px 0 0;font-size:18px">✨ Necesito otra funcionalidad, Submódulo o Módulo Principal</h2>' +
+      '<div style="font-size:12px;color:var(--pk-muted)">Las pantallas operativas permanecen limpias. Desde esta pestaña exclusiva puedes solicitar o activar nuevos Submódulos o Funcionalidades (como Firma de encargado o Seleccionar transportista).</div></div></div>' +
+      '<div class="card-body"><div class="center-selector-grid">' + cards + '</div></div></div>';
+  }
 
-    window.provekoUpdatePosLine = function(idx, field, val) {
-      if (!STATE.posDraft.lines[idx]) return;
-      STATE.posDraft.lines[idx][field] = val;
-      renderInvoicingPosCenter();
+  function pkConfirmStandbyCheckout() {
+    var compName = ((document.getElementById('pay-modal-company') || {}).value || '').trim() || 'Empresa Registrada S.A.S.';
+    var nitVal = ((document.getElementById('reg-company-nit') || {}).value || '').trim() || '901.880.110-2';
+    var slug = compName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 20) || 'cliente';
+    var planInfo = pkComputeRegistrationPlan();
+    var newClient = {
+      tenantId: 'tnt-' + slug + '-' + String(Date.now()).slice(-3),
+      companyName: compName, nit: nitVal,
+      businessTypeId: STATE.selectedBusinessTypeId,
+      businessTypeName: planInfo.preset ? planInfo.preset.name : 'Plan Empresarial',
+      dbName: 'db_' + slug, dbHost: 'db', dbPort: 5432,
+      paymentStatus: 'STANDBY_VERIFICADO', monthlyUsd: planInfo.totalUsd,
+      adminUsername: 'admin.' + slug,
+      adminPasswordHint: 'PkAdmin#' + slug.slice(0, 4).toUpperCase() + '2026!',
+      maxRolesAllowed: 5, maxUsersAllowed: 10,
+      activePrincipalServices: planInfo.services,
+      activeSubmodules: planInfo.submodules,
+      activeFeatures: planInfo.features,
+      internalRoles: [
+        { roleId: 'rol-admin', name: 'Administrador General (Cuenta Admin)', description: 'Control total en la BD del cliente.', allowedSubmodules: ['*'] },
+        { roleId: 'rol-cajero', name: 'Cajero y Facturador', description: 'Caja POS y Facturación.', allowedSubmodules: ['mod-pos', 'mod-dian'] },
+        { roleId: 'rol-bodega', name: 'Encargado de Bodega', description: 'Existencias, Bodegas y Traslados.', allowedSubmodules: ['mod-stock', 'mod-warehouses', 'mod-transfers'] }
+      ],
+      internalUsers: [
+        { userId: 'u-admin', username: 'admin.' + slug, fullName: 'Administrador ' + compName, email: 'admin@' + slug + '.co', internalRoleId: 'rol-admin', internalRoleName: 'Administrador General (Cuenta Admin)', passwordHint: 'PkAdmin#' + slug.slice(0, 4).toUpperCase() + '2026!', isClientAdmin: true }
+      ]
     };
-
-    window.provekoRemovePosLine = function(idx) {
-      if (STATE.posDraft.lines.length <= 1) return;
-      STATE.posDraft.lines.splice(idx, 1);
-      renderInvoicingPosCenter();
-    };
-
-    window.provekoEmitInvoice = function(mode) {
-      let subtotal = 0, discount = 0, tax = 0;
-      STATE.posDraft.lines.forEach((l) => {
-        const g = l.qty * l.unitPrice;
-        const d = hasComponent('comp:line-discounts') ? g * (l.discountPct / 100) : 0;
-        const b = g - d;
-        subtotal += b; discount += d; tax += b * (l.taxRate / 100);
-      });
-      const tip = hasComponent('comp:tip-service') ? subtotal * ((STATE.posDraft.tipPct || 0) / 100) : 0;
-      const grandTotal = subtotal + tax + tip;
-      const prefix = mode === 'COTIZACION' ? 'COT-' : (STATE.posDraft.docType.includes('DIAN') ? 'FAC-' : 'POS-');
-      STATE.db.invoices.unshift({
-        id: prefix + Math.floor(1000 + Math.random() * 8999),
-        type: mode === 'COTIZACION' ? 'Cotización Comercial' : STATE.posDraft.docType,
-        customerName: STATE.posDraft.customerName,
-        customerNit: '901.445.889-1',
-        cashierName: STATE.posDraft.cashierName,
-        paymentMethod: STATE.posDraft.paymentMethod,
-        subtotal: Math.round(subtotal), discount: Math.round(discount), tax: Math.round(tax), tip: Math.round(tip),
-        grandTotal: Math.round(grandTotal), issuedAt: 'Ahora mismo', itemsCount: STATE.posDraft.lines.length, cufe: 'SHA384-VERIFIED',
-      });
-      renderInvoicingPosCenter();
-    };
-
-    window.provekoCreateProduct = function() {
-      STATE.db.products.unshift({
-        id: 'prd-' + Date.now(),
-        sku: document.getElementById('prd-sku').value || 'SKU-NEW',
-        barcode: '770' + Math.floor(100000000 + Math.random() * 899999999),
-        name: document.getElementById('prd-name').value || 'Producto Nuevo',
-        category: document.getElementById('prd-cat').value, unit: 'UND',
-        warehouse: document.getElementById('prd-wh').value || 'Bodega Central',
-        stock: Number(document.getElementById('prd-stock').value) || 0, minStock: 10,
-        unitCost: Number(document.getElementById('prd-cost').value) || 0,
-        salePrice: Number(document.getElementById('prd-price').value) || 0, taxRate: 19,
-        lotCode: document.getElementById('prd-lot') ? document.getElementById('prd-lot').value : 'LOTE-GEN',
-        expiration: '2027-06-30',
-      });
-      renderInventoryAndRecipesCenter();
-    };
-
-    window.provekoAddRecipeIngredient = function() {
-      STATE.recipeDraft.ingredients.push({ name: 'Nuevo Insumo de Receta', qty: 0.25, unit: 'KG', unitCost: 22000, wastePct: 3 });
-      renderInventoryAndRecipesCenter();
-    };
-
-    window.provekoUpdateRecipeIng = function(idx, field, val) {
-      if (!STATE.recipeDraft.ingredients[idx]) return;
-      STATE.recipeDraft.ingredients[idx][field] = val;
-      renderInventoryAndRecipesCenter();
-    };
-
-    window.provekoRemoveRecipeIng = function(idx) {
-      if (STATE.recipeDraft.ingredients.length <= 1) return;
-      STATE.recipeDraft.ingredients.splice(idx, 1);
-      renderInventoryAndRecipesCenter();
-    };
-
-    window.provekoSaveVisualRecipe = function() {
-      const totalCost = STATE.recipeDraft.ingredients.reduce((a, i) => a + (i.qty * i.unitCost * (1 + i.wastePct / 100)), 0);
-      STATE.db.recipes.unshift({
-        id: 'rec-' + Date.now(), code: STATE.recipeDraft.code, productName: STATE.recipeDraft.productName,
-        portions: 1, salePrice: STATE.recipeDraft.salePrice, totalCost: Math.round(totalCost),
-        ingredients: [...STATE.recipeDraft.ingredients],
-      });
-      renderInventoryAndRecipesCenter();
-    };
-
-    window.provekoCreateTableOrder = function() {
-      STATE.db.tablesAndOrders.unshift({
-        id: 'MESA-' + Math.floor(10 + Math.random() * 89),
-        name: document.getElementById('tbl-name').value || 'Mesa Nueva',
-        diners: Number(document.getElementById('tbl-diners').value) || 2,
-        waiter: document.getElementById('tbl-waiter').value || 'Mesero Turno',
-        status: 'EN_COCINA', currentOrder: [document.getElementById('tbl-order').value || 'Pedido en preparación'], total: 128000,
-      });
-      renderGastroAndReservationsCenter();
-    };
-
-    window.provekoAdvanceTableStatus = function(idx) {
-      const t = STATE.db.tablesAndOrders[idx];
-      if (!t) return;
-      t.status = t.status === 'EN_COCINA' ? 'LISTO_PARA_SERVIR' : (t.status === 'LISTO_PARA_SERVIR' ? 'CUENTA_ABIERTA' : 'DISPONIBLE');
-      if (t.status === 'DISPONIBLE') { t.currentOrder = []; t.total = 0; t.diners = 0; }
-      renderGastroAndReservationsCenter();
-    };
-
-    window.provekoCreateReservationOrTicket = function() {
-      STATE.db.reservationsAndTickets.unshift({
-        id: 'RES-' + Date.now(), kind: document.getElementById('res-kind').value,
-        holderName: document.getElementById('res-holder').value || 'Cliente Reserva',
-        documentId: document.getElementById('res-doc').value || '900.000.000',
-        resourceName: document.getElementById('res-resource').value || 'Cupo Reservado',
-        dateSlot: document.getElementById('res-date').value || 'Hoy', spots: 4,
-        ticketCode: 'TCK-' + Math.floor(1000 + Math.random() * 8999) + '-OK',
-        amount: Number(document.getElementById('res-amount').value) || 150000, status: 'CONFIRMADA',
-      });
-      renderGastroAndReservationsCenter();
-    };
-
-    window.provekoRecalcNetWeight = function() {
-      const g = Number(document.getElementById('trk-gross').value) || 0;
-      const t = Number(document.getElementById('trk-tare').value) || 0;
-      const nEl = document.getElementById('trk-net');
-      if (nEl) nEl.value = String(Math.max(0, g - t));
-    };
-
-    window.provekoRegisterTruckInYard = function() {
-      const gross = document.getElementById('trk-gross') ? Number(document.getElementById('trk-gross').value) : 48000;
-      const tare = document.getElementById('trk-tare') ? Number(document.getElementById('trk-tare').value) : 16500;
-      STATE.db.trucksInYard.unshift({
-        id: 'TRK-' + Date.now(),
-        tractorPlate: (document.getElementById('trk-plate').value || 'AAA-000').toUpperCase(),
-        trailerPlate: (document.getElementById('trk-trailer').value || 'R-00000').toUpperCase(),
-        vehicleType: document.getElementById('trk-type').value,
-        driverName: document.getElementById('trk-driver').value || 'Conductor Asignado', driverId: 'CC Verificada',
-        carrier: document.getElementById('trk-carrier').value || 'Transportadora',
-        cargoProduct: document.getElementById('trk-cargo').value || 'Carga General',
-        dock: document.getElementById('trk-dock') ? document.getElementById('trk-dock').value : 'Muelle #1',
-        grossWeightKg: gross, tareWeightKg: tare, netWeightKg: Math.max(0, gross - tare),
-        sealCode: document.getElementById('trk-seal') ? document.getElementById('trk-seal').value : 'PREC-OK',
-        yardStatus: 'EN_BASCULA_PESAJE', entryTime: 'Ahora',
-      });
-      renderLogisticsAndFleetCenter();
-    };
-
-    window.provekoAdvanceTruckStatus = function(idx) {
-      const trk = STATE.db.trucksInYard[idx];
-      if (!trk) return;
-      const flow = ['EN_BASCULA_PESAJE', 'CARGANDO_EN_MUELLE', 'DESTARE_SALIDA', 'DESPACHADO_CON_GUIA'];
-      trk.yardStatus = flow[(flow.indexOf(trk.yardStatus) + 1) % flow.length];
-      renderLogisticsAndFleetCenter();
-    };
-
-    window.provekoCreateThirdParty = function() {
-      STATE.db.thirdParties.unshift({
-        id: 'ter-' + Date.now(), taxId: document.getElementById('tp-nit').value || '900.000.000-1',
-        legalName: document.getElementById('tp-name').value || 'Nuevo Tercero',
-        thirdPartyType: document.getElementById('tp-type').value,
-        phone: document.getElementById('tp-phone').value || '+57 300 000 0000', email: 'contacto@tercero.co',
-        city: document.getElementById('tp-city').value || 'Bogotá',
-        creditLimit: document.getElementById('tp-limit') ? Number(document.getElementById('tp-limit').value) : 10000000,
-        balanceDue: 0, paymentTermsDays: 30,
-      });
-      renderCrmAndFinanceCenter();
-    };
-
-    window.provekoApplyQuickPayment = function(idx) {
-      const tp = STATE.db.thirdParties[idx];
-      if (!tp) return;
-      tp.balanceDue = Math.max(0, tp.balanceDue - 1500000);
-      renderCrmAndFinanceCenter();
-    };
-
-    window.provekoCreateTenantUser = function() {
-      const tenant = getActiveTenant();
-      STATE.db.users.push({
-        id: 'usr-' + Date.now(), tenantId: tenant.tenantId,
-        fullName: document.getElementById('usr-name').value || 'Nuevo Empleado',
-        username: document.getElementById('usr-email').value || 'usuario@empresa.co',
-        password: document.getElementById('usr-pass').value || 'Clave2026!',
-        roleKey: document.getElementById('usr-role').value, branch: tenant.activeBranch, active: true,
-      });
-      renderUsersAndRbacCenter();
-    };
-  `;
+    STATE.clients.push(newClient);
+    STATE.lastGeneratedClient = newClient;
+    try {
+      fetch('/api/v1/payments/checkout/standby', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(newClient)
+      }).catch(function() {});
+    } catch (_e) {}
+    document.getElementById('generated-credentials-box').innerHTML =
+      '<div>Empresa: <strong>' + pkEsc(newClient.companyName) + '</strong></div>' +
+      '<div>Base de Datos PostgreSQL Creada: <strong>' + pkEsc(newClient.dbName) + '</strong></div>' +
+      '<div>Rol Global: <strong>cliente</strong> · Cuenta Admin: <strong>' + pkEsc(newClient.adminUsername) + '</strong></div>' +
+      '<div>Contraseña Inicial: <strong>' + pkEsc(newClient.adminPasswordHint) + '</strong></div>';
+    document.getElementById('payment-step-checkout').style.display = 'none';
+    document.getElementById('payment-step-credentials').style.display = 'block';
+  }
+`;
 }

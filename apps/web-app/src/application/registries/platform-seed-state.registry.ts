@@ -1,127 +1,149 @@
-export function buildInitialPlatformSeedState(): Record<string, unknown> {
-  return {
-    tenants: [
+import type { ClientDatabaseTenantRecord } from '../../domain/contracts/platform-hub.contract.js';
+
+/**
+ * Estado inicial limpio:
+ * - Cero empresas random pre-creadas.
+ * - En Día 0 solo existe `db_version_prueba` (usada exclusivamente por el apartado Demo)
+ *   además de `proveko_control_db` (Base Principal con los 4 roles: superadmin, desarrollador, auxiliar, cliente).
+ * - Cada cliente real se crea cuando completa "Registra tu Negocio" o cuando lo registra el SuperAdmin.
+ */
+export const INITIAL_CLIENT_DATABASES: readonly ClientDatabaseTenantRecord[] = [
+  {
+    tenantId: 'tnt-demo',
+    companyName: 'Entorno Demo Oficial Proveko',
+    nit: '900.000.000-1',
+    businessTypeId: 'agro-logistica-bascula',
+    businessTypeName: 'Entorno Demo Integral (Todos los Módulos Principales)',
+    dbName: 'db_version_prueba',
+    dbHost: 'db',
+    dbPort: 5432,
+    paymentStatus: 'DEMO',
+    monthlyUsd: 0,
+    adminUsername: 'demo',
+    adminPasswordHint: 'DemoProveko2026!',
+    maxRolesAllowed: 6,
+    maxUsersAllowed: 15,
+    activePrincipalServices: ['srv-invoicing', 'srv-inventory', 'srv-gastro', 'srv-hotel', 'srv-crm', 'srv-finance'],
+    activeSubmodules: [
+      'mod-pos', 'mod-dian', 'mod-quotes',
+      'mod-stock', 'mod-warehouses', 'mod-transfers', 'mod-recipes', 'mod-lots', 'mod-scale',
+      'mod-tables', 'mod-kds', 'mod-split',
+      'mod-bookings', 'mod-tickets', 'mod-rooms',
+      'mod-directory', 'mod-pipelines', 'mod-loyalty',
+      'mod-cashbook', 'mod-arap', 'mod-puc',
+    ],
+    activeFeatures: [
+      'comp-cashier-name', 'comp-tip', 'comp-line-discount',
+      'comp-manager-signature', 'comp-carrier-select', 'comp-scale-tare',
+      'comp-waiter-assign', 'comp-qr-ticket',
+    ],
+    internalRoles: [
       {
-        tenantId: 'emp-agroindustrial-del-valle',
-        companyName: 'Grupo Agroindustrial & Logístico del Valle S.A.S.',
-        nit: '901.482.310-4',
-        city: 'Cali, Colombia',
-        planName: 'Plan Corporativo Integral Multi-Operación',
-        paymentStatus: 'STANDBY_APPROVED',
-        monthlyCop: 313000,
-        adminUsername: 'admin@agrovalle.co',
-        adminPassword: 'AgroValle2026!',
-        activeBranch: 'Planta & Sedes Principales',
-        enabledCenters: [
-          'center:invoicing-pos',
-          'center:inventory-recipes',
-          'center:gastro-reservations',
-          'center:logistics-fleet',
-          'center:crm-finance',
-          'center:users-rbac',
-        ],
-        enabledComponents: [
-          'comp:cashier-shift',
-          'comp:dian-electronic',
-          'comp:line-discounts',
-          'comp:tip-service',
-          'comp:quotes-converter',
-          'comp:recipes-bom',
-          'comp:lots-fefo',
-          'comp:warehouse-transfers',
-          'comp:gastro-tables-kds',
-          'comp:split-check-seats',
-          'comp:slot-reservations',
-          'comp:ticket-issuance',
-          'comp:weighbridge-scale',
-          'comp:dock-turn-queue',
-          'comp:seal-manifest',
-          'comp:credit-portfolio',
-          'comp:double-entry-puc',
-        ],
+        roleId: 'rol-admin',
+        name: 'Administrador General (Cuenta Admin)',
+        description: 'Control completo de la base de datos de la empresa, roles internos y usuarios.',
+        allowedSubmodules: ['*'],
       },
       {
-        tenantId: 'emp-restaurante-la-brasa',
-        companyName: 'Gastrobar & Eventos La Brasa Imperial S.A.S.',
-        nit: '900.812.904-1',
-        city: 'Medellín, Colombia',
-        planName: 'Plan Gastronomía, Reservas, Tickets e Inventario',
-        paymentStatus: 'STANDBY_APPROVED',
-        monthlyCop: 186000,
-        adminUsername: 'admin@labrasaimperial.co',
-        adminPassword: 'Brasa2026!',
-        activeBranch: 'Sede Poblado',
-        enabledCenters: [
-          'center:invoicing-pos',
-          'center:inventory-recipes',
-          'center:gastro-reservations',
-          'center:crm-finance',
-          'center:users-rbac',
-        ],
-        enabledComponents: [
-          'comp:cashier-shift',
-          'comp:dian-electronic',
-          'comp:tip-service',
-          'comp:recipes-bom',
-          'comp:gastro-tables-kds',
-          'comp:split-check-seats',
-          'comp:slot-reservations',
-          'comp:ticket-issuance',
-          'comp:credit-portfolio',
-        ],
+        roleId: 'rol-cajero',
+        name: 'Cajero y Facturador',
+        description: 'Operación de Caja POS, Facturación Electrónica DIAN y Cotizaciones.',
+        allowedSubmodules: ['mod-pos', 'mod-dian', 'mod-quotes', 'mod-directory'],
       },
-    ],
-    users: [
-      { id: 'usr-1', tenantId: 'emp-agroindustrial-del-valle', fullName: 'Carlos Eduardo Mendoza', username: 'admin@agrovalle.co', password: 'AgroValle2026!', roleKey: 'ADMIN_CLIENTE', branch: 'Planta & Sedes Principales', active: true },
-      { id: 'usr-2', tenantId: 'emp-agroindustrial-del-valle', fullName: 'Laura Valentina Ríos', username: 'cajero@agrovalle.co', password: 'Cajero2026!', roleKey: 'CAJERO_FACTURADOR', branch: 'Punto de Venta Central', active: true },
-      { id: 'usr-3', tenantId: 'emp-agroindustrial-del-valle', fullName: 'Jorge Hernán Ospina', username: 'bascula@agrovalle.co', password: 'Bascula2026!', roleKey: 'CONTROL_TRACTOMULAS', branch: 'Patio de Tractomulas Norte', active: true },
-      { id: 'usr-4', tenantId: 'emp-restaurante-la-brasa', fullName: 'Juliana Restrepo', username: 'admin@labrasaimperial.co', password: 'Brasa2026!', roleKey: 'ADMIN_CLIENTE', branch: 'Sede Poblado', active: true },
-    ],
-    products: [
-      { id: 'prd-1', sku: 'CAF-EXP-500', barcode: '770123450001', name: 'Café Origen Especial Tostado 500g', category: 'Alimentos y Bebidas', unit: 'UND', warehouse: 'Bodega Central', stock: 145, minStock: 30, unitCost: 18500, salePrice: 34000, taxRate: 19, lotCode: 'LOTE-2026-A1', expiration: '2027-08-15' },
-      { id: 'prd-2', sku: 'LOMO-RES-KG', barcode: '770123450002', name: 'Corte Lomo Fino Madurado (Porción 350g)', category: 'Restaurante / Cocina', unit: 'PORCIÓN', warehouse: 'Cuarto Frío Cocina', stock: 42, minStock: 15, unitCost: 29000, salePrice: 68000, taxRate: 8, lotCode: 'LOTE-CAR-09', expiration: '2026-12-01' },
-      { id: 'prd-3', sku: 'GRANEL-MAIZ-TON', barcode: '770123450003', name: 'Maíz Amarillo Industrial a Granel (Tonelada)', category: 'Agroindustrial / Granel', unit: 'TON', warehouse: 'Silo Principal #2', stock: 380, minStock: 50, unitCost: 1150000, salePrice: 1490000, taxRate: 5, lotCode: 'SILO-2026-11', expiration: '2027-11-30' },
-      { id: 'prd-4', sku: 'TCK-VIP-EVENTO', barcode: '770123450004', name: 'Pase / Ticket VIP Evento & Reserva Mesa', category: 'Tickets y Cupos', unit: 'TICKET', warehouse: 'Taquilla Digital', stock: 200, minStock: 10, unitCost: 15000, salePrice: 85000, taxRate: 0, lotCode: 'EV-2026', expiration: '2026-12-31' },
-    ],
-    recipes: [
       {
-        id: 'rec-1',
-        code: 'ESC-LOMO-TRAPO',
-        productName: 'Plato Fuerte: Lomo al Trapo con Reducción de Café (1 Porción)',
-        portions: 1,
-        salePrice: 68000,
-        totalCost: 31450,
-        ingredients: [
-          { name: 'Lomo Fino Madurado', qty: 0.35, unit: 'KG', unitCost: 75000, wastePct: 5, lineCost: 27562.5 },
-          { name: 'Café Especial Molido', qty: 0.03, unit: 'KG', unitCost: 37000, wastePct: 2, lineCost: 1132.2 },
-          { name: 'Guarnición Rústica y Especias', qty: 1, unit: 'PORCIÓN', unitCost: 2755.3, wastePct: 0, lineCost: 2755.3 },
-        ],
+        roleId: 'rol-bodega',
+        name: 'Encargado de Bodega y Báscula',
+        description: 'Existencias, Bodegas, Solicitudes de Traslado, Lotes y Báscula Camionera.',
+        allowedSubmodules: ['mod-stock', 'mod-warehouses', 'mod-transfers', 'mod-recipes', 'mod-lots', 'mod-scale'],
+      },
+      {
+        roleId: 'rol-operador',
+        name: 'Operador de Servicio / Taquilla',
+        description: 'Salón de mesas, comandas KDS, reserva de cupos y emisión de tickets.',
+        allowedSubmodules: ['mod-tables', 'mod-kds', 'mod-split', 'mod-bookings', 'mod-tickets', 'mod-rooms'],
       },
     ],
-    invoices: [
-      { id: 'FAC-1001', type: 'Factura Electrónica DIAN', customerName: 'Comercializadora Andina S.A.S.', customerNit: '901.445.889-1', cashierName: 'Laura Valentina Ríos', paymentMethod: 'Transferencia Bancaria', subtotal: 1490000, discount: 0, tax: 74500, tip: 0, grandTotal: 1564500, issuedAt: 'Hoy 09:15 AM', itemsCount: 2, cufe: '9a8f...44d1' },
-      { id: 'POS-4022', type: 'Tirilla POS Mostrador', customerName: 'Consumidor Final', customerNit: '222222222222', cashierName: 'Laura Valentina Ríos', paymentMethod: 'Efectivo', subtotal: 136000, discount: 0, tax: 10880, tip: 13600, grandTotal: 160480, issuedAt: 'Hoy 10:02 AM', itemsCount: 3, cufe: 'TIRILLA-LOCAL' },
+    internalUsers: [
+      {
+        userId: 'usr-demo-admin',
+        username: 'demo',
+        fullName: 'Administrador Demo Proveko',
+        email: 'demo@proveko.com',
+        internalRoleId: 'rol-admin',
+        internalRoleName: 'Administrador General (Cuenta Admin)',
+        passwordHint: 'DemoProveko2026!',
+        isClientAdmin: true,
+      },
     ],
-    tablesAndOrders: [
-      { id: 'MESA-01', name: 'Mesa 01 · Terraza Principal', diners: 4, waiter: 'Andrés Mejía', status: 'EN_COCINA', currentOrder: ['2x Lomo al Trapo', '2x Limonada de Coco'], total: 164000 },
-      { id: 'MESA-02', name: 'Mesa 02 · Salón VIP', diners: 2, waiter: 'Andrés Mejía', status: 'CUENTA_ABIERTA', currentOrder: ['1x Café Origen 500g', '2x Cappuccino Artesanal'], total: 58000 },
-      { id: 'MESA-03', name: 'Mesa 03 · Barra Central', diners: 0, waiter: 'Sin asignar', status: 'DISPONIBLE', currentOrder: [], total: 0 },
-    ],
-    reservationsAndTickets: [
-      { id: 'RES-901', kind: 'RESERVA_CUPO', holderName: 'Dra. Mariana Vélez', documentId: '1.020.445.910', resourceName: 'Salón Reservado / Habitación Suite 302', dateSlot: '2026-11-06 19:30', spots: 6, ticketCode: 'TCK-8841-VIP', amount: 420000, status: 'CONFIRMADA' },
-      { id: 'RES-902', kind: 'TICKET_ENTRADA', holderName: 'Grupo Empresarial Pacífico', documentId: '900.512.331-9', resourceName: 'Cupo Evento Corporativo + Cena', dateSlot: '2026-11-07 18:00', spots: 12, ticketCode: 'TCK-8842-CORP', amount: 1020000, status: 'CHECK_IN_ACTIVO' },
-    ],
-    trucksInYard: [
-      { id: 'TRK-01', tractorPlate: 'WXY-942', trailerPlate: 'R-44810', vehicleType: 'Tractomula 3S3 (6 Ejes)', driverName: 'Hernando Gómez', driverId: '71.688.420', carrier: 'Transportes del Pacífico S.A.', cargoProduct: 'Maíz Amarillo Industrial a Granel', dock: 'Muelle #2 - Silos', grossWeightKg: 52400, tareWeightKg: 17800, netWeightKg: 34600, sealCode: 'PREC-99812', yardStatus: 'CARGANDO_EN_MUELLE', entryTime: '08:20 AM' },
-      { id: 'TRK-02', tractorPlate: 'ttz-318', trailerPlate: 'R-51209', vehicleType: 'Dobletroque Rígido', driverName: 'Édgar Quintero', driverId: '16.742.119', carrier: 'Logística Andina Express', cargoProduct: 'Café Origen Especial Exportación', dock: 'Muelle #4 - Bodega', grossWeightKg: 27900, tareWeightKg: 10400, netWeightKg: 17500, sealCode: 'PREC-99845', yardStatus: 'DESPACHADO_CON_GUIA', entryTime: '07:10 AM' },
-    ],
-    thirdParties: [
-      { id: 'ter-1', taxId: '901.445.889-1', legalName: 'Comercializadora Andina S.A.S.', thirdPartyType: 'CLIENTE', phone: '+57 310 445 8890', email: 'compras@andina.com.co', city: 'Bogotá D.C.', creditLimit: 25000000, balanceDue: 4200000, paymentTermsDays: 30 },
-      { id: 'ter-2', taxId: '890.903.112-8', legalName: 'Molinos y Suministros del Sur S.A.', thirdPartyType: 'PROVEEDOR', phone: '+57 315 882 1900', email: 'cartera@molinossur.co', city: 'Cali', creditLimit: 40000000, balanceDue: 8500000, paymentTermsDays: 45 },
-      { id: 'ter-3', taxId: '71.688.420', legalName: 'Hernando Gómez (Conductor Tractomula WXY-942)', thirdPartyType: 'CONDUCTOR_TRANSPORTADOR', phone: '+57 312 610 3341', email: 'hgomez.transporte@correo.co', city: 'Buenaventura', creditLimit: 0, balanceDue: 0, paymentTermsDays: 0 },
-    ],
-    journalVouchers: [
-      { id: 'COMP-001', number: 'CD-2026-001', date: '2026-11-05', concept: 'Contabilización Venta Factura FAC-1001', totalDebit: 1564500, totalCredit: 1564500, status: 'CUADRADO' },
-    ],
-  };
-}
+  },
+];
+
+export const INITIAL_SUBMODULE_ROWS: Record<string, readonly (readonly string[])[]> = {
+  'mod-pos': [
+    ['POS-9001', 'Consumidor Final', 'Laura Gómez — Turno Mañana', 'Efectivo', '$ 148.500', 'Emitido'],
+    ['POS-9002', 'Constructora Andina S.A.S.', 'Laura Gómez — Turno Mañana', 'Transferencia / QR', '$ 920.000', 'Emitido'],
+  ],
+  'mod-dian': [
+    ['FEV-10421', 'Comercializadora del Valle S.A.S.', '901.452.110-4', '$ 4.850.000', 'CUFE Validado DIAN', 'Hoy 09:15'],
+  ],
+  'mod-quotes': [
+    ['COT-308', 'Ingenios Unidos S.A.', '2026-11-30', 'Ing. Carlos Ruiz', '$ 12.400.000', 'Vigente'],
+  ],
+  'mod-stock': [
+    ['INS-00104', 'Cemento Gris Estructural 50Kg', 'Bodega Central Principal', '420 Und', '50 Und', '$ 31.500'],
+    ['INS-00219', 'Acero Figurado 1/2 Pulgada', 'Bodega Norte Punto Venta', '185 Und', '40 Und', '$ 42.000'],
+  ],
+  'mod-warehouses': [
+    ['BOD-CENTRAL-01', 'Bodega Central Principal', 'Barranquilla — Vía 40', '800 Ton / 240 Estibas', 'Firmado: Jorge Pardo', 'Activa'],
+    ['BOD-NORTE-02', 'Bodega Norte Punto Venta', 'Cartagena — Mamonal', '450 Ton / 120 Estibas', 'Firmado: Andrés Mejía', 'Activa'],
+  ],
+  'mod-transfers': [
+    ['TR-501', 'Bodega Central Principal', 'Bodega Norte Punto Venta', '120 Sacos Cemento 50Kg', 'Transportes Rápidos del Norte S.A.S.', 'Autorizado: Jorge Pardo'],
+  ],
+  'mod-recipes': [
+    ['BOM-101', 'Mortero Premezclado Seco x 40Kg', 'Cemento (12Kg) + Arena Sílice (28Kg) + Aditivo (0.2Kg)', '1 Saco', '$ 18.900'],
+  ],
+  'mod-lots': [
+    ['LOT-2026-901', 'Aditivo Impermeabilizante Industrial', 'Bodega Central Principal', '2027-06-15', '95 Cuñetes', 'Óptimo FEFO'],
+  ],
+  'mod-scale': [
+    ['BAS-7741', 'SXT-942 / R-4481', 'TransCarga Pesada — Hernando Valencia', '52.400 Kg', '16.800 Kg', '35.600 Kg (35.60 Ton)'],
+  ],
+  'mod-tables': [
+    ['Mesa 05 — Terraza', '4 Comensales', 'Mateo Ríos', '$ 186.000', 'Ocupada'],
+  ],
+  'mod-kds': [
+    ['CMD-409', 'Mesa 05 — Terraza', '2x Lomito término 3/4, 2x Jugo Natural', 'Parrilla y Calientes', 'En Preparación (6 min)'],
+  ],
+  'mod-split': [
+    ['DIV-112', 'Mesa 05 — Terraza', 'Partes Iguales', '4 Pagadores', '$ 46.500 c/u'],
+  ],
+  'mod-bookings': [
+    ['RES-801', 'Valeria Mendoza', 'Salón Auditorio Empresarial', '2026-11-12 08:00 - 12:00', '40 Cupos', 'Confirmada'],
+  ],
+  'mod-tickets': [
+    ['TCK-99201', 'Pase General Día', 'Santiago Ospina', 'QR-PK-99201', '$ 45.000', 'Válido en Portería'],
+  ],
+  'mod-rooms': [
+    ['Habitación 304 — Ejecutiva', 'Camila Restrepo', '2 Noches', '$ 210.000 / noche', 'Check-In Activo'],
+  ],
+  'mod-directory': [
+    ['901.452.110-4', 'Comercializadora del Valle S.A.S.', 'Cliente Corporativo', 'Cali — 315 890 1122', '$ 25.000.000'],
+    ['900.771.220-8', 'Transportes Rápidos del Norte S.A.S.', 'Empresa Transportista', 'Barranquilla — 300 441 9080', '$ 0'],
+  ],
+  'mod-pipelines': [
+    ['OP-204', 'Ingenios Unidos S.A.', 'Propuesta Enviada', 'Carlos Ruiz', '$ 28.000.000'],
+  ],
+  'mod-loyalty': [
+    ['Diana Marcela Pineda', 'Oro Preferencial', '2.450 Puntos', 'Hoy', '5% Descuento Directo'],
+  ],
+  'mod-cashbook': [
+    ['EGR-2041', 'Bancolombia Cuenta Corriente', 'Egreso / Pago', 'Pago Flete Transporte Nacional', 'Autorizado: Tesorería', '$ 1.450.000'],
+  ],
+  'mod-arap': [
+    ['CXC-8810', 'Comercializadora del Valle S.A.S.', 'Cuenta por Cobrar (Cliente)', '2026-11-30', '$ 4.850.000', 'Al Día'],
+  ],
+  'mod-puc': [
+    ['AST-9901', '130505 - Clientes Nacionales', '901.452.110-4', 'Causación Factura FEV-10421', '$ 4.850.000', 'Asentado'],
+  ],
+};
