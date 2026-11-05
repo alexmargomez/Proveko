@@ -136,5 +136,50 @@ export function renderPlatformActionsRuntimeJs(): string {
     document.getElementById('payment-step-checkout').style.display = 'none';
     document.getElementById('payment-step-credentials').style.display = 'block';
   }
+
+  function pkHydrateClientsFromPostgres() {
+    try {
+      fetch('/api/v1/control/databases')
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(data) {
+          if (!data || !Array.isArray(data.rows) || data.rows.length === 0) return;
+          for (var i = 0; i < data.rows.length; i++) {
+            var r = data.rows[i];
+            var exists = false;
+            for (var j = 0; j < STATE.clients.length; j++) {
+              if (STATE.clients[j].dbName === r.db_name) { exists = true; break; }
+            }
+            if (!exists) {
+              STATE.clients.push({
+                tenantId: r.tenant_id || ('tnt-' + r.db_name),
+                companyName: r.company_name || r.db_name,
+                nit: r.nit || '900.000.000-1',
+                businessTypeId: r.business_type || 'comercio-retail',
+                businessTypeName: r.business_type || 'Plan Empresarial',
+                dbName: r.db_name,
+                dbHost: r.db_host || 'db',
+                dbPort: Number(r.db_port) || 5432,
+                paymentStatus: 'STANDBY_VERIFICADO',
+                monthlyUsd: 49,
+                adminUsername: r.admin_username || 'admin',
+                adminPasswordHint: r.admin_password_hint || 'Prov#2026!',
+                maxRolesAllowed: Number(r.max_roles_allowed) || 5,
+                maxUsersAllowed: Number(r.max_users_allowed) || 10,
+                activePrincipalServices: Array.isArray(r.enabled_services_json) ? r.enabled_services_json : ['srv-invoicing', 'srv-inventory'],
+                activeSubmodules: Array.isArray(r.enabled_submodules_json) ? r.enabled_submodules_json : ['mod-pos', 'mod-stock', 'mod-warehouses'],
+                activeFeatures: Array.isArray(r.enabled_features_json) ? r.enabled_features_json : ['comp-cashier-name', 'comp-manager-signature'],
+                internalRoles: (STATE.clients[0] ? STATE.clients[0].internalRoles.slice() : []),
+                internalUsers: [{ userId: 'u-adm', username: r.admin_username || 'admin', fullName: 'Administrador ' + (r.company_name || ''), email: 'admin@empresa.co', internalRoleId: 'rol-admin', internalRoleName: 'Administrador General (Cuenta Admin)', passwordHint: r.admin_password_hint || 'Prov#2026!', isClientAdmin: true }]
+              });
+            }
+          }
+          if (STATE.session && (STATE.session.role === 'superadmin' || STATE.session.role === 'desarrollador' || STATE.session.role === 'auxiliar')) {
+            pkRenderSuperAdmin();
+          }
+        })
+        .catch(function() {});
+    } catch (_e) {}
+  }
+  setTimeout(pkHydrateClientsFromPostgres, 50);
 `;
 }
