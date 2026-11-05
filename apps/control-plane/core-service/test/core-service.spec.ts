@@ -1011,7 +1011,7 @@ describe('Proveko — Core-Service & Inner Ring Libraries (Audit Verification Su
       coreMigrationsDir,
       'add_billing_audit_log',
     );
-    expect(nextCore.filename).toBe('0002_add_billing_audit_log.sql');
+    expect(nextCore.filename).toBe('0003_add_billing_audit_log.sql');
 
     const nextClientPos = SystemStartupBootstrapper.computeNextMigrationFilename(
       join(migrationsRootDir, 'clients/srv-invoicing/ms-invoicing-pos'),
@@ -1043,6 +1043,7 @@ describe('Proveko — Core-Service & Inner Ring Libraries (Audit Verification Su
     expect(bootDay0.coreDbName).toBe('proveko_control_db');
     expect(bootDay0.coreDbAppliedNewMigrations).toEqual([
       '0001_init_control_plane_core_db.sql',
+      '0002_superadmin_and_tenant_connections.sql',
     ]);
     expect(bootDay0.trialDbCreatedOnStartup).toBe(true);
     expect(bootDay0.registeredDatabasesInCoreDb).toEqual(['db_version_prueba']);

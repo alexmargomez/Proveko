@@ -23,6 +23,7 @@ services:
       - "${DB_EXTERNAL_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./libs/tenant-db-resolver/migrations/core:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-proveko_control_db}"]
       interval: 5s
@@ -67,6 +68,11 @@ services:
       PROVEKO_NODE_ROLE: api-gateway
       PROVEKO_NODE_ID: proveko-api-gateway
       PORT: 4000
+      DB_HOST: db
+      DB_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-proveko_control_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-proveko_master_secret_2026}
       APP_DOMAIN: ${APP_DOMAIN:-localhost}
       APP_URL: ${APP_URL:-http://localhost:4000}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,api-gateway}

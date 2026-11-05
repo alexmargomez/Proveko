@@ -1,165 +1,116 @@
 /**
- * Runtime de Cliente — Estado de la Estación de Trabajo, Conmutador de Capas (`/` vs `/app`)
- * y Orquestación de Capacidades / Presets (SOLID SRP).
+ * Runtime de Cliente — Centro 3 (Comandas, Mesas, Reserva de Cupos y Tickets)
+ * y Centro 4 (Control de Tractomulas, Báscula Camionera y Muelles de Patio) (SOLID SRP).
  */
-export function renderWorkstationControllerRuntimeJs(initialSurface: 'landing' | 'workstation'): string {
+export function renderWorkstationControllerRuntimeJs(_initialSurface: 'landing' | 'workstation'): string {
   return `
-    const STATE = {
-      surface: '${initialSurface}',
-      tenantId: 'db_version_prueba',
-      activeBranchId: 'br-01',
-      subVer: 1,
-      token: '',
-      activePresetKey: 'preset:corporate-erp',
-      selectedModuleKey: 'ms:crm-directory',
-      showRawJson: false,
-      isActionInFlight: false,
-      requestSeq: 0,
-      enabledServices: {
-        'srv:crm': ['ms:crm-directory', 'ms:crm-pipelines', 'ms:crm-loyalty'],
-        'srv:invoicing': ['ms:invoicing-pos', 'ms:invoicing-electronic-dian', 'ms:invoicing-quotes'],
-        'srv:inventory': ['ms:inventory-stock', 'ms:inventory-recipes', 'ms:inventory-lots', 'ms:inventory-transfers'],
-        'srv:gastro': ['ms:gastro-tables', 'ms:gastro-kds', 'ms:gastro-split-check'],
-        'srv:hotel': ['ms:hotel-rooms', 'ms:hotel-bookings', 'ms:hotel-frontdesk'],
-        'srv:finance': ['ms:finance-ar-ap', 'ms:finance-accounting-puc']
-      },
-      readonlyMicroservices: ['ms:invoicing-simple-receipt', 'ms:finance-cashbook']
-    };
+    function renderGastroAndReservationsCenter() {
+      const showKds = hasComponent('comp:gastro-tables-kds');
+      const showSplit = hasComponent('comp:split-check-seats');
+      const showSlots = hasComponent('comp:slot-reservations');
+      const showTickets = hasComponent('comp:ticket-issuance');
 
-    window.provekoSwitchSurface = function(targetSurface) {
-      STATE.surface = targetSurface === 'workstation' ? 'workstation' : 'landing';
-      const landingEl = document.getElementById('surface-landing');
-      const workstationEl = document.getElementById('surface-workstation');
-      const tabLanding = document.getElementById('tab-surface-landing');
-      const tabWorkstation = document.getElementById('tab-surface-workstation');
-      if (landingEl && workstationEl) {
-        landingEl.classList.toggle('hidden', STATE.surface !== 'landing');
-        workstationEl.classList.toggle('hidden', STATE.surface !== 'workstation');
-      }
-      if (tabLanding && tabWorkstation) {
-        tabLanding.classList.toggle('active', STATE.surface === 'landing');
-        tabWorkstation.classList.toggle('active', STATE.surface === 'workstation');
-      }
-      if (STATE.surface === 'workstation') {
-        renderActiveModulePanel();
-        window.provekoExecuteList();
-      } else {
-        renderLandingConfigurator();
-      }
-    };
+      document.getElementById('center-kpi-strip').innerHTML =
+        '<div class="kpi-card"><span class="kpi-label">Mesas y Comandas</span><div class="kpi-value tabular-nums">' + STATE.db.tablesAndOrders.length + ' Mesas</div><span class="kpi-sub">Control de salón y cocina en vivo</span></div>' +
+        '<div class="kpi-card"><span class="kpi-label">Reservas y Cupos Activos</span><div class="kpi-value tabular-nums">' + STATE.db.reservationsAndTickets.length + ' Cupos</div><span class="kpi-sub">Agenda y control de aforo</span></div>' +
+        '<div class="kpi-card"><span class="kpi-label">Tickets / Boletas Emitidas</span><div class="kpi-value">' + (showTickets ? 'Taquilla Activa' : 'Opcional') + '</div><span class="kpi-sub">Verificación por código</span></div>' +
+        '<div class="kpi-card"><span class="kpi-label">División de Cuentas</span><div class="kpi-value">' + (showSplit ? 'Por Silla / Partes' : 'Cuenta Única') + '</div><span class="kpi-sub">Cuadre exacto sin centavos perdidos</span></div>';
 
-    window.provekoToggleAuditDrawer = function() {
-      const drawer = document.getElementById('audit-drawer');
-      if (drawer) drawer.classList.toggle('hidden');
-    };
-
-    window.provekoTogglePayloadMode = function() {
-      STATE.showRawJson = !STATE.showRawJson;
-      const rawBox = document.getElementById('raw-json-container');
-      const btn = document.getElementById('btn-toggle-json-mode');
-      if (rawBox) rawBox.classList.toggle('hidden', !STATE.showRawJson);
-      if (btn) btn.textContent = STATE.showRawJson ? 'Ocultar JSON Avanzado' : 'Modo JSON Avanzado';
-    };
-
-    window.provekoToggleParentService = async function(svcKey) {
-      if (isParentEnabled(svcKey)) {
-        delete STATE.enabledServices[svcKey];
-      } else {
-        const firstChild = MODULES_CATALOG.find((m) => m.parentService === svcKey);
-        STATE.enabledServices[svcKey] = firstChild ? [firstChild.key] : [];
-      }
-      STATE.subVer += 1;
-      await window.provekoReissueSession();
-    };
-
-    window.provekoToggleModule = async function(svcKey, modKey) {
-      if (!isParentEnabled(svcKey)) return;
-      const list = STATE.enabledServices[svcKey] || [];
-      const modMeta = MODULES_CATALOG.find((m) => m.key === modKey);
-      if (list.includes(modKey)) {
-        STATE.enabledServices[svcKey] = list.filter((k) => k !== modKey);
-      } else {
-        let nextList = [...list];
-        if (modMeta && modMeta.supersedes) {
-          nextList = nextList.filter((k) => k !== modMeta.supersedes);
-          if (!STATE.readonlyMicroservices.includes(modMeta.supersedes)) {
-            STATE.readonlyMicroservices.push(modMeta.supersedes);
-          }
-        }
-        nextList.push(modKey);
-        STATE.enabledServices[svcKey] = nextList;
-        STATE.readonlyMicroservices = STATE.readonlyMicroservices.filter((k) => k !== modKey);
-      }
-      STATE.subVer += 1;
-      await window.provekoReissueSession();
-    };
-
-    window.provekoApplyPreset = async function(presetKey) {
-      const preset = PRESETS_CATALOG.find((p) => p.presetKey === presetKey);
-      if (!preset) return;
-      STATE.activePresetKey = presetKey;
-      const nextServices = {};
-      const svcList = preset.enabledServices || preset.services || [];
-      const modList = preset.enabledMicroservices || preset.microservices || [];
-      svcList.forEach((sKey) => { nextServices[sKey] = []; });
-      modList.forEach((mKey) => {
-        const m = MODULES_CATALOG.find((item) => item.key === mKey);
-        if (m && nextServices[m.parentService]) {
-          nextServices[m.parentService].push(mKey);
-        }
-      });
-      STATE.enabledServices = nextServices;
-      STATE.readonlyMicroservices = [];
-      if (modList.includes('ms:invoicing-electronic-dian')) STATE.readonlyMicroservices.push('ms:invoicing-simple-receipt');
-      if (modList.includes('ms:finance-accounting-puc')) STATE.readonlyMicroservices.push('ms:finance-cashbook');
-      STATE.subVer += 1;
-      if (modList.length > 0) STATE.selectedModuleKey = modList[0];
-      await window.provekoReissueSession();
-    };
-
-    window.provekoSelectModule = function(modKey) {
-      STATE.selectedModuleKey = modKey;
-      renderSidebar();
-      renderActiveModulePanel();
-      window.provekoExecuteList();
-    };
-
-    function renderActiveModulePanel() {
-      const mod = MODULES_CATALOG.find((m) => m.key === STATE.selectedModuleKey) || MODULES_CATALOG[0];
-      const schema = UI_SCHEMAS[mod.key];
-      const status = getModuleStatus(mod);
-      document.getElementById('mod-parent-badge').textContent = mod.parentService.replace(/^srv:/, 'ms:');
-      document.getElementById('mod-key-badge').textContent = schema.moduleNotation;
-      document.getElementById('mod-prefix-badge').textContent = schema.badge;
-      document.getElementById('mod-title').textContent = schema.title;
-      document.getElementById('mod-desc').textContent = schema.description;
-      document.getElementById('create-endpoint-label').textContent = 'POST ' + schema.createEndpoint;
-      document.getElementById('btn-create-action').textContent = schema.createButtonLabel;
-      document.getElementById('payload-editor').value = JSON.stringify(schema.defaultPayload, null, 2);
-
-      const isLockedOrReadonly = status !== 'ACTIVE';
-      renderModuleKpis(schema);
-      renderGuidedFormFields(schema, isLockedOrReadonly);
-      document.getElementById('btn-create-action').disabled = isLockedOrReadonly || STATE.isActionInFlight;
-
-      const bannerBox = document.getElementById('gate-banner-container');
-      if (status === 'ACTIVE') {
-        bannerBox.className = 'hidden';
-        bannerBox.innerHTML = '';
-      } else if (status === 'READONLY') {
-        bannerBox.className = '';
-        bannerBox.innerHTML = '<div class="gate-banner gate-readonly"><span><strong>Modo Archivo Histórico (Solo Lectura):</strong> Este módulo fue reemplazado por un módulo superior. Tus registros históricos siguen disponibles para consulta y auditoría.</span></div>';
-      } else {
-        bannerBox.className = '';
-        bannerBox.innerHTML = '<div class="gate-banner gate-locked"><span><strong>Módulo Desactivado en tu Plan Actual:</strong> Actívalo en un clic para habilitar el registro de operaciones.</span><button type="button" class="btn btn-primary" onclick="window.provekoQuickEnableCurrentModule()">⚡ Activar Ahora</button></div>';
-      }
+      const canvas = document.getElementById('center-workspace-canvas');
+      canvas.innerHTML =
+        (showKds ?
+          '<div class="card" style="margin-bottom:16px;">' +
+            '<div class="card-header"><span class="card-title">🍽️ Mapa de Mesas, Toma de Comandas y Despacho a Cocina</span><button type="button" class="btn btn-primary" onclick="window.provekoCreateTableOrder()">+ Abrir Nueva Mesa / Comanda</button></div>' +
+            '<div class="card-body">' +
+              '<div class="form-grid-4" style="margin-bottom:12px;">' +
+                '<div class="form-group"><label class="form-label">Mesa / Ubicación</label><input id="tbl-name" class="form-control" value="Mesa 04 · Terraza Cubierta" /></div>' +
+                '<div class="form-group"><label class="form-label">Comensales (Cupos)</label><input id="tbl-diners" type="number" class="form-control tabular-nums" value="4" /></div>' +
+                '<div class="form-group"><label class="form-label">Mesero / Anfitrión</label><input id="tbl-waiter" class="form-control" value="Camila Londoño" /></div>' +
+                '<div class="form-group"><label class="form-label">Pedido Inicial a Cocina</label><input id="tbl-order" class="form-control" value="2x Lomo al Trapo, 2x Jugo Natural" /></div>' +
+              '</div>' +
+              '<div class="form-grid-3">' +
+                STATE.db.tablesAndOrders.map((t, idx) =>
+                  '<div class="card" style="border-left:4px solid ' + (t.status === 'DISPONIBLE' ? '#15803D' : '#1D4ED8') + ';">' +
+                    '<div class="card-body">' +
+                      '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">' +
+                        '<strong>' + escapeHtml(t.name) + '</strong>' +
+                        '<span class="badge ' + (t.status === 'DISPONIBLE' ? 'badge-emerald' : 'badge-amber') + '">' + escapeHtml(t.status) + '</span>' +
+                      '</div>' +
+                      '<div style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">Comensales: <strong>' + t.diners + '</strong> · Mesero: ' + escapeHtml(t.waiter) + '</div>' +
+                      '<div style="font-size:12px; margin-bottom:8px;">' + (t.currentOrder.length ? escapeHtml(t.currentOrder.join(' · ')) : 'Sin pedidos activos') + '</div>' +
+                      '<div style="display:flex; justify-content:space-between; align-items:center;">' +
+                        '<span class="tabular-nums" style="font-weight:800; font-size:15px;">' + formatCop(t.total) + '</span>' +
+                        (showSplit && t.total > 0 ? '<span class="badge badge-blue">' + formatCop(Math.round(t.total / Math.max(1, t.diners))) + ' / silla</span>' : '') +
+                        '<button type="button" class="btn btn-outline" style="padding:4px 8px; font-size:11px;" onclick="window.provekoAdvanceTableStatus(' + idx + ')">Avanzar Estado</button>' +
+                      '</div>' +
+                    '</div>' +
+                  '</div>'
+                ).join('') +
+              '</div>' +
+            '</div>' +
+          '</div>' : '') +
+        ((showSlots || showTickets) ?
+          '<div class="card"><div class="card-header"><span class="card-title">🎟️ Reserva de Cupos, Alojamiento y Emisión de Tickets / Boletas</span><button type="button" class="btn btn-emerald" onclick="window.provekoCreateReservationOrTicket()">+ Registrar Reserva / Emitir Ticket</button></div>' +
+            '<div class="card-body"><div class="form-grid-3" style="margin-bottom:12px;">' +
+              '<div class="form-group"><label class="form-label">Modalidad</label><select id="res-kind" class="form-control"><option value="RESERVA_CUPO">Reserva de Cupos / Espacio / Habitación</option><option value="TICKET_ENTRADA">Emisión de Ticket / Boleta de Entrada</option></select></div>' +
+              '<div class="form-group"><label class="form-label">Titular / Huésped / Cliente</label><input id="res-holder" class="form-control" value="Dr. Alejandro Vargas" /></div>' +
+              '<div class="form-group"><label class="form-label">Documento / NIT</label><input id="res-doc" class="form-control" value="79.441.802" /></div>' +
+              '<div class="form-group"><label class="form-label">Espacio, Habitación o Evento</label><input id="res-resource" class="form-control" value="Cupo VIP Terraza / Habitación 204" /></div>' +
+              '<div class="form-group"><label class="form-label">Fecha, Hora y Cupos</label><input id="res-date" class="form-control" value="2026-11-08 20:00 (4 Cupos)" /></div>' +
+              '<div class="form-group"><label class="form-label">Valor Total ($)</label><input id="res-amount" type="number" class="form-control tabular-nums" value="340000" /></div>' +
+            '</div>' +
+            '<table class="data-table"><thead><tr><th>Código Ticket</th><th>Modalidad</th><th>Titular</th><th>Espacio / Recurso</th><th>Fecha y Hora</th><th>Cupos</th><th>Valor</th><th>Estado</th></tr></thead><tbody>' +
+              STATE.db.reservationsAndTickets.map((r) => '<tr><td class="mono" style="font-weight:700; color:#1D4ED8;">' + escapeHtml(r.ticketCode) + '</td><td><span class="badge badge-blue">' + escapeHtml(r.kind) + '</span></td><td style="font-weight:700;">' + escapeHtml(r.holderName) + '</td><td>' + escapeHtml(r.resourceName) + '</td><td>' + escapeHtml(r.dateSlot) + '</td><td class="tabular-nums">' + r.spots + '</td><td class="tabular-nums" style="font-weight:800;">' + formatCop(r.amount) + '</td><td><span class="badge badge-emerald">' + escapeHtml(r.status) + '</span></td></tr>').join('') +
+            '</tbody></table></div></div>' : '');
     }
 
-    window.provekoQuickEnableCurrentModule = async function() {
-      const mod = MODULES_CATALOG.find((m) => m.key === STATE.selectedModuleKey);
-      if (!mod) return;
-      if (!isParentEnabled(mod.parentService)) STATE.enabledServices[mod.parentService] = [];
-      await window.provekoToggleModule(mod.parentService, mod.key);
-    };
+    function renderLogisticsAndFleetCenter() {
+      const showScale = hasComponent('comp:weighbridge-scale');
+      const showDock = hasComponent('comp:dock-turn-queue');
+      const showSeal = hasComponent('comp:seal-manifest');
+      const totalNetKg = STATE.db.trucksInYard.reduce((a, b) => a + b.netWeightKg, 0);
+
+      document.getElementById('center-kpi-strip').innerHTML =
+        '<div class="kpi-card"><span class="kpi-label">Tractomulas en Patio</span><div class="kpi-value tabular-nums">' + STATE.db.trucksInYard.length + ' Vehículos</div><span class="kpi-sub">Control de portería, báscula y muelles</span></div>' +
+        '<div class="kpi-card"><span class="kpi-label">Carga Neta Pesada Hoy</span><div class="kpi-value tabular-nums">' + totalNetKg.toLocaleString('es-CO') + ' kg</div><span class="kpi-sub">' + (totalNetKg / 1000).toFixed(2) + ' Toneladas métricas</span></div>' +
+        '<div class="kpi-card"><span class="kpi-label">Báscula Camionera</span><div class="kpi-value">' + (showScale ? 'En Línea (Bruto/Tara)' : 'Manual') + '</div><span class="kpi-sub">Cálculo automático de Peso Neto</span></div>' +
+        '<div class="kpi-card"><span class="kpi-label">Control de Precintos</span><div class="kpi-value">' + (showSeal ? 'Verificado' : 'Estándar') + '</div><span class="kpi-sub">Trazabilidad de seguridad</span></div>';
+
+      const canvas = document.getElementById('center-workspace-canvas');
+      canvas.innerHTML =
+        '<div class="card"><div class="card-header"><span class="card-title">🚛 Control de Ingreso de Tractomulas, Pesaje en Báscula y Asignación de Muelle</span><button type="button" class="btn btn-primary" onclick="window.provekoRegisterTruckInYard()">+ Registrar Ingreso / Pesaje de Tractomula</button></div>' +
+          '<div class="card-body">' +
+            '<div class="form-grid-4" style="margin-bottom:14px;">' +
+              '<div class="form-group"><label class="form-label">Placa Cabezote</label><input id="trk-plate" class="form-control mono" value="SZN-814" /></div>' +
+              '<div class="form-group"><label class="form-label">Placa Remolque / Tráiler</label><input id="trk-trailer" class="form-control mono" value="R-60912" /></div>' +
+              '<div class="form-group"><label class="form-label">Configuración Vehicular</label><select id="trk-type" class="form-control"><option>Tractomula 3S3 (6 Ejes - 52 Ton)</option><option>Minimula 2S2 (4 Ejes)</option><option>Dobletroque Rígido</option><option>Camión Sencillo / Turbo</option></select></div>' +
+              '<div class="form-group"><label class="form-label">Conductor y Cédula</label><input id="trk-driver" class="form-control" value="Álvaro Morales · CC 14.889.201" /></div>' +
+              '<div class="form-group"><label class="form-label">Empresa Transportadora</label><input id="trk-carrier" class="form-control" value="Expreso de Carga Nacional S.A." /></div>' +
+              '<div class="form-group"><label class="form-label">Producto / Carga Transportada</label><input id="trk-cargo" class="form-control" value="Maíz Amarillo Industrial a Granel" /></div>' +
+              (showDock ? '<div class="form-group"><label class="form-label">Muelle / Silo Asignado (Componente)</label><select id="trk-dock" class="form-control"><option>Muelle #1 - Descargue Granel</option><option>Muelle #2 - Silos Norte</option><option>Muelle #3 - Despacho Producto Terminado</option></select></div>' : '') +
+              (showSeal ? '<div class="form-group"><label class="form-label">Precinto / Sello de Seguridad</label><input id="trk-seal" class="form-control mono" value="PREC-99904" /></div>' : '') +
+              (showScale ?
+                '<div class="form-group"><label class="form-label">Peso Bruto Báscula (kg)</label><input id="trk-gross" type="number" class="form-control tabular-nums" value="51800" oninput="window.provekoRecalcNetWeight()" /></div>' +
+                '<div class="form-group"><label class="form-label">Peso Tara Vehículo Vacío (kg)</label><input id="trk-tare" type="number" class="form-control tabular-nums" value="17300" oninput="window.provekoRecalcNetWeight()" /></div>' +
+                '<div class="form-group"><label class="form-label">Peso Neto Carga Calculado (kg)</label><input id="trk-net" class="form-control tabular-nums mono" disabled value="34500" style="font-weight:800; color:#15803D; background:#DCFCE7;" /></div>'
+                : '') +
+            '</div>' +
+            '<table class="data-table"><thead><tr><th>Cabezote / Remolque</th><th>Vehículo</th><th>Conductor y Transportadora</th><th>Carga</th>' + (showDock ? '<th>Muelle</th>' : '') + (showScale ? '<th>Bruto (kg)</th><th>Tara (kg)</th><th>Peso Neto (kg)</th>' : '') + (showSeal ? '<th>Precinto</th>' : '') + '<th>Estado en Patio</th><th>Acción</th></tr></thead><tbody>' +
+              STATE.db.trucksInYard.map((trk, idx) =>
+                '<tr>' +
+                  '<td class="mono" style="font-weight:800;">' + escapeHtml(trk.tractorPlate) + ' / ' + escapeHtml(trk.trailerPlate) + '</td>' +
+                  '<td>' + escapeHtml(trk.vehicleType) + '</td>' +
+                  '<td><strong>' + escapeHtml(trk.driverName) + '</strong><div style="font-size:11px; color:var(--text-muted);">' + escapeHtml(trk.carrier) + '</div></td>' +
+                  '<td>' + escapeHtml(trk.cargoProduct) + '</td>' +
+                  (showDock ? '<td><span class="badge badge-blue">' + escapeHtml(trk.dock) + '</span></td>' : '') +
+                  (showScale ? '<td class="tabular-nums">' + trk.grossWeightKg.toLocaleString('es-CO') + '</td><td class="tabular-nums">' + trk.tareWeightKg.toLocaleString('es-CO') + '</td><td class="tabular-nums mono" style="font-weight:800; color:#15803D;">' + trk.netWeightKg.toLocaleString('es-CO') + ' kg</td>' : '') +
+                  (showSeal ? '<td class="mono">' + escapeHtml(trk.sealCode) + '</td>' : '') +
+                  '<td><span class="badge badge-emerald">' + escapeHtml(trk.yardStatus) + '</span></td>' +
+                  '<td><button type="button" class="btn btn-outline" style="padding:4px 8px; font-size:11px;" onclick="window.provekoAdvanceTruckStatus(' + idx + ')">Avanzar Turno</button></td>' +
+                '</tr>'
+              ).join('') +
+            '</tbody></table>' +
+          '</div></div>';
+    }
   `;
 }

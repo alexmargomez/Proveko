@@ -26,7 +26,11 @@ import {
   toModuleNotation,
   toParentMicroserviceNotation,
 } from '@proveko/shared-kernel';
-import { FileBasedMigrationRegistry } from '@proveko/tenant-db-resolver';
+import {
+  FileBasedMigrationRegistry,
+  type PostgresBootstrapSummary,
+  PostgresPsqlBootstrapRunner,
+} from '@proveko/tenant-db-resolver';
 import { createSrvCrmHostRunner } from '../../srv-crm/host-runner/src/index.js';
 import { createSrvFinanceHostRunner } from '../../srv-finance/host-runner/src/index.js';
 import { createSrvGastroHostRunner } from '../../srv-gastro/host-runner/src/index.js';
@@ -159,6 +163,15 @@ export async function startProvekoClusterNodeHttpServer(
   let hostRunner: ParentServiceHostRunner | null = null;
   let gateway: ProvekoApiGateway | null = null;
   let migrationRegistry: FileBasedMigrationRegistry | null = null;
+  let postgresBootstrapSummary: PostgresBootstrapSummary | null = null;
+
+  const cwdMigrations = path.resolve(process.cwd(), 'libs/tenant-db-resolver/migrations');
+  const relativeMigrations = fileURLToPath(
+    new URL('../../../libs/tenant-db-resolver/migrations', import.meta.url),
+  );
+  const migrationsRootDir =
+    env.PROVEKO_MIGRATIONS_DIR ??
+    (existsSync(cwdMigrations) ? cwdMigrations : relativeMigrations);
 
   if (options.nodeRole === 'ms-host-runner') {
     const rawParent = (options.parentService ??
@@ -179,16 +192,15 @@ export async function startProvekoClusterNodeHttpServer(
       new FetchUpstreamHttpClientAdapter(),
       clusterHmacGuard,
     );
+    if (env.DB_HOST) {
+      postgresBootstrapSummary = PostgresPsqlBootstrapRunner.runStartupMigrations(migrationsRootDir);
+    }
   } else if (options.nodeRole === 'core-service') {
-    const cwdMigrations = path.resolve(process.cwd(), 'libs/tenant-db-resolver/migrations');
-    const relativeMigrations = fileURLToPath(
-      new URL('../../../libs/tenant-db-resolver/migrations', import.meta.url),
-    );
-    const migrationsRootDir =
-      env.PROVEKO_MIGRATIONS_DIR ??
-      (existsSync(cwdMigrations) ? cwdMigrations : relativeMigrations);
     migrationRegistry = new FileBasedMigrationRegistry();
     migrationRegistry.loadAllCatalogMigrationsFromRoot(migrationsRootDir);
+    if (env.DB_HOST) {
+      postgresBootstrapSummary = PostgresPsqlBootstrapRunner.runStartupMigrations(migrationsRootDir);
+    }
   }
 
   const server = http.createServer(async (req, res) => {
@@ -399,6 +411,69 @@ export async function startProvekoClusterNodeHttpServer(
               tenantId,
               activeBranchId,
               subVer,
+            }),
+          );
+          return;
+        }
+
+        if (method === 'POST' && url === '/api/v1/payments/checkout/standby') {
+          const checkoutReq = ((await readJsonBody(req)) ?? {}) as {
+            companyName?: string;
+            nit?: string;
+            adminEmail?: string;
+            enabledCenters?: string[];
+            enabledComponents?: string[];
+          };
+          const companyName =
+            typeof checkoutReq.companyName === 'string' && checkoutReq.companyName.trim().length > 0
+              ? checkoutReq.companyName.trim()
+              : 'Nueva Empresa Cliente S.A.S.';
+          const nit =
+            typeof checkoutReq.nit === 'string' && checkoutReq.nit.trim().length > 0
+              ? checkoutReq.nit.trim()
+              : '900.000.000-1';
+          const adminEmail =
+            typeof checkoutReq.adminEmail === 'string' && checkoutReq.adminEmail.trim().length > 0
+              ? checkoutReq.adminEmail.trim()
+              : 'admin@empresa.co';
+          const slug = `emp-${companyName
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .slice(0, 20)}`;
+          const temporaryPassword = `Prov#2026!`;
+          const token = jwtVault.signAccessToken({
+            tenant_id: slug,
+            cell_id: 'cell-db-01',
+            user_id: `usr-admin-${slug}`,
+            role_key: 'ADMIN_CLIENTE',
+            tier: 'enterprise',
+            is_sandbox: false,
+            active_branch_id: 'br-01',
+            allowed_branch_ids: ['br-01', 'br-02'],
+            sub_ver: 1,
+            services: {
+              'srv:crm': ['ms:crm-directory'],
+              'srv:invoicing': ['ms:invoicing-pos', 'ms:invoicing-electronic-dian'],
+              'srv:inventory': ['ms:inventory-stock', 'ms:inventory-recipes'],
+            },
+            readonly_microservices: [],
+          });
+
+          res.writeHead(201, { 'content-type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              paymentStatus: 'STANDBY_APPROVED',
+              paymentService: 'ms-payments',
+              paymentReference: `STBY-${Date.now()}`,
+              credential: {
+                tenantId: slug,
+                companyName,
+                nit,
+                adminUsername: adminEmail,
+                temporaryPassword,
+                roleKey: 'ADMIN_CLIENTE',
+              },
+              token,
             }),
           );
           return;
