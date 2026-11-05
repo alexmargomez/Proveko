@@ -7,20 +7,24 @@ export function renderSuperAdminAndShellRuntimeJs(): string {
   function pkRenderSuperAdmin() {
     var kpiEl = document.getElementById('sa-kpi-row');
     if (kpiEl) {
-      var realClientsCount = 0;
-      for (var c = 0; c < STATE.clients.length; c++) {
-        if (STATE.clients[c].tenantId !== 'tnt-demo') realClientsCount++;
-      }
+      var pgList = (STATE.pgDatabases && STATE.pgDatabases.length > 0)
+        ? STATE.pgDatabases
+        : ['proveko_control_db', 'proveko_groups_db'];
       kpiEl.innerHTML =
-        '<div class="kpi-box"><div class="kpi-label">Base Principal Control Plane</div><div class="kpi-val" style="font-size:16px">proveko_control_db</div></div>' +
-        '<div class="kpi-box"><div class="kpi-label">Bases de Datos de Clientes + Demo</div><div class="kpi-val">' + STATE.clients.length + ' BDs PostgreSQL</div></div>' +
-        '<div class="kpi-box"><div class="kpi-label">Empresas Clientes Registradas</div><div class="kpi-val" style="color:var(--pk-emerald)">' + realClientsCount + '</div></div>' +
-        '<div class="kpi-box"><div class="kpi-label">Roles Globales Oficiales</div><div class="kpi-val" style="font-size:14px">superadmin · desarrollador · auxiliar · cliente</div></div>';
+        '<div class="kpi-box"><div class="kpi-label">BDs Sistema (Core + Grupos)</div><div class="kpi-val" style="font-size:13px">proveko_control_db · proveko_groups_db</div></div>' +
+        '<div class="kpi-box"><div class="kpi-label">Total BDs PostgreSQL en proveko_db</div><div class="kpi-val">' + pgList.length + ' BDs (' + pkEsc(pgList.join(', ')) + ')</div></div>' +
+        '<div class="kpi-box"><div class="kpi-label">Empresas Clientes (BD Propia)</div><div class="kpi-val" style="color:var(--pk-emerald)">' + STATE.clients.length + ' BDs Clientes</div></div>' +
+        '<div class="kpi-box"><div class="kpi-label">Modo Demo Público</div><div class="kpi-val" style="font-size:13px;color:var(--pk-primary)">100% localStorage (Sin BD)</div></div>';
     }
 
     var gridEl = document.getElementById('sa-tenants-grid');
     if (gridEl) {
       var gHtml = '';
+      if (STATE.clients.length === 0) {
+        gHtml = '<div class="card"><div class="card-body" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">' +
+          '<div><strong>Aún no hay empresas clientes registradas en PostgreSQL.</strong><div style="font-size:12px;color:var(--pk-muted)">Las bases del sistema (<code>proveko_control_db</code> y <code>proveko_groups_db</code>) ya están activas en <code>proveko_db</code>. El modo Demo opera en <code>localStorage</code>. Crea un cliente para aprovisionar su BD PostgreSQL aislada (<code>db_&lt;cliente&gt;</code>).</div></div>' +
+          '<button type="button" class="btn btn-emerald btn-sm" id="btn-sa-empty-new-client">+ Crear Primer Cliente y su BD PostgreSQL</button></div></div>';
+      }
       for (var i = 0; i < STATE.clients.length; i++) {
         var t = STATE.clients[i];
         gHtml += '<div class="card"><div class="card-head">' +
@@ -132,7 +136,7 @@ export function renderSuperAdminAndShellRuntimeJs(): string {
       pkRenderRegistrationWizard();
     } else if (STATE.publicTab === 'demo') {
       STATE.activeTenantId = 'tnt-demo';
-      if (topCtx) topCtx.textContent = '| Demo Interactiva (db_version_prueba)';
+      if (topCtx) topCtx.textContent = '| Demo Interactiva (Datos en localStorage)';
       if (sWs) sWs.classList.add('active');
       pkRenderWorkstation();
     }

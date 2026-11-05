@@ -127,6 +127,7 @@ export class PostgresPsqlBootstrapRunner {
     driver.ensureDatabaseExists(PostgresClientGroupsCatalogRepository.DEFAULT_GROUPS_DB_NAME);
     driver.dropLegacyRandomDatabaseIfExists('db_agrovalle');
     driver.dropLegacyRandomDatabaseIfExists('db_labrasa');
+    driver.dropLegacyRandomDatabaseIfExists('db_version_prueba');
 
     const coreResult = await bootstrapper.runCoreMigrations(join(migrationsRootDir, 'core'));
     const groupsBootstrapper = new SystemStartupBootstrapper(
@@ -143,14 +144,16 @@ export class PostgresPsqlBootstrapRunner {
     const targets: TenantMigrationTarget[] = activeClientDbNames.map((dbName) => {
       driver.ensureDatabaseExists(dbName);
       return {
-        tenantId: dbName === 'db_version_prueba' ? 'tnt-demo' : `tnt-${dbName}`,
+        tenantId: `tnt-${dbName}`,
         cellId: 'cell-alpanel-primary',
         dbName,
         activeServices: fullServicesMap,
       };
     });
 
-    await orchestrator.migrateTenantDatabaseFleet(targets);
+    if (targets.length > 0) {
+      await orchestrator.migrateTenantDatabaseFleet(targets);
+    }
 
     return {
       executedAgainstRealPostgres: true,
@@ -185,6 +188,20 @@ export class PostgresPsqlBootstrapRunner {
     });
 
     return catalogRepo.registerTenantAndSeedClientAdmin(cfg.coreDbName, input);
+  }
+
+  public static saveClientSubmoduleRecordInPostgres(params: {
+    dbName: string;
+    submoduleKey: string;
+    recordId: string;
+    cells: readonly string[];
+  }): boolean {
+    const cfg = PostgresMigrationDatabaseDriverAdapter.resolveEnvConfig();
+    if (!cfg) return false;
+    const driver = new PostgresMigrationDatabaseDriverAdapter(cfg);
+    if (!driver.isReachable().ok) return false;
+    const catalogRepo = new PostgresTenantControlCatalogRepository(driver);
+    return catalogRepo.saveClientSubmoduleRecord(params);
   }
 
   public static listPostgresDatabasesAndClients(): ClusterDatabaseCatalogSnapshot {
@@ -245,3 +262,4 @@ export class PostgresPsqlBootstrapRunner {
     return groupsRepo.registerDeveloperCatalogItem(input);
   }
 }
+

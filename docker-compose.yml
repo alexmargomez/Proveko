@@ -54,6 +54,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-proveko_master_secret_2026}
       APP_DOMAIN: ${APP_DOMAIN:-localhost}
       APP_URL: ${APP_URL:-http://localhost:4000}
+    volumes:
+      - ./dist:/app/dist:ro
+      - ./libs/tenant-db-resolver/migrations:/app/libs/tenant-db-resolver/migrations:ro
     depends_on:
       db:
         condition: service_healthy
@@ -95,6 +98,9 @@ services:
       UPSTREAM_MS_GASTRO: ${UPSTREAM_MS_GASTRO:-http://ms-gastro:4104}
       UPSTREAM_MS_HOTEL: ${UPSTREAM_MS_HOTEL:-http://ms-hotel:4105}
       UPSTREAM_MS_FINANCE: ${UPSTREAM_MS_FINANCE:-http://ms-finance:4106}
+    volumes:
+      - ./dist:/app/dist:ro
+      - ./libs/tenant-db-resolver/migrations:/app/libs/tenant-db-resolver/migrations:ro
     depends_on:
       db:
         condition: service_healthy
@@ -124,6 +130,9 @@ services:
       JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
       PROVEKO_CLUSTER_SECRET: ${PROVEKO_CLUSTER_SECRET:-proveko_alpanel_cluster_hmac_secret_2026}
       ENABLED_MICROSERVICES: ${ENABLED_MICROSERVICES:-*}
+    volumes:
+      - ./dist:/app/dist:ro
+      - ./libs/tenant-db-resolver/migrations:/app/libs/tenant-db-resolver/migrations:ro
     expose:
       - "4010"
     depends_on:
@@ -153,6 +162,9 @@ services:
       JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
       JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
       PROVEKO_CLUSTER_SECRET: ${PROVEKO_CLUSTER_SECRET:-proveko_alpanel_cluster_hmac_secret_2026}
+    volumes:
+      - ./dist:/app/dist:ro
+      - ./libs/tenant-db-resolver/migrations:/app/libs/tenant-db-resolver/migrations:ro
     expose:
       - "4101"
     depends_on:
@@ -182,6 +194,9 @@ services:
       JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
       JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
       PROVEKO_CLUSTER_SECRET: ${PROVEKO_CLUSTER_SECRET:-proveko_alpanel_cluster_hmac_secret_2026}
+    volumes:
+      - ./dist:/app/dist:ro
+      - ./libs/tenant-db-resolver/migrations:/app/libs/tenant-db-resolver/migrations:ro
     expose:
       - "4102"
     depends_on:
@@ -211,6 +226,9 @@ services:
       JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
       JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
       PROVEKO_CLUSTER_SECRET: ${PROVEKO_CLUSTER_SECRET:-proveko_alpanel_cluster_hmac_secret_2026}
+    volumes:
+      - ./dist:/app/dist:ro
+      - ./libs/tenant-db-resolver/migrations:/app/libs/tenant-db-resolver/migrations:ro
     expose:
       - "4103"
     depends_on:
@@ -240,6 +258,9 @@ services:
       JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
       JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
       PROVEKO_CLUSTER_SECRET: ${PROVEKO_CLUSTER_SECRET:-proveko_alpanel_cluster_hmac_secret_2026}
+    volumes:
+      - ./dist:/app/dist:ro
+      - ./libs/tenant-db-resolver/migrations:/app/libs/tenant-db-resolver/migrations:ro
     expose:
       - "4104"
     depends_on:
@@ -269,6 +290,9 @@ services:
       JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
       JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
       PROVEKO_CLUSTER_SECRET: ${PROVEKO_CLUSTER_SECRET:-proveko_alpanel_cluster_hmac_secret_2026}
+    volumes:
+      - ./dist:/app/dist:ro
+      - ./libs/tenant-db-resolver/migrations:/app/libs/tenant-db-resolver/migrations:ro
     expose:
       - "4105"
     depends_on:
@@ -298,6 +322,9 @@ services:
       JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-kid-proveko-cluster-2026}
       JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_ed25519_master_seed_2026}
       PROVEKO_CLUSTER_SECRET: ${PROVEKO_CLUSTER_SECRET:-proveko_alpanel_cluster_hmac_secret_2026}
+    volumes:
+      - ./dist:/app/dist:ro
+      - ./libs/tenant-db-resolver/migrations:/app/libs/tenant-db-resolver/migrations:ro
     expose:
       - "4106"
     depends_on:
@@ -312,3 +339,4 @@ networks:
 
 volumes:
   postgres_data:
+
