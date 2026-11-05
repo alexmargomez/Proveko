@@ -899,13 +899,21 @@ describe('Proveko — Full Outward Ecosystem: API Gateway, Multi-Server Topology
       ...collectTsFiles(path.join(repoRoot, 'libs/ui-kit/src')),
       ...collectTsFiles(path.join(repoRoot, 'apps/srv-invoicing/frontend')),
       ...collectTsFiles(path.join(repoRoot, 'apps/srv-inventory/frontend')),
-      ...collectTsFiles(path.join(repoRoot, 'apps/srv-gastro/frontend')),
-      ...collectTsFiles(path.join(repoRoot, 'apps/srv-hotel/frontend')),
+      ...collectTsFiles(path.join(repoRoot, 'apps/srv-procurement/frontend')),
+      ...collectTsFiles(path.join(repoRoot, 'apps/srv-treasury/frontend')),
       ...collectTsFiles(path.join(repoRoot, 'apps/srv-crm/frontend')),
       ...collectTsFiles(path.join(repoRoot, 'apps/srv-finance/frontend')),
+      ...collectTsFiles(path.join(repoRoot, 'apps/srv-hr-payroll/frontend')),
+      ...collectTsFiles(path.join(repoRoot, 'apps/srv-reports/frontend')),
+      ...collectTsFiles(path.join(repoRoot, 'apps/srv-gastro/frontend')),
+      ...collectTsFiles(path.join(repoRoot, 'apps/srv-workshop/frontend')),
+      ...collectTsFiles(path.join(repoRoot, 'apps/srv-fleet/frontend')),
+      ...collectTsFiles(path.join(repoRoot, 'apps/srv-appointments/frontend')),
+      ...collectTsFiles(path.join(repoRoot, 'apps/srv-hotel/frontend')),
+      ...collectTsFiles(path.join(repoRoot, 'apps/srv-ticketing/frontend')),
     ];
 
-    expect(frontendFiles.length).toBeGreaterThanOrEqual(30);
+    expect(frontendFiles.length).toBeGreaterThanOrEqual(38);
     for (const filePath of frontendFiles) {
       const content = fs.readFileSync(filePath, 'utf8');
       const lineCount = content.split('\n').length;
@@ -943,7 +951,7 @@ describe('Proveko — Full Outward Ecosystem: API Gateway, Multi-Server Topology
     expect(safeSerialized).not.toContain('</script>');
     expect(safeSerialized).toContain('\\u003c/script\\u003e');
 
-    // Verificación de los 3 Apartados Públicos, 4 Roles Oficiales, Cero Selectores Educativos y Cero Empresas Random
+    // Verificación de los 3 Apartados Públicos, 4 Roles Oficiales, 14 Microservicios, 9 Grupos de Clientes y Cero Empresas Random
     const landingHtml = renderProvekoWorkstationHtml({
       appDomain: 'proveko.sudoalexmar.tech',
       initialSurface: 'landing',
@@ -966,6 +974,13 @@ describe('Proveko — Full Outward Ecosystem: API Gateway, Multi-Server Topology
     expect(landingHtml).toContain('proveko_groups_db');
     expect(landingHtml).toContain('bares-discotecas');
     expect(landingHtml).toContain('distribuidora-mayorista');
+    expect(landingHtml).toContain('talleres-fixmotor');
+    expect(landingHtml).toContain('servicios-citas-v2');
+    expect(landingHtml).toContain('erp-corporativo-integral');
+    expect(landingHtml).toContain('srv-procurement');
+    expect(landingHtml).toContain('srv-reports');
+    expect(landingHtml).toContain('srv-workshop');
+    expect(landingHtml).toContain('srv-hr-payroll');
     expect(landingHtml).toContain('ws-v2-filter-input');
     expect(landingHtml).toContain('Listado de Clientes y Terceros (v2)');
     expect(landingHtml).toContain('sa-groups-catalog-panel');

@@ -1,45 +1,29 @@
 import type { MicroserviceFrontendDefinition } from '../../web-app/src/domain/contracts/platform-hub.contract.js';
 
 /**
- * Frontend interno del Microservicio `srv-gastro` (Módulo Principal: Restaurantes, Mesas y Comandas).
- * Submódulos en interpestañas:
- *  - Salón y Mapa de Mesas (`mod-tables`)
- *  - Monitor de Cocina KDS (`mod-kds`)
- *  - División de Cuentas (`mod-split`)
+ * Frontend interno del Microservicio `srv-gastro` (Módulo Principal: Restaurantes, Bares, KDS y Domicilios).
  */
 export const SRV_GASTRO_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
   serviceKey: 'srv-gastro',
-  externalPrincipalModuleName: 'Restaurantes, Mesas y Comandas',
+  externalPrincipalModuleName: 'Restaurantes, Bares, Comandas KDS y Domicilios',
   icon: '🍽️',
-  subtitle: 'Control de salón, comandas en tiempo real para cocina/bar y división de cuentas.',
-  standaloneMonthlyUsd: 119000,
+  subtitle: 'Salón y barras, comandas KDS por estación, carta con modificadores, división de cuentas y despacho de domicilios.',
+  standaloneMonthlyUsd: 129000,
   submodules: [
     {
       moduleKey: 'mod-tables',
       parentServiceKey: 'srv-gastro',
-      externalSubmoduleName: 'Salón y Mapa de Mesas',
+      externalSubmoduleName: 'Salón, Barras y Mapa de Mesas',
       tabIcon: '🪑',
-      summary: 'Ocupación de mesas por terraza o salón, comensales activos y asignación de mesero.',
+      summary: 'Ocupación de mesas por terraza o salón, comensales activos, medidas de licor y asignación de mesero.',
       monthlyAddonUsd: 39000,
       actionButtonLabel: 'Abrir / Actualizar Mesa',
       tableHeaders: ['Mesa / Zona', 'Comensales', 'Mesero Asignado', 'Consumo Acumulado', 'Estado'],
       fields: [
         { key: 'tableCode', label: 'Mesa y Zona', type: 'select', options: ['Mesa 01 — Salón Principal', 'Mesa 05 — Terraza', 'Mesa 12 — VIP', 'Barra Principal 02'] },
         { key: 'guestsCount', label: 'Número de Comensales', type: 'number', placeholder: '4' },
-        {
-          key: 'waiterName',
-          label: 'Mesero / Bartender Asignado',
-          type: 'text',
-          placeholder: 'Mateo Ríos',
-          requiredFeatureKey: 'comp-waiter-assign',
-        },
-        {
-          key: 'barBottleMeasure',
-          label: 'Medida de Licor / Botella (Bares)',
-          type: 'select',
-          options: ['Botella Completa 750ml', 'Media Botella 375ml', 'Trago / Shot 1.5 Oz', 'Cóctel de Autor'],
-          requiredFeatureKey: 'comp-bar-shot-measure',
-        },
+        { key: 'waiterName', label: 'Mesero / Bartender Asignado', type: 'text', placeholder: 'Mateo Ríos', requiredFeatureKey: 'comp-waiter-assign' },
+        { key: 'barBottleMeasure', label: 'Medida de Licor / Botella (Bares)', type: 'select', options: ['Botella Completa 750ml', 'Media Botella 375ml', 'Trago / Shot 1.5 Oz', 'Cóctel de Autor'], requiredFeatureKey: 'comp-bar-shot-measure' },
         { key: 'currentTotal', label: 'Consumo Inicial ($ COP)', type: 'number', placeholder: '148000' },
       ],
     },
@@ -48,7 +32,7 @@ export const SRV_GASTRO_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       parentServiceKey: 'srv-gastro',
       externalSubmoduleName: 'Monitor de Cocina y Barra (KDS)',
       tabIcon: '🔥',
-      summary: 'Tablero de comandas por estación de preparación (parrilla, cocina fría, barra de licores) y tiempos.',
+      summary: 'Tablero de comandas por estación de preparación (parrilla, cocina fría, barra de licores) y tiempos SLA.',
       monthlyAddonUsd: 45000,
       actionButtonLabel: 'Enviar Comanda a Cocina / Barra',
       tableHeaders: ['Comanda', 'Mesa / Barra', 'Pedido y Notas', 'Estación', 'Tiempo / Estado'],
@@ -59,11 +43,27 @@ export const SRV_GASTRO_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
       ],
     },
     {
+      moduleKey: 'mod-modifiers-menu',
+      parentServiceKey: 'srv-gastro',
+      externalSubmoduleName: 'Carta Digital, Términos de Cocción y Adiciones',
+      tabIcon: '🥩',
+      summary: 'Configuración de términos de carne, adiciones con cobro extra, exclusiones ("sin cebolla") y combos.',
+      monthlyAddonUsd: 29000,
+      actionButtonLabel: 'Guardar Grupo de Modificadores',
+      tableHeaders: ['Grupo Modificador', 'Plato / Categoría', 'Opciones Disponibles', 'Recargo Adición (COP)', 'Estado'],
+      fields: [
+        { key: 'modifierGroup', label: 'Grupo de Modificador', type: 'text', placeholder: 'Término de Cocción / Adiciones Parrilla' },
+        { key: 'dishTarget', label: 'Categoría Aplicable', type: 'select', options: ['Cortes de Parrilla y Hamburguesas', 'Coctelería y Licores', 'Pizzas y Pastas', 'Desayunos y Combos'] },
+        { key: 'optionsList', label: 'Opciones de Selección', type: 'text', placeholder: 'Azul, Medio, Tres Cuartos (3/4), Bien Asado + Tocineta' },
+        { key: 'extraPriceCop', label: 'Recargo Adición ($ COP)', type: 'number', placeholder: '8500' },
+      ],
+    },
+    {
       moduleKey: 'mod-split',
       parentServiceKey: 'srv-gastro',
-      externalSubmoduleName: 'División de Cuentas',
+      externalSubmoduleName: 'División de Cuentas y Pre-Cuentas',
       tabIcon: '➗',
-      summary: 'Separación de cuenta por silla, por comensal o en partes iguales antes de facturar.',
+      summary: 'Separación de cuenta por silla, por comensal o en partes iguales con cálculo de Impoconsumo 8% y propina.',
       monthlyAddonUsd: 29000,
       actionButtonLabel: 'Registrar División de Cuenta',
       tableHeaders: ['Referencia', 'Mesa', 'Modalidad', 'Pagadores', 'Total por Pagador'],
@@ -71,34 +71,31 @@ export const SRV_GASTRO_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
         { key: 'tableRef', label: 'Mesa a Dividir', type: 'text', placeholder: 'Mesa 12 — VIP' },
         { key: 'splitMode', label: 'Modalidad de División', type: 'select', options: ['Por Comensal / Silla', 'Partes Iguales', 'Por Producto Consumido'] },
         { key: 'payersCount', label: 'Cantidad de Pagadores', type: 'number', placeholder: '3' },
-        { key: 'amountPerPayer', label: 'Valor Promedio por Pagador ($)', type: 'number', placeholder: '85000' },
+        { key: 'amountPerPayer', label: 'Valor Promedio por Pagador ($ COP)', type: 'number', placeholder: '85000' },
+      ],
+    },
+    {
+      moduleKey: 'mod-deliveries',
+      parentServiceKey: 'srv-gastro',
+      externalSubmoduleName: 'Domicilios Propios,Plataformas y Motorizados',
+      tabIcon: '🛵',
+      summary: 'Despacho de pedidos a domicilio por WhatsApp/Web/Rappi, asignación de domiciliario y cuadre de efectivo.',
+      monthlyAddonUsd: 35000,
+      actionButtonLabel: 'Despachar Pedido con Domiciliario',
+      tableHeaders: ['Pedido #', 'Cliente y Dirección', 'Canal', 'Domiciliario', 'Total + Envío (COP)'],
+      fields: [
+        { key: 'orderCode', label: 'Consecutivo Domicilio', type: 'text', placeholder: 'DOM-2026-419' },
+        { key: 'customerAddress', label: 'Cliente, Teléfono y Dirección', type: 'text', placeholder: 'Cra 15 # 88-20 Apto 502 — 310 554 1190' },
+        { key: 'channel', label: 'Canal de Entrada', type: 'select', options: ['WhatsApp Directo Restaurante', 'Página Web Propia', 'Rappi / Didi Food', 'Teléfono PBX'] },
+        { key: 'courierName', label: 'Motorizado Asignado', type: 'text', placeholder: 'Kevin Andrés Mora — Moto Placa KLM-45D' },
+        { key: 'totalWithDelivery', label: 'Total a Recaudar ($ COP)', type: 'number', placeholder: '94000' },
       ],
     },
   ],
   features: [
-    {
-      componentKey: 'comp-waiter-assign',
-      externalName: 'Asignación de mesero / bartender por mesa',
-      description: 'Registra el mesero o bartender responsable en apertura de mesa y liquidación de propinas.',
-      parentModuleKey: 'mod-tables',
-      includedByDefault: true,
-      monthlyAddonUsd: 15000,
-    },
-    {
-      componentKey: 'comp-bar-shot-measure',
-      externalName: 'Control de inventario por trago / botella (Bares)',
-      description: 'Descuenta automáticamente onzas o mililitros de botellas abiertas al vender tragos o cócteles.',
-      parentModuleKey: 'mod-tables',
-      includedByDefault: true,
-      monthlyAddonUsd: 19000,
-    },
-    {
-      componentKey: 'comp-happy-hour-pricing',
-      externalName: 'Tarifas automáticas Happy Hour (Bares)',
-      description: 'Activa precios promocionales por franja horaria en barra y mesas.',
-      parentModuleKey: 'mod-tables',
-      includedByDefault: true,
-      monthlyAddonUsd: 15000,
-    },
+    { componentKey: 'comp-waiter-assign', externalName: 'Asignación de mesero / bartender por mesa', description: 'Registra el mesero o bartender responsable en apertura de mesa y liquidación de propinas.', parentModuleKey: 'mod-tables', includedByDefault: true, monthlyAddonUsd: 15000 },
+    { componentKey: 'comp-bar-shot-measure', externalName: 'Control de inventario por trago / botella (Bares)', description: 'Descuenta automáticamente onzas o mililitros de botellas abiertas al vender tragos o cócteles.', parentModuleKey: 'mod-tables', includedByDefault: true, monthlyAddonUsd: 19000 },
+    { componentKey: 'comp-happy-hour-pricing', externalName: 'Tarifas automáticas Happy Hour (Bares)', description: 'Activa precios promocionales por franja horaria en barra y mesas.', parentModuleKey: 'mod-tables', includedByDefault: true, monthlyAddonUsd: 15000 },
+    { componentKey: 'comp-courtesy-auth', externalName: 'PIN supervisor para cortesías y anulaciones de comanda', description: 'Exige autorización de administrador y motivo al anular un plato ya enviado a cocina.', parentModuleKey: 'mod-kds', includedByDefault: true, monthlyAddonUsd: 15000 },
   ],
 };

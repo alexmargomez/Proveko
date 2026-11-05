@@ -1,25 +1,21 @@
 import type { MicroserviceFrontendDefinition } from '../../web-app/src/domain/contracts/platform-hub.contract.js';
 
 /**
- * Frontend interno del Microservicio `srv-crm` (Módulo Principal: Clientes, Proveedores y Comercial).
- * Submódulos en interpestañas:
- *  - Directorio de Terceros (`mod-directory`)
- *  - Oportunidades y Embudo Comercial (`mod-pipelines`)
- *  - Fidelización y Puntos (`mod-loyalty`)
+ * Frontend interno del Microservicio `srv-crm` (Módulo Principal: Clientes, Proveedores, Contratos v2 y CRM 360).
  */
 export const SRV_CRM_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
   serviceKey: 'srv-crm',
-  externalPrincipalModuleName: 'Clientes, Proveedores y Terceros (v2)',
+  externalPrincipalModuleName: 'Clientes, Proveedores, Contratos (v2) y CRM 360',
   icon: '🤝',
-  subtitle: 'Listado maestro estilo v2 de clientes, proveedores y transportistas con filtros, cupos y fidelización.',
-  standaloneMonthlyUsd: 95000,
+  subtitle: 'Directorio maestro estilo v2 (NIT+DV, DANE, sucursales), contratos con bolsa presupuestal, LTV 360° y fidelización.',
+  standaloneMonthlyUsd: 115000,
   submodules: [
     {
       moduleKey: 'mod-directory',
       parentServiceKey: 'srv-crm',
       externalSubmoduleName: 'Listado de Clientes y Terceros (v2)',
       tabIcon: '📇',
-      summary: 'Directorio completo estilo version2: identificación NIT+DV, clasificación, régimen fiscal, ciudad, correo FE y cupo de crédito.',
+      summary: 'Directorio completo estilo version2: identificación NIT+DV, responsabilidades DIAN, DANE, sucursales y cupo de crédito.',
       monthlyAddonUsd: 29000,
       actionButtonLabel: 'Guardar Cliente / Tercero en BD',
       tableHeaders: ['NIT / Documento', 'Razón Social / Nombre', 'Tipo de Tercero', 'Ciudad / Teléfono', 'Cupo Aprobado (COP)'],
@@ -29,16 +25,49 @@ export const SRV_CRM_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
         { key: 'legalName', label: 'Razón Social o Nombre Completo', type: 'text', placeholder: 'Distribuidora del Caribe S.A.S.' },
         { key: 'partyRole', label: 'Clasificación del Tercero', type: 'select', options: ['Cliente Corporativo', 'Cliente Frecuente / Mostrador', 'Proveedor de Insumos', 'Empresa Transportista', 'Cliente y Proveedor'] },
         { key: 'taxRegime', label: 'Régimen Tributario DIAN', type: 'select', options: ['Responsable de IVA (Régimen Común)', 'No Responsable de IVA', 'Gran Contribuyente', 'Régimen Simple RST'] },
-        { key: 'cityPhone', label: 'Ciudad, Dirección y WhatsApp', type: 'text', placeholder: 'Barranquilla — 300 412 8890' },
+        { key: 'cityPhone', label: 'Ciudad DANE, Dirección y WhatsApp', type: 'text', placeholder: 'Barranquilla (08001) — 300 412 8890' },
         { key: 'billingEmail', label: 'Correo Recepción Factura Electrónica', type: 'text', placeholder: 'facturacion@empresa.co' },
         { key: 'paymentTerm', label: 'Condición y Plazo de Pago', type: 'select', options: ['Contado Inmediato', 'Crédito 15 Días', 'Crédito 30 Días', 'Crédito 60 Días'] },
         { key: 'creditLimit', label: 'Cupo de Crédito Aprobado ($ COP)', type: 'number', placeholder: '15000000' },
       ],
     },
     {
+      moduleKey: 'mod-contracts',
+      parentServiceKey: 'srv-crm',
+      externalSubmoduleName: 'Contratos Comerciales y Bolsas Presupuestales (v2)',
+      tabIcon: '📜',
+      summary: 'Convenios corporativos estilo EmpresaContrato v2 con techo presupuestal, consumo acumulado, vigencias y pólizas.',
+      monthlyAddonUsd: 45000,
+      actionButtonLabel: 'Crear / Actualizar Contrato Corporativo',
+      tableHeaders: ['N° Contrato', 'Empresa / Convenio', 'Vigencia', 'Techo Presupuestal', 'Saldo Disponible (COP)'],
+      fields: [
+        { key: 'contractNumber', label: 'Número de Contrato / Convenio', type: 'text', placeholder: 'CNT-2026-0084' },
+        { key: 'companyName', label: 'Empresa Contratante', type: 'text', placeholder: 'Grupo Industrial del Pacífico S.A.' },
+        { key: 'validityRange', label: 'Vigencia Inicial — Final', type: 'text', placeholder: '2026-01-01 a 2026-12-31' },
+        { key: 'budgetCeiling', label: 'Bolsa / Techo Presupuestal ($ COP)', type: 'number', placeholder: '120000000' },
+        { key: 'availableBalance', label: 'Saldo Disponible Actual ($ COP)', type: 'number', placeholder: '84500000' },
+      ],
+    },
+    {
+      moduleKey: 'mod-customer-360',
+      parentServiceKey: 'srv-crm',
+      externalSubmoduleName: 'Expediente 360° LTV y Segmentación RFM',
+      tabIcon: '🎯',
+      summary: 'Métricas tipo FixMotor: valor histórico comprado (LTV), ticket promedio, frecuencia de visita y alerta de inactividad.',
+      monthlyAddonUsd: 35000,
+      actionButtonLabel: 'Actualizar Ficha 360° y Segmento',
+      tableHeaders: ['Cliente', 'Segmento RFM', 'Total Histórico LTV', 'Ticket Promedio', 'Días Sin Compra'],
+      fields: [
+        { key: 'customerName', label: 'Cliente Analizado', type: 'text', placeholder: 'Inversiones automotrices del Norte' },
+        { key: 'rfmSegment', label: 'Segmento RFM', type: 'select', options: ['Campeón VIP (Alta Frecuencia)', 'Leal Recurrente', 'En Riesgo de Fuga (>60 días)', 'Nuevo Cliente'] },
+        { key: 'lifetimeValueCop', label: 'LTV Histórico Acumulado ($ COP)', type: 'number', placeholder: '42800000' },
+        { key: 'avgTicketCop', label: 'Ticket Promedio ($ COP)', type: 'number', placeholder: '1850000' },
+      ],
+    },
+    {
       moduleKey: 'mod-pipelines',
       parentServiceKey: 'srv-crm',
-      externalSubmoduleName: 'Oportunidades y Embudo',
+      externalSubmoduleName: 'Oportunidades y Embudo Comercial',
       tabIcon: '📈',
       summary: 'Seguimiento de negocios en negociación, etapa comercial, ejecutivo asignado y cierre esperado.',
       monthlyAddonUsd: 39000,
@@ -48,13 +77,13 @@ export const SRV_CRM_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
         { key: 'dealTitle', label: 'Nombre del Negocio / Contrato', type: 'text', placeholder: 'Suministro Mensual Dotación Industrial' },
         { key: 'prospectName', label: 'Empresa Prospecto', type: 'text', placeholder: 'Ingenios Unidos S.A.' },
         { key: 'stage', label: 'Etapa Actual', type: 'select', options: ['Contacto Inicial', 'Propuesta Enviada', 'Negociación Final', 'Ganada / Cerrada'] },
-        { key: 'expectedValue', label: 'Valor Estimado ($)', type: 'number', placeholder: '18500000' },
+        { key: 'expectedValue', label: 'Valor Estimado ($ COP)', type: 'number', placeholder: '18500000' },
       ],
     },
     {
       moduleKey: 'mod-loyalty',
       parentServiceKey: 'srv-crm',
-      externalSubmoduleName: 'Fidelización y Puntos',
+      externalSubmoduleName: 'Fidelización, Puntos y Cashback',
       tabIcon: '⭐',
       summary: 'Acumulación y redención de puntos por compras frecuentes y categorías de cliente.',
       monthlyAddonUsd: 29000,
@@ -70,11 +99,27 @@ export const SRV_CRM_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
   features: [
     {
       componentKey: 'comp-nit-dv-auto',
-      externalName: 'Cálculo automático de Dígito de Verificación NIT',
+      externalName: 'Cálculo automático de Dígito de Verificación NIT (Módulo 11 DIAN)',
       description: 'Calcula automáticamente el DV fiscal al registrar clientes, proveedores o transportistas.',
       parentModuleKey: 'mod-directory',
       includedByDefault: true,
       monthlyAddonUsd: 15000,
+    },
+    {
+      componentKey: 'comp-credit-quota-lock',
+      externalName: 'Bloqueo automático de despacho por cupo de crédito o mora',
+      description: 'Impide facturar a crédito cuando el cliente supera su cupo aprobado o presenta facturas vencidas.',
+      parentModuleKey: 'mod-directory',
+      includedByDefault: true,
+      monthlyAddonUsd: 19000,
+    },
+    {
+      componentKey: 'comp-contract-budget-alert',
+      externalName: 'Alerta de agotamiento de bolsa presupuestal de contrato (v2)',
+      description: 'Notifica cuando el consumo acumulado de un convenio supera el 80% del techo contratado.',
+      parentModuleKey: 'mod-contracts',
+      includedByDefault: true,
+      monthlyAddonUsd: 19000,
     },
   ],
 };

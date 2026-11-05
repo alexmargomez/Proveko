@@ -1,0 +1,116 @@
+import type { MicroserviceFrontendDefinition } from '../../web-app/src/domain/contracts/platform-hub.contract.js';
+
+/**
+ * Frontend interno del Microservicio `srv-workshop` (Módulo Principal: Talleres Automotrices, OT Kanban y Comisiones).
+ * Inspirado 100% en `FixMotor` (`Vehicles`, `Schedules`, `Workers`, `WorkerSettlements`, `WorkshopKanbanService`).
+ */
+export const SRV_WORKSHOP_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
+  serviceKey: 'srv-workshop',
+  externalPrincipalModuleName: 'Talleres Automotrices, OT Kanban y Comisiones (FixMotor)',
+  icon: '🔧',
+  subtitle: 'Recepción técnica por placa, semáforo SOAT/Tecnomecánica/Aceite, tablero Kanban de 5 etapas y liquidación de mecánicos.',
+  standaloneMonthlyUsd: 129000,
+  submodules: [
+    {
+      moduleKey: 'mod-vehicles-assets',
+      parentServiceKey: 'srv-workshop',
+      externalSubmoduleName: 'Parque Automotor / Equipos y Alertas (SOAT / Aceite)',
+      tabIcon: '🏍️',
+      summary: 'Hoja de vida clínica por placa/serial, odómetro actual, próximo cambio de aceite y vencimientos SOAT/Tecnomecánica.',
+      monthlyAddonUsd: 39000,
+      actionButtonLabel: 'Guardar Vehículo / Activo en BD',
+      tableHeaders: ['Placa / Serial', 'Marca y Línea', 'Propietario', 'Kilometraje / Próximo Aceite', 'Semáforo SOAT / Tecno'],
+      fields: [
+        { key: 'plate', label: 'Placa del Vehículo o Serial Equipo', type: 'text', placeholder: 'KLM-84G / WXY-912' },
+        { key: 'makeModel', label: 'Marca y Línea / Modelo', type: 'text', placeholder: 'Yamaha NMAX Connected 155 — Mod 2025' },
+        { key: 'ownerName', label: 'Cliente Propietario y WhatsApp', type: 'text', placeholder: 'Andrés Felipe Toro — 315 842 9910' },
+        { key: 'mileageInfo', label: 'Kilometraje Actual / Próximo Cambio Aceite', type: 'text', placeholder: 'Actual: 14.200 Km | Próximo Aceite: 17.000 Km' },
+        {
+          key: 'legalAlerts',
+          label: 'Estado SOAT y Revisión Tecnomecánica',
+          type: 'select',
+          options: ['Vigente al Día (Verde)', 'Próximo a Vencer < 15 Días (Naranja)', 'SOAT / Tecnomecánica Vencido (Rojo)'],
+          requiredFeatureKey: 'comp-soat-tecno-oil-alerts',
+        },
+      ],
+    },
+    {
+      moduleKey: 'mod-work-orders-kanban',
+      parentServiceKey: 'srv-workshop',
+      externalSubmoduleName: 'Recepción 360° y Tablero Kanban de Taller (5 Etapas)',
+      tabIcon: '📋',
+      summary: 'Órdenes de trabajo (Recibido -> Diagnóstico -> Esperando Repuesto -> En Reparación -> Listo para Entrega) con aviso WhatsApp.',
+      monthlyAddonUsd: 49000,
+      actionButtonLabel: 'Crear / Avanzar Orden en Kanban',
+      tableHeaders: ['N° Orden (OT)', 'Placa y Cliente', 'Técnico Asignado', 'Etapa Kanban', 'Trabajos y Total ($ COP)'],
+      fields: [
+        { key: 'otNumber', label: 'Número de Orden de Trabajo', type: 'text', placeholder: 'OT-2026-00914' },
+        { key: 'vehicleAndClient', label: 'Placa y Propietario', type: 'text', placeholder: 'KLM-84G — Andrés Felipe Toro' },
+        { key: 'assignedWorker', label: 'Mecánico / Técnico Responsable', type: 'select', options: ['Carlos Julio Pineda (Especialista Inyección)', 'Robinson Morales (Frenos y Suspensión)', 'Diego Fernando Ríos (Electricidad y Diagnóstico)'] },
+        { key: 'kanbanStage', label: 'Etapa en el Tablero Kanban', type: 'select', options: ['1. Recibido en Taller', '2. En Diagnóstico Técnico', '3. Esperando Repuesto', '4. En Reparación en Bahía', '5. Listo para Entrega (Notificar WhatsApp)'] },
+        { key: 'servicesChecklist', label: 'Trabajos Solicitados y Checklist Recepción', type: 'text', placeholder: 'Cambio Aceite + Pastillas Delanteras (Deja Casco, Combustible 50%)' },
+        { key: 'estimatedTotal', label: 'Total Repuestos + Mano de Obra ($ COP)', type: 'number', placeholder: '285000' },
+      ],
+    },
+    {
+      moduleKey: 'mod-worker-commissions',
+      parentServiceKey: 'srv-workshop',
+      externalSubmoduleName: 'Liquidación de Comisiones de Mecánicos / Técnicos',
+      tabIcon: '👷',
+      summary: 'Acumulador de mano de obra producida en el turno (totalDia), porcentaje del técnico vs taller y liquidación auditable.',
+      monthlyAddonUsd: 39000,
+      actionButtonLabel: 'Liquidar Corte de Comisión a Técnico',
+      tableHeaders: ['Liquidación', 'Mecánico / Técnico', 'Mano de Obra Bruta', '% Comisión', 'Pagado a Técnico ($ COP)'],
+      fields: [
+        { key: 'settlementCode', label: 'Código de Liquidación', type: 'text', placeholder: 'LIQ-TEC-00312' },
+        { key: 'workerName', label: 'Mecánico / Técnico', type: 'text', placeholder: 'Carlos Julio Pineda' },
+        { key: 'grossLabor', label: 'Total Bruto Mano de Obra del Turno ($ COP)', type: 'number', placeholder: '640000' },
+        { key: 'commissionPct', label: 'Esquema de Participación (%)', type: 'select', options: ['60% Técnico / 40% Taller', '50% Técnico / 50% Taller', '40% Técnico / 60% Taller', '70% Especialista Externo / 30% Taller'] },
+        { key: 'paidToWorker', label: 'Neto Pagado al Técnico ($ COP)', type: 'number', placeholder: '384000' },
+      ],
+    },
+    {
+      moduleKey: 'mod-warranties',
+      parentServiceKey: 'srv-workshop',
+      externalSubmoduleName: 'Garantías de Repuestos y Mano de Obra',
+      tabIcon: '🛡️',
+      summary: 'Control de reingresos por garantía vinculados a la factura original o serial del repuesto instalado.',
+      monthlyAddonUsd: 29000,
+      actionButtonLabel: 'Registrar Caso de Garantía',
+      tableHeaders: ['Radicado Garantía', 'Factura / OT Origen', 'Placa / Repuesto', 'Dictamen Técnico', 'Costo Asumido ($ COP)'],
+      fields: [
+        { key: 'warrantyCode', label: 'Radicado de Garantía', type: 'text', placeholder: 'GAR-2026-0048' },
+        { key: 'originInvoiceOt', label: 'Factura y OT Original', type: 'text', placeholder: 'FEV-1088 / OT-2026-00810' },
+        { key: 'itemOrService', label: 'Placa y Repuesto / Trabajo Reclamado', type: 'text', placeholder: 'KLM-84G — Batería Gel 12V 7Ah (Serial BAT-9912)' },
+        { key: 'resolutionType', label: 'Resolución Técnica', type: 'select', options: ['Reposición sin Costo por Proveedor', 'Ajuste Mano de Obra Taller', 'Improcedente por Mal Uso'] },
+        { key: 'assumedCost', label: 'Valor Cubierto ($ COP)', type: 'number', placeholder: '145000' },
+      ],
+    },
+  ],
+  features: [
+    {
+      componentKey: 'comp-soat-tecno-oil-alerts',
+      externalName: 'Semáforo preventivo de SOAT, Tecnomecánica y Cambio de Aceite',
+      description: 'Muestra alertas automáticas al digitar la placa si el vehículo tiene documentos o cambio de aceite próximos a vencer.',
+      parentModuleKey: 'mod-vehicles-assets',
+      includedByDefault: true,
+      monthlyAddonUsd: 15000,
+    },
+    {
+      componentKey: 'comp-kanban-whatsapp-notify',
+      externalName: 'Notificación WhatsApp en 1 clic por etapa del Kanban',
+      description: 'Envía mensaje automático al celular del cliente cuando su vehículo avanza de etapa o está Listo para Entrega.',
+      parentModuleKey: 'mod-work-orders-kanban',
+      includedByDefault: true,
+      monthlyAddonUsd: 15000,
+    },
+    {
+      componentKey: 'comp-pos-ot-preload',
+      externalName: 'Precarga automática de Orden de Trabajo en Caja POS',
+      description: 'Al facturar una placa con orden pendiente en el taller, carga automáticamente sus repuestos, mano de obra y mecánico.',
+      parentModuleKey: 'mod-work-orders-kanban',
+      includedByDefault: true,
+      monthlyAddonUsd: 19000,
+    },
+  ],
+};

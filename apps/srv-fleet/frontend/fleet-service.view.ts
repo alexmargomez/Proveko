@@ -1,0 +1,105 @@
+import type { MicroserviceFrontendDefinition } from '../../web-app/src/domain/contracts/platform-hub.contract.js';
+
+/**
+ * Frontend interno del Microservicio `srv-fleet` (Módulo Principal: Flotas, Báscula Camionera y RNDC).
+ */
+export const SRV_FLEET_FRONTEND_VIEW: MicroserviceFrontendDefinition = {
+  serviceKey: 'srv-fleet',
+  externalPrincipalModuleName: 'Flotas, Báscula Camionera y RNDC',
+  icon: '🚛',
+  subtitle: 'Báscula camionera RS-232 (Bruto/Tara/Neto), manifiestos RNDC Ministerio de Transporte, anticipos de viaje y control de llantas.',
+  standaloneMonthlyUsd: 165000,
+  submodules: [
+    {
+      moduleKey: 'mod-fleet-scale',
+      parentServiceKey: 'srv-fleet',
+      externalSubmoduleName: 'Báscula Camionera RS-232 y Destare de Flota',
+      tabIcon: '⚖️',
+      summary: 'Pesaje camionero Bruto / Tara / Neto en kilogramos y toneladas, descuento por humedad/impureza y transportista.',
+      monthlyAddonUsd: 65000,
+      actionButtonLabel: 'Emitir Tiquete de Báscula',
+      tableHeaders: ['Tiquete', 'Placa / Remolque', 'Transportista / Conductor', 'Peso Bruto', 'Peso Tara', 'Peso Neto'],
+      hasTruckScaleWeighbridge: true,
+      fields: [
+        { key: 'truckPlate', label: 'Placa Cabezote / Remolque', type: 'text', placeholder: 'SXT-942 / R-4481' },
+        { key: 'driverName', label: 'Conductor y Cédula', type: 'text', placeholder: 'Hernando Valencia — CC 79.412.880' },
+        {
+          key: 'carrierCompany',
+          label: 'Seleccionar Transportista',
+          type: 'select',
+          options: ['TransCarga Pesada de Colombia', 'Cooperativa de Tractomulas del Sur', 'Particular / Flota Propia'],
+          requiredFeatureKey: 'comp-carrier-select',
+        },
+        { key: 'cargoType', label: 'Carga y Muelle Asignado', type: 'text', placeholder: 'Granel Maíz Amarillo — Muelle 3' },
+      ],
+    },
+    {
+      moduleKey: 'mod-fleet-dispatch-rndc',
+      parentServiceKey: 'srv-fleet',
+      externalSubmoduleName: 'Despachos, Remesas y Manifiestos RNDC',
+      tabIcon: '🛣️',
+      summary: 'Emisión de remesas terrestres de carga, manifiestos electrónicos RNDC, conductores y piso SICETAC.',
+      monthlyAddonUsd: 55000,
+      actionButtonLabel: 'Radicar Manifiesto RNDC',
+      tableHeaders: ['Manifiesto RNDC', 'Ruta Origen → Destino', 'Tractomula / Remolque', 'Conductor', 'Flete Pactado ($ COP)'],
+      fields: [
+        { key: 'manifestCode', label: 'Consecutivo Manifiesto RNDC', type: 'text', placeholder: 'MN-2026-08841' },
+        { key: 'routeDetail', label: 'Ruta Origen → Destino (DANE)', type: 'text', placeholder: 'Buenaventura (Valle) → Bogotá D.C.' },
+        { key: 'vehiclePlate', label: 'Placa Cabezote y Tráiler', type: 'text', placeholder: 'WXY-812 / R-5520' },
+        { key: 'driverName', label: 'Conductor Asignado', type: 'text', placeholder: 'Álvaro Gómez — Lic. C3' },
+        { key: 'agreedFreight', label: 'Valor Flete Pactado ($ COP)', type: 'number', placeholder: '4850000' },
+      ],
+    },
+    {
+      moduleKey: 'mod-trip-settlements',
+      parentServiceKey: 'srv-fleet',
+      externalSubmoduleName: 'Anticipos de Viaje, Peajes, ACPM y Liquidación',
+      tabIcon: '⛽',
+      summary: 'Legalización de anticipos de conductores, peajes, ACPM (rendimiento Km/Galón), viáticos y cumplido de remesa.',
+      monthlyAddonUsd: 49000,
+      actionButtonLabel: 'Liquidar Viaje y Cumplido',
+      tableHeaders: ['Liquidación', 'Manifiesto', 'Anticipos Giro', 'Peajes + ACPM + Viáticos', 'Saldo a Pagar ($ COP)'],
+      fields: [
+        { key: 'settlementCode', label: 'N° Liquidación de Viaje', type: 'text', placeholder: 'LIQ-V-2026-310' },
+        { key: 'manifestRef', label: 'Manifiesto RNDC Cumplido', type: 'text', placeholder: 'MN-2026-08841' },
+        { key: 'advancePaid', label: 'Anticipo Entregado ($ COP)', type: 'number', placeholder: '2200000' },
+        { key: 'tollsAndFuel', label: 'Total Peajes + ACPM (Galones)', type: 'text', placeholder: '18 Peajes + 145 Gal ACPM ($1.950.000)' },
+        { key: 'netBalance', label: 'Saldo Neto Propietario ($ COP)', type: 'number', placeholder: '2601500' },
+      ],
+    },
+    {
+      moduleKey: 'mod-tires-fleet-maint',
+      parentServiceKey: 'srv-fleet',
+      externalSubmoduleName: 'Control de Llantas por Eje, SOAT y Tecnomecánica',
+      tabIcon: '🛞',
+      summary: 'Mapa de llantas por posición de eje, profundidad de labrado (mm), reencauches y alertas SOAT/Tecnomecánica.',
+      monthlyAddonUsd: 45000,
+      actionButtonLabel: 'Registrar Inspección de Llanta / Vehículo',
+      tableHeaders: ['Serial Llanta', 'Placa / Posición Eje', 'Labrado (mm)', 'Km Acumulados', 'Estado / SOAT'],
+      fields: [
+        { key: 'tireSerial', label: 'Serial de Llanta / Marca', type: 'text', placeholder: 'MICH-295-80R22-991' },
+        { key: 'axlePosition', label: 'Vehículo y Posición de Eje', type: 'select', options: ['Eje 1 Direccional Izq', 'Eje 1 Direccional Der', 'Eje 2 Tracción Ext', 'Tráiler Eje 3 Int'] },
+        { key: 'treadDepthMm', label: 'Profundidad Labrado (mm)', type: 'text', placeholder: '8.5 mm (Óptimo)' },
+        { key: 'accumulatedKm', label: 'Kilómetros Acumulados', type: 'number', placeholder: '64200' },
+      ],
+    },
+  ],
+  features: [
+    {
+      componentKey: 'comp-weighbridge-humidity-discount',
+      externalName: 'Descuento automático por humedad e impureza en báscula camionera',
+      description: 'Resta automáticamente el porcentaje de humedad e impureza de laboratorio sobre el peso neto destarado.',
+      parentModuleKey: 'mod-fleet-scale',
+      includedByDefault: true,
+      monthlyAddonUsd: 25000,
+    },
+    {
+      componentKey: 'comp-rndc-manifest-sync',
+      externalName: 'Validación SICETAC y Radicación RNDC Ministerio de Transporte',
+      description: 'Verifica piso tarifario SICETAC, retención 1% transporte y radicación de manifiesto de carga.',
+      parentModuleKey: 'mod-fleet-dispatch-rndc',
+      includedByDefault: true,
+      monthlyAddonUsd: 25000,
+    },
+  ],
+};
