@@ -23,6 +23,7 @@ import {
   MultiDatabaseMigrationOrchestrator,
   PerDatabaseHealthAndAlertMonitor,
   PerTenantBackupManager,
+  SystemStartupBootstrapper,
   TenantConnectionPoolManager,
   createMigrationFileDescriptor,
   type TenantSqlClient,
@@ -996,6 +997,97 @@ describe('Proveko — Core-Service & Inner Ring Libraries (Audit Verification Su
       'MIGRATION_FAILURE_OR_DRIFT',
       'BACKUP_OVERDUE',
     ]);
+  });
+
+  it('6. Ciclo de Vida Inicial y Dinámico de BDs: Arranque con proveko_control_db (coreDB) + db_version_prueba, Creación Dinámica al Registrar Cliente Nuevo y Actualización desde la Lista de coreDB', async () => {
+    const migrationsRootDir = join(
+      process.cwd(),
+      'libs/tenant-db-resolver/migrations',
+    );
+    const controlPlaneMigrationsDir = join(migrationsRootDir, 'control-plane');
+
+    const registry = new FileBasedMigrationRegistry();
+    registry.loadAllCatalogMigrationsFromRoot(migrationsRootDir);
+
+    const driver = new InMemoryMigrationDatabaseDriverAdapter();
+    const migrationEngine = new FileBasedMigrationEngine(registry, driver);
+    const fleetOrchestrator = new MultiDatabaseMigrationOrchestrator(migrationEngine, {
+      maxConcurrentDatabases: 4,
+    });
+
+    const bootstrapper = new SystemStartupBootstrapper(
+      driver,
+      migrationEngine,
+      fleetOrchestrator,
+      'proveko_control_db',
+      'db_version_prueba',
+    );
+
+    // 1. ARRANQUE INICIAL (Día 0, sin clientes pagados aún):
+    //    - Se migra la Base Principal `proveko_control_db` (coreDB, donde vive la lista de clientes/BDs).
+    //    - Se crea y migra únicamente `db_version_prueba`.
+    const bootDay0 = await bootstrapper.bootstrapOnSystemStartup(controlPlaneMigrationsDir);
+    expect(bootDay0.coreDbName).toBe('proveko_control_db');
+    expect(bootDay0.coreDbAppliedNewMigrations).toEqual([
+      '0001_init_control_plane_core_db.sql',
+    ]);
+    expect(bootDay0.trialDbCreatedOnStartup).toBe(true);
+    expect(bootDay0.registeredDatabasesInCoreDb).toEqual(['db_version_prueba']);
+    expect(bootDay0.tenantFleetMigrationReport.totalDatabasesTargeted).toBe(1);
+    expect(
+      bootDay0.tenantFleetMigrationReport.resultsByDatabase['db_version_prueba']?.status,
+    ).toBe('SUCCESS');
+
+    // 2. REGISTRO DE UN CLIENTE NUEVO:
+    //    - Se crea su propia BD (`db_tenant_ferreteria_central`), se ejecutan sus migraciones en esa nueva BD
+    //      y queda registrado en la lista de clientes/BDs dentro de `proveko_control_db`.
+    const newClientResult = await bootstrapper.registerAndMigrateNewClientDatabase({
+      tenantId: 'tnt-ferreteria-01',
+      slug: 'ferreteria_central',
+      legalName: 'Ferretería Central S.A.S.',
+      activeServices: {
+        'ms:crm': ['mod:crm-directory'],
+        'ms:invoicing': ['mod:invoicing-pos', 'mod:invoicing-electronic-dian'],
+        'ms:inventory': ['mod:inventory-stock'],
+      },
+    });
+    expect(newClientResult.clientRecord.dbName).toBe('db_tenant_ferreteria_central');
+    expect(newClientResult.appliedNewMigrations.length).toBeGreaterThan(0);
+
+    // Ahora la lista en `proveko_control_db` tiene exactamente 2 BDs: `db_version_prueba` + `db_tenant_ferreteria_central`
+    expect(bootstrapper.listRegisteredDatabasesFromCoreDb().map((r) => r.dbName)).toEqual([
+      'db_version_prueba',
+      'db_tenant_ferreteria_central',
+    ]);
+
+    // 3. SIGUIENTE DESPLIEGUE (cuando sale una migración nueva `0003_add_pos_cashier_shift.sql`):
+    //    - El sistema lee de `proveko_control_db` la lista actual (`db_version_prueba` + `db_tenant_ferreteria_central`),
+    //      salta todas las migraciones antiguas y corre solo la nueva `0003` en ambas bases de datos.
+    registry.registerMigrationFile(
+      createMigrationFileDescriptor({
+        filename: '0003_add_pos_cashier_shift.sql',
+        parentService: 'ms:invoicing',
+        moduleKey: 'mod:invoicing-pos',
+        sqlUp:
+          'ALTER TABLE "srv_invoicing"."pos_sales" ADD COLUMN IF NOT EXISTS cashier_shift_id VARCHAR(64);',
+      }),
+    );
+
+    const bootAfterUpdate = await bootstrapper.bootstrapOnSystemStartup(controlPlaneMigrationsDir);
+    expect(bootAfterUpdate.coreDbSkippedOldMigrations).toEqual([
+      '0001_init_control_plane_core_db.sql',
+    ]);
+    expect(bootAfterUpdate.coreDbAppliedNewMigrations).toEqual([]);
+    expect(bootAfterUpdate.trialDbCreatedOnStartup).toBe(false);
+    expect(bootAfterUpdate.tenantFleetMigrationReport.totalDatabasesTargeted).toBe(2);
+    expect(
+      bootAfterUpdate.tenantFleetMigrationReport.resultsByDatabase['db_version_prueba']
+        ?.appliedNewMigrations,
+    ).toEqual(['0003_add_pos_cashier_shift.sql']);
+    expect(
+      bootAfterUpdate.tenantFleetMigrationReport.resultsByDatabase['db_tenant_ferreteria_central']
+        ?.appliedNewMigrations,
+    ).toEqual(['0003_add_pos_cashier_shift.sql']);
   });
 });
 
