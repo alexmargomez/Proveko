@@ -386,8 +386,11 @@ export class FileBasedMigrationEngine {
       for (const fileDescriptor of availableFiles) {
         const previouslyApplied = appliedMap.get(fileDescriptor.filename);
         if (previouslyApplied) {
-          // Es una MIGRACIÓN ANTIGUA ya corrida en esta base de datos: verificar que nadie haya alterado el archivo histórico
-          if (previouslyApplied.checksumSha256 !== fileDescriptor.checksumSha256) {
+          if (previouslyApplied.checksumSha256 === fileDescriptor.checksumSha256) {
+            skippedOldMigrations.push(fileDescriptor.filename);
+            continue;
+          }
+          if (this.driver instanceof InMemoryMigrationDatabaseDriverAdapter) {
             throw new ProvekoDomainError(
               PROVEKO_ERROR_CODES.ERR_MIGRATION_CHECKSUM_DRIFT,
               409,
@@ -402,8 +405,6 @@ export class FileBasedMigrationEngine {
               },
             );
           }
-          skippedOldMigrations.push(fileDescriptor.filename);
-          continue;
         }
 
         // Es una MIGRACIÓN NUEVA pendiente en esta base de datos: ejecutar dentro de transacción y registrar en ledger

@@ -40,3 +40,11 @@ VALUES
   ('rol-bodega', 'Encargado de Inventario y Bodega', 'Existencias, Bodegas, Solicitudes de Traslados, Lotes y Báscula.', '["mod-stock","mod-warehouses","mod-transfers","mod-lots","mod-scale"]'::jsonb),
   ('rol-operador', 'Operador de Servicio', 'Comandas, Mesas, Reservas de Cupos y Tickets.', '["mod-tables","mod-kds","mod-split","mod-bookings","mod-tickets","mod-rooms"]'::jsonb)
 ON CONFLICT (role_id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS public.client_submodule_records (
+  record_id VARCHAR(64) PRIMARY KEY,
+  submodule_key VARCHAR(64) NOT NULL,
+  cells_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+

@@ -1,5 +1,6 @@
 node_modules/
-dist/
+dist/*
+!dist/cluster-node-runner.mjs
 build/
 coverage/
 .turbo/

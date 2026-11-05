@@ -66,7 +66,11 @@ export function renderGatewayTransportRuntimeJs(): string {
     if (iconEl) iconEl.textContent = activeSvc.icon;
     if (titleEl) titleEl.textContent = activeSvc.externalPrincipalModuleName;
     if (subEl) subEl.textContent = activeSvc.subtitle;
-    if (dbEl) dbEl.textContent = 'BD Aislada: ' + client.dbName;
+    if (dbEl) {
+      dbEl.textContent = pkIsDemoMode()
+        ? 'Almacenamiento Demo: localStorage (Navegador)'
+        : 'BD PostgreSQL Aislada: ' + client.dbName;
+    }
 
     var pillsEl = document.getElementById('ws-active-features-pills');
     if (pillsEl) {

@@ -145,35 +145,14 @@ ALTER TABLE "control_plane"."tenants" ALTER COLUMN "tax_id_nit" SET DEFAULT '900
 ALTER TABLE "control_plane"."tenants" ALTER COLUMN "encrypted_connection_envelope" SET DEFAULT '{}'::jsonb;
 ALTER TABLE "control_plane"."tenants" ALTER COLUMN "theme_config" SET DEFAULT '{}'::jsonb;
 
+-- Limpieza idempotente de empresas random previas y de la antigua BD de demo (el Demo usa localStorage)
+DELETE FROM "public"."tenant_database_connections" WHERE "db_name" IN ('db_agrovalle', 'db_labrasa', 'db_version_prueba');
+DELETE FROM "control_plane"."tenants" WHERE "id" IN ('tnt-agrovalle', 'tnt-labrasa', 'tnt-demo');
+
 INSERT INTO "control_plane"."database_cells" ("id", "code", "host", "admin_port", "pooler_port", "max_tenants", "current_tenants", "tier_target", "is_sandbox_cell", "status")
 VALUES
   ('cell-alpanel-primary', 'CELL-ALPANEL-01', 'db', 5432, 6432, 250, 1, 'ENTERPRISE', FALSE, 'ONLINE')
 ON CONFLICT ("id") DO NOTHING;
-
-INSERT INTO "control_plane"."tenants" ("id", "slug", "legal_name", "tax_id_nit", "tier", "is_sandbox", "status", "cell_id", "db_name", "encrypted_connection_envelope", "theme_config")
-VALUES
-  ('tnt-demo', 'version_prueba', 'Empresa Demo Interactiva Proveko', '900.000.000-1', 'ENTERPRISE', TRUE, 'ACTIVE', 'cell-alpanel-primary', 'db_version_prueba', '{}'::jsonb, '{}'::jsonb)
-ON CONFLICT ("id") DO NOTHING;
-
-INSERT INTO "public"."tenant_database_connections" (
-  "connection_id", "tenant_id", "company_name", "nit", "business_type",
-  "db_host", "db_port", "db_name", "db_user", "db_password_secret_ref",
-  "admin_username", "admin_password_hint", "max_roles_allowed", "max_users_allowed",
-  "enabled_services_json", "enabled_submodules_json", "enabled_features_json",
-  "pool_max_connections", "status", "last_migration_version"
-)
-VALUES (
-  'conn-demo-01', 'tnt-demo', 'Empresa Demo Interactiva Proveko', '900.000.000-1', 'empresarial-completo',
-  'db', 5432, 'db_version_prueba', 'postgres', 'env:POSTGRES_PASSWORD',
-  'demo', 'DemoProveko2026!', 8, 25,
-  '["srv-invoicing","srv-inventory","srv-gastro","srv-hotel","srv-crm","srv-finance"]'::jsonb,
-  '["mod-pos","mod-dian","mod-quotes","mod-stock","mod-warehouses","mod-transfers","mod-recipes","mod-lots","mod-scale","mod-tables","mod-kds","mod-split","mod-bookings","mod-tickets","mod-rooms","mod-directory","mod-pipelines","mod-cashbook","mod-arap","mod-puc"]'::jsonb,
-  '["comp-cashier-name","comp-tip","comp-line-discount","comp-manager-signature","comp-carrier-select","comp-scale-tare","comp-qr-ticket"]'::jsonb,
-  20, 'ACTIVE', '0002'
-)
-ON CONFLICT ("connection_id") DO UPDATE SET
-  "company_name" = EXCLUDED."company_name",
-  "db_name" = EXCLUDED."db_name";
 
 INSERT INTO "public"."role_definitions" ("role_code", "role_scope", "role_label", "description")
 VALUES

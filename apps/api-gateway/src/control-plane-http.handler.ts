@@ -34,7 +34,15 @@ export async function handleControlPlaneAndCheckoutRoutes(params: {
   const { method, url, req, res, jwtVault, migrationsRootDir, readJsonBody } = params;
 
   if (method === 'GET' && url === '/api/v1/control/databases') {
-    const live = PostgresPsqlBootstrapRunner.listPostgresDatabasesAndClients();
+    let live = PostgresPsqlBootstrapRunner.listPostgresDatabasesAndClients();
+    if (
+      process.env.DB_HOST &&
+      (!live.databases.includes('proveko_groups_db') ||
+        live.databases.includes('db_version_prueba'))
+    ) {
+      await PostgresPsqlBootstrapRunner.runStartupMigrations(migrationsRootDir);
+      live = PostgresPsqlBootstrapRunner.listPostgresDatabasesAndClients();
+    }
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify(live));
     return true;
@@ -44,6 +52,19 @@ export async function handleControlPlaneAndCheckoutRoutes(params: {
     const snapshot = PostgresPsqlBootstrapRunner.getClientGroupsCatalogFromPostgres();
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify(snapshot));
+    return true;
+  }
+
+  if (method === 'POST' && url === '/api/v1/control/client-db/record') {
+    const body = ((await readJsonBody(req)) ?? {}) as Record<string, unknown>;
+    const ok = PostgresPsqlBootstrapRunner.saveClientSubmoduleRecordInPostgres({
+      dbName: String(body.dbName ?? ''),
+      submoduleKey: String(body.submoduleKey ?? 'mod-pos'),
+      recordId: String(body.recordId ?? `REG-${Date.now()}`),
+      cells: Array.isArray(body.cells) ? (body.cells as string[]) : [],
+    });
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ ok }));
     return true;
   }
 

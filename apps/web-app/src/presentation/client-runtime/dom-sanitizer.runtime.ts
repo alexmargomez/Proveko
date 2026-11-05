@@ -5,6 +5,10 @@
 export function renderDomSanitizerRuntimeJs(): string {
   return `
   var BOOT = window.__PROVEKO_BOOT__ || {};
+  var DEMO_STORAGE_KEY = 'proveko_demo_localstorage_v1';
+  var defaultDemoClient = (BOOT.initialClients && BOOT.initialClients[0]) ? JSON.parse(JSON.stringify(BOOT.initialClients[0])) : null;
+  if (defaultDemoClient) defaultDemoClient.dbName = 'localStorage (Navegador)';
+
   var STATE = {
     publicTab: 'showcase', // 'showcase' | 'auth' | 'demo'
     authMode: 'login',     // 'login' | 'register'
@@ -12,7 +16,9 @@ export function renderDomSanitizerRuntimeJs(): string {
     selectedBusinessTypeId: (BOOT.businessTypes && BOOT.businessTypes[0]) ? BOOT.businessTypes[0].id : 'comercio-retail',
     extraServiceKeys: {},
     extraSubmoduleKeys: {},
-    clients: (BOOT.initialClients || []).slice(),
+    demoClient: defaultDemoClient,
+    clients: [],
+    pgDatabases: ['proveko_control_db', 'proveko_groups_db'],
     activeTenantId: 'tnt-demo',
     activeServiceKey: 'srv-invoicing',
     activeSubmoduleKey: 'mod-pos',
@@ -29,6 +35,31 @@ export function renderDomSanitizerRuntimeJs(): string {
     ],
     lastGeneratedClient: null
   };
+
+  function pkIsDemoMode() {
+    return !STATE.session && STATE.publicTab === 'demo';
+  }
+
+  function pkLoadDemoFromLocalStorage() {
+    try {
+      var raw = window.localStorage ? window.localStorage.getItem(DEMO_STORAGE_KEY) : null;
+      if (!raw) return;
+      var parsed = JSON.parse(raw);
+      if (parsed && parsed.demoClient) STATE.demoClient = parsed.demoClient;
+      if (parsed && parsed.submoduleRows) STATE.submoduleRows = parsed.submoduleRows;
+    } catch (_e) {}
+  }
+
+  function pkSaveDemoToLocalStorage() {
+    try {
+      if (!window.localStorage) return;
+      window.localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify({
+        demoClient: STATE.demoClient,
+        submoduleRows: STATE.submoduleRows
+      }));
+    } catch (_e) {}
+  }
+  pkLoadDemoFromLocalStorage();
 
   function pkEsc(str) {
     return String(str == null ? '' : str)
@@ -60,10 +91,11 @@ export function renderDomSanitizerRuntimeJs(): string {
   }
 
   function pkGetActiveClient() {
+    if (pkIsDemoMode()) return STATE.demoClient;
     for (var i = 0; i < STATE.clients.length; i++) {
       if (STATE.clients[i].tenantId === STATE.activeTenantId) return STATE.clients[i];
     }
-    return STATE.clients[0];
+    return STATE.clients[0] || STATE.demoClient;
   }
 
   function pkRenderShowcase() {

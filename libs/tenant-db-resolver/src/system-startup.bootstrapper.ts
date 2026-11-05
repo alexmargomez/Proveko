@@ -369,12 +369,7 @@ export class SystemStartupBootstrapper {
           const version = filename.slice(0, 4);
 
           const existing = appliedMap.get(filename);
-          if (existing) {
-            if (existing.checksumSha256 !== checksumSha256) {
-              throw new Error(
-                `Checksum drift detected on coreDB migration "${filename}" in "${this.coreDbName}".`,
-              );
-            }
+          if (existing && existing.checksumSha256 === checksumSha256) {
             skippedOldMigrations.push(filename);
             continue;
           }

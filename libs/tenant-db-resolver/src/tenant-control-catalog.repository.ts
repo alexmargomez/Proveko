@@ -45,16 +45,15 @@ export class PostgresTenantControlCatalogRepository implements TenantControlCata
       sql: `
         SELECT db_name
         FROM public.tenant_database_connections
-        WHERE status = 'ACTIVE'
+        WHERE status = 'ACTIVE' AND db_name <> 'db_version_prueba'
         ORDER BY db_name ASC;
       `,
     });
-    if (!res.ok) return ['db_version_prueba'];
-    const names = res.stdout
+    if (!res.ok) return [];
+    return res.stdout
       .split('\n')
       .map((line) => line.trim())
-      .filter(Boolean);
-    return names.length > 0 ? names : ['db_version_prueba'];
+      .filter((name) => Boolean(name) && name !== 'db_version_prueba');
   }
 
   public registerTenantAndSeedClientAdmin(
@@ -139,13 +138,43 @@ export class PostgresTenantControlCatalogRepository implements TenantControlCata
     return registerRes.ok;
   }
 
+  public saveClientSubmoduleRecord(params: {
+    dbName: string;
+    submoduleKey: string;
+    recordId: string;
+    cells: readonly string[];
+  }): boolean {
+    const safeClientDb = sanitizePgIdentifier(params.dbName);
+    const res = this.driver.executePsql({
+      dbName: safeClientDb,
+      singleTransaction: true,
+      variables: {
+        rec_id: params.recordId,
+        sub_key: params.submoduleKey,
+        cells_json: JSON.stringify(params.cells),
+      },
+      sql: `
+        CREATE TABLE IF NOT EXISTS public.client_submodule_records (
+          record_id VARCHAR(64) PRIMARY KEY,
+          submodule_key VARCHAR(64) NOT NULL,
+          cells_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        INSERT INTO public.client_submodule_records (record_id, submodule_key, cells_json)
+        VALUES (:'rec_id', :'sub_key', :'cells_json'::jsonb)
+        ON CONFLICT (record_id) DO UPDATE SET cells_json = EXCLUDED.cells_json;
+      `,
+    });
+    return res.ok;
+  }
+
   public getClusterDatabaseCatalogSnapshot(coreDbName: string): ClusterDatabaseCatalogSnapshot {
     const dbRes = this.driver.executePsql({
       dbName: 'postgres',
       sql: `
         SELECT datname
         FROM pg_database
-        WHERE datistemplate = false AND datname <> 'postgres'
+        WHERE datistemplate = false AND datname <> 'postgres' AND datname <> 'db_version_prueba'
         ORDER BY datname ASC;
       `,
     });
@@ -166,7 +195,7 @@ export class PostgresTenantControlCatalogRepository implements TenantControlCata
             admin_username, admin_password_hint, max_roles_allowed, max_users_allowed,
             enabled_services_json, enabled_submodules_json, enabled_features_json
           FROM public.tenant_database_connections
-          WHERE status = 'ACTIVE'
+          WHERE status = 'ACTIVE' AND db_name <> 'db_version_prueba'
           ORDER BY updated_at ASC
         ) t;
       `,
@@ -183,3 +212,4 @@ export class PostgresTenantControlCatalogRepository implements TenantControlCata
     return { databases, rows };
   }
 }
+
