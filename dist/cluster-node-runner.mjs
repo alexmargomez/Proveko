@@ -1,5 +1,3 @@
-import { createRequire } from 'module'; const require = createRequire(import.meta.url);
-
 // apps/api-gateway/src/cluster-node-runner.ts
 import { existsSync as existsSync3 } from "node:fs";
 import http from "node:http";
@@ -9839,6 +9837,133 @@ var PostgresClientGroupsCatalogRepository = class _PostgresClientGroupsCatalogRe
 
 // libs/tenant-db-resolver/src/postgres-psql.driver.ts
 import { join as join4 } from "node:path";
+
+// libs/tenant-db-resolver/src/tenant-relational-workspace.repository.ts
+var PostgresTenantRelationalWorkspaceRepository = class {
+  constructor(driver) {
+    this.driver = driver;
+  }
+  driver;
+  getRelationalStateSnapshot(dbName) {
+    const safeDb = sanitizePgIdentifier(dbName);
+    if (!safeDb || safeDb === "db_version_prueba") return null;
+    const ensureRes = this.driver.executePsql({
+      dbName: safeDb,
+      sql: `
+        CREATE TABLE IF NOT EXISTS public.client_relational_state_snapshot (
+          snapshot_key VARCHAR(64) PRIMARY KEY,
+          state_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        SELECT state_json::text
+        FROM public.client_relational_state_snapshot
+        WHERE snapshot_key = 'PRIMARY_RELATIONAL_GRAPH'
+        LIMIT 1;
+      `
+    });
+    if (!ensureRes.ok || !ensureRes.stdout.trim()) return null;
+    const lines = ensureRes.stdout.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("{"));
+    if (lines.length === 0) return null;
+    try {
+      return JSON.parse(lines[lines.length - 1] ?? "{}");
+    } catch {
+      return null;
+    }
+  }
+  executeRelationalTransaction(input) {
+    const safeDb = sanitizePgIdentifier(input.dbName);
+    if (!safeDb || safeDb === "db_version_prueba") return false;
+    const p = input.entityPayload ?? {};
+    const stateJson = input.fullRelationalState ? JSON.stringify(input.fullRelationalState) : null;
+    if (stateJson) {
+      this.driver.executePsql({
+        dbName: safeDb,
+        singleTransaction: true,
+        variables: { state_json: stateJson },
+        sql: `
+          CREATE TABLE IF NOT EXISTS public.client_relational_state_snapshot (
+            snapshot_key VARCHAR(64) PRIMARY KEY,
+            state_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          );
+          INSERT INTO public.client_relational_state_snapshot (snapshot_key, state_json, updated_at)
+          VALUES ('PRIMARY_RELATIONAL_GRAPH', :'state_json'::jsonb, NOW())
+          ON CONFLICT (snapshot_key) DO UPDATE SET
+            state_json = EXCLUDED.state_json,
+            updated_at = NOW();
+        `
+      });
+    }
+    if (input.actionType === "ISSUE_HYBRID_INVOICE") {
+      const invoiceNumber = String(p.invoiceNumber ?? `FEV-${Date.now().toString().slice(-5)}`);
+      const customerNit = String(p.customerNit ?? "900.000.000-1");
+      const customerName = String(p.customerName ?? "Cliente General");
+      const total = Number(p.total ?? 0);
+      const pendingBalance = Number(p.pendingBalance ?? 0);
+      const cxcId = `cxc-${invoiceNumber.toLowerCase().replace(/[^a-z0-9]/g, "")}`;
+      this.driver.executePsql({
+        dbName: safeDb,
+        singleTransaction: true,
+        variables: {
+          inv_num: invoiceNumber,
+          cust_nit: customerNit,
+          cust_name: customerName,
+          total_amt: String(total),
+          pending_amt: String(pendingBalance),
+          cxc_id: cxcId,
+          cufe_val: `CUFE-sha384-${invoiceNumber.toLowerCase()}-${Date.now()}`
+        },
+        sql: `
+          INSERT INTO srv_treasury.trs_accounts_receivable (
+            cxc_id, invoice_number, customer_nit, customer_name, aging_bucket, original_amount_cop, balance_pending_cop, status
+          ) VALUES (
+            :'cxc_id', :'inv_num', :'cust_nit', :'cust_name', 'CORRIENTE_0_30',
+            :'total_amt'::numeric, :'pending_amt'::numeric,
+            CASE WHEN :'pending_amt'::numeric > 0 THEN 'OPEN' ELSE 'PAID' END
+          )
+          ON CONFLICT (cxc_id) DO UPDATE SET
+            balance_pending_cop = EXCLUDED.balance_pending_cop,
+            status = EXCLUDED.status;
+        `
+      });
+    } else if (input.actionType === "REGISTER_CXC_PAYMENT") {
+      const invoiceNumber = String(p.invoiceNumber ?? "FEV-10421");
+      const customerName = String(p.customerName ?? "Cliente");
+      const amount = Number(p.amount ?? 0);
+      const newBalance = Number(p.newBalance ?? 0);
+      const rcNumber = String(p.rcNumber ?? `RC-${Date.now().toString().slice(-5)}`);
+      const cxcId = `cxc-${invoiceNumber.toLowerCase().replace(/[^a-z0-9]/g, "")}`;
+      this.driver.executePsql({
+        dbName: safeDb,
+        singleTransaction: true,
+        variables: {
+          cxc_id: cxcId,
+          rc_id: rcNumber.toLowerCase(),
+          rc_num: rcNumber,
+          cust_name: customerName,
+          amt: String(amount),
+          new_bal: String(newBalance)
+        },
+        sql: `
+          UPDATE srv_treasury.trs_accounts_receivable
+          SET balance_pending_cop = :'new_bal'::numeric,
+              status = CASE WHEN :'new_bal'::numeric <= 0 THEN 'PAID' ELSE 'PARTIAL' END
+          WHERE cxc_id = :'cxc_id' OR invoice_number = :'cxc_id';
+
+          INSERT INTO srv_treasury.trs_cash_receipt_vouchers (
+            rc_id, rc_consecutive, customer_name, amount_received_cop
+          ) VALUES (
+            :'rc_id', :'rc_num', :'cust_name', :'amt'::numeric
+          )
+          ON CONFLICT (rc_id) DO NOTHING;
+        `
+      });
+    }
+    return true;
+  }
+};
+
+// libs/tenant-db-resolver/src/postgres-psql.driver.ts
 function buildFullCatalogServicesMap() {
   const map = {};
   for (const mod2 of SEED_MICROSERVICES_CATALOG) {
@@ -10005,6 +10130,22 @@ var PostgresPsqlBootstrapRunner = class {
     if (!driver.isReachable().ok) return false;
     const groupsRepo = new PostgresClientGroupsCatalogRepository(driver);
     return groupsRepo.registerDeveloperCatalogItem(input);
+  }
+  static getClientRelationalStateFromPostgres(dbName) {
+    const cfg = PostgresMigrationDatabaseDriverAdapter.resolveEnvConfig();
+    if (!cfg) return null;
+    const driver = new PostgresMigrationDatabaseDriverAdapter(cfg);
+    if (!driver.isReachable().ok) return null;
+    const repo = new PostgresTenantRelationalWorkspaceRepository(driver);
+    return repo.getRelationalStateSnapshot(dbName);
+  }
+  static executeClientRelationalTransactionInPostgres(input) {
+    const cfg = PostgresMigrationDatabaseDriverAdapter.resolveEnvConfig();
+    if (!cfg) return false;
+    const driver = new PostgresMigrationDatabaseDriverAdapter(cfg);
+    if (!driver.isReachable().ok) return false;
+    const repo = new PostgresTenantRelationalWorkspaceRepository(driver);
+    return repo.executeRelationalTransaction(input);
   }
 };
 
@@ -14616,6 +14757,129 @@ var INITIAL_SUBMODULE_ROWS = {
   ...EXPANSION_SUBMODULE_SEED_ROWS
 };
 
+// apps/web-app/src/presentation/client-runtime/crm-360-cxc-hub.runtime.ts
+function renderCrm360CxcHubRuntimeJs() {
+  return `
+  function pkRenderLook360Hub() {
+    var db = STATE.relDb;
+    var container = document.getElementById('ws-converged-hub-container');
+    if (!container || !db) return;
+
+    var tab = STATE.look360Tab || 'customers';
+    var q = (STATE.look360Search || '').trim().toLowerCase();
+
+    var totalCxc = 0; var creditInvoicesCount = 0;
+    for (var invIdx = 0; invIdx < db.invoices.length; invIdx++) {
+      var inv = db.invoices[invIdx];
+      if (Number(inv.pendingBalance || 0) > 0) {
+        totalCxc += Number(inv.pendingBalance);
+        creditInvoicesCount++;
+      }
+    }
+
+    var tableHtml = '';
+    if (tab === 'customers') {
+      var cRows = '';
+      for (var c = 0; c < db.customers.length; c++) {
+        var cu = db.customers[c];
+        if (q && (cu.name + ' ' + cu.nit + ' ' + cu.city).toLowerCase().indexOf(q) === -1) continue;
+        var contract = cu.contractId ? pkFindById(db.contracts, cu.contractId) : null;
+        var tariff = cu.tariffId ? pkFindById(db.tariffs, cu.tariffId) : null;
+        var vehCount = 0; var invCount = 0;
+        for (var v = 0; v < db.vehicles.length; v++) if (db.vehicles[v].customerId === cu.id) vehCount++;
+        for (var iv = 0; iv < db.invoices.length; iv++) if (db.invoices[iv].customerId === cu.id) invCount++;
+        cRows += '<tr>' +
+          '<td><strong>' + pkEsc(cu.name) + '</strong><div style="font-size:11px;color:var(--pk-muted)">' + pkEsc(cu.docType + ' ' + cu.nit + (cu.dv ? '-' + cu.dv : '') + ' \xB7 ' + cu.taxRegime) + '</div></td>' +
+          '<td>' + pkEsc(cu.city) + '<div style="font-size:11px;color:var(--pk-muted)">\u{1F4DE} ' + pkEsc(cu.phone) + '</div></td>' +
+          '<td><span class="badge badge-blue">' + pkEsc(contract ? contract.code : 'Contado') + '</span> <span class="badge badge-slate">' + pkEsc(tariff ? tariff.name : 'Plena') + '</span></td>' +
+          '<td><span class="badge badge-emerald">\u{1F697} ' + vehCount + ' activos</span> <span class="badge badge-blue">\u{1F9FE} ' + invCount + ' fact.</span></td>' +
+          '<td><strong style="color:' + (cu.currentDebt > 0 ? 'var(--pk-amber)' : 'var(--pk-emerald)') + '">' + pkCop(cu.currentDebt) + '</strong> / Cupo: ' + pkCop(cu.creditLimit) + '</td>' +
+          '<td><div class="row-actions">' +
+          '<button type="button" class="btn btn-primary btn-sm" data-open-customer-360="' + pkEsc(cu.id) + '">\u{1F441}\uFE0F Expediente 360\xB0</button>' +
+          '<button type="button" class="btn btn-outline btn-sm" data-pos-select-cust-go="' + pkEsc(cu.id) + '">\u{1F6D2} Facturarle</button></div></td></tr>';
+      }
+      tableHtml = '<table><thead><tr><th>Tercero / NIT DIAN</th><th>Ciudad / WhatsApp</th><th>Contrato y Tarifa (FK)</th><th>Relaciones FK</th><th>Deuda CxC / Cupo</th><th>Acciones 360\xB0</th></tr></thead><tbody>' + cRows + '</tbody></table>';
+    } else if (tab === 'cxc') {
+      var dRows = '';
+      for (var d = 0; d < db.invoices.length; d++) {
+        var f = db.invoices[d];
+        if (q && (f.id + ' ' + f.customerName + ' ' + f.plate).toLowerCase().indexOf(q) === -1) continue;
+        var hasDebt = Number(f.pendingBalance || 0) > 0;
+        dRows += '<tr>' +
+          '<td><strong>' + pkEsc(f.id) + '</strong><div style="font-size:11px;color:var(--pk-muted)">' + pkEsc(f.date) + '</div></td>' +
+          '<td><strong>' + pkEsc(f.customerName) + '</strong><div style="font-size:11px;color:var(--pk-muted)">\u{1F697} Placa FK: ' + pkEsc(f.plate || 'Mostrador') + '</div></td>' +
+          '<td>' + pkCop(f.total) + '</td>' +
+          '<td style="color:var(--pk-emerald);font-weight:700">' + pkCop(f.amountPaid) + '</td>' +
+          '<td><span class="badge ' + (hasDebt ? 'badge-amber' : 'badge-emerald') + '" style="font-size:12px">' + (hasDebt ? 'Debe: ' + pkCop(f.pendingBalance) : '\u2713 Paz y Salvo') + '</span></td>' +
+          '<td><div class="row-actions">' +
+          (hasDebt ? '<button type="button" class="btn btn-emerald btn-sm" data-open-abono-modal="' + pkEsc(f.id) + '">\u{1F4B5} Registrar Abono / Pagar</button>' : '') +
+          '<button type="button" class="btn btn-outline btn-sm" data-open-invoice-modal="' + pkEsc(f.id) + '">\u{1F5A8}\uFE0F Ver Factura / Glosa</button></div></td></tr>';
+      }
+      tableHtml = '<table><thead><tr><th>Factura / Fecha</th><th>Cliente y Veh\xEDculo (FK)</th><th>Total Factura</th><th>Total Abonado</th><th>Saldo Pendiente CxC</th><th>Recaudo / Visor</th></tr></thead><tbody>' + dRows + '</tbody></table>';
+    } else if (tab === 'vehicles') {
+      var vRows = '';
+      for (var vh = 0; vh < db.vehicles.length; vh++) {
+        var ve = db.vehicles[vh];
+        if (q && (ve.plate + ' ' + ve.brand + ' ' + ve.customerName).toLowerCase().indexOf(q) === -1) continue;
+        vRows += '<tr>' +
+          '<td><span class="badge badge-blue" style="font-size:12px">\u{1F697} ' + pkEsc(ve.plate) + '</span></td>' +
+          '<td><strong>' + pkEsc(ve.brand) + '</strong> (' + ve.modelYear + ')</td>' +
+          '<td>\u{1F464} <strong>' + pkEsc(ve.customerName) + '</strong></td>' +
+          '<td>Actual: <strong>' + ve.currentKm.toLocaleString('es-CO') + ' km</strong> \xB7 Pr\xF3x Aceite: <strong>' + ve.nextOilChangeKm.toLocaleString('es-CO') + ' km</strong></td>' +
+          '<td>SOAT: ' + pkEsc(ve.soatExpiry) + ' \xB7 Tecno: ' + pkEsc(ve.tecnoExpiry) + '</td>' +
+          '<td><button type="button" class="btn btn-primary btn-sm" data-open-vehicle-360="' + pkEsc(ve.id) + '">\u{1F441}\uFE0F Hoja de Vida Placa</button></td></tr>';
+      }
+      tableHtml = '<table><thead><tr><th>Placa</th><th>Marca / L\xEDnea</th><th>Propietario (FK -> customers)</th><th>Control Kilometraje / Aceite</th><th>Vencimientos Legales</th><th>Historial</th></tr></thead><tbody>' + vRows + '</tbody></table>';
+    } else if (tab === 'contracts') {
+      var ctRows = '';
+      for (var ct = 0; ct < db.contracts.length; ct++) {
+        var co = db.contracts[ct];
+        var tf = pkFindById(db.tariffs, co.tariffId);
+        ctRows += '<tr>' +
+          '<td><code>' + pkEsc(co.code) + '</code></td>' +
+          '<td><strong>' + pkEsc(co.name) + '</strong><div style="font-size:11px;color:var(--pk-muted)">Entidad: ' + pkEsc(co.entityNit) + '</div></td>' +
+          '<td><span class="badge badge-blue">' + pkEsc(tf ? tf.name + ' (-' + tf.discountPct + '%)' : co.tariffId) + '</span></td>' +
+          '<td>' + pkCop(co.budgetCeiling) + '</td>' +
+          '<td>' + pkCop(co.consumedAmount) + '</td>' +
+          '<td><strong style="color:var(--pk-emerald)">' + pkCop(co.availableBalance) + '</strong></td></tr>';
+      }
+      tableHtml = '<table><thead><tr><th>C\xF3digo Contrato</th><th>Convenio / Entidad (Estilo v2)</th><th>Tarifario Enlazado (FK)</th><th>Techo Presupuestal</th><th>Ejecutado / Facturado</th><th>Saldo Disponible</th></tr></thead><tbody>' + ctRows + '</tbody></table>';
+    } else {
+      var kRows = '';
+      for (var km = 0; km < db.kardexMovements.length; km++) {
+        var kv = db.kardexMovements[km];
+        kRows += '<tr>' +
+          '<td><code>' + pkEsc(kv.id) + '</code><div style="font-size:10px;color:var(--pk-muted)">' + pkEsc(kv.date) + '</div></td>' +
+          '<td><span class="badge ' + (kv.movementType.indexOf('ENTRADA') !== -1 ? 'badge-emerald' : 'badge-amber') + '">' + pkEsc(kv.movementType) + '</span></td>' +
+          '<td><strong>' + pkEsc(kv.productName) + '</strong></td>' +
+          '<td>' + (kv.qty > 0 ? '+' + kv.qty : kv.qty) + ' und (Saldo: <strong>' + kv.balanceAfter + '</strong>)</td>' +
+          '<td>' + pkCop(kv.unitCost) + '</td>' +
+          '<td><code>' + pkEsc(kv.referenceDoc) + '</code> \xB7 ' + pkEsc(kv.actor) + '</td></tr>';
+      }
+      tableHtml = '<table><thead><tr><th>Movimiento / Fecha</th><th>Tipo Operaci\xF3n</th><th>Producto (FK)</th><th>Cantidad / Saldo Post</th><th>Costo Unit.</th><th>Documento Origen (FK)</th></tr></thead><tbody>' + kRows + '</tbody></table>';
+    }
+
+    container.innerHTML =
+      '<div class="kpi-row">' +
+      '<div class="kpi-box"><div class="kpi-label">Terceros / Clientes Activos</div><div class="kpi-val">' + db.customers.length + ' empresas/personas</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Veh\xEDculos / Activos Enlazados</div><div class="kpi-val" style="color:var(--pk-primary)">' + db.vehicles.length + ' placas con FK</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Total Cartera por Cobrar (CxC)</div><div class="kpi-val" style="color:var(--pk-amber)">' + pkCop(totalCxc) + ' (' + creditInvoicesCount + ' fact.)</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Contratos y Convenios v2</div><div class="kpi-val" style="color:var(--pk-emerald)">' + db.contracts.length + ' vigentes</div></div>' +
+      '</div>' +
+
+      '<div class="card"><div class="card-head"><div class="row-actions">' +
+      '<button type="button" class="btn ' + (tab === 'customers' ? 'btn-primary' : 'btn-outline') + ' btn-sm" data-look360-tab="customers">\u{1F465} Clientes y Terceros 360\xB0 (' + db.customers.length + ')</button>' +
+      '<button type="button" class="btn ' + (tab === 'cxc' ? 'btn-primary' : 'btn-outline') + ' btn-sm" data-look360-tab="cxc">\u{1F4B5} Cartera CxC, Facturas y Abonos (' + db.invoices.length + ')</button>' +
+      '<button type="button" class="btn ' + (tab === 'vehicles' ? 'btn-primary' : 'btn-outline') + ' btn-sm" data-look360-tab="vehicles">\u{1F697} Veh\xEDculos y Activos (' + db.vehicles.length + ')</button>' +
+      '<button type="button" class="btn ' + (tab === 'contracts' ? 'btn-primary' : 'btn-outline') + ' btn-sm" data-look360-tab="contracts">\u{1F4D1} Contratos y Tarifarios v2 (' + db.contracts.length + ')</button>' +
+      '<button type="button" class="btn ' + (tab === 'kardex' ? 'btn-primary' : 'btn-outline') + ' btn-sm" data-look360-tab="kardex">\u{1F4CA} Kardex Auditor\xEDa (' + db.kardexMovements.length + ')</button>' +
+      '</div>' +
+      '<input type="text" id="look360-search-input" value="' + pkEsc(STATE.look360Search || '') + '" placeholder="\u{1F50E} Filtrar por cliente, NIT, placa o factura..." style="padding:6px 10px;border-radius:8px;border:1px solid var(--pk-border);font-size:12px;min-width:220px" />' +
+      '</div><div class="card-body"><div class="table-wrap">' + tableHtml + '</div></div></div>';
+  }
+`;
+}
+
 // apps/web-app/src/presentation/client-runtime/developer-groups-catalog.runtime.ts
 function renderDeveloperGroupsCatalogRuntimeJs() {
   return `
@@ -14789,11 +15053,20 @@ function renderDomSanitizerRuntimeJs() {
     activeServiceKey: 'srv-invoicing',
     activeSubmoduleKey: 'mod-pos',
     activeWorkstationPane: 'module', // 'module' | 'rbac' | 'need-feature'
+    activeConvergedHub: 'pos',       // 'pos' | 'kanban' | 'inventory' | 'look360' | 'reports' | 'gastro' | 'submodules'
     submoduleRows: JSON.parse(JSON.stringify(BOOT.initialRows || {})),
     featureRequests: [],
+    relDb: pkCreateInitialRelationalDb(),
+    posCustomerId: 'cust-1',
+    posVehicleId: 'veh-1',
+    posPaymentMethod: 'Efectivo',
+    posCashReceived: 250000,
+    posCreditInitialAbono: 50000,
+    posLinkedOrderId: '',
+    posLinkedTableId: '',
     posCart: [
-      { name: 'Producto / Servicio Principal', qty: 2, price: 48000, discountPct: 0 },
-      { name: 'Insumo Complementario', qty: 1, price: 29000, discountPct: 5 }
+      { kind: 'PRODUCTO', refId: 'prd-1', code: 'ACE-20W50', name: 'Aceite Sint\xE9tico 20W-50 4T / Gal\xF3n', qty: 1, price: 48000, taxPct: 19 },
+      { kind: 'SERVICIO', refId: 'SRV-INI', code: 'MO', name: 'Sincronizaci\xF3n Electr\xF3nica y Esc\xE1ner', qty: 1, price: 85000, taxPct: 0, workerId: 'wk-1', workerName: 'Carlos Andr\xE9s M\xE9ndez' }
     ],
     bomLines: [
       { ingredient: 'Materia Prima Base', qty: '10', unit: 'Kg', cost: 24000 },
@@ -14805,7 +15078,6 @@ function renderDomSanitizerRuntimeJs() {
   function pkIsDemoMode() {
     return !STATE.session && STATE.publicTab === 'demo';
   }
-
   function pkLoadDemoFromLocalStorage() {
     try {
       var raw = window.localStorage ? window.localStorage.getItem(DEMO_STORAGE_KEY) : null;
@@ -14813,26 +15085,26 @@ function renderDomSanitizerRuntimeJs() {
       var parsed = JSON.parse(raw);
       if (parsed && parsed.demoClient) STATE.demoClient = parsed.demoClient;
       if (parsed && parsed.submoduleRows) STATE.submoduleRows = parsed.submoduleRows;
+      if (parsed && parsed.relDb && parsed.relDb.customers) STATE.relDb = parsed.relDb;
     } catch (_e) {}
   }
-
   function pkSaveDemoToLocalStorage() {
     try {
-      if (!window.localStorage) return;
-      window.localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify({
-        demoClient: STATE.demoClient,
-        submoduleRows: STATE.submoduleRows
-      }));
+      if (window.localStorage) window.localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify({ demoClient: STATE.demoClient, submoduleRows: STATE.submoduleRows, relDb: STATE.relDb }));
     } catch (_e) {}
   }
   pkLoadDemoFromLocalStorage();
 
+  function pkHydrateClientRelationalWorkspace(dbName) {
+    if (!dbName || dbName.indexOf('localStorage') !== -1) return;
+    fetch('/api/v1/client-workspace/state?dbName=' + encodeURIComponent(dbName)).then(function(r) { return r.json(); }).then(function(res) {
+      if (res && res.state && res.state.customers) { STATE.relDb = res.state; pkRenderWorkstation(); }
+      else { pkPersistRelationalTx('INIT_SEED', {}); }
+    }).catch(function() {});
+  }
+
   function pkEsc(str) {
-    return String(str == null ? '' : str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+    return String(str == null ? '' : str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
   function pkCop(val) {
@@ -15152,11 +15424,34 @@ function renderGatewayTransportRuntimeJs() {
       var tHtml = '';
       for (var k = 0; k < availableSubs.length; k++) {
         var subTab = availableSubs[k];
-        var isTabAct = activeSub && subTab.moduleKey === activeSub.moduleKey;
+        var isTabAct = activeSub && subTab.moduleKey === activeSub.moduleKey && STATE.activeConvergedHub === 'submodules';
         tHtml += '<button type="button" class="btn ' + (isTabAct ? 'btn-primary' : 'btn-outline') + ' btn-sm" data-ws-submodule="' + pkEsc(subTab.moduleKey) + '">' +
           pkEsc(subTab.tabIcon + ' ' + subTab.externalSubmoduleName) + '</button>';
       }
       tabsEl.innerHTML = tHtml;
+    }
+
+    var hubBtns = document.querySelectorAll('[data-ws-hub]');
+    for (var hb = 0; hb < hubBtns.length; hb++) {
+      var hKey = hubBtns[hb].getAttribute('data-ws-hub');
+      hubBtns[hb].className = 'btn ' + (STATE.activeConvergedHub === hKey ? 'btn-primary' : 'btn-outline') + ' btn-sm';
+    }
+
+    var hubContainer = document.getElementById('ws-converged-hub-container');
+    var stdWrapper = document.getElementById('ws-standard-submodules-wrapper');
+    if (STATE.activeConvergedHub && STATE.activeConvergedHub !== 'submodules') {
+      if (hubContainer) hubContainer.style.display = 'block';
+      if (stdWrapper) stdWrapper.style.display = 'none';
+      if (STATE.activeConvergedHub === 'pos') pkRenderPosHub();
+      else if (STATE.activeConvergedHub === 'kanban') pkRenderKanbanHub();
+      else if (STATE.activeConvergedHub === 'inventory') pkRenderInventoryHub();
+      else if (STATE.activeConvergedHub === 'look360') pkRenderLook360Hub();
+      else if (STATE.activeConvergedHub === 'reports') pkRenderReportsAndCashboxHub();
+      else if (STATE.activeConvergedHub === 'gastro') pkRenderGastroHub();
+      return;
+    } else {
+      if (hubContainer) hubContainer.style.display = 'none';
+      if (stdWrapper) stdWrapper.style.display = 'block';
     }
 
     if (!activeSub) return;
@@ -15220,6 +15515,110 @@ function renderGatewayTransportRuntimeJs() {
       var cntBadge = document.getElementById('ws-v2-count-badge');
       if (cntBadge) cntBadge.textContent = matchedCount + ' / ' + rows.length + ' registros';
     }
+  }
+`;
+}
+
+// apps/web-app/src/presentation/client-runtime/inventory-wms-hub.runtime.ts
+function renderInventoryWmsHubRuntimeJs() {
+  return `
+  function pkRenderInventoryHub() {
+    var db = STATE.relDb;
+    var container = document.getElementById('ws-converged-hub-container');
+    if (!container || !db) return;
+
+    var totalCostVal = 0;
+    var totalSaleVal = 0;
+    var lowStockCount = 0;
+    var whFilter = STATE.invWarehouseFilter || 'ALL';
+    var qSearch = (STATE.invSearchText || '').trim().toLowerCase();
+
+    var whOpts = '<option value="ALL">Todas las Bodegas (' + db.warehouses.length + ')</option>';
+    var whSelectForm = '';
+    for (var w = 0; w < db.warehouses.length; w++) {
+      var wh = db.warehouses[w];
+      whOpts += '<option value="' + pkEsc(wh.id) + '" ' + (whFilter === wh.id ? 'selected' : '') + '>' + pkEsc(wh.code + ' \u2014 ' + wh.name) + '</option>';
+      whSelectForm += '<option value="' + pkEsc(wh.id) + '">' + pkEsc(wh.code + ' \u2014 ' + wh.name) + '</option>';
+    }
+
+    var supOpts = '';
+    for (var s = 0; s < db.suppliers.length; s++) {
+      var sp = db.suppliers[s];
+      supOpts += '<option value="' + pkEsc(sp.id) + '">' + pkEsc(sp.name + ' (NIT ' + sp.nit + ' \xB7 ' + sp.city + ')') + '</option>';
+    }
+
+    var prodOpts = '<option value="NEW">+ Crear Nuevo Producto / Referencia en Cat\xE1logo</option>';
+    var rowsHtml = '';
+    for (var i = 0; i < db.products.length; i++) {
+      var p = db.products[i];
+      prodOpts += '<option value="' + pkEsc(p.id) + '">' + pkEsc('[' + p.code + '] ' + p.name + ' (Stock actual: ' + p.stock + ')') + '</option>';
+      var costLine = Number(p.costPrice || 0) * Number(p.stock || 0);
+      var saleLine = Number(p.salePrice || 0) * Number(p.stock || 0);
+      totalCostVal += costLine;
+      totalSaleVal += saleLine;
+      if (Number(p.stock || 0) <= Number(p.minStock || 5)) lowStockCount++;
+
+      if (whFilter !== 'ALL' && p.warehouseId !== whFilter) continue;
+      if (qSearch && (p.code + ' ' + p.name + ' ' + p.category).toLowerCase().indexOf(qSearch) === -1) continue;
+
+      var whObj = pkFindById(db.warehouses, p.warehouseId);
+      var supObj = pkFindById(db.suppliers, p.supplierId);
+      var unitProfit = Number(p.salePrice || 0) - Number(p.costPrice || 0);
+      var marginPct = p.salePrice > 0 ? Math.round((unitProfit / p.salePrice) * 100) : 0;
+      var isLow = Number(p.stock || 0) <= Number(p.minStock || 5);
+
+      rowsHtml += '<tr>' +
+        '<td><code>' + pkEsc(p.code) + '</code><div style="font-size:10px;color:var(--pk-muted)">Lote: ' + pkEsc(p.lotCode || 'N/A') + '</div></td>' +
+        '<td><strong>' + pkEsc(p.name) + '</strong><div style="font-size:11px;color:var(--pk-muted)">\u{1F3F7}\uFE0F ' + pkEsc(p.category) + ' \xB7 \u{1F91D} FK Prov: ' + pkEsc(supObj ? supObj.name : 'Directo') + '</div></td>' +
+        '<td><span class="badge badge-slate">' + pkEsc(whObj ? whObj.name : p.warehouseId) + '</span></td>' +
+        '<td>' + pkCop(p.costPrice) + '</td>' +
+        '<td><strong>' + pkCop(p.salePrice) + '</strong></td>' +
+        '<td><span class="badge badge-emerald">+' + pkCop(unitProfit) + ' (' + marginPct + '%)</span></td>' +
+        '<td><div class="row-actions">' +
+        '<button type="button" class="btn btn-outline btn-sm" data-inv-delta="-1" data-inv-id="' + pkEsc(p.id) + '">-1</button>' +
+        '<span class="badge ' + (isLow ? 'badge-amber' : 'badge-blue') + '" style="font-size:12px">' + p.stock + ' und' + (isLow ? ' \u26A0\uFE0F Bajo' : '') + '</span>' +
+        '<button type="button" class="btn btn-outline btn-sm" data-inv-delta="1" data-inv-id="' + pkEsc(p.id) + '">+1</button>' +
+        '</div></td></tr>';
+    }
+
+    var potentialProfit = totalSaleVal - totalCostVal;
+    var globalMarginPct = totalSaleVal > 0 ? Math.round((potentialProfit / totalSaleVal) * 100) : 0;
+
+    container.innerHTML =
+      '<div class="kpi-row">' +
+      '<div class="kpi-box"><div class="kpi-label">Costo Total en Bodega (Inversi\xF3n)</div><div class="kpi-val">' + pkCop(totalCostVal) + '</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Valor Total de Venta (PVP)</div><div class="kpi-val" style="color:var(--pk-primary)">' + pkCop(totalSaleVal) + '</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Ganancia Potencial Estimada</div><div class="kpi-val" style="color:var(--pk-emerald)">' + pkCop(potentialProfit) + ' (' + globalMarginPct + '%)</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Alertas Stock M\xEDnimo / Cr\xEDtico</div><div class="kpi-val" style="color:' + (lowStockCount > 0 ? 'var(--pk-amber)' : 'var(--pk-emerald)') + '">' + lowStockCount + ' referencias</div></div>' +
+      '</div>' +
+
+      '<div class="card"><div class="card-head"><div>' +
+      '<div class="card-title">\u{1F4E5} 1. Registrar Entrada de Compra a Proveedor / Acta de Recepci\xF3n T\xE9cnica v2 (FK -> suppliers, warehouses, kardex)</div>' +
+      '<div class="card-sub">Incrementa existencias autom\xE1ticamente, actualiza el costo de compra/PVP y deja trazabilidad auditable en el Kardex Valorizado</div></div></div>' +
+      '<div class="card-body"><div class="form-grid">' +
+      '<div class="field"><label>Producto Existente o Nuevo (FK -> products)</label><select id="inv-entry-product-id">' + prodOpts + '</select></div>' +
+      '<div class="field"><label>Proveedor Emisor (FK -> suppliers)</label><select id="inv-entry-supplier-id">' + supOpts + '</select></div>' +
+      '<div class="field"><label>Bodega Destino (FK -> warehouses)</label><select id="inv-entry-warehouse-id">' + whSelectForm + '</select></div>' +
+      '<div class="field"><label>Factura Compra / Acta v2 N\xBA</label><input type="text" id="inv-entry-invoice-ref" placeholder="Ej: FC-PROV-8841 / ACTA-2026" value="ACTA-REC-' + String(Date.now()).slice(-4) + '" /></div>' +
+      '<div class="field"><label>C\xF3digo SKU (Si es nuevo)</label><input type="text" id="inv-entry-sku" placeholder="Ej: REP-9920" /></div>' +
+      '<div class="field"><label>Nombre Producto (Si es nuevo)</label><input type="text" id="inv-entry-name" placeholder="Ej: Amortiguador Trasero Gas / Insumo" /></div>' +
+      '<div class="field"><label>Cantidad Recibida (+ Stock)</label><input type="number" id="inv-entry-qty" value="10" min="1" /></div>' +
+      '<div class="field"><label>Costo Unitario Compra (COP)</label><input type="number" id="inv-entry-cost" value="35000" /></div>' +
+      '<div class="field"><label>Precio Venta P\xFAblico (COP)</label><input type="number" id="inv-entry-sale" value="58000" /></div>' +
+      '<div class="field"><label>Lote / Vencimiento / Temp. Acta v2</label><input type="text" id="inv-entry-lot" placeholder="Ej: LOTE-2026B \xB7 Vence 2028 \xB7 22\xB0C Conforme" value="LOTE-2026B \xB7 Conforme" /></div>' +
+      '</div><div style="margin-top:10px;display:flex;justify-content:flex-end">' +
+      '<button type="button" class="btn btn-emerald" id="btn-inv-register-purchase">\u{1F4E5} Procesar Entrada de Almac\xE9n, Sumar Stock y Asentar Kardex</button></div></div></div>' +
+
+      '<div class="card"><div class="card-head"><div>' +
+      '<div class="card-title">\u{1F4E6} 2. Cat\xE1logo Maestro Valorizado con Enlaces a Bodegas y Proveedores</div>' +
+      '<div class="card-sub">Ajusta existencias en tiempo real (-1 / +1) o filtra por bodega y referencia</div></div>' +
+      '<div class="row-actions">' +
+      '<select id="inv-filter-warehouse" style="padding:6px 10px;border-radius:8px;border:1px solid var(--pk-border);font-size:12px">' + whOpts + '</select>' +
+      '<input type="text" id="inv-search-input" value="' + pkEsc(STATE.invSearchText || '') + '" placeholder="\u{1F50E} Buscar SKU, nombre o categor\xEDa..." style="padding:6px 10px;border-radius:8px;border:1px solid var(--pk-border);font-size:12px;min-width:210px" />' +
+      '</div></div>' +
+      '<div class="card-body"><div class="table-wrap"><table><thead><tr>' +
+      '<th>SKU / Lote</th><th>Producto y Proveedor (FK)</th><th>Bodega (FK)</th><th>Costo</th><th>Precio Venta</th><th>Utilidad / Margen</th><th>Existencias (Kardex)</th>' +
+      '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div></div></div>';
   }
 `;
 }
@@ -15414,6 +15813,971 @@ function renderPlatformActionsRuntimeJs() {
 `;
 }
 
+// apps/web-app/src/presentation/client-runtime/pos-hybrid-hub.runtime.ts
+function renderPosHybridHubRuntimeJs() {
+  return `
+  function pkRenderPosHub() {
+    var db = STATE.relDb;
+    var container = document.getElementById('ws-converged-hub-container');
+    if (!container || !db) return;
+
+    var cust = pkFindById(db.customers, STATE.posCustomerId) || db.customers[0];
+    if (cust) STATE.posCustomerId = cust.id;
+    var contract = cust && cust.contractId ? pkFindById(db.contracts, cust.contractId) : null;
+    var tariff = cust && cust.tariffId ? pkFindById(db.tariffs, cust.tariffId) : null;
+    var custVehicles = [];
+    for (var v = 0; v < db.vehicles.length; v++) {
+      if (!cust || db.vehicles[v].customerId === cust.id) custVehicles.push(db.vehicles[v]);
+    }
+    var selectedVehicle = pkFindById(db.vehicles, STATE.posVehicleId) || custVehicles[0] || null;
+    if (selectedVehicle && !STATE.posVehicleId) STATE.posVehicleId = selectedVehicle.id;
+
+    var pendingOrders = [];
+    for (var o = 0; o < db.workOrders.length; o++) {
+      var wo = db.workOrders[o];
+      if (wo.status !== 'Facturado' && ((cust && wo.customerId === cust.id) || (selectedVehicle && wo.vehicleId === selectedVehicle.id))) {
+        pendingOrders.push(wo);
+      }
+    }
+    var openTables = [];
+    for (var dt = 0; dt < db.diningTables.length; dt++) {
+      if (db.diningTables[dt].status !== 'Libre' && db.diningTables[dt].items.length > 0) openTables.push(db.diningTables[dt]);
+    }
+
+    var custOpts = '';
+    for (var cIdx = 0; cIdx < db.customers.length; cIdx++) {
+      var cItem = db.customers[cIdx];
+      custOpts += '<option value="' + pkEsc(cItem.id) + '" ' + (cust && cust.id === cItem.id ? 'selected' : '') + '>' +
+        pkEsc(cItem.docType + ' ' + cItem.nit + (cItem.dv ? '-' + cItem.dv : '') + ' \u2014 ' + cItem.name + ' (' + cItem.city + ')') + '</option>';
+    }
+    var vehOpts = '<option value="">\u2014 Sin veh\xEDculo / Venta mostrador \u2014</option>';
+    for (var vIdx = 0; vIdx < db.vehicles.length; vIdx++) {
+      var vItem = db.vehicles[vIdx];
+      var isOwner = cust && vItem.customerId === cust.id;
+      vehOpts += '<option value="' + pkEsc(vItem.id) + '" ' + (selectedVehicle && selectedVehicle.id === vItem.id ? 'selected' : '') + '>' +
+        pkEsc(vItem.plate + ' \xB7 ' + vItem.brand + ' (' + (isOwner ? 'Del cliente' : vItem.customerName) + ')') + '</option>';
+    }
+    var prodOpts = '';
+    for (var pIdx = 0; pIdx < db.products.length; pIdx++) {
+      var pr = db.products[pIdx];
+      prodOpts += '<option value="' + pkEsc(pr.id) + '">' + pkEsc('[' + pr.code + '] ' + pr.name + ' \u2014 Stock: ' + pr.stock + ' \u2014 ' + pkCop(pr.salePrice)) + '</option>';
+    }
+    var workerOpts = '';
+    for (var wIdx = 0; wIdx < db.workers.length; wIdx++) {
+      var wk = db.workers[wIdx];
+      workerOpts += '<option value="' + pkEsc(wk.id) + '">' + pkEsc(wk.name + ' (' + wk.specialty + ' \xB7 Com. ' + wk.commissionPct + '%)') + '</option>';
+    }
+
+    var alertsHtml = '';
+    if (selectedVehicle) {
+      var oilDiff = selectedVehicle.nextOilChangeKm - selectedVehicle.currentKm;
+      var oilBadge = oilDiff <= 500
+        ? '<span class="badge badge-amber">\u{1F6E2}\uFE0F Cambio Aceite urgente (en ' + oilDiff + ' km \xB7 Meta: ' + selectedVehicle.nextOilChangeKm + ' km)</span>'
+        : '<span class="badge badge-emerald">\u{1F6E2}\uFE0F Aceite OK (Pr\xF3x: ' + selectedVehicle.nextOilChangeKm + ' km)</span>';
+      alertsHtml = '<div style="margin-top:8px;padding:8px 10px;background:#f8fafc;border:1px solid var(--pk-border);border-radius:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">' +
+        '<div style="font-size:11px"><strong>\u{1F697} Activo Enlazado (FK):</strong> <code>' + pkEsc(selectedVehicle.plate) + '</code> ' + pkEsc(selectedVehicle.brand) + ' \xB7 Km actual: <strong>' + selectedVehicle.currentKm.toLocaleString('es-CO') + ' km</strong></div>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap">' + oilBadge +
+        '<span class="badge badge-blue">\u{1F4C5} SOAT: ' + pkEsc(selectedVehicle.soatExpiry) + '</span>' +
+        '<span class="badge badge-slate">\u{1F527} Tecno: ' + pkEsc(selectedVehicle.tecnoExpiry) + '</span>' +
+        '<button type="button" class="btn btn-outline btn-sm" data-open-vehicle-360="' + pkEsc(selectedVehicle.id) + '">\u{1F441}\uFE0F Hoja de Vida Placa</button></div></div>';
+    }
+
+    var pendingBannerHtml = '';
+    if (pendingOrders.length > 0 || openTables.length > 0) {
+      pendingBannerHtml += '<div style="margin-top:10px;padding:10px 12px;background:#eff6ff;border:1px solid #93c5fd;border-radius:10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">' +
+        '<div style="font-size:12px;color:#1e3a8a"><strong>\u{1F517} Convergencia Autom\xE1tica Detectada:</strong> Hay \xF3rdenes de trabajo o mesas activas listas para facturar en caja:</div><div class="row-actions">';
+      for (var po = 0; po < pendingOrders.length; po++) {
+        var ord = pendingOrders[po];
+        pendingBannerHtml += '<button type="button" class="btn btn-primary btn-sm" data-pos-load-order="' + pkEsc(ord.id) + '">\u26A1 Cargar OT ' + pkEsc(ord.id + ' (' + ord.plate + ' \xB7 ' + ord.status + ')') + '</button>';
+      }
+      for (var ot = 0; ot < openTables.length; ot++) {
+        var tbl = openTables[ot];
+        pendingBannerHtml += '<button type="button" class="btn btn-emerald btn-sm" data-pos-load-table="' + pkEsc(tbl.id) + '">\u{1F37D}\uFE0F Cargar ' + pkEsc(tbl.name) + ' (' + pkCop(tbl.total) + ')</button>';
+      }
+      pendingBannerHtml += '</div></div>';
+    }
+
+    var subTotal = 0; var discountTotal = 0; var taxTotal = 0;
+    var discountPct = tariff ? Number(tariff.discountPct || 0) : 0;
+    var cartRowsHtml = '';
+    for (var i = 0; i < STATE.posCart.length; i++) {
+      var it = STATE.posCart[i];
+      var lineGross = Number(it.price || 0) * Number(it.qty || 1);
+      var lineDisc = Math.round(lineGross * (discountPct / 100));
+      var lineNet = lineGross - lineDisc;
+      var lineTax = Math.round(lineNet * (Number(it.taxPct || 0) / 100));
+      subTotal += lineGross; discountTotal += lineDisc; taxTotal += lineTax;
+      cartRowsHtml += '<tr>' +
+        '<td><span class="badge ' + (it.kind === 'SERVICIO' ? 'badge-amber' : 'badge-blue') + '">' + pkEsc(it.kind || 'PRODUCTO') + '</span></td>' +
+        '<td><strong>' + pkEsc(it.name) + '</strong><div style="font-size:11px;color:var(--pk-muted)">' +
+        (it.workerName ? '\u{1F468}\u200D\u{1F527} T\xE9cnico FK: ' + pkEsc(it.workerName) : '\u{1F4E6} SKU: ' + pkEsc(it.code || 'CAT')) + '</div></td>' +
+        '<td><div class="row-actions"><button type="button" class="btn btn-outline btn-sm" data-pos-qty-delta="-1" data-pos-idx="' + i + '">-</button>' +
+        '<span style="font-weight:800;min-width:22px;text-align:center">' + it.qty + '</span>' +
+        '<button type="button" class="btn btn-outline btn-sm" data-pos-qty-delta="1" data-pos-idx="' + i + '">+</button></div></td>' +
+        '<td>' + pkCop(it.price) + '</td>' +
+        '<td><strong>' + pkCop(lineNet + lineTax) + '</strong></td>' +
+        '<td><button type="button" class="btn btn-outline btn-sm" data-pos-del-idx="' + i + '">\u{1F5D1}\uFE0F</button></td></tr>';
+    }
+    if (!cartRowsHtml) {
+      cartRowsHtml = '<tr><td colspan="6" style="text-align:center;color:var(--pk-muted);padding:18px">El carrito h\xEDbrido est\xE1 vac\xEDo. Selecciona repuestos, mano de obra o carga una Orden Kanban / Mesa arriba.</td></tr>';
+    }
+    var grandTotal = subTotal - discountTotal + taxTotal;
+    var cashRec = Number(STATE.posCashReceived || grandTotal);
+    var changeDue = Math.max(0, cashRec - grandTotal);
+
+    container.innerHTML =
+      '<div class="card"><div class="card-head"><div>' +
+      '<div class="card-title">\u{1F6D2} 1. Datos Relacionales del Cliente, Convenio v2 y Veh\xEDculo/Activo (FKs enlazadas)</div>' +
+      '<div class="card-sub">Al cambiar de cliente se enlazan sus veh\xEDculos, su contrato/tarifa de descuento y sus \xF3rdenes pendientes en taller</div></div>' +
+      '<div class="row-actions"><button type="button" class="btn btn-outline btn-sm" data-open-customer-360="' + pkEsc(cust ? cust.id : '') + '">\u{1F441}\uFE0F Expediente 360\xB0 Cliente</button>' +
+      '<button type="button" class="btn btn-outline btn-sm" id="btn-pos-quick-new-customer">+ Nuevo Cliente DIAN</button></div></div>' +
+      '<div class="card-body">' +
+      '<div class="form-grid">' +
+      '<div class="field"><label>Cliente / Tercero DIAN (FK -> customers)</label><select id="pos-select-customer">' + custOpts + '</select></div>' +
+      '<div class="field"><label>Veh\xEDculo / Placa o Activo (FK -> vehicles)</label><select id="pos-select-vehicle">' + vehOpts + '</select></div>' +
+      '<div class="field"><label>Contrato / Convenio v2 y Tarifa Aplicada (FK -> contracts)</label>' +
+      '<input type="text" readonly value="' + pkEsc((contract ? contract.code + ' \xB7 Cupo disp: ' + pkCop(contract.availableBalance) : 'Particular Contado') + ' | ' + (tariff ? tariff.name + ' (-' + tariff.discountPct + '%)' : 'Tarifa Plena')) + '" style="background:#f8fafc;font-weight:700;color:var(--pk-primary)" /></div>' +
+      '</div>' + alertsHtml + pendingBannerHtml + '</div></div>' +
+
+      '<div class="grid-2">' +
+      '<div class="card"><div class="card-head"><div><div class="card-title">\u{1F4E6} 2A. Agregar Repuesto / Producto del Inventario (FK -> products)</div>' +
+      '<div class="card-sub">Descuenta stock autom\xE1ticamente y registra salida en Kardex al facturar</div></div></div>' +
+      '<div class="card-body"><div class="form-grid">' +
+      '<div class="field"><label>Lector C\xF3digo de Barras / SKU R\xE1pido</label><input type="text" id="pos-sku-input" placeholder="Ej: ACE-20W50 y presiona Enter o clic en Agregar" /></div>' +
+      '<div class="field"><label>Cat\xE1logo de Productos con Stock en Bodega</label><select id="pos-select-product">' + prodOpts + '</select></div>' +
+      '<div class="field"><label>Cantidad</label><input type="number" id="pos-product-qty" value="1" min="1" /></div>' +
+      '</div><div style="margin-top:10px;display:flex;justify-content:flex-end"><button type="button" class="btn btn-primary btn-sm" id="btn-pos-add-product">+ Agregar Producto al Carrito</button></div></div></div>' +
+
+      '<div class="card"><div class="card-head"><div><div class="card-title">\u{1F527} 2B. Agregar Mano de Obra / Servicio con T\xE9cnico (FK -> workers)</div>' +
+      '<div class="card-sub">Liquida autom\xE1ticamente comisi\xF3n para el mec\xE1nico/profesional asignado</div></div></div>' +
+      '<div class="card-body"><div class="form-grid">' +
+      '<div class="field"><label>Descripci\xF3n del Servicio / Procedimiento</label><input type="text" id="pos-service-desc" placeholder="Ej: Sincronizaci\xF3n full inyecci\xF3n / Mantenimiento" /></div>' +
+      '<div class="field"><label>Valor Mano de Obra (COP)</label><input type="number" id="pos-service-price" value="65000" /></div>' +
+      '<div class="field"><label>T\xE9cnico / Profesional Ejecutor (FK -> workers)</label><select id="pos-select-worker">' + workerOpts + '</select></div>' +
+      '</div><div style="margin-top:10px;display:flex;justify-content:flex-end"><button type="button" class="btn btn-amber btn-sm" id="btn-pos-add-service">+ Agregar Mano de Obra al Carrito</button></div></div></div>' +
+      '</div>' +
+
+      '<div class="card"><div class="card-head"><div><div class="card-title">\u{1F9FE} 3. Carrito Maestro-Detalle, Liquidaci\xF3n y Cierre Relacional</div>' +
+      '<div class="card-sub">Cotiza sin descontar inventario o factura ejecutando todas las llaves for\xE1neas en una sola transacci\xF3n</div></div>' +
+      '<span class="badge badge-emerald" style="font-size:13px">Total Neto: ' + pkCop(grandTotal) + '</span></div>' +
+      '<div class="card-body"><div class="table-wrap" style="margin-bottom:12px"><table><thead><tr><th>Tipo</th><th>Concepto / V\xEDnculo FK</th><th>Cant.</th><th>Vlr. Unit</th><th>Subtotal</th><th></th></tr></thead><tbody>' + cartRowsHtml + '</tbody></table></div>' +
+      '<div class="form-grid" style="background:#f8fafc;padding:12px;border-radius:10px;border:1px solid var(--pk-border)">' +
+      '<div class="field"><label>Medio de Pago</label><select id="pos-payment-method">' +
+      '<option value="Efectivo" ' + (STATE.posPaymentMethod === 'Efectivo' ? 'selected' : '') + '>\u{1F4B5} Efectivo en Caja</option>' +
+      '<option value="Transferencia / Nequi" ' + (STATE.posPaymentMethod === 'Transferencia / Nequi' ? 'selected' : '') + '>\u{1F4F2} Transferencia / Nequi / Daviplata</option>' +
+      '<option value="Tarjeta" ' + (STATE.posPaymentMethod === 'Tarjeta' ? 'selected' : '') + '>\u{1F4B3} Dat\xE1fono / Tarjeta</option>' +
+      '<option value="Pago Mixto" ' + (STATE.posPaymentMethod === 'Pago Mixto' ? 'selected' : '') + '>\u2696\uFE0F Pago Mixto (Efectivo + Transferencia)</option>' +
+      '<option value="Cr\xE9dito / Cartera CxC" ' + (STATE.posPaymentMethod === 'Cr\xE9dito / Cartera CxC' ? 'selected' : '') + '>\u{1F4D2} Cr\xE9dito / Enviar a Cartera CxC (Con Abono)</option></select></div>' +
+      '<div class="field"><label>Efectivo Recibido / Abono Inicial (COP)</label><input type="number" id="pos-cash-received" value="' + (STATE.posPaymentMethod === 'Cr\xE9dito / Cartera CxC' ? (STATE.posCreditInitialAbono || 0) : cashRec) + '" /></div>' +
+      '<div class="field"><label>Resumen Financiero y Vueltos / Saldo CxC</label>' +
+      '<input type="text" readonly value="' + (STATE.posPaymentMethod === 'Cr\xE9dito / Cartera CxC'
+        ? ('Saldo a Cartera CxC: ' + pkCop(Math.max(0, grandTotal - Number(STATE.posCreditInitialAbono || 0))))
+        : ('Sub: ' + pkCop(subTotal) + ' | Dto: -' + pkCop(discountTotal) + ' | Cambio: ' + pkCop(changeDue))) + '" style="font-weight:800;color:var(--pk-emerald);background:#fff" /></div>' +
+      '</div>' +
+      '<div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">' +
+      '<div class="row-actions">' +
+      '<button type="button" class="btn btn-outline btn-sm" id="btn-pos-print-quote">\u{1F5A8}\uFE0F Imprimir Cotizaci\xF3n PDF (Sin descontar Stock)</button>' +
+      '<button type="button" class="btn btn-outline btn-sm" id="btn-pos-whatsapp-quote">\u{1F4AC} Enviar Cotizaci\xF3n por WhatsApp</button>' +
+      '</div>' +
+      '<button type="button" class="btn btn-emerald" id="btn-pos-checkout-invoice">\u{1F9FE} Facturar Electr\xF3nicamente y Ejecutar Cruces FK</button>' +
+      '</div></div></div>';
+  }
+`;
+}
+
+// apps/web-app/src/presentation/client-runtime/relational-hub-actions.runtime.ts
+function renderRelationalHubActionsRuntimeJs() {
+  return `
+  function pkPrintHtmlDocument(title, htmlContent) {
+    var win = window.open('', '_blank', 'width=840,height=700');
+    if (!win) { pkToast('Permite ventanas emergentes para imprimir el PDF.'); return; }
+    win.document.write('<html><head><title>' + pkEsc(title) + '</title>' +
+      '<style>body{font-family:Inter,Arial,sans-serif;padding:24px;color:#0f172a}table{width:100%;border-collapse:collapse;margin-top:14px}th,td{border:1px solid #cbd5e1;padding:8px;text-align:left;font-size:12px}th{background:#f1f5f9}.head{display:flex;justify-content:space-between;border-bottom:2px solid #1d4ed8;padding-bottom:12px;margin-bottom:14px}</style>' +
+      '</head><body>' + htmlContent + '<script>setTimeout(function(){window.print();},350);<\\/script></body></html>');
+    win.document.close();
+  }
+
+  function pkHandleRelationalHubClick(target) {
+    var db = STATE.relDb;
+    if (!db) return false;
+
+    if (target.closest('#btn-close-rel-modal')) {
+      var m = document.getElementById('pk-relational-modal'); if (m) m.classList.remove('open'); return true;
+    }
+    var hubBtn = target.closest('[data-ws-hub]');
+    if (hubBtn) { STATE.activeConvergedHub = hubBtn.getAttribute('data-ws-hub'); pkRenderWorkstation(); return true; }
+
+    var c360 = target.closest('[data-open-customer-360]');
+    if (c360) { pkOpenCustomer360Modal(c360.getAttribute('data-open-customer-360')); return true; }
+    var v360 = target.closest('[data-open-vehicle-360]');
+    if (v360) { pkOpenVehicle360Modal(v360.getAttribute('data-open-vehicle-360')); return true; }
+    var abOpen = target.closest('[data-open-abono-modal]');
+    if (abOpen) { pkOpenAbonoModal(abOpen.getAttribute('data-open-abono-modal')); return true; }
+    var invOpen = target.closest('[data-open-invoice-modal]');
+    if (invOpen) { pkOpenInvoiceModal(invOpen.getAttribute('data-open-invoice-modal')); return true; }
+
+    var goCustPos = target.closest('[data-pos-select-cust-go]');
+    if (goCustPos) {
+      STATE.posCustomerId = goCustPos.getAttribute('data-pos-select-cust-go');
+      STATE.posVehicleId = ''; STATE.activeConvergedHub = 'pos'; pkRenderWorkstation(); return true;
+    }
+
+    var loadOrd = target.closest('[data-pos-load-order]');
+    if (loadOrd) {
+      var wo = pkFindById(db.workOrders, loadOrd.getAttribute('data-pos-load-order'));
+      if (wo) {
+        STATE.posCustomerId = wo.customerId; STATE.posVehicleId = wo.vehicleId; STATE.posLinkedOrderId = wo.id; STATE.posCart = [];
+        for (var s = 0; s < (wo.services || []).length; s++) {
+          STATE.posCart.push({ kind: 'SERVICIO', refId: wo.id, code: 'OT-SRV', name: wo.services[s].description + ' (Placa ' + wo.plate + ')', qty: 1, price: Number(wo.services[s].price || 0), taxPct: 0, workerId: wo.workerId, workerName: wo.workerName });
+        }
+        STATE.activeConvergedHub = 'pos'; pkRenderWorkstation();
+        pkToast('Orden Kanban ' + wo.id + ' (' + wo.plate + ') cargada al carrito de Caja POS.');
+      }
+      return true;
+    }
+
+    var loadTbl = target.closest('[data-pos-load-table]');
+    if (loadTbl) {
+      var tbl = pkFindById(db.diningTables, loadTbl.getAttribute('data-pos-load-table'));
+      if (tbl) {
+        STATE.posLinkedTableId = tbl.id; STATE.posCart = [];
+        for (var ti = 0; ti < tbl.items.length; ti++) {
+          STATE.posCart.push({ kind: 'PRODUCTO', refId: tbl.items[ti].productId, code: 'MESA', name: tbl.items[ti].name + ' (' + tbl.name + ')', qty: tbl.items[ti].qty, price: tbl.items[ti].price, taxPct: 8 });
+        }
+        STATE.activeConvergedHub = 'pos'; pkRenderWorkstation();
+        pkToast(tbl.name + ' cargada en Caja POS para cobro.');
+      }
+      return true;
+    }
+
+    if (target.closest('#btn-pos-add-product')) {
+      var skuVal = ((document.getElementById('pos-sku-input') || {}).value || '').trim().toUpperCase();
+      var selProdId = (document.getElementById('pos-select-product') || {}).value;
+      var qtyP = Math.max(1, Number((document.getElementById('pos-product-qty') || {}).value || 1));
+      var prod = null;
+      if (skuVal) {
+        for (var pi = 0; pi < db.products.length; pi++) if (db.products[pi].code.toUpperCase() === skuVal) { prod = db.products[pi]; break; }
+      }
+      if (!prod) prod = pkFindById(db.products, selProdId) || db.products[0];
+      if (prod) {
+        STATE.posCart.push({ kind: 'PRODUCTO', refId: prod.id, code: prod.code, name: prod.name, qty: qtyP, price: prod.salePrice, taxPct: prod.taxPct || 19 });
+        pkRenderWorkstation(); pkToast('Producto agregado: ' + prod.name);
+      }
+      return true;
+    }
+
+    if (target.closest('#btn-pos-add-service')) {
+      var sDesc = ((document.getElementById('pos-service-desc') || {}).value || '').trim() || 'Mano de Obra Especializada';
+      var sPrice = Math.max(1000, Number((document.getElementById('pos-service-price') || {}).value || 65000));
+      var wkObj = pkFindById(db.workers, (document.getElementById('pos-select-worker') || {}).value) || db.workers[0];
+      STATE.posCart.push({ kind: 'SERVICIO', refId: 'SRV-' + Date.now(), code: 'MO', name: sDesc, qty: 1, price: sPrice, taxPct: 0, workerId: wkObj ? wkObj.id : '', workerName: wkObj ? wkObj.name : 'T\xE9cnico' });
+      pkRenderWorkstation(); pkToast('Mano de obra enlazada al t\xE9cnico ' + (wkObj ? wkObj.name : ''));
+      return true;
+    }
+
+    var qDelta = target.closest('[data-pos-qty-delta]');
+    if (qDelta) {
+      var idxQ = Number(qDelta.getAttribute('data-pos-idx'));
+      if (STATE.posCart[idxQ]) { STATE.posCart[idxQ].qty = Math.max(1, STATE.posCart[idxQ].qty + Number(qDelta.getAttribute('data-pos-qty-delta'))); pkRenderWorkstation(); }
+      return true;
+    }
+
+    var delCart = target.closest('[data-pos-del-idx]');
+    if (delCart) { STATE.posCart.splice(Number(delCart.getAttribute('data-pos-del-idx')), 1); pkRenderWorkstation(); return true; }
+
+    if (target.closest('#btn-pos-checkout-invoice')) {
+      if (STATE.posCart.length === 0) { pkToast('Agrega al menos un producto o servicio al carrito.'); return true; }
+      var cust = pkFindById(db.customers, STATE.posCustomerId) || db.customers[0];
+      var veh = pkFindById(db.vehicles, STATE.posVehicleId);
+      var contract = cust && cust.contractId ? pkFindById(db.contracts, cust.contractId) : null;
+      var tariff = cust && cust.tariffId ? pkFindById(db.tariffs, cust.tariffId) : null;
+      var discPct = tariff ? Number(tariff.discountPct || 0) : 0;
+
+      var subT = 0; var discT = 0; var taxT = 0;
+      for (var c = 0; c < STATE.posCart.length; c++) {
+        var item = STATE.posCart[c];
+        var gross = item.price * item.qty;
+        var disc = Math.round(gross * (discPct / 100));
+        var net = gross - disc;
+        var tx = Math.round(net * (Number(item.taxPct || 0) / 100));
+        subT += gross; discT += disc; taxT += tx;
+
+        if (item.kind === 'PRODUCTO') {
+          var prObj = pkFindById(db.products, item.refId);
+          if (prObj) {
+            prObj.stock = Math.max(0, Number(prObj.stock || 0) - item.qty);
+            db.kardexMovements.unshift({
+              id: 'KDX-' + String(Date.now()).slice(-4), date: new Date().toISOString().slice(0, 16).replace('T', ' '),
+              productId: prObj.id, productName: prObj.name, warehouseId: prObj.warehouseId,
+              movementType: 'SALIDA_VENTA', qty: -item.qty, unitCost: prObj.costPrice, balanceAfter: prObj.stock,
+              referenceDoc: 'POS-FACT', actor: cust ? cust.name : 'Caja'
+            });
+          }
+        } else if (item.kind === 'SERVICIO' && item.workerId) {
+          var wkTarget = pkFindById(db.workers, item.workerId);
+          if (wkTarget) wkTarget.totalDayGross = Number(wkTarget.totalDayGross || 0) + net;
+        }
+      }
+
+      var totalNet = subT - discT + taxT;
+      var payMethod = (document.getElementById('pos-payment-method') || {}).value || STATE.posPaymentMethod || 'Efectivo';
+      var cashInputVal = Number((document.getElementById('pos-cash-received') || {}).value || 0);
+      var isCredit = payMethod === 'Cr\xE9dito / Cartera CxC';
+      var paidNow = isCredit ? Math.min(totalNet, Math.max(0, cashInputVal)) : totalNet;
+      var pendingBal = isCredit ? Math.max(0, totalNet - paidNow) : 0;
+
+      if (contract) { contract.consumedAmount += totalNet; contract.availableBalance = Math.max(0, contract.budgetCeiling - contract.consumedAmount); }
+      if (cust && pendingBal > 0) cust.currentDebt = Number(cust.currentDebt || 0) + pendingBal;
+      if (STATE.posLinkedOrderId) { var linkedWo = pkFindById(db.workOrders, STATE.posLinkedOrderId); if (linkedWo) linkedWo.status = 'Facturado'; STATE.posLinkedOrderId = ''; }
+      if (STATE.posLinkedTableId) { var linkedTb = pkFindById(db.diningTables, STATE.posLinkedTableId); if (linkedTb) { linkedTb.status = 'Libre'; linkedTb.items = []; linkedTb.total = 0; linkedTb.diners = 0; } STATE.posLinkedTableId = ''; }
+
+      var invId = 'FEVP-' + (9011 + db.invoices.length);
+      var newInv = {
+        id: invId, cufe: 'CUFE-DIAN-' + Date.now(), date: new Date().toISOString().slice(0, 16).replace('T', ' '),
+        customerId: cust ? cust.id : 'cust-1', customerName: cust ? cust.name : 'Consumidor Final',
+        customerNit: cust ? cust.nit : '222222222222', contractId: contract ? contract.id : '',
+        vehicleId: veh ? veh.id : '', plate: veh ? veh.plate : 'MOSTRADOR',
+        items: STATE.posCart.slice(), subtotal: subT, discountTotal: discT, taxTotal: taxT, total: totalNet,
+        paymentMethod: payMethod, amountPaid: paidNow, pendingBalance: pendingBal,
+        status: pendingBal > 0 ? 'Pendiente CxC' : 'Pagada', glosaStatus: 'Sin Glosa',
+        abonosHistory: paidNow > 0 ? [{ id: 'RC-' + String(Date.now()).slice(-4), date: new Date().toISOString().slice(0, 10), amount: paidNow, method: payMethod, note: 'Pago inicial en Caja POS' }] : []
+      };
+      db.invoices.unshift(newInv); STATE.posCart = [];
+      pkPersistRelationalTx('CREATE_INVOICE', { invoiceId: invId, customerName: newInv.customerName, total: totalNet });
+      pkRenderWorkstation(); pkToast('Factura ' + invId + ' emitida: Stock descontado, Kardex asentado y comisiones actualizadas.');
+      return true;
+    }
+
+    return pkHandleSecondaryHubActions(target, db);
+  }
+`;
+}
+
+// apps/web-app/src/presentation/client-runtime/relational-hub-secondary-actions.runtime.ts
+function renderRelationalHubSecondaryActionsRuntimeJs() {
+  return `
+  function pkHandleSecondaryHubActions(target, db) {
+    if (target.closest('#btn-pos-print-quote')) {
+      var custQ = pkFindById(db.customers, STATE.posCustomerId) || db.customers[0];
+      var rowsQ = ''; var sumQ = 0;
+      for (var q = 0; q < STATE.posCart.length; q++) { var itQ = STATE.posCart[q]; var subQ = itQ.qty * itQ.price; sumQ += subQ; rowsQ += '<tr><td>' + pkEsc(itQ.kind) + '</td><td>' + pkEsc(itQ.name) + '</td><td>' + itQ.qty + '</td><td>' + pkCop(itQ.price) + '</td><td>' + pkCop(subQ) + '</td></tr>'; }
+      pkPrintHtmlDocument('Cotizaci\xF3n Formal Proveko', '<div class="head"><div><h2>COTIZACI\xD3N / PRESUPUESTO COMERCIAL</h2><div>No descuenta inventario \xB7 Validez: 15 d\xEDas</div></div><div><strong>Cliente:</strong> ' + pkEsc(custQ ? custQ.name : '') + '<br/><strong>NIT/CC:</strong> ' + pkEsc(custQ ? custQ.nit : '') + '</div></div><table><thead><tr><th>Tipo</th><th>Concepto</th><th>Cant.</th><th>Vlr. Unit</th><th>Subtotal</th></tr></thead><tbody>' + rowsQ + '</tbody></table><h3 style="text-align:right;margin-top:16px">Total Cotizado: ' + pkCop(sumQ) + '</h3>');
+      return true;
+    }
+    var prInv = target.closest('[data-print-invoice]');
+    if (prInv) {
+      var invP = pkFindById(db.invoices, prInv.getAttribute('data-print-invoice'));
+      if (invP) {
+        var rowsI = '';
+        for (var ii = 0; ii < (invP.items || []).length; ii++) { var itI = invP.items[ii]; rowsI += '<tr><td>' + pkEsc(itI.kind) + '</td><td>' + pkEsc(itI.name) + '</td><td>' + itI.qty + '</td><td>' + pkCop(itI.price) + '</td><td>' + pkCop(itI.qty * itI.price) + '</td></tr>'; }
+        pkPrintHtmlDocument('Factura ' + invP.id, '<div class="head"><div><h2>FACTURA ELECTR\xD3NICA DE VENTA ' + pkEsc(invP.id) + '</h2><div>CUFE: ' + pkEsc(invP.cufe) + '</div></div><div><strong>Cliente:</strong> ' + pkEsc(invP.customerName) + '<br/><strong>NIT:</strong> ' + pkEsc(invP.customerNit) + '<br/><strong>Placa:</strong> ' + pkEsc(invP.plate) + '</div></div><table><thead><tr><th>Tipo</th><th>Descripci\xF3n</th><th>Cant.</th><th>Vlr. Unit</th><th>Subtotal</th></tr></thead><tbody>' + rowsI + '</tbody></table><h3 style="text-align:right;margin-top:16px">Total Factura: ' + pkCop(invP.total) + ' | Saldo CxC: ' + pkCop(invP.pendingBalance) + '</h3>');
+      }
+      return true;
+    }
+    if (target.closest('#btn-pos-whatsapp-quote')) {
+      var custW = pkFindById(db.customers, STATE.posCustomerId) || db.customers[0];
+      var phoneW = (custW && custW.phone ? custW.phone : '3001234567').replace(/\\D/g, '');
+      var totalW = 0; for (var w = 0; w < STATE.posCart.length; w++) totalW += STATE.posCart[w].qty * STATE.posCart[w].price;
+      window.open('https://wa.me/57' + phoneW + '?text=' + encodeURIComponent('Hola ' + (custW ? custW.name : '') + ', te compartimos tu cotizaci\xF3n en Proveko por valor de ' + pkCop(totalW) + '.'), '_blank');
+      return true;
+    }
+    var woWa = target.closest('[data-wo-whatsapp]');
+    if (woWa) {
+      var ordW = pkFindById(db.workOrders, woWa.getAttribute('data-wo-whatsapp'));
+      if (ordW) window.open('https://wa.me/573104558899?text=' + encodeURIComponent('Hola ' + ordW.customerName + ', tu veh\xEDculo placa ' + ordW.plate + ' (' + ordW.vehicleBrand + ') est\xE1 en estado: ' + ordW.status + '. Total estimado: ' + pkCop(ordW.totalEstimated)), '_blank');
+      return true;
+    }
+    if (target.closest('#btn-wo-suggest-oil')) {
+      var curKm = Number((document.getElementById('wo-current-km') || {}).value || 45000);
+      var nextEl = document.getElementById('wo-next-oil-km'); if (nextEl) nextEl.value = String(curKm + 3000);
+      pkToast('Pr\xF3ximo cambio de aceite sugerido a los ' + (curKm + 3000).toLocaleString('es-CO') + ' km.');
+      return true;
+    }
+    if (target.closest('#btn-wo-create-order')) {
+      var custObj = pkFindById(db.customers, (document.getElementById('wo-customer-id') || {}).value) || db.customers[0];
+      var plate = ((document.getElementById('wo-plate') || {}).value || 'NEW-001').trim().toUpperCase();
+      var brand = ((document.getElementById('wo-brand') || {}).value || 'Veh\xEDculo / Activo').trim();
+      var curK = Number((document.getElementById('wo-current-km') || {}).value || 45000);
+      var nxtK = Number((document.getElementById('wo-next-oil-km') || {}).value || (curK + 3000));
+      var soatD = (document.getElementById('wo-soat-date') || {}).value || '2026-12-31';
+      var wkObj = pkFindById(db.workers, (document.getElementById('wo-worker-id') || {}).value) || db.workers[0];
+      var sDesc = ((document.getElementById('wo-service-desc') || {}).value || 'Diagn\xF3stico y Mantenimiento General').trim();
+      var sPrc = Number((document.getElementById('wo-service-price') || {}).value || 120000);
+
+      var vehObj = null;
+      for (var v = 0; v < db.vehicles.length; v++) if (db.vehicles[v].plate.toUpperCase() === plate) { vehObj = db.vehicles[v]; break; }
+      if (!vehObj) {
+        vehObj = { id: 'veh-' + Date.now(), plate: plate, brand: brand, modelYear: '2025', customerId: custObj ? custObj.id : 'cust-1', customerName: custObj ? custObj.name : 'Cliente', currentKm: curK, nextOilChangeKm: nxtK, soatExpiry: soatD, tecnoExpiry: soatD, notes: sDesc };
+        db.vehicles.unshift(vehObj);
+      } else { vehObj.currentKm = curK; vehObj.nextOilChangeKm = nxtK; }
+
+      var newWoId = 'OT-' + (3043 + db.workOrders.length);
+      db.workOrders.unshift({ id: newWoId, createdAt: new Date().toISOString().slice(0, 16).replace('T', ' '), customerId: custObj ? custObj.id : 'cust-1', customerName: custObj ? custObj.name : 'Cliente', vehicleId: vehObj.id, plate: plate, vehicleBrand: brand, currentKm: curK, nextOilKm: nxtK, workerId: wkObj ? wkObj.id : 'wk-1', workerName: wkObj ? wkObj.name : 'T\xE9cnico', status: 'Recibido', services: [{ description: sDesc, price: sPrc }], totalEstimated: sPrc });
+      pkPersistRelationalTx('CREATE_WORK_ORDER', { orderId: newWoId, plate: plate });
+      pkRenderWorkstation(); pkToast('Orden ' + newWoId + ' (' + plate + ') ingresada al Kanban y enlazada al cliente.');
+      return true;
+    }
+
+    var woMove = target.closest('[data-wo-move]');
+    if (woMove) {
+      var ordM = pkFindById(db.workOrders, woMove.getAttribute('data-wo-move'));
+      var nextStg = woMove.getAttribute('data-wo-stage');
+      if (ordM && nextStg) { ordM.status = nextStg; pkPersistRelationalTx('MOVE_WORK_ORDER', { orderId: ordM.id, stage: nextStg }); pkRenderWorkstation(); pkToast('Orden ' + ordM.id + ' avanzada a: ' + nextStg); }
+      return true;
+    }
+
+    var invDelta = target.closest('[data-inv-delta]');
+    if (invDelta) {
+      var prD = pkFindById(db.products, invDelta.getAttribute('data-inv-id'));
+      var dStock = Number(invDelta.getAttribute('data-inv-delta'));
+      if (prD) {
+        prD.stock = Math.max(0, Number(prD.stock || 0) + dStock);
+        db.kardexMovements.unshift({ id: 'KDX-' + String(Date.now()).slice(-4), date: new Date().toISOString().slice(0, 16).replace('T', ' '), productId: prD.id, productName: prD.name, warehouseId: prD.warehouseId, movementType: dStock > 0 ? 'AJUSTE_POSITIVO' : 'AJUSTE_NEGATIVO', qty: dStock, unitCost: prD.costPrice, balanceAfter: prD.stock, referenceDoc: 'AJUSTE-RAPIDO', actor: 'Operador' });
+        pkPersistRelationalTx('ADJUST_STOCK', { productId: prD.id, stock: prD.stock }); pkRenderWorkstation();
+      }
+      return true;
+    }
+
+    if (target.closest('#btn-inv-register-purchase')) {
+      var pSel = (document.getElementById('inv-entry-product-id') || {}).value;
+      var supId = (document.getElementById('inv-entry-supplier-id') || {}).value;
+      var whId = (document.getElementById('inv-entry-warehouse-id') || {}).value;
+      var refDoc = ((document.getElementById('inv-entry-invoice-ref') || {}).value || 'ACTA-REC').trim();
+      var qtyIn = Math.max(1, Number((document.getElementById('inv-entry-qty') || {}).value || 10));
+      var costIn = Math.max(100, Number((document.getElementById('inv-entry-cost') || {}).value || 35000));
+      var saleIn = Math.max(costIn, Number((document.getElementById('inv-entry-sale') || {}).value || 58000));
+      var lotIn = ((document.getElementById('inv-entry-lot') || {}).value || 'LOTE-2026').trim();
+
+      var targetProd = pSel !== 'NEW' ? pkFindById(db.products, pSel) : null;
+      if (!targetProd) {
+        var newSku = ((document.getElementById('inv-entry-sku') || {}).value || ('SKU-' + String(Date.now()).slice(-4))).trim().toUpperCase();
+        var newName = ((document.getElementById('inv-entry-name') || {}).value || 'Nuevo Producto Ingresado').trim();
+        targetProd = { id: 'prd-' + Date.now(), code: newSku, name: newName, category: 'Compras / Actas v2', warehouseId: whId, supplierId: supId, costPrice: costIn, salePrice: saleIn, taxPct: 19, stock: qtyIn, minStock: 4, lotCode: lotIn, expiryDate: '2028-12-31' };
+        db.products.unshift(targetProd);
+      } else {
+        targetProd.stock = Number(targetProd.stock || 0) + qtyIn; targetProd.costPrice = costIn; targetProd.salePrice = saleIn; targetProd.warehouseId = whId; targetProd.supplierId = supId; targetProd.lotCode = lotIn;
+      }
+      db.kardexMovements.unshift({ id: 'KDX-' + String(Date.now()).slice(-4), date: new Date().toISOString().slice(0, 16).replace('T', ' '), productId: targetProd.id, productName: targetProd.name, warehouseId: whId, movementType: 'ENTRADA_COMPRA_ACTA', qty: qtyIn, unitCost: costIn, balanceAfter: targetProd.stock, referenceDoc: refDoc, actor: 'Recepci\xF3n Almac\xE9n' });
+      pkPersistRelationalTx('PURCHASE_ENTRY', { productCode: targetProd.code, productName: targetProd.name, costPrice: costIn, salePrice: saleIn, stock: targetProd.stock });
+      pkRenderWorkstation(); pkToast('Entrada de compra registrada: +' + qtyIn + ' und a ' + targetProd.name);
+      return true;
+    }
+
+    var abConf = target.closest('[data-confirm-abono-inv]');
+    if (abConf) {
+      var invAb = pkFindById(db.invoices, abConf.getAttribute('data-confirm-abono-inv'));
+      if (invAb) {
+        var amt = Math.min(invAb.pendingBalance, Math.max(1000, Number((document.getElementById('modal-abono-amount') || {}).value || invAb.pendingBalance)));
+        var mth = (document.getElementById('modal-abono-method') || {}).value || 'Efectivo';
+        var nt = ((document.getElementById('modal-abono-note') || {}).value || 'Abono Cartera').trim();
+        invAb.amountPaid = Number(invAb.amountPaid || 0) + amt; invAb.pendingBalance = Math.max(0, Number(invAb.pendingBalance || 0) - amt);
+        invAb.status = invAb.pendingBalance === 0 ? 'Pagada' : 'Pendiente CxC';
+        if (!invAb.abonosHistory) invAb.abonosHistory = [];
+        invAb.abonosHistory.unshift({ id: 'RC-' + String(Date.now()).slice(-4), date: new Date().toISOString().slice(0, 10), amount: amt, method: mth, note: nt });
+        var custAb = pkFindById(db.customers, invAb.customerId); if (custAb) custAb.currentDebt = Math.max(0, Number(custAb.currentDebt || 0) - amt);
+        pkPersistRelationalTx('REGISTER_ABONO', { invoiceId: invAb.id, amount: amt }); pkOpenAbonoModal(invAb.id); pkRenderWorkstation(); pkToast('Abono por ' + pkCop(amt) + ' aplicado a ' + invAb.id);
+      }
+      return true;
+    }
+
+    var settleBtn = target.closest('[data-settle-worker]');
+    if (settleBtn) {
+      var wkS = pkFindById(db.workers, settleBtn.getAttribute('data-settle-worker'));
+      if (wkS && wkS.totalDayGross > 0) {
+        var g = Number(wkS.totalDayGross); var pay = Math.round(g * (wkS.commissionPct / 100));
+        db.settlements.unshift({ id: 'LIQ-' + String(Date.now()).slice(-4), date: new Date().toISOString().slice(0, 16).replace('T', ' '), workerId: wkS.id, workerName: wkS.name, grossLabor: g, commissionPct: wkS.commissionPct, technicianPayout: pay, companyRetention: g - pay });
+        wkS.totalDayGross = 0; pkPersistRelationalTx('SETTLE_WORKER', { workerId: wkS.id, payout: pay }); pkRenderWorkstation(); pkToast('Turno liquidado a ' + wkS.name + ' por ' + pkCop(pay));
+      }
+      return true;
+    }
+
+    if (target.closest('#btn-wk-add')) {
+      var wName = ((document.getElementById('wk-new-name') || {}).value || '').trim();
+      var wSpec = ((document.getElementById('wk-new-spec') || {}).value || 'T\xE9cnico Especialista').trim();
+      var wPct = Number((document.getElementById('wk-new-pct') || {}).value || 40);
+      if (!wName) { pkToast('Ingresa el nombre del t\xE9cnico.'); return true; }
+      db.workers.push({ id: 'wk-' + Date.now(), name: wName, docNumber: '1020' + String(Date.now()).slice(-5), specialty: wSpec, commissionPct: wPct, phone: '3000000000', totalDayGross: 0 });
+      pkPersistRelationalTx('ADD_WORKER', { name: wName }); pkRenderWorkstation(); pkToast('T\xE9cnico vinculado: ' + wName);
+      return true;
+    }
+
+    if (target.closest('#btn-exp-add')) {
+      var eDesc = ((document.getElementById('exp-new-desc') || {}).value || '').trim();
+      var eCat = (document.getElementById('exp-new-cat') || {}).value || 'Insumos Operativos';
+      var eSrc = (document.getElementById('exp-new-source') || {}).value || 'Efectivo Caja';
+      var eAmt = Math.max(1000, Number((document.getElementById('exp-new-amount') || {}).value || 25000));
+      if (!eDesc) { pkToast('Ingresa la descripci\xF3n del gasto.'); return true; }
+      db.expenses.unshift({ id: 'EGR-' + String(Date.now()).slice(-4), date: new Date().toISOString().slice(0, 16).replace('T', ' '), category: eCat, description: eDesc, amount: eAmt, paymentSource: eSrc, responsible: 'Caja' });
+      pkPersistRelationalTx('ADD_EXPENSE', { description: eDesc, amount: eAmt }); pkRenderWorkstation(); pkToast('Gasto registrado por ' + pkCop(eAmt));
+      return true;
+    }
+
+    var csvBtn = target.closest('[data-export-csv]');
+    if (csvBtn) {
+      var kind = csvBtn.getAttribute('data-export-csv');
+      if (kind === 'invoices') { var rInv = []; for (var i1 = 0; i1 < db.invoices.length; i1++) rInv.push([db.invoices[i1].id, db.invoices[i1].date, db.invoices[i1].customerName, db.invoices[i1].plate, db.invoices[i1].total, db.invoices[i1].amountPaid, db.invoices[i1].pendingBalance, db.invoices[i1].status]); pkDownloadCsvUtf8('proveko_facturas_cxc.csv', ['Factura', 'Fecha', 'Cliente', 'Placa', 'Total', 'Pagado', 'Saldo_CxC', 'Estado'], rInv); }
+      else if (kind === 'inventory') { var rPrd = []; for (var i2 = 0; i2 < db.products.length; i2++) rPrd.push([db.products[i2].code, db.products[i2].name, db.products[i2].category, db.products[i2].costPrice, db.products[i2].salePrice, db.products[i2].stock]); pkDownloadCsvUtf8('proveko_inventario_valorizado.csv', ['SKU', 'Producto', 'Categoria', 'Costo', 'Precio_Venta', 'Stock'], rPrd); }
+      else if (kind === 'expenses') { var rExp = []; for (var i3 = 0; i3 < db.expenses.length; i3++) rExp.push([db.expenses[i3].id, db.expenses[i3].date, db.expenses[i3].category, db.expenses[i3].description, db.expenses[i3].paymentSource, db.expenses[i3].amount]); pkDownloadCsvUtf8('proveko_gastos_caja.csv', ['ID', 'Fecha', 'Categoria', 'Descripcion', 'Origen', 'Monto'], rExp); }
+      else if (kind === 'settlements') { var rSt = []; for (var i4 = 0; i4 < db.settlements.length; i4++) rSt.push([db.settlements[i4].id, db.settlements[i4].date, db.settlements[i4].workerName, db.settlements[i4].grossLabor, db.settlements[i4].technicianPayout, db.settlements[i4].companyRetention]); pkDownloadCsvUtf8('proveko_liquidaciones_tecnicos.csv', ['ID', 'Fecha', 'Tecnico', 'Bruto', 'Pago_Tecnico', 'Retencion_Empresa'], rSt); }
+      pkToast('Archivo Excel CSV (UTF-8 con BOM) descargado.'); return true;
+    }
+
+    var gDemo = target.closest('[data-gastro-add-demo]');
+    if (gDemo) {
+      var tbD = pkFindById(db.diningTables, gDemo.getAttribute('data-gastro-add-demo'));
+      if (tbD) { tbD.status = 'Ocupada'; tbD.diners = 3; tbD.items.push({ productId: 'prd-3', name: 'Men\xFA Ejecutivo / Plato Fuerte', qty: 2, price: 42000 }); tbD.total = Number(tbD.total || 0) + 84000; pkPersistRelationalTx('GASTRO_ORDER', { tableId: tbD.id }); pkRenderWorkstation(); }
+      return true;
+    }
+
+    if (target.closest('#btn-pos-quick-new-customer')) {
+      var newCId = 'cust-' + Date.now();
+      db.customers.unshift({ id: newCId, docType: 'NIT', nit: '901' + String(Date.now()).slice(-6), dv: '4', name: 'Empresa Cliente Express #' + (db.customers.length + 1), businessType: 'Jur\xEDdica', taxRegime: 'Responsable de IVA (O-48)', phone: '3158899001', email: 'compras@empresa.co', city: 'Bogot\xE1 D.C.', address: 'Av. El Dorado # 68B-85', contractId: 'cnt-particular', tariffId: 'trf-plena', creditLimit: 5000000, currentDebt: 0 });
+      STATE.posCustomerId = newCId; pkPersistRelationalTx('CREATE_CUSTOMER', { id: newCId }); pkRenderWorkstation(); pkToast('Nuevo Tercero DIAN creado y seleccionado en el POS.');
+      return true;
+    }
+    return false;
+  }
+`;
+}
+
+// apps/web-app/src/presentation/client-runtime/relational-modals.runtime.ts
+function renderRelationalModalsRuntimeJs() {
+  return `
+  function pkOpenModal(title, sub, bodyHtml) {
+    var modal = document.getElementById('pk-relational-modal');
+    var tEl = document.getElementById('pk-rel-modal-title');
+    var sEl = document.getElementById('pk-rel-modal-sub');
+    var bEl = document.getElementById('pk-rel-modal-body');
+    if (!modal || !bEl) return;
+    if (tEl) tEl.textContent = title;
+    if (sEl) sEl.textContent = sub;
+    bEl.innerHTML = bodyHtml;
+    modal.classList.add('open');
+  }
+
+  function pkOpenCustomer360Modal(custId) {
+    var db = STATE.relDb;
+    var cust = pkFindById(db.customers, custId) || db.customers[0];
+    if (!cust) return;
+    var contract = cust.contractId ? pkFindById(db.contracts, cust.contractId) : null;
+    var tariff = cust.tariffId ? pkFindById(db.tariffs, cust.tariffId) : null;
+
+    var vehHtml = '';
+    for (var v = 0; v < db.vehicles.length; v++) {
+      var ve = db.vehicles[v];
+      if (ve.customerId !== cust.id) continue;
+      vehHtml += '<tr><td><span class="badge badge-blue">\u{1F697} ' + pkEsc(ve.plate) + '</span></td><td><strong>' + pkEsc(ve.brand) + '</strong></td><td>' + ve.currentKm.toLocaleString('es-CO') + ' km (Pr\xF3x: ' + ve.nextOilChangeKm.toLocaleString('es-CO') + ' km)</td><td>SOAT: ' + pkEsc(ve.soatExpiry) + '</td></tr>';
+    }
+    var invHtml = ''; var totalHistorical = 0;
+    for (var i = 0; i < db.invoices.length; i++) {
+      var inv = db.invoices[i];
+      if (inv.customerId !== cust.id) continue;
+      totalHistorical += Number(inv.total || 0);
+      invHtml += '<tr><td><strong>' + pkEsc(inv.id) + '</strong> (' + pkEsc(inv.date) + ')</td><td>' + pkEsc(inv.plate || 'Mostrador') + '</td><td>' + pkCop(inv.total) + '</td><td>' + pkCop(inv.pendingBalance) + '</td><td><span class="badge ' + (inv.pendingBalance > 0 ? 'badge-amber' : 'badge-emerald') + '">' + pkEsc(inv.status) + '</span></td></tr>';
+    }
+
+    pkOpenModal(
+      '\u{1F441}\uFE0F Expediente Relacional 360\xB0 \u2014 ' + cust.name,
+      cust.docType + ' ' + cust.nit + (cust.dv ? '-' + cust.dv : '') + ' \xB7 ' + cust.taxRegime + ' \xB7 ' + cust.city + ' (' + cust.address + ')',
+      '<div class="kpi-row">' +
+      '<div class="kpi-box"><div class="kpi-label">Total Facturado Hist\xF3rico</div><div class="kpi-val">' + pkCop(totalHistorical) + '</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Saldo Pendiente CxC</div><div class="kpi-val" style="color:var(--pk-amber)">' + pkCop(cust.currentDebt) + '</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Contrato Enlazado (FK)</div><div class="kpi-val" style="font-size:13px">' + pkEsc(contract ? contract.code + ' (' + pkCop(contract.availableBalance) + ')' : 'Contado') + '</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Tarifa Asignada (FK)</div><div class="kpi-val" style="font-size:13px;color:var(--pk-primary)">' + pkEsc(tariff ? tariff.name + ' (-' + tariff.discountPct + '%)' : 'Plena') + '</div></div>' +
+      '</div>' +
+      '<div style="font-size:13px;font-weight:800;margin:10px 0 6px">\u{1F697} Veh\xEDculos / Activos Registrados a Nombre del Cliente (FK -> vehicles):</div>' +
+      '<div class="table-wrap" style="margin-bottom:12px"><table><thead><tr><th>Placa</th><th>Marca / L\xEDnea</th><th>Kilometraje y Aceite</th><th>Vencimientos</th></tr></thead><tbody>' + (vehHtml || '<tr><td colspan="4">Sin veh\xEDculos asociados</td></tr>') + '</tbody></table></div>' +
+      '<div style="font-size:13px;font-weight:800;margin:10px 0 6px">\u{1F9FE} Historial de Facturas, Servicios y Cartera CxC (FK -> invoices):</div>' +
+      '<div class="table-wrap"><table><thead><tr><th>Factura</th><th>Placa</th><th>Total</th><th>Saldo CxC</th><th>Estado</th></tr></thead><tbody>' + (invHtml || '<tr><td colspan="5">Sin facturas registradas</td></tr>') + '</tbody></table></div>'
+    );
+  }
+
+  function pkOpenVehicle360Modal(vehId) {
+    var db = STATE.relDb;
+    var ve = pkFindById(db.vehicles, vehId) || db.vehicles[0];
+    if (!ve) return;
+    var histHtml = '';
+    for (var o = 0; o < db.workOrders.length; o++) {
+      var wo = db.workOrders[o];
+      if (wo.vehicleId !== ve.id && wo.plate !== ve.plate) continue;
+      var sList = [];
+      for (var k = 0; k < (wo.services || []).length; k++) sList.push(wo.services[k].description + ' (' + pkCop(wo.services[k].price) + ')');
+      histHtml += '<tr><td><code>' + pkEsc(wo.id) + '</code> (' + pkEsc(wo.createdAt) + ')</td><td>' + pkEsc(wo.workerName) + '</td><td>' + pkEsc(sList.join(' + ')) + '</td><td><span class="badge badge-blue">' + pkEsc(wo.status) + '</span></td></tr>';
+    }
+    pkOpenModal(
+      '\u{1F697} Hoja de Vida T\xE9cnica de Placa \u2014 ' + ve.plate + ' (' + ve.brand + ')',
+      'Propietario FK: ' + ve.customerName + ' \xB7 Km Actual: ' + ve.currentKm.toLocaleString('es-CO') + ' km \xB7 Pr\xF3x. Aceite: ' + ve.nextOilChangeKm.toLocaleString('es-CO') + ' km',
+      '<div style="padding:10px;background:#f8fafc;border-radius:10px;border:1px solid var(--pk-border);margin-bottom:12px;font-size:12px">' +
+      '<strong>Observaciones T\xE9cnicas:</strong> ' + pkEsc(ve.notes || 'Sin alertas estructurales') + ' \xB7 <strong>SOAT:</strong> ' + pkEsc(ve.soatExpiry) + ' \xB7 <strong>Tecnomec\xE1nica:</strong> ' + pkEsc(ve.tecnoExpiry) + '</div>' +
+      '<div style="font-size:13px;font-weight:800;margin-bottom:6px">\u{1F527} Historial de \xD3rdenes de Trabajo e Intervenciones en Taller:</div>' +
+      '<div class="table-wrap"><table><thead><tr><th>Orden / Fecha</th><th>T\xE9cnico Ejecutor (FK)</th><th>Procedimientos Realizados</th><th>Estado</th></tr></thead><tbody>' + (histHtml || '<tr><td colspan="4">Sin \xF3rdenes previas</td></tr>') + '</tbody></table></div>'
+    );
+  }
+
+  function pkOpenAbonoModal(invId) {
+    var db = STATE.relDb;
+    var inv = pkFindById(db.invoices, invId);
+    if (!inv) return;
+    var abRows = '';
+    var abList = inv.abonosHistory || [];
+    for (var a = 0; a < abList.length; a++) {
+      abRows += '<tr><td><code>' + pkEsc(abList[a].id) + '</code></td><td>' + pkEsc(abList[a].date) + '</td><td>' + pkEsc(abList[a].method) + '</td><td>' + pkEsc(abList[a].note) + '</td><td style="color:var(--pk-emerald);font-weight:800">+' + pkCop(abList[a].amount) + '</td></tr>';
+    }
+    pkOpenModal(
+      '\u{1F4B5} Recaudo de Cartera CxC y Abonos \u2014 Factura ' + inv.id,
+      'Cliente FK: ' + inv.customerName + ' \xB7 Total Factura: ' + pkCop(inv.total) + ' \xB7 Saldo Pendiente: ' + pkCop(inv.pendingBalance),
+      '<div class="form-grid" style="background:#f8fafc;padding:12px;border-radius:10px;border:1px solid var(--pk-border);margin-bottom:12px">' +
+      '<div class="field"><label>Valor del Abono o Pago Total (COP)</label><input type="number" id="modal-abono-amount" value="' + inv.pendingBalance + '" max="' + inv.pendingBalance + '" /></div>' +
+      '<div class="field"><label>Medio de Recaudo</label><select id="modal-abono-method"><option value="Efectivo">\u{1F4B5} Efectivo Caja</option><option value="Transferencia / Nequi">\u{1F4F2} Transferencia / Nequi</option><option value="Tarjeta">\u{1F4B3} Tarjeta</option></select></div>' +
+      '<div class="field"><label>Observaci\xF3n Recibo de Caja</label><div class="row-actions"><input type="text" id="modal-abono-note" value="Abono / Pago Cartera CxC" style="flex:1" />' +
+      '<button type="button" class="btn btn-emerald btn-sm" data-confirm-abono-inv="' + pkEsc(inv.id) + '">\u2713 Aplicar Abono</button></div></div></div>' +
+      '<div style="font-size:12px;font-weight:800;margin-bottom:6px">Historial de Recibos de Caja y Abonos Aplicados a esta Factura:</div>' +
+      '<div class="table-wrap"><table><thead><tr><th>Recibo</th><th>Fecha</th><th>Medio</th><th>Nota</th><th>Valor Abonado</th></tr></thead><tbody>' + (abRows || '<tr><td colspan="5">Sin abonos registrados a\xFAn</td></tr>') + '</tbody></table></div>'
+    );
+  }
+
+  function pkOpenInvoiceModal(invId) {
+    var db = STATE.relDb;
+    var inv = pkFindById(db.invoices, invId);
+    if (!inv) return;
+    var itRows = '';
+    for (var i = 0; i < (inv.items || []).length; i++) {
+      var it = inv.items[i];
+      itRows += '<tr><td>' + pkEsc(it.kind) + '</td><td><strong>' + pkEsc(it.name) + '</strong></td><td>' + it.qty + '</td><td>' + pkCop(it.price) + '</td><td><strong>' + pkCop(it.qty * it.price) + '</strong></td></tr>';
+    }
+    pkOpenModal(
+      '\u{1F9FE} Factura Electr\xF3nica DIAN ' + inv.id + ' (' + inv.status + ')',
+      'CUFE: ' + inv.cufe + ' \xB7 Cliente: ' + inv.customerName + ' \xB7 Placa: ' + (inv.plate || 'Mostrador'),
+      '<div class="table-wrap" style="margin-bottom:12px"><table><thead><tr><th>Tipo</th><th>Descripci\xF3n</th><th>Cant.</th><th>Vlr. Unit</th><th>Subtotal</th></tr></thead><tbody>' + itRows + '</tbody></table></div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:#f8fafc;border-radius:10px">' +
+      '<div><strong>Total Neto: ' + pkCop(inv.total) + '</strong> \xB7 Pagado: ' + pkCop(inv.amountPaid) + ' \xB7 Saldo CxC: ' + pkCop(inv.pendingBalance) + '</div>' +
+      '<button type="button" class="btn btn-primary btn-sm" data-print-invoice="' + pkEsc(inv.id) + '">\u{1F5A8}\uFE0F Imprimir PDF Formato Carta / Tirilla</button></div>'
+    );
+  }
+`;
+}
+
+// apps/web-app/src/presentation/client-runtime/relational-seed-data.runtime.ts
+function renderRelationalSeedDataRuntimeJs() {
+  return `
+  function pkCreateInitialRelationalDb() {
+    return {
+      tariffs: [
+        { id: 'tar-base', code: 'TAR-MOSTRADOR', name: 'Precio Base General (0% Desc.)', discountPct: 0 },
+        { id: 'tar-corp-15', code: 'TAR-CORP-2026', name: 'Tarifario Convenio Institucional (-15% v2)', discountPct: 15 },
+        { id: 'tar-vip-10', code: 'TAR-VIP-10', name: 'Lista Mayorista / Flota Aliada (-10%)', discountPct: 10 }
+      ],
+      contracts: [
+        { id: 'cnt-0084', code: 'CNT-2026-0084', customerId: 'cust-1', name: 'Convenio Suministro y Mantenimiento Anual v2', budgetCeiling: 120000000, consumedAmount: 35500000, availableBalance: 84500000, tariffId: 'tar-corp-15', status: 'ACTIVO' },
+        { id: 'cnt-0112', code: 'CNT-2026-0112', customerId: 'cust-2', name: 'Contrato Flota Pesada y Repuestos del Norte', budgetCeiling: 80000000, consumedAmount: 19200000, availableBalance: 60800000, tariffId: 'tar-vip-10', status: 'ACTIVO' }
+      ],
+      customers: [
+        { id: 'cust-1', nit: '901452110', dv: '4', name: 'Comercializadora del Valle S.A.S.', phone: '3104458890', email: 'facturacion@comvalle.co', city: 'Cali', creditLimit: 35000000, contractId: 'cnt-0084', tariffId: 'tar-corp-15' },
+        { id: 'cust-2', nit: '900812441', dv: '9', name: 'Inversiones y Transportes del Norte S.A.S.', phone: '3157782210', email: 'logistica@transnorte.co', city: 'Barranquilla', creditLimit: 25000000, contractId: 'cnt-0112', tariffId: 'tar-vip-10' },
+        { id: 'cust-3', nit: '79884120', dv: '3', name: 'Andr\xE9s Felipe Ospina (Particular)', phone: '3005541190', email: 'aospina@gmail.com', city: 'Bogot\xE1 D.C.', creditLimit: 5000000, contractId: '', tariffId: 'tar-base' }
+      ],
+      suppliers: [
+        { id: 'sup-1', nit: '900412889-1', name: 'Distribuidora Nacional de Repuestos e Insumos S.A.S.', phone: '3189901122', email: 'ventas@disnacional.co', contactName: 'Ing. Roberto Ariza' },
+        { id: 'sup-2', nit: '901220410-8', name: 'Importadora Andina de Lubricantes y Partes S.A.', phone: '3124405566', email: 'pedidos@impandina.co', contactName: 'Dra. Claudia G\xF3mez' }
+      ],
+      warehouses: [
+        { id: 'wh-central', code: 'BOD-CENTRAL-01', name: 'Bodega Central Principal', city: 'Sede Principal', manager: 'Jorge Pardo' },
+        { id: 'wh-norte', code: 'BOD-NORTE-02', name: 'Bodega Norte Punto de Venta', city: 'Sede Norte', manager: 'Andr\xE9s Mej\xEDa' }
+      ],
+      products: [
+        { id: 'prd-1', sku: '7701001', name: 'Aceite Sint\xE9tico 10W-40 Alto Rendimiento (Gal\xF3n)', warehouseId: 'wh-central', supplierId: 'sup-2', costPrice: 95000, salePrice: 145000, stock: 28, minStock: 6, lotNumber: 'LOT-2026-901', expirationDate: '2027-08-15' },
+        { id: 'prd-2', sku: '7701002', name: 'Kit Pastillas de Freno Cer\xE1micas Delanteras', warehouseId: 'wh-central', supplierId: 'sup-1', costPrice: 110000, salePrice: 185000, stock: 14, minStock: 5, lotNumber: 'LOT-2026-412', expirationDate: '2028-12-31' },
+        { id: 'prd-3', sku: '7701003', name: 'Filtro de Aire / Combustible Original OEM', warehouseId: 'wh-central', supplierId: 'sup-1', costPrice: 32000, salePrice: 58000, stock: 4, minStock: 8, lotNumber: 'LOT-2026-109', expirationDate: '2027-05-20' },
+        { id: 'prd-4', sku: '7701004', name: 'Bater\xEDa Sellada Libre Mantenimiento 800 Amp', warehouseId: 'wh-norte', supplierId: 'sup-1', costPrice: 310000, salePrice: 460000, stock: 9, minStock: 3, lotNumber: 'LOT-2026-774', expirationDate: '2027-11-30' }
+      ],
+      vehicles: [
+        { id: 'veh-1', plate: 'KLM-482', make: 'Toyota', model: 'Hilux SRX 4x4 2.8L Diesel', customerId: 'cust-2', currentMileage: 42850, nextOilChangeKm: 42500, soatDueDate: '2026-10-15', tecnoDueDate: '2027-04-20' },
+        { id: 'veh-2', plate: 'WXY-812', make: 'Kenworth', model: 'T800 Tractomula 3S3', customerId: 'cust-1', currentMileage: 184200, nextOilChangeKm: 185000, soatDueDate: '2027-06-10', tecnoDueDate: '2027-06-10' },
+        { id: 'veh-3', plate: 'MTX-99D', make: 'Yamaha', model: 'FZ 250 ABS', customerId: 'cust-3', currentMileage: 14900, nextOilChangeKm: 15000, soatDueDate: '2027-02-18', tecnoDueDate: '2027-02-18' }
+      ],
+      workers: [
+        { id: 'wrk-1', docNumber: '79.412.880', name: 'Ing. Mauricio Casta\xF1o (L\xEDder T\xE9cnico)', roleTitle: 'Especialista Senior / Mec\xE1nico L\xEDder', commissionPct: 50, totalDayGross: 380000, phone: '3112233445' },
+        { id: 'wrk-2', docNumber: '1.032.488.910', name: 'Juli\xE1n David Torres (T\xE9cnico A)', roleTitle: 'T\xE9cnico de Diagn\xF3stico y Sincronizaci\xF3n', commissionPct: 45, totalDayGross: 240000, phone: '3145566778' },
+        { id: 'wrk-3', docNumber: '52.889.104', name: 'Dra. Laura G\xF3mez (Especialista / Consultora)', roleTitle: 'Especialista de Servicio y Atenci\xF3n', commissionPct: 40, totalDayGross: 150000, phone: '3168899001' }
+      ],
+      workOrders: [
+        { id: 'ot-842', code: 'OT-2026-0842', customerId: 'cust-2', vehicleId: 'veh-1', workerId: 'wrk-1', kanbanStage: 'En Reparaci\xF3n', state: 'Pendiente', mileage: 42850, notes: 'Nivel combustible 1/2 tanque. Revisi\xF3n inyectores y cambio aceite.', servicesList: [{ description: 'Mantenimiento Preventivo 40.000 Km + Esc\xE1ner', price: 220000 }, { description: 'Calibraci\xF3n y Limpieza Ultrasonido Inyectores', price: 160000 }], createdAt: '2026-11-05' },
+        { id: 'ot-843', code: 'OT-2026-0843', customerId: 'cust-3', vehicleId: 'veh-3', workerId: 'wrk-2', kanbanStage: 'Listo para Entrega', state: 'Pendiente', mileage: 14900, notes: 'Deja casco en recepci\xF3n. Cambio pastillas y sincronizaci\xF3n.', servicesList: [{ description: 'Sincronizaci\xF3n General e Inyecci\xF3n Electr\xF3nica', price: 140000 }, { description: 'Instalaci\xF3n Pastillas de Freno y Purga L\xEDquido', price: 60000 }], createdAt: '2026-11-05' },
+        { id: 'ot-844', code: 'OT-2026-0844', customerId: 'cust-1', vehicleId: 'veh-2', workerId: 'wrk-1', kanbanStage: 'En Diagn\xF3stico', state: 'Pendiente', mileage: 184200, notes: 'Ingreso a bah\xEDa pesada para diagn\xF3stico el\xE9ctrico.', servicesList: [{ description: 'Diagn\xF3stico Computarizado Sistema El\xE9ctrico 24V', price: 180000 }], createdAt: '2026-11-05' }
+      ],
+      invoices: [
+        {
+          id: 'inv-10421', invoiceNumber: 'FEV-10421', date: '2026-11-05',
+          customerId: 'cust-1', customerName: 'Comercializadora del Valle S.A.S.', customerNit: '901452110-4', customerPhone: '3104458890',
+          contractId: 'cnt-0084', vehicleId: 'veh-2', vehiclePlate: 'WXY-812', workerId: 'wrk-1', workerName: 'Ing. Mauricio Casta\xF1o (L\xEDder T\xE9cnico)',
+          items: [{ productId: 'prd-1', sku: '7701001', name: 'Aceite Sint\xE9tico 10W-40 Alto Rendimiento (Gal\xF3n)', qty: 2, unitCost: 95000, unitPrice: 145000, subtotal: 290000 }, { productId: 'prd-2', sku: '7701002', name: 'Kit Pastillas de Freno Cer\xE1micas Delanteras', qty: 1, unitCost: 110000, unitPrice: 185000, subtotal: 185000 }],
+          services: [{ description: 'Mantenimiento Preventivo y Revisi\xF3n de Frenos', price: 250000 }],
+          subtotalProducts: 475000, subtotalServices: 250000, discountAmount: 0, total: 725000,
+          paymentMethod: 'Cr\xE9dito / Cartera CxC', paidAmount: 300000, pendingBalance: 425000,
+          paymentNotes: 'Abono inicial transferencia $300.000 \u2014 Saldo a 30 d\xEDas', glosaStatus: 'SIN_GLOSA',
+          abonosHistory: [{ id: 'rc-001', date: '2026-11-05', amount: 300000, method: 'Transferencia', notes: 'Anticipo inicial' }]
+        },
+        {
+          id: 'inv-10422', invoiceNumber: 'POS-9001', date: '2026-11-05',
+          customerId: 'cust-2', customerName: 'Inversiones y Transportes del Norte S.A.S.', customerNit: '900812441-9', customerPhone: '3157782210',
+          contractId: 'cnt-0112', vehicleId: 'veh-1', vehiclePlate: 'KLM-482', workerId: 'wrk-2', workerName: 'Juli\xE1n David Torres (T\xE9cnico A)',
+          items: [{ productId: 'prd-4', sku: '7701004', name: 'Bater\xEDa Sellada Libre Mantenimiento 800 Amp', qty: 1, unitCost: 310000, unitPrice: 460000, subtotal: 460000 }],
+          services: [{ description: 'Instalaci\xF3n de Bater\xEDa y Prueba de Alternador', price: 90000 }],
+          subtotalProducts: 460000, subtotalServices: 90000, discountAmount: 0, total: 550000,
+          paymentMethod: 'Efectivo', paidAmount: 550000, pendingBalance: 0,
+          paymentNotes: 'Pagado de contado en caja principal', glosaStatus: 'SIN_GLOSA',
+          abonosHistory: []
+        }
+      ],
+      kardexMovements: [
+        { id: 'kdx-1', date: '2026-11-05', productId: 'prd-1', sku: '7701001', productName: 'Aceite Sint\xE9tico 10W-40 Alto Rendimiento (Gal\xF3n)', warehouseName: 'Bodega Central Principal', type: 'ENTRADA_COMPRA', qty: 30, unitCost: 95000, balanceAfter: 30, referenceDoc: 'ACT-REC-2026-118 (FE-99412)' },
+        { id: 'kdx-2', date: '2026-11-05', productId: 'prd-1', sku: '7701001', productName: 'Aceite Sint\xE9tico 10W-40 Alto Rendimiento (Gal\xF3n)', warehouseName: 'Bodega Central Principal', type: 'SALIDA_VENTA', qty: 2, unitCost: 95000, balanceAfter: 28, referenceDoc: 'FEV-10421' },
+        { id: 'kdx-3', date: '2026-11-05', productId: 'prd-4', sku: '7701004', productName: 'Bater\xEDa Sellada Libre Mantenimiento 800 Amp', warehouseName: 'Bodega Norte Punto de Venta', type: 'SALIDA_VENTA', qty: 1, unitCost: 310000, balanceAfter: 9, referenceDoc: 'POS-9001' }
+      ],
+      expenses: [
+        { id: 'exp-1', date: '2026-11-05', description: 'Compra desengrasante biodegradable e insumos de bah\xEDa', category: 'Insumos Operativos', paymentMethod: 'Efectivo', amount: 68000 },
+        { id: 'exp-2', date: '2026-11-05', description: 'Flete motorizado mensajer\xEDa repuestos urgentes', category: 'Transporte / Fletes', paymentMethod: 'Efectivo', amount: 35000 }
+      ],
+      settlements: [
+        { id: 'stl-1', date: '2026-11-04', workerId: 'wrk-1', workerName: 'Ing. Mauricio Casta\xF1o (L\xEDder T\xE9cnico)', grossAmount: 680000, commissionPct: 50, paidAmount: 340000, companyShare: 340000, notes: 'Liquidaci\xF3n turno anterior pagada sin novedades' }
+      ],
+      diningTables: [
+        { id: 'tbl-1', code: 'MESA-05', zone: 'Terraza Principal', waiterName: 'Mateo R\xEDos', status: 'OCUPADA_COMANDA', items: [{ productId: 'prd-1', sku: '7701001', name: 'Combo Parrilla / Servicio Especial', qty: 2, price: 95000 }] },
+        { id: 'tbl-2', code: 'MESA-08', zone: 'Sal\xF3n VIP', waiterName: 'Laura G\xF3mez', status: 'LIBRE', items: [] },
+        { id: 'tbl-3', code: 'BARRA-02', zone: 'Barra Central', waiterName: 'Mateo R\xEDos', status: 'OCUPADA_COMANDA', items: [{ productId: 'prd-3', sku: '7701003', name: 'Reserva Botella / Picada', qty: 1, price: 185000 }] }
+      ]
+    };
+  }
+
+  function pkCalcNitDv(nitRaw) {
+    var clean = String(nitRaw || '').replace(/\\D/g, '');
+    if (!clean) return '0';
+    var weights = [3, 7, 13, 17, 19, 23, 29, 37, 41, 43, 47, 53, 59, 67, 71];
+    var sum = 0;
+    for (var i = 0; i < clean.length && i < weights.length; i++) {
+      sum += parseInt(clean.charAt(clean.length - 1 - i), 10) * weights[i];
+    }
+    var rem = sum % 11;
+    return String(rem > 1 ? 11 - rem : rem);
+  }
+
+  function pkGetRelDb() {
+    if (!STATE.relDb) STATE.relDb = pkCreateInitialRelationalDb();
+    return STATE.relDb;
+  }
+
+  function pkGetCustomerById(id) {
+    var list = pkGetRelDb().customers || [];
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+    return null;
+  }
+
+  function pkGetVehicleById(id) {
+    var list = pkGetRelDb().vehicles || [];
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+    return null;
+  }
+
+  function pkGetWorkerById(id) {
+    var list = pkGetRelDb().workers || [];
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+    return null;
+  }
+
+  function pkGetProductById(id) {
+    var list = pkGetRelDb().products || [];
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+    return null;
+  }
+
+  function pkGetContractById(id) {
+    var list = pkGetRelDb().contracts || [];
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+    return null;
+  }
+
+  function pkGetTariffById(id) {
+    var list = pkGetRelDb().tariffs || [];
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+    return null;
+  }
+
+  function pkGetVehicleAlertsList(veh) {
+    if (!veh) return [];
+    var alerts = [];
+    var curKm = Number(veh.currentMileage || 0);
+    var nextKm = Number(veh.nextOilChangeKm || 0);
+    if (curKm > 0 && nextKm > 0) {
+      if (curKm >= nextKm) alerts.push('\u26A0\uFE0F Cambio de aceite VENCIDO (' + curKm.toLocaleString('es-CO') + ' / ' + nextKm.toLocaleString('es-CO') + ' km)');
+      else if (nextKm - curKm <= 500) alerts.push('\u{1F514} Pr\xF3ximo cambio de aceite en ' + (nextKm - curKm) + ' km');
+    }
+    var today = '2026-11-05';
+    if (veh.soatDueDate && veh.soatDueDate <= today) alerts.push('\u{1F6A8} SOAT VENCIDO (' + veh.soatDueDate + ')');
+    if (veh.tecnoDueDate && veh.tecnoDueDate <= today) alerts.push('\u{1F6A8} Tecnomec\xE1nica VENCIDA (' + veh.tecnoDueDate + ')');
+    return alerts;
+  }
+
+  function pkPersistRelTransaction(actionType, entityPayload) {
+    if (pkIsDemoMode()) {
+      pkSaveDemoToLocalStorage();
+      return;
+    }
+    var cl = pkGetActiveClient();
+    if (!cl || !cl.dbName) return;
+    fetch('/api/v1/client-workspace/transaction', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        dbName: cl.dbName,
+        actionType: actionType || 'SYNC_STATE',
+        entityPayload: entityPayload || {},
+        fullRelationalState: pkGetRelDb()
+      })
+    }).catch(function() {});
+  }
+
+  function pkDownloadCsv(filename, headers, rows) {
+    var escCell = function(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+    var lines = [headers.map(escCell).join(';')];
+    for (var i = 0; i < rows.length; i++) lines.push(rows[i].map(escCell).join(';'));
+    var blob = new Blob(['\\uFEFF' + lines.join('\\r\\n')], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.setAttribute('download', filename);
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+`;
+}
+
+// apps/web-app/src/presentation/client-runtime/reports-cashbox-commissions-hub.runtime.ts
+function renderReportsCashboxCommissionsHubRuntimeJs() {
+  return `
+  function pkRenderReportsAndCashboxHub() {
+    var db = STATE.relDb;
+    var container = document.getElementById('ws-converged-hub-container');
+    if (!container || !db) return;
+
+    var totalInvoiced = 0; var cashIn = 0; var digitalIn = 0; var totalCxc = 0; var partsProfit = 0;
+    for (var i = 0; i < db.invoices.length; i++) {
+      var inv = db.invoices[i];
+      totalInvoiced += Number(inv.total || 0);
+      totalCxc += Number(inv.pendingBalance || 0);
+      var paid = Number(inv.amountPaid || 0);
+      if (inv.paymentMethod === 'Efectivo' || inv.paymentMethod === 'Cr\xE9dito / Cartera CxC') cashIn += paid;
+      else digitalIn += paid;
+      var items = inv.items || [];
+      for (var k = 0; k < items.length; k++) {
+        if (items[k].kind === 'PRODUCTO') {
+          var pr = pkFindById(db.products, items[k].refId);
+          var unitCost = pr ? Number(pr.costPrice || 0) : Math.round(Number(items[k].price || 0) * 0.6);
+          partsProfit += (Number(items[k].price || 0) - unitCost) * Number(items[k].qty || 1);
+        }
+      }
+    }
+
+    var cashExpenses = 0; var totalExpenses = 0;
+    var expRows = '';
+    for (var e = 0; e < db.expenses.length; e++) {
+      var ex = db.expenses[e];
+      totalExpenses += Number(ex.amount || 0);
+      if (ex.paymentSource === 'Efectivo Caja') cashExpenses += Number(ex.amount || 0);
+      expRows += '<tr><td><code>' + pkEsc(ex.id) + '</code></td><td>' + pkEsc(ex.date) + '</td><td><span class="badge badge-slate">' + pkEsc(ex.category) + '</span></td><td><strong>' + pkEsc(ex.description) + '</strong></td><td>' + pkEsc(ex.paymentSource) + '</td><td style="color:var(--pk-amber);font-weight:800">-' + pkCop(ex.amount) + '</td></tr>';
+    }
+
+    var netCashInBox = cashIn - cashExpenses;
+
+    var wkRows = '';
+    for (var w = 0; w < db.workers.length; w++) {
+      var wk = db.workers[w];
+      var gross = Number(wk.totalDayGross || 0);
+      var techPay = Math.round(gross * (Number(wk.commissionPct || 40) / 100));
+      var bizCut = gross - techPay;
+      wkRows += '<tr>' +
+        '<td><strong>' + pkEsc(wk.name) + '</strong><div style="font-size:11px;color:var(--pk-muted)">' + pkEsc(wk.specialty) + ' \xB7 \u{1F4DE} ' + pkEsc(wk.phone) + '</div></td>' +
+        '<td><span class="badge badge-blue">' + wk.commissionPct + '% T\xE9cnico / ' + (100 - wk.commissionPct) + '% Empresa</span></td>' +
+        '<td>' + pkCop(gross) + '</td>' +
+        '<td style="color:var(--pk-primary);font-weight:800">' + pkCop(techPay) + '</td>' +
+        '<td style="color:var(--pk-emerald);font-weight:800">' + pkCop(bizCut) + '</td>' +
+        '<td>' + (gross > 0
+          ? '<button type="button" class="btn btn-emerald btn-sm" data-settle-worker="' + pkEsc(wk.id) + '">\u26A1 Liquidar Turno (' + pkCop(techPay) + ')</button>'
+          : '<span class="badge badge-slate">\u2713 Turno en $0</span>') + '</td></tr>';
+    }
+
+    var stRows = '';
+    for (var s = 0; s < db.settlements.length; s++) {
+      var st = db.settlements[s];
+      stRows += '<tr><td><code>' + pkEsc(st.id) + '</code></td><td>' + pkEsc(st.date) + '</td><td><strong>' + pkEsc(st.workerName) + '</strong></td><td>' + pkCop(st.grossLabor) + '</td><td>' + st.commissionPct + '%</td><td style="color:var(--pk-primary);font-weight:800">' + pkCop(st.technicianPayout) + '</td><td style="color:var(--pk-emerald);font-weight:800">' + pkCop(st.companyRetention) + '</td></tr>';
+    }
+
+    container.innerHTML =
+      '<div class="kpi-row">' +
+      '<div class="kpi-box"><div class="kpi-label">Efectivo Neto Real en Gaveta (Ingresos - Gastos)</div><div class="kpi-val" style="color:var(--pk-emerald)">' + pkCop(netCashInBox) + '</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Ingresos Digitales (Transferencias / Tarjeta)</div><div class="kpi-val" style="color:var(--pk-primary)">' + pkCop(digitalIn) + '</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Utilidad Neta en Repuestos + Total Facturado</div><div class="kpi-val">+' + pkCop(partsProfit) + ' / ' + pkCop(totalInvoiced) + '</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Cartera por Cobrar CxC / Gastos Menores</div><div class="kpi-val" style="color:var(--pk-amber)">CxC: ' + pkCop(totalCxc) + ' \xB7 Gastos: -' + pkCop(totalExpenses) + '</div></div>' +
+      '</div>' +
+
+      '<div class="card"><div class="card-head"><div>' +
+      '<div class="card-title">\u{1F4E5} Exportaci\xF3n Ejecutiva a Excel CSV (UTF-8 con BOM Compatible con Excel)</div>' +
+      '<div class="card-sub">Descarga al instante las tablas relacionales enlazadas de la plataforma</div></div>' +
+      '<div class="row-actions">' +
+      '<button type="button" class="btn btn-outline btn-sm" data-export-csv="invoices">\u{1F4CA} Exportar Ventas y Facturas (.CSV)</button>' +
+      '<button type="button" class="btn btn-outline btn-sm" data-export-csv="inventory">\u{1F4E6} Exportar Inventario Valorizado (.CSV)</button>' +
+      '<button type="button" class="btn btn-outline btn-sm" data-export-csv="expenses">\u{1F4B8} Exportar Gastos Caja (.CSV)</button>' +
+      '<button type="button" class="btn btn-outline btn-sm" data-export-csv="settlements">\u{1F468}\u200D\u{1F527} Exportar Liquidaciones (.CSV)</button>' +
+      '</div></div></div>' +
+
+      '<div class="card"><div class="card-head"><div>' +
+      '<div class="card-title">\u{1F468}\u200D\u{1F527} 1. Liquidaci\xF3n de Comisiones de T\xE9cnicos / Profesionales (FK -> workers, settlements)</div>' +
+      '<div class="card-sub">Cada servicio facturado en el POS suma autom\xE1ticamente al acumulado del t\xE9cnico; liquida su turno con un clic</div></div></div>' +
+      '<div class="card-body"><div class="table-wrap" style="margin-bottom:12px"><table><thead><tr><th>T\xE9cnico / Profesional</th><th>Esquema Comisi\xF3n</th><th>Producido Bruto Hoy</th><th>Pago al T\xE9cnico</th><th>Utilidad Empresa</th><th>Acci\xF3n</th></tr></thead><tbody>' + wkRows + '</tbody></table></div>' +
+      '<div class="form-grid" style="background:#f8fafc;padding:10px;border-radius:10px;border:1px solid var(--pk-border)">' +
+      '<div class="field"><label>Nombre Nuevo T\xE9cnico / Profesional</label><input type="text" id="wk-new-name" placeholder="Ej: Jorge Iv\xE1n R\xEDos" /></div>' +
+      '<div class="field"><label>Especialidad / \xC1rea</label><input type="text" id="wk-new-spec" placeholder="Ej: Diagn\xF3stico Electr\xF3nico / Especialista" /></div>' +
+      '<div class="field"><label>% Comisi\xF3n T\xE9cnico</label><div class="row-actions"><input type="number" id="wk-new-pct" value="40" min="5" max="90" style="flex:1" />' +
+      '<button type="button" class="btn btn-primary btn-sm" id="btn-wk-add">+ Vincular T\xE9cnico</button></div></div></div>' +
+      (stRows ? '<div style="margin-top:12px"><div style="font-size:12px;font-weight:800;margin-bottom:6px">Historial de Turnos Liquidados:</div><div class="table-wrap"><table><thead><tr><th>ID</th><th>Fecha</th><th>T\xE9cnico</th><th>Bruto</th><th>%</th><th>Pagado T\xE9cnico</th><th>Retenci\xF3n Empresa</th></tr></thead><tbody>' + stRows + '</tbody></table></div></div>' : '') +
+      '</div></div>' +
+
+      '<div class="card"><div class="card-head"><div>' +
+      '<div class="card-title">\u{1F4B8} 2. Control de Gastos de Caja Menor y Egresos Operativos</div>' +
+      '<div class="card-sub">Los gastos pagados en Efectivo Caja se descuentan autom\xE1ticamente del Efectivo Neto en Gaveta</div></div></div>' +
+      '<div class="card-body"><div class="form-grid" style="margin-bottom:12px">' +
+      '<div class="field"><label>Concepto / Descripci\xF3n del Gasto</label><input type="text" id="exp-new-desc" placeholder="Ej: Compra insumos aseo / Domicilio repuestos" /></div>' +
+      '<div class="field"><label>Categor\xEDa</label><select id="exp-new-cat"><option value="Insumos Operativos">Insumos Operativos</option><option value="Servicios P\xFAblicos">Servicios P\xFAblicos</option><option value="Transporte / Fletes">Transporte / Fletes</option><option value="Mantenimiento">Mantenimiento</option></select></div>' +
+      '<div class="field"><label>Origen del Dinero y Valor (COP)</label><div class="row-actions">' +
+      '<select id="exp-new-source" style="width:140px"><option value="Efectivo Caja">Efectivo Caja</option><option value="Transferencia Bancaria">Banco / Nequi</option></select>' +
+      '<input type="number" id="exp-new-amount" value="25000" style="flex:1" />' +
+      '<button type="button" class="btn btn-amber btn-sm" id="btn-exp-add">+ Registrar Gasto</button></div></div></div>' +
+      '<div class="table-wrap"><table><thead><tr><th>ID</th><th>Fecha</th><th>Categor\xEDa</th><th>Descripci\xF3n</th><th>Origen</th><th>Monto</th></tr></thead><tbody>' + expRows + '</tbody></table></div></div></div>';
+  }
+
+  function pkRenderGastroHub() {
+    var db = STATE.relDb;
+    var container = document.getElementById('ws-converged-hub-container');
+    if (!container || !db) return;
+    var cards = '';
+    for (var i = 0; i < db.diningTables.length; i++) {
+      var t = db.diningTables[i];
+      var itemsHtml = '';
+      for (var j = 0; j < t.items.length; j++) {
+        itemsHtml += '<div style="font-size:11px;display:flex;justify-content:space-between"><span>' + t.items[j].qty + 'x ' + pkEsc(t.items[j].name) + '</span><strong>' + pkCop(t.items[j].price * t.items[j].qty) + '</strong></div>';
+      }
+      cards += '<div class="card"><div class="card-head"><div><div class="card-title">\u{1F37D}\uFE0F ' + pkEsc(t.name) + ' (' + pkEsc(t.zone) + ')</div>' +
+        '<div class="card-sub">Mesero: ' + pkEsc(t.waiter) + ' \xB7 Comensales: ' + t.diners + '</div></div>' +
+        '<span class="badge ' + (t.status === 'Libre' ? 'badge-slate' : (t.status === 'Cuenta' ? 'badge-amber' : 'badge-emerald')) + '">' + pkEsc(t.status) + '</span></div>' +
+        '<div class="card-body"><div style="background:#f8fafc;padding:8px;border-radius:8px;min-height:54px;margin-bottom:8px">' + (itemsHtml || '<span style="font-size:11px;color:var(--pk-muted)">Mesa disponible sin comanda activa</span>') + '</div>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center">' +
+        '<strong>Total: ' + pkCop(t.total) + '</strong>' +
+        (t.total > 0 ? '<button type="button" class="btn btn-emerald btn-sm" data-pos-load-table="' + pkEsc(t.id) + '">\u{1F6D2} Pasar Cuenta a Caja POS</button>' : '<button type="button" class="btn btn-outline btn-sm" data-gastro-add-demo="' + pkEsc(t.id) + '">+ Comanda R\xE1pida</button>') +
+        '</div></div></div>';
+    }
+    container.innerHTML = '<div class="grid-3">' + cards + '</div>';
+  }
+`;
+}
+
 // apps/web-app/src/presentation/client-runtime/superadmin-and-shell.runtime.ts
 function renderSuperAdminAndShellRuntimeJs() {
   return `
@@ -15517,6 +16881,7 @@ function renderSuperAdminAndShellRuntimeJs() {
         if (uLabel) uLabel.textContent = (cl ? cl.companyName : '') + ' \u2014 ' + STATE.session.username;
         if (topCtx) topCtx.textContent = '| ' + (cl ? cl.companyName : 'Plataforma Cliente');
         if (sWs) sWs.classList.add('active');
+        if (cl && cl.dbName) pkHydrateClientRelationalWorkspace(cl.dbName);
         pkRenderWorkstation();
       }
       return;
@@ -15594,11 +16959,113 @@ function renderSuperAdminAndShellRuntimeJs() {
 `;
 }
 
+// apps/web-app/src/presentation/client-runtime/workshop-kanban-hub.runtime.ts
+function renderWorkshopKanbanHubRuntimeJs() {
+  return `
+  function pkRenderKanbanHub() {
+    var db = STATE.relDb;
+    var container = document.getElementById('ws-converged-hub-container');
+    if (!container || !db) return;
+
+    var stages = ['Recibido', 'En Diagn\xF3stico', 'Esperando Repuesto', 'En Reparaci\xF3n', 'Listo para Entrega'];
+    var stageBadges = ['badge-slate', 'badge-blue', 'badge-amber', 'badge-blue', 'badge-emerald'];
+
+    var custOpts = '';
+    for (var c = 0; c < db.customers.length; c++) {
+      var cu = db.customers[c];
+      custOpts += '<option value="' + pkEsc(cu.id) + '">' + pkEsc(cu.name + ' (' + cu.docType + ' ' + cu.nit + ')') + '</option>';
+    }
+    var workerOpts = '';
+    for (var w = 0; w < db.workers.length; w++) {
+      var wk = db.workers[w];
+      workerOpts += '<option value="' + pkEsc(wk.id) + '">' + pkEsc(wk.name + ' \u2014 ' + wk.specialty) + '</option>';
+    }
+
+    var columnsHtml = '';
+    for (var s = 0; s < stages.length; s++) {
+      var stg = stages[s];
+      var cardsHtml = '';
+      var count = 0;
+      for (var o = 0; o < db.workOrders.length; o++) {
+        var wo = db.workOrders[o];
+        if (wo.status !== stg) continue;
+        count++;
+        var svcsSummary = '';
+        for (var k = 0; k < (wo.services || []).length; k++) {
+          svcsSummary += '<div style="font-size:11px;color:var(--pk-text)">\u2022 ' + pkEsc(wo.services[k].description) + ' (<strong>' + pkCop(wo.services[k].price) + '</strong>)</div>';
+        }
+        var nextStage = s < stages.length - 1 ? stages[s + 1] : null;
+        var prevStage = s > 0 ? stages[s - 1] : null;
+
+        cardsHtml += '<div style="background:#fff;border:1px solid var(--pk-border);border-radius:10px;padding:10px;margin-bottom:8px;box-shadow:0 1px 3px rgba(15,23,42,.05)">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
+          '<span class="badge ' + stageBadges[s] + '">\u{1F697} ' + pkEsc(wo.plate) + '</span>' +
+          '<span style="font-size:11px;font-weight:800;color:var(--pk-muted)">' + pkEsc(wo.id) + '</span></div>' +
+          '<div style="font-size:12px;font-weight:800">' + pkEsc(wo.vehicleBrand) + '</div>' +
+          '<div style="font-size:11px;color:var(--pk-muted);margin-bottom:6px">\u{1F464} FK Cliente: <strong>' + pkEsc(wo.customerName) + '</strong><br/>\u{1F468}\u200D\u{1F527} FK T\xE9cnico: <strong>' + pkEsc(wo.workerName) + '</strong><br/>\u{1F6E3}\uFE0F Km: ' + Number(wo.currentKm || 0).toLocaleString('es-CO') + ' (Pr\xF3x Aceite: ' + Number(wo.nextOilKm || 0).toLocaleString('es-CO') + ')</div>' +
+          '<div style="background:#f8fafc;padding:6px;border-radius:6px;margin-bottom:6px">' + svcsSummary + '</div>' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+          '<span style="font-size:11px;color:var(--pk-muted)">Total Estimado:</span>' +
+          '<strong style="font-size:12px;color:var(--pk-emerald)">' + pkCop(wo.totalEstimated) + '</strong></div>' +
+          '<div class="row-actions" style="justify-content:space-between">' +
+          (prevStage ? '<button type="button" class="btn btn-outline btn-sm" style="padding:3px 7px;font-size:10px" data-wo-move="' + pkEsc(wo.id) + '" data-wo-stage="' + pkEsc(prevStage) + '">&larr;</button>' : '<span></span>') +
+          (nextStage ? '<button type="button" class="btn btn-primary btn-sm" style="padding:3px 8px;font-size:10px" data-wo-move="' + pkEsc(wo.id) + '" data-wo-stage="' + pkEsc(nextStage) + '">Avanzar: ' + pkEsc(nextStage) + ' &rarr;</button>' : '') +
+          '</div>' +
+          '<div class="row-actions" style="margin-top:6px;border-top:1px dashed var(--pk-border);padding-top:6px">' +
+          '<button type="button" class="btn btn-emerald btn-sm" style="width:100%;justify-content:center" data-pos-load-order="' + pkEsc(wo.id) + '">\u{1F6D2} Pasar a Caja POS y Facturar</button>' +
+          '<button type="button" class="btn btn-outline btn-sm" style="width:100%;justify-content:center" data-wo-whatsapp="' + pkEsc(wo.id) + '">\u{1F4AC} Avisar por WhatsApp</button>' +
+          '</div></div>';
+      }
+      if (!cardsHtml) {
+        cardsHtml = '<div style="font-size:11px;color:var(--pk-muted);text-align:center;padding:18px 6px;border:1px dashed var(--pk-border);border-radius:8px">Sin \xF3rdenes en esta etapa</div>';
+      }
+      columnsHtml += '<div style="background:#f8fafc;border:1px solid var(--pk-border);border-radius:12px;padding:10px;min-width:215px;flex:1">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+        '<strong style="font-size:12px">' + pkEsc(stg) + '</strong>' +
+        '<span class="badge ' + stageBadges[s] + '">' + count + '</span></div>' +
+        cardsHtml + '</div>';
+    }
+
+    container.innerHTML =
+      '<div class="card"><div class="card-head"><div>' +
+      '<div class="card-title">\u{1F527} 1. Recepci\xF3n T\xE9cnica de Veh\xEDculo / Activo y Creaci\xF3n de Orden de Trabajo (FK -> customers, vehicles, workers)</div>' +
+      '<div class="card-sub">Registra o actualiza autom\xE1ticamente la placa en la tabla de veh\xEDculos, sugiere cambio de aceite (+3.000 km) y crea tarjeta en el Kanban</div></div></div>' +
+      '<div class="card-body"><div class="form-grid">' +
+      '<div class="field"><label>Propietario / Cliente (FK -> customers)</label><select id="wo-customer-id">' + custOpts + '</select></div>' +
+      '<div class="field"><label>Placa / Serial del Activo</label><input type="text" id="wo-plate" placeholder="Ej: KLM-901" style="text-transform:uppercase;font-weight:800" /></div>' +
+      '<div class="field"><label>Marca / L\xEDnea / Modelo</label><input type="text" id="wo-brand" placeholder="Ej: Mazda CX-30 Grand Touring 2024" /></div>' +
+      '<div class="field"><label>Kilometraje Actual</label><div class="row-actions"><input type="number" id="wo-current-km" value="45000" style="flex:1" />' +
+      '<button type="button" class="btn btn-outline btn-sm" id="btn-wo-suggest-oil">\u{1F6E2}\uFE0F +3.000 km</button></div></div>' +
+      '<div class="field"><label>Pr\xF3x. Cambio Aceite (Km)</label><input type="number" id="wo-next-oil-km" value="48000" /></div>' +
+      '<div class="field"><label>Vencimiento SOAT / Tecno</label><input type="date" id="wo-soat-date" value="2026-12-31" /></div>' +
+      '<div class="field"><label>T\xE9cnico / Mec\xE1nico Asignado (FK -> workers)</label><select id="wo-worker-id">' + workerOpts + '</select></div>' +
+      '<div class="field"><label>Trabajo / Diagn\xF3stico Solicitado</label><input type="text" id="wo-service-desc" placeholder="Ej: Cambio kit embrague + revisi\xF3n frenos" /></div>' +
+      '<div class="field"><label>Valor Mano de Obra Estimado (COP)</label><input type="number" id="wo-service-price" value="120000" /></div>' +
+      '</div><div style="margin-top:10px;display:flex;justify-content:flex-end">' +
+      '<button type="button" class="btn btn-primary" id="btn-wo-create-order">+ Ingresar Veh\xEDculo/Activo al Tablero Kanban</button></div></div></div>' +
+
+      '<div class="card"><div class="card-head"><div>' +
+      '<div class="card-title">\u{1F4CB} 2. Tablero Kanban de Taller y Operaciones en Vivo (5 Etapas Interactivas)</div>' +
+      '<div class="card-sub">Mueve \xF3rdenes entre etapas, notifica al cliente por WhatsApp o env\xEDa la orden con un clic a Caja POS para facturarla</div></div></div>' +
+      '<div class="card-body"><div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:6px">' + columnsHtml + '</div></div></div>';
+  }
+`;
+}
+
 // apps/web-app/src/presentation/client-runtime/workstation-controller.runtime.ts
 function renderClientRuntimeBundleJs() {
   return `(function() {
+${renderRelationalSeedDataRuntimeJs()}
 ${renderDomSanitizerRuntimeJs()}
 ${renderFormAndTableRuntimeJs()}
+${renderPosHybridHubRuntimeJs()}
+${renderWorkshopKanbanHubRuntimeJs()}
+${renderInventoryWmsHubRuntimeJs()}
+${renderCrm360CxcHubRuntimeJs()}
+${renderReportsCashboxCommissionsHubRuntimeJs()}
+${renderRelationalModalsRuntimeJs()}
+${renderRelationalHubSecondaryActionsRuntimeJs()}
+${renderRelationalHubActionsRuntimeJs()}
 ${renderGatewayTransportRuntimeJs()}
 ${renderPlatformActionsRuntimeJs()}
 ${renderDeveloperGroupsCatalogRuntimeJs()}
@@ -15607,6 +17074,16 @@ ${renderSuperAdminAndShellRuntimeJs()}
   function pkGoRegister(presetId) {
     if (presetId) { STATE.selectedBusinessTypeId = presetId; STATE.extraServiceKeys = {}; STATE.extraSubmoduleKeys = {}; }
     STATE.publicTab = 'auth'; STATE.authMode = 'register'; pkUpdateShellNavigation();
+  }
+
+  function pkMapServiceToConvergedHub(svcKey) {
+    if (svcKey === 'srv-invoicing') return 'pos';
+    if (svcKey === 'srv-workshop' || svcKey === 'srv-appointments') return 'kanban';
+    if (svcKey === 'srv-inventory' || svcKey === 'srv-procurement') return 'inventory';
+    if (svcKey === 'srv-crm' || svcKey === 'srv-treasury') return 'look360';
+    if (svcKey === 'srv-reports' || svcKey === 'srv-finance' || svcKey === 'srv-hr-payroll') return 'reports';
+    if (svcKey === 'srv-gastro') return 'gastro';
+    return 'submodules';
   }
 
   document.addEventListener('click', function(ev) {
@@ -15628,8 +17105,7 @@ ${renderSuperAdminAndShellRuntimeJs()}
     var bTypeBtn = target.closest('[data-select-btype]');
     if (bTypeBtn) {
       STATE.selectedBusinessTypeId = bTypeBtn.getAttribute('data-select-btype');
-      STATE.extraServiceKeys = {}; STATE.extraSubmoduleKeys = {};
-      pkRenderRegistrationWizard(); return;
+      STATE.extraServiceKeys = {}; STATE.extraSubmoduleKeys = {}; pkRenderRegistrationWizard(); return;
     }
 
     if (target.closest('#btn-submit-login')) {
@@ -15640,9 +17116,7 @@ ${renderSuperAdminAndShellRuntimeJs()}
       else if (uVal.indexOf('aux') !== -1) { STATE.session = { role: 'auxiliar', username: uVal }; }
       else {
         var matchedClient = STATE.clients[STATE.clients.length - 1] || STATE.clients[0];
-        for (var i = 0; i < STATE.clients.length; i++) {
-          if (STATE.clients[i].adminUsername.toLowerCase() === uVal) matchedClient = STATE.clients[i];
-        }
+        for (var i = 0; i < STATE.clients.length; i++) if (STATE.clients[i].adminUsername.toLowerCase() === uVal) matchedClient = STATE.clients[i];
         if (!matchedClient) { pkToast('No hay un cliente registrado con ese usuario. Registra primero tu empresa.'); return; }
         STATE.activeTenantId = matchedClient.tenantId;
         STATE.session = { role: 'cliente', username: uVal, tenantId: matchedClient.tenantId, internalRoleName: 'Administrador General' };
@@ -15670,103 +17144,88 @@ ${renderSuperAdminAndShellRuntimeJs()}
       pkUpdateShellNavigation(); return;
     }
 
+    var lookTab = target.closest('[data-look360-tab]');
+    if (lookTab) { STATE.look360Tab = lookTab.getAttribute('data-look360-tab'); pkRenderWorkstation(); return; }
+    if (pkHandleRelationalHubClick(target)) return;
+
     var wsSvc = target.closest('[data-ws-service]');
-    if (wsSvc) { STATE.activeWorkstationPane = 'module'; STATE.activeServiceKey = wsSvc.getAttribute('data-ws-service'); STATE.activeSubmoduleKey = ''; pkRenderWorkstation(); return; }
+    if (wsSvc) {
+      var sKey = wsSvc.getAttribute('data-ws-service');
+      STATE.activeWorkstationPane = 'module'; STATE.activeServiceKey = sKey; STATE.activeSubmoduleKey = '';
+      STATE.activeConvergedHub = pkMapServiceToConvergedHub(sKey); pkRenderWorkstation(); return;
+    }
     var wsSub = target.closest('[data-ws-submodule]');
-    if (wsSub) { STATE.activeSubmoduleKey = wsSub.getAttribute('data-ws-submodule'); pkRenderWorkstation(); return; }
+    if (wsSub) { STATE.activeSubmoduleKey = wsSub.getAttribute('data-ws-submodule'); STATE.activeConvergedHub = 'submodules'; pkRenderWorkstation(); return; }
     if (target.closest('#btn-nav-internal-rbac')) { STATE.activeWorkstationPane = 'rbac'; pkRenderWorkstation(); return; }
     if (target.closest('#btn-nav-need-feature')) { STATE.activeWorkstationPane = 'need-feature'; pkRenderWorkstation(); return; }
-    if (target.closest('#btn-ws-clear-filter')) {
-      STATE.v2FilterText = ''; var fIn = document.getElementById('ws-v2-filter-input'); if (fIn) fIn.value = ''; pkRenderWorkstation(); return;
-    }
+    if (target.closest('#btn-ws-clear-filter')) { STATE.v2FilterText = ''; var fIn = document.getElementById('ws-v2-filter-input'); if (fIn) fIn.value = ''; pkRenderWorkstation(); return; }
 
     if (target.closest('#btn-ws-save-record')) {
       var inputs = document.querySelectorAll('[data-ws-field]');
       var recId = 'REG-' + String(Date.now()).slice(-4);
-      var row = [recId];
-      for (var f = 0; f < inputs.length; f++) row.push(inputs[f].value || 'Registrado');
+      var row = [recId]; for (var f = 0; f < inputs.length; f++) row.push(inputs[f].value || 'Registrado');
       if (!STATE.submoduleRows[STATE.activeSubmoduleKey]) STATE.submoduleRows[STATE.activeSubmoduleKey] = [];
       STATE.submoduleRows[STATE.activeSubmoduleKey].unshift(row);
       if (pkIsDemoMode()) {
-        pkSaveDemoToLocalStorage();
-        pkRenderWorkstation();
-        pkToast('Registro guardado en localStorage (Modo Demo).');
+        pkSaveDemoToLocalStorage(); pkRenderWorkstation(); pkToast('Registro guardado en localStorage (Modo Demo).');
       } else {
         var clRec = pkGetActiveClient();
-        fetch('/api/v1/control/client-db/record', {
-          method: 'POST', headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ dbName: clRec.dbName, submoduleKey: STATE.activeSubmoduleKey, recordId: recId, cells: row })
-        }).catch(function() {});
-        pkRenderWorkstation();
-        pkToast('Registro persistido en BD PostgreSQL: ' + clRec.dbName);
+        fetch('/api/v1/control/client-db/record', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dbName: clRec.dbName, submoduleKey: STATE.activeSubmoduleKey, recordId: recId, cells: row }) }).catch(function() {});
+        pkRenderWorkstation(); pkToast('Registro persistido en BD PostgreSQL: ' + clRec.dbName);
       }
       return;
     }
 
     if (target.closest('#btn-create-internal-role')) {
       var clR = pkGetActiveClient();
-      if (clR.internalRoles.length >= clR.maxRolesAllowed) {
-        pkToast('Has alcanzado el l\xEDmite m\xE1ximo de roles (' + clR.maxRolesAllowed + ') permitido por SuperAdmin.'); return;
-      }
+      if (clR.internalRoles.length >= clR.maxRolesAllowed) { pkToast('Has alcanzado el l\xEDmite m\xE1ximo de roles (' + clR.maxRolesAllowed + ').'); return; }
       var rName = ((document.getElementById('new-role-name') || {}).value || '').trim();
       var rDesc = ((document.getElementById('new-role-desc') || {}).value || '').trim() || 'Rol personalizado';
       if (!rName) { pkToast('Ingresa el nombre del rol.'); return; }
       clR.internalRoles.push({ roleId: 'rol-' + Date.now(), name: rName, description: rDesc, allowedSubmodules: clR.activeSubmodules.slice(0, 3) });
-      if (pkIsDemoMode()) pkSaveDemoToLocalStorage();
-      pkRenderWorkstation(); pkToast('Rol interno creado en ' + clR.dbName); return;
+      if (pkIsDemoMode()) pkSaveDemoToLocalStorage(); pkRenderWorkstation(); pkToast('Rol interno creado en ' + clR.dbName); return;
     }
 
     if (target.closest('#btn-create-internal-user')) {
       var clU = pkGetActiveClient();
-      if (clU.internalUsers.length >= clU.maxUsersAllowed) {
-        pkToast('Has alcanzado el l\xEDmite m\xE1ximo de usuarios (' + clU.maxUsersAllowed + ') permitido por SuperAdmin.'); return;
-      }
+      if (clU.internalUsers.length >= clU.maxUsersAllowed) { pkToast('Has alcanzado el l\xEDmite m\xE1ximo de usuarios (' + clU.maxUsersAllowed + ').'); return; }
       var uFull = ((document.getElementById('new-user-fullname') || {}).value || '').trim();
       var uName = ((document.getElementById('new-user-username') || {}).value || '').trim();
       if (!uFull || !uName) { pkToast('Completa nombre y usuario.'); return; }
       clU.internalUsers.push({ userId: 'u-' + Date.now(), username: uName, fullName: uFull, email: uName + '@empresa.co', internalRoleId: 'rol-operador', internalRoleName: 'Rol Asignado', passwordHint: 'Usr#2026!', isClientAdmin: false });
-      if (pkIsDemoMode()) pkSaveDemoToLocalStorage();
-      pkRenderWorkstation(); pkToast('Usuario creado en ' + clU.dbName); return;
+      if (pkIsDemoMode()) pkSaveDemoToLocalStorage(); pkRenderWorkstation(); pkToast('Usuario creado en ' + clU.dbName); return;
     }
 
     var reqBtn = target.closest('[data-req-key]');
     if (reqBtn) {
       var clF = pkGetActiveClient();
-      var rTier = reqBtn.getAttribute('data-req-tier');
-      var rKey = reqBtn.getAttribute('data-req-key');
-      var rLbl = reqBtn.getAttribute('data-req-label');
+      var rTier = reqBtn.getAttribute('data-req-tier'); var rKey = reqBtn.getAttribute('data-req-key'); var rLbl = reqBtn.getAttribute('data-req-label');
       if (rTier === 'SUBMODULO' && clF.activeSubmodules.indexOf(rKey) === -1) clF.activeSubmodules.push(rKey);
       if (rTier === 'FUNCIONALIDAD' && clF.activeFeatures.indexOf(rKey) === -1) clF.activeFeatures.push(rKey);
       STATE.featureRequests.push({ companyName: clF.companyName, tier: rTier, key: rKey, label: rLbl });
-      if (pkIsDemoMode()) pkSaveDemoToLocalStorage();
-      pkRenderWorkstation(); pkToast('Activado: ' + rLbl); return;
+      if (pkIsDemoMode()) pkSaveDemoToLocalStorage(); pkRenderWorkstation(); pkToast('Activado: ' + rLbl); return;
     }
-
     if (pkHandleSuperAdminAction(target)) return;
   });
 
   document.addEventListener('change', function(ev) {
-    var t = ev.target;
-    if (!t) return;
-    var exSvc = t.getAttribute('data-extra-service');
-    if (exSvc) { STATE.extraServiceKeys[exSvc] = !!t.checked; pkRenderRegistrationWizard(); return; }
-    var exSub = t.getAttribute('data-extra-submodule');
-    if (exSub) { STATE.extraSubmoduleKeys[exSub] = !!t.checked; pkRenderRegistrationWizard(); return; }
+    var t = ev.target; if (!t) return;
+    if (t.id === 'pos-select-customer') { STATE.posCustomerId = t.value; STATE.posVehicleId = ''; pkRenderWorkstation(); return; }
+    if (t.id === 'pos-select-vehicle') { STATE.posVehicleId = t.value; pkRenderWorkstation(); return; }
+    if (t.id === 'pos-payment-method') { STATE.posPaymentMethod = t.value; pkRenderWorkstation(); return; }
+    if (t.id === 'inv-filter-warehouse') { STATE.invWarehouseFilter = t.value; pkRenderWorkstation(); return; }
+    var exSvc = t.getAttribute('data-extra-service'); if (exSvc) { STATE.extraServiceKeys[exSvc] = !!t.checked; pkRenderRegistrationWizard(); return; }
+    var exSub = t.getAttribute('data-extra-submodule'); if (exSub) { STATE.extraSubmoduleKeys[exSub] = !!t.checked; pkRenderRegistrationWizard(); return; }
   });
 
   document.addEventListener('input', function(ev) {
-    var t = ev.target;
-    if (t && t.id === 'ws-v2-filter-input') {
-      STATE.v2FilterText = t.value || '';
-      pkRenderWorkstation();
-      return;
-    }
-    if (t && (t.id === 'scale-gross-kg' || t.id === 'scale-tare-kg')) {
-      var g = Number((document.getElementById('scale-gross-kg') || {}).value || 0);
-      var tr = Number((document.getElementById('scale-tare-kg') || {}).value || 0);
-      var net = Math.max(0, g - tr);
-      var disp = document.getElementById('scale-net-display');
-      if (disp) disp.value = net.toLocaleString('es-CO') + ' Kg (' + (net / 1000).toFixed(2) + ' Ton)';
+    var t = ev.target; if (!t) return;
+    if (t.id === 'ws-v2-filter-input') { STATE.v2FilterText = t.value || ''; pkRenderWorkstation(); return; }
+    if (t.id === 'inv-search-input') { STATE.invSearchText = t.value || ''; pkRenderWorkstation(); return; }
+    if (t.id === 'look360-search-input') { STATE.look360Search = t.value || ''; pkRenderWorkstation(); return; }
+    if (t.id === 'pos-cash-received') {
+      if (STATE.posPaymentMethod === 'Cr\xE9dito / Cartera CxC') STATE.posCreditInitialAbono = Number(t.value || 0);
+      else STATE.posCashReceived = Number(t.value || 0);
     }
   });
 
@@ -16039,13 +17498,13 @@ function renderLoginAndSuperAdminHtml() {
 function renderWorkstationLayerHtml() {
   return `
   <section class="surface" id="surface-workstation">
-    <!-- BANNER EXCLUSIVO CUANDO SE NAVEGA EN EL APARTADO 3: DEMO (db_version_prueba) -->
-    <div id="demo-mode-banner" style="display:none;background:linear-gradient(90deg,#1e3a8a,#1d4ed8);color:#fff;padding:10px 16px;border-radius:12px;margin-bottom:14px;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+    <!-- BANNER EXCLUSIVO CUANDO SE NAVEGA EN EL APARTADO 3: DEMO -->
+    <div id="demo-mode-banner" style="display:none;background:linear-gradient(90deg,#023047,#1d4ed8);color:#fff;padding:10px 16px;border-radius:12px;margin-bottom:14px;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
       <div style="font-size:12px">
-        <strong>\u{1F9EA} APARTADO DEMO INTERACTIVA:</strong> Est\xE1s probando todos los M\xF3dulos Principales y Subm\xF3dulos sobre la base de datos de demostraci\xF3n (<code>db_version_prueba</code>).
+        <strong>\u{1F9EA} DEMO INTERACTIVA RELACIONAL (FactuPOS + Version2):</strong> Todas las tablas est\xE1n enlazadas con <strong>Foreign Keys (FK)</strong> en vivo: si creas un cliente, producto, orden Kanban o factura, impacta autom\xE1ticamente el Stock, Kardex, Cartera CxC, Comisiones de T\xE9cnicos y Arqueo de Caja.
       </div>
       <button type="button" class="btn btn-emerald btn-sm" id="btn-demo-go-register">
-        \u{1F680} Registra tu Negocio y obt\xE9n tu propia Base de Datos &rarr;
+        \u{1F680} Registra tu Negocio y obt\xE9n tu propia Base de Datos PostgreSQL &rarr;
       </button>
     </div>
 
@@ -16069,57 +17528,67 @@ function renderWorkstationLayerHtml() {
         </div>
       </aside>
 
-      <!-- \xC1REA CENTRAL DE OPERACI\xD3N -->
+      <!-- \xC1REA CENTRAL DE OPERACI\xD3N CONVERGENTE -->
       <div class="ws-main">
-        <!-- VISTA 1: OPERACI\xD3N DE UN M\xD3DULO PRINCIPAL Y SUS INTERPESTA\xD1AS DE SUBM\xD3DULOS -->
+        <!-- VISTA 1: OPERACI\xD3N RELACIONAL CONVERGENTE (FACTUPOS + VERSION2) -->
         <div id="ws-pane-module-operation">
-          <div class="card" style="margin-bottom:14px">
-            <div class="card-head">
+          <!-- BARRA SUPERIOR DE CENTROS DE CONVERGENCIA RELACIONAL -->
+          <div class="card" style="margin-bottom:14px;border:2px solid #cbd5e1">
+            <div class="card-head" style="background:linear-gradient(90deg,#0f172a,#1e293b);color:#fff;border-radius:12px 12px 0 0">
               <div>
-                <div style="display:flex;align-items:center;gap:8px">
-                  <span id="ws-active-service-icon" style="font-size:20px">\u{1F4E6}</span>
-                  <h2 style="margin:0;font-size:18px" id="ws-active-service-title">M\xF3dulo Principal</h2>
-                  <span class="badge badge-emerald" id="ws-active-db-badge">BD: db_version_prueba</span>
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                  <span id="ws-active-service-icon" style="font-size:20px">\u{1F6D2}</span>
+                  <h2 style="margin:0;font-size:17px;color:#fff" id="ws-active-service-title">Centro Operativo Relacional</h2>
+                  <span class="badge badge-emerald" id="ws-active-db-badge">BD Relacional Activa</span>
                 </div>
-                <div style="font-size:12px;color:var(--pk-muted);margin-top:3px" id="ws-active-service-sub"></div>
+                <div style="font-size:12px;color:#cbd5e1;margin-top:3px" id="ws-active-service-sub"></div>
               </div>
               <div id="ws-active-features-pills" style="display:flex;gap:6px;flex-wrap:wrap"></div>
             </div>
-            <!-- BARRA DE INTERPESTA\xD1AS DE SUBM\xD3DULOS -->
-            <div style="padding:10px 18px;background:#f8fafc;border-bottom:1px solid var(--pk-border);display:flex;gap:8px;flex-wrap:wrap" id="ws-submodule-tabs"></div>
 
-            <div class="card-body">
-              <div style="margin-bottom:12px;font-size:12px;color:var(--pk-muted)" id="ws-submodule-summary"></div>
+            <!-- SELECTOR R\xC1PIDO DE FLUJOS CONVERGENTES (ENLAZADOS POR FOREIGN KEYS) -->
+            <div style="padding:10px 14px;background:#f1f5f9;border-bottom:1px solid var(--pk-border);display:flex;gap:6px;flex-wrap:wrap;align-items:center" id="ws-converged-hub-bar">
+              <span style="font-size:11px;font-weight:800;color:#023047;text-transform:uppercase;margin-right:4px">\u{1F517} Flujos Integrados (FK):</span>
+              <button type="button" class="btn btn-sm" data-hub-mode="pos" id="hub-btn-pos">\u{1F6D2} 1. POS H\xEDbrido, Facturaci\xF3n y Cotizaciones</button>
+              <button type="button" class="btn btn-sm" data-hub-mode="kanban" id="hub-btn-kanban">\u{1F6E0}\uFE0F 2. Recepci\xF3n, Veh\xEDculos y Kanban en Vivo</button>
+              <button type="button" class="btn btn-sm" data-hub-mode="inventory" id="hub-btn-inventory">\u{1F4E6} 3. Inventario Valorizado, Compras y Actas v2</button>
+              <button type="button" class="btn btn-sm" data-hub-mode="look360" id="hub-btn-look360">\u{1F50D} 4. Consultas 360\xB0, Clientes, Contratos y Cartera CxC</button>
+              <button type="button" class="btn btn-sm" data-hub-mode="reports" id="hub-btn-reports">\u{1F4CA} 5. Arqueo Caja, Gastos, Comisiones y CSV</button>
+              <button type="button" class="btn btn-sm" data-hub-mode="gastro" id="hub-btn-gastro">\u{1F37D}\uFE0F 6. Mesas, KDS y Cuenta a Caja</button>
+              <button type="button" class="btn btn-sm" data-hub-mode="submodules" id="hub-btn-submodules">\u{1F4D1} 7. Subm\xF3dulos Espec\xEDficos</button>
+            </div>
 
-              <!-- WIDGETS ESPECIALIZADOS DEL SUBM\xD3DULO (POS / RECETAS / B\xC1SCULA) -->
-              <div id="ws-specialized-widget-slot" style="margin-bottom:16px"></div>
+            <!-- CONTENEDOR PRINCIPAL DEL MOTOR CONVERGENTE -->
+            <div class="card-body" id="ws-converged-hub-container"></div>
 
-              <!-- FORMULARIO LIMPIO DEL SUBM\xD3DULO (CON LOS CAMPOS DE SUS FUNCIONALIDADES ACTIVAS) -->
-              <div style="background:#f8fafc;border:1px solid var(--pk-border);border-radius:12px;padding:14px;margin-bottom:16px">
-                <div class="grid-3" id="ws-submodule-form-fields"></div>
-                <div class="row-actions" style="margin-top:12px;justify-content:flex-end">
-                  <button type="button" class="btn btn-primary" id="btn-ws-save-record">Guardar Registro</button>
+            <!-- SECCI\xD3N DE SUBM\xD3DULOS ESPEC\xCDFICOS (CUANDO SE ELIGE MODO SUBM\xD3DULOS) -->
+            <div id="ws-legacy-submodule-wrapper" style="display:none;border-top:1px solid var(--pk-border)">
+              <div style="padding:10px 18px;background:#f8fafc;border-bottom:1px solid var(--pk-border);display:flex;gap:8px;flex-wrap:wrap" id="ws-submodule-tabs"></div>
+              <div class="card-body">
+                <div style="margin-bottom:12px;font-size:12px;color:var(--pk-muted)" id="ws-submodule-summary"></div>
+                <div id="ws-specialized-widget-slot" style="margin-bottom:16px"></div>
+                <div style="background:#f8fafc;border:1px solid var(--pk-border);border-radius:12px;padding:14px;margin-bottom:16px">
+                  <div class="grid-3" id="ws-submodule-form-fields"></div>
+                  <div class="row-actions" style="margin-top:12px;justify-content:flex-end">
+                    <button type="button" class="btn btn-primary" id="btn-ws-save-record">Guardar Registro</button>
+                  </div>
                 </div>
-              </div>
-
-              <!-- BARRA DE FILTROS MULTICRITERIO ESTILO VERSION2 (v2) -->
-              <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;padding:10px 12px;background:#f1f5f9;border:1px solid var(--pk-border);border-radius:10px">
-                <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:240px">
-                  <span style="font-size:12px;font-weight:800;color:var(--pk-text)">\u{1F50D} Filtro R\xE1pido (v2):</span>
-                  <input type="text" id="ws-v2-filter-input" placeholder="Buscar por NIT, cliente, c\xF3digo, bodega, placa o estado..." style="flex:1;padding:7px 10px;border:1px solid var(--pk-border);border-radius:7px;font-size:12px;background:#fff" />
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;padding:10px 12px;background:#f1f5f9;border:1px solid var(--pk-border);border-radius:10px">
+                  <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:240px">
+                    <span style="font-size:12px;font-weight:800;color:var(--pk-text)">\u{1F50D} Filtro R\xE1pido (v2):</span>
+                    <input type="text" id="ws-v2-filter-input" placeholder="Buscar por NIT, cliente, c\xF3digo, bodega, placa o estado..." style="flex:1;padding:7px 10px;border:1px solid var(--pk-border);border-radius:7px;font-size:12px;background:#fff" />
+                  </div>
+                  <div class="row-actions">
+                    <span class="badge badge-blue" id="ws-v2-count-badge">0 registros</span>
+                    <button type="button" class="btn btn-outline btn-sm" id="btn-ws-clear-filter">Limpiar Filtro</button>
+                  </div>
                 </div>
-                <div class="row-actions">
-                  <span class="badge badge-blue" id="ws-v2-count-badge">0 registros</span>
-                  <button type="button" class="btn btn-outline btn-sm" id="btn-ws-clear-filter">Limpiar Filtro</button>
+                <div class="table-wrap">
+                  <table>
+                    <thead id="ws-submodule-thead"></thead>
+                    <tbody id="ws-submodule-tbody"></tbody>
+                  </table>
                 </div>
-              </div>
-
-              <!-- TABLA DE REGISTROS DEL SUBM\xD3DULO -->
-              <div class="table-wrap">
-                <table>
-                  <thead id="ws-submodule-thead"></thead>
-                  <tbody id="ws-submodule-tbody"></tbody>
-                </table>
               </div>
             </div>
           </div>
@@ -16130,6 +17599,17 @@ function renderWorkstationLayerHtml() {
 
         <!-- VISTA 3: PESTA\xD1A "NECESITO OTRA FUNCIONALIDAD" -->
         <div id="ws-pane-need-feature" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- MODAL RELACIONAL UNIVERSAL (EXPEDIENTE 360\xB0 CLIENTE, HOJA DE VIDA VEH\xCDCULO, ABONOS CXC, VISOR FACTURA) -->
+    <div class="modal-backdrop" id="pk-relational-modal">
+      <div class="modal-box" style="max-width:860px;width:95%">
+        <div class="card-head" style="background:#023047;color:#fff;border-radius:12px 12px 0 0">
+          <div class="card-title" style="color:#fff" id="pk-rel-modal-title">Expediente Relacional</div>
+          <button type="button" class="btn btn-outline btn-sm" style="background:#fff;color:#023047" id="btn-close-rel-modal">\u2715 Cerrar</button>
+        </div>
+        <div class="card-body" id="pk-rel-modal-body" style="max-height:78vh;overflow-y:auto"></div>
       </div>
     </div>
   </section>`;
@@ -16474,6 +17954,26 @@ async function handleControlPlaneAndCheckoutRoutes(params) {
       submoduleKey: String(body.submoduleKey ?? "mod-pos"),
       recordId: String(body.recordId ?? `REG-${Date.now()}`),
       cells: Array.isArray(body.cells) ? body.cells : []
+    });
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ ok }));
+    return true;
+  }
+  if (method === "GET" && url.startsWith("/api/v1/client-workspace/state")) {
+    const parsedUrl = new URL(url, "http://localhost");
+    const dbName = parsedUrl.searchParams.get("dbName") ?? "";
+    const relationalState = PostgresPsqlBootstrapRunner.getClientRelationalStateFromPostgres(dbName);
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ dbName, relationalState }));
+    return true;
+  }
+  if (method === "POST" && url === "/api/v1/client-workspace/transaction") {
+    const body = await readJsonBody2(req) ?? {};
+    const ok = PostgresPsqlBootstrapRunner.executeClientRelationalTransactionInPostgres({
+      dbName: String(body.dbName ?? ""),
+      actionType: String(body.actionType ?? "SYNC_STATE"),
+      entityPayload: typeof body.entityPayload === "object" && body.entityPayload !== null ? body.entityPayload : void 0,
+      fullRelationalState: typeof body.fullRelationalState === "object" && body.fullRelationalState !== null ? body.fullRelationalState : void 0
     });
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify({ ok }));

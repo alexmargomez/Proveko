@@ -103,11 +103,34 @@ export function renderGatewayTransportRuntimeJs(): string {
       var tHtml = '';
       for (var k = 0; k < availableSubs.length; k++) {
         var subTab = availableSubs[k];
-        var isTabAct = activeSub && subTab.moduleKey === activeSub.moduleKey;
+        var isTabAct = activeSub && subTab.moduleKey === activeSub.moduleKey && STATE.activeConvergedHub === 'submodules';
         tHtml += '<button type="button" class="btn ' + (isTabAct ? 'btn-primary' : 'btn-outline') + ' btn-sm" data-ws-submodule="' + pkEsc(subTab.moduleKey) + '">' +
           pkEsc(subTab.tabIcon + ' ' + subTab.externalSubmoduleName) + '</button>';
       }
       tabsEl.innerHTML = tHtml;
+    }
+
+    var hubBtns = document.querySelectorAll('[data-ws-hub]');
+    for (var hb = 0; hb < hubBtns.length; hb++) {
+      var hKey = hubBtns[hb].getAttribute('data-ws-hub');
+      hubBtns[hb].className = 'btn ' + (STATE.activeConvergedHub === hKey ? 'btn-primary' : 'btn-outline') + ' btn-sm';
+    }
+
+    var hubContainer = document.getElementById('ws-converged-hub-container');
+    var stdWrapper = document.getElementById('ws-standard-submodules-wrapper');
+    if (STATE.activeConvergedHub && STATE.activeConvergedHub !== 'submodules') {
+      if (hubContainer) hubContainer.style.display = 'block';
+      if (stdWrapper) stdWrapper.style.display = 'none';
+      if (STATE.activeConvergedHub === 'pos') pkRenderPosHub();
+      else if (STATE.activeConvergedHub === 'kanban') pkRenderKanbanHub();
+      else if (STATE.activeConvergedHub === 'inventory') pkRenderInventoryHub();
+      else if (STATE.activeConvergedHub === 'look360') pkRenderLook360Hub();
+      else if (STATE.activeConvergedHub === 'reports') pkRenderReportsAndCashboxHub();
+      else if (STATE.activeConvergedHub === 'gastro') pkRenderGastroHub();
+      return;
+    } else {
+      if (hubContainer) hubContainer.style.display = 'none';
+      if (stdWrapper) stdWrapper.style.display = 'block';
     }
 
     if (!activeSub) return;

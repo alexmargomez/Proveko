@@ -23,11 +23,20 @@ export function renderDomSanitizerRuntimeJs(): string {
     activeServiceKey: 'srv-invoicing',
     activeSubmoduleKey: 'mod-pos',
     activeWorkstationPane: 'module', // 'module' | 'rbac' | 'need-feature'
+    activeConvergedHub: 'pos',       // 'pos' | 'kanban' | 'inventory' | 'look360' | 'reports' | 'gastro' | 'submodules'
     submoduleRows: JSON.parse(JSON.stringify(BOOT.initialRows || {})),
     featureRequests: [],
+    relDb: pkCreateInitialRelationalDb(),
+    posCustomerId: 'cust-1',
+    posVehicleId: 'veh-1',
+    posPaymentMethod: 'Efectivo',
+    posCashReceived: 250000,
+    posCreditInitialAbono: 50000,
+    posLinkedOrderId: '',
+    posLinkedTableId: '',
     posCart: [
-      { name: 'Producto / Servicio Principal', qty: 2, price: 48000, discountPct: 0 },
-      { name: 'Insumo Complementario', qty: 1, price: 29000, discountPct: 5 }
+      { kind: 'PRODUCTO', refId: 'prd-1', code: 'ACE-20W50', name: 'Aceite Sintético 20W-50 4T / Galón', qty: 1, price: 48000, taxPct: 19 },
+      { kind: 'SERVICIO', refId: 'SRV-INI', code: 'MO', name: 'Sincronización Electrónica y Escáner', qty: 1, price: 85000, taxPct: 0, workerId: 'wk-1', workerName: 'Carlos Andrés Méndez' }
     ],
     bomLines: [
       { ingredient: 'Materia Prima Base', qty: '10', unit: 'Kg', cost: 24000 },
@@ -39,7 +48,6 @@ export function renderDomSanitizerRuntimeJs(): string {
   function pkIsDemoMode() {
     return !STATE.session && STATE.publicTab === 'demo';
   }
-
   function pkLoadDemoFromLocalStorage() {
     try {
       var raw = window.localStorage ? window.localStorage.getItem(DEMO_STORAGE_KEY) : null;
@@ -47,26 +55,26 @@ export function renderDomSanitizerRuntimeJs(): string {
       var parsed = JSON.parse(raw);
       if (parsed && parsed.demoClient) STATE.demoClient = parsed.demoClient;
       if (parsed && parsed.submoduleRows) STATE.submoduleRows = parsed.submoduleRows;
+      if (parsed && parsed.relDb && parsed.relDb.customers) STATE.relDb = parsed.relDb;
     } catch (_e) {}
   }
-
   function pkSaveDemoToLocalStorage() {
     try {
-      if (!window.localStorage) return;
-      window.localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify({
-        demoClient: STATE.demoClient,
-        submoduleRows: STATE.submoduleRows
-      }));
+      if (window.localStorage) window.localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify({ demoClient: STATE.demoClient, submoduleRows: STATE.submoduleRows, relDb: STATE.relDb }));
     } catch (_e) {}
   }
   pkLoadDemoFromLocalStorage();
 
+  function pkHydrateClientRelationalWorkspace(dbName) {
+    if (!dbName || dbName.indexOf('localStorage') !== -1) return;
+    fetch('/api/v1/client-workspace/state?dbName=' + encodeURIComponent(dbName)).then(function(r) { return r.json(); }).then(function(res) {
+      if (res && res.state && res.state.customers) { STATE.relDb = res.state; pkRenderWorkstation(); }
+      else { pkPersistRelationalTx('INIT_SEED', {}); }
+    }).catch(function() {});
+  }
+
   function pkEsc(str) {
-    return String(str == null ? '' : str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+    return String(str == null ? '' : str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
   function pkCop(val) {
