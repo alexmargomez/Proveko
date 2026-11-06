@@ -1,6 +1,6 @@
 /**
- * Estilos de Estructura (Shell) para Proveko: Menú Lateral de Iconos con Títulos Cortos
- * y Barra Superior de Secciones por Módulo (SOLID SRP <= 200 líneas).
+ * Estilos de Estructura (Shell) 100% Pantalla Completa para Proveko:
+ * Menú Lateral Fijo a la Izquierda (`#023047`) y Área Operativa al 100% del Ancho (SOLID SRP <= 200 líneas).
  */
 export function renderLayoutShellStylesCss(): string {
   return `
@@ -13,19 +13,25 @@ export function renderLayoutShellStylesCss(): string {
       --pk-primary: #023047;
       --pk-primary-hover: #1e40af;
       --pk-emerald: #059669;
+      --pk-amber: #d97706;
+      --pk-rose: #e11d48;
     }
     * { box-sizing: border-box; }
-    body {
+    html, body {
       margin: 0;
+      padding: 0;
+      width: 100%;
+      min-height: 100vh;
       font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: var(--pk-bg);
       color: var(--pk-text);
     }
-    .pk-shell { min-height: 100vh; display: flex; flex-direction: column; }
+    .pk-shell { width: 100%; min-height: 100vh; display: flex; flex-direction: column; }
     .pk-topbar {
       background: #ffffff;
       border-bottom: 1px solid var(--pk-border);
-      padding: 8px 18px;
+      padding: 8px 20px;
+      width: 100%;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -57,8 +63,10 @@ export function renderLayoutShellStylesCss(): string {
       box-shadow: 0 1px 3px rgba(15,23,42,0.12);
     }
     .pk-context-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .surface { display: none; padding: 14px 18px; max-width: 1480px; width: 100%; margin: 0 auto; }
+    .surface { display: none; padding: 16px 22px; width: 100%; max-width: 100%; margin: 0; flex: 1; }
     .surface.active { display: block; }
+    #surface-workstation.surface { padding: 0; }
+    #demo-mode-banner { border-radius: 0 !important; margin-bottom: 0 !important; padding: 8px 20px !important; }
     .hero-banner {
       background: linear-gradient(135deg, #023047 0%, #1e3a8a 100%);
       color: #fff; border-radius: 16px; padding: 24px;
@@ -74,27 +82,35 @@ export function renderLayoutShellStylesCss(): string {
       background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18);
       border-radius: 14px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between;
     }
-    .ws-layout { display: grid; grid-template-columns: 210px 1fr; gap: 14px; align-items: start; }
+    .ws-layout {
+      display: grid;
+      grid-template-columns: 235px minmax(0, 1fr);
+      gap: 0;
+      width: 100%;
+      min-height: calc(100vh - 52px);
+      align-items: stretch;
+    }
     .ws-sidebar {
-      background: #023047; color: #fff; border-radius: 14px;
-      padding: 12px 10px; position: sticky; top: 64px;
-      box-shadow: 0 10px 25px -5px rgba(2,48,71,0.25);
+      background: #023047; color: #fff;
+      padding: 14px 10px;
+      min-height: calc(100vh - 52px);
+      border-right: 1px solid rgba(255,255,255,0.1);
     }
     .ws-nav-head { font-size: 10px; font-weight: 800; text-transform: uppercase; color: #94a3b8; padding: 4px 8px; letter-spacing: 0.05em; }
     .ws-nav-list { display: flex; flex-direction: column; gap: 4px; }
     .ws-nav-btn {
       text-align: left; border: 0; background: transparent; color: #e2e8f0;
       padding: 9px 11px; border-radius: 10px; cursor: pointer; transition: 0.15s;
-      display: flex; align-items: center; gap: 9px; width: 100%;
+      display: flex; align-items: center; gap: 10px; width: 100%;
     }
     .ws-nav-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
     .ws-nav-btn.active { background: #ffb703; color: #023047; font-weight: 800; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
     .ws-nav-icon { font-size: 18px; line-height: 1; flex-shrink: 0; }
     .ws-nav-title { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .ws-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+    .ws-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; width: 100%; padding: 14px 20px; }
     .ws-top-subbar {
       background: #fff; border: 1px solid var(--pk-border); border-radius: 12px;
-      padding: 10px 14px; display: flex; flex-direction: column; gap: 10px;
+      padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; width: 100%;
     }
     .ws-top-subbar-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
     .ws-subtabs-row { display: flex; gap: 6px; flex-wrap: wrap; padding-top: 8px; border-top: 1px solid #e2e8f0; }

@@ -141,24 +141,23 @@ ${renderSuperAdminAndShellRuntimeJs()}
 
     var stdDel = target.closest('[data-std-del-idx]');
     if (stdDel) { var listStd = STATE.submoduleRows[STATE.activeSubmoduleKey]; if (listStd) { listStd.splice(Number(stdDel.getAttribute('data-std-del-idx')), 1); pkRenderWorkstation(); pkToast('Registro eliminado.'); } return; }
-
     var wsSvc = target.closest('[data-ws-service]');
     if (wsSvc) { STATE.activeWorkstationPane = 'module'; STATE.activeServiceKey = wsSvc.getAttribute('data-ws-service'); STATE.activeSubmoduleKey = ''; pkRenderWorkstation(); return; }
     var wsSub = target.closest('[data-ws-submodule]');
     if (wsSub) { STATE.activeSubmoduleKey = wsSub.getAttribute('data-ws-submodule'); pkRenderWorkstation(); return; }
     if (target.closest('#btn-nav-internal-rbac')) { STATE.activeWorkstationPane = 'rbac'; pkRenderWorkstation(); return; }
     if (target.closest('#btn-nav-need-feature')) { STATE.activeWorkstationPane = 'need-feature'; pkRenderWorkstation(); return; }
-
     if (target.closest('#btn-ws-save-record')) {
-      var inputs = document.querySelectorAll('[data-ws-field]'); var recId = 'REG-' + String(Date.now()).slice(-4);
-      var row = [recId]; for (var f = 0; f < inputs.length; f++) row.push(inputs[f].value || 'Registrado');
+      var inputs = document.querySelectorAll('[data-ws-field]');
+      var isAuto0 = inputs.length > 0 && inputs[0].hasAttribute('readonly');
+      var recId = isAuto0 ? inputs[0].value : ('REG-' + String(Date.now()).slice(-4));
+      var row = isAuto0 ? [] : [recId]; for (var f = 0; f < inputs.length; f++) row.push(inputs[f].value || 'Registrado');
       if (!STATE.submoduleRows[STATE.activeSubmoduleKey]) STATE.submoduleRows[STATE.activeSubmoduleKey] = [];
       STATE.submoduleRows[STATE.activeSubmoduleKey].unshift(row);
       if (pkIsDemoMode()) pkSaveDemoToLocalStorage();
       else { var clRec = pkGetActiveClient(); fetch('/api/v1/control/client-db/record', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dbName: clRec.dbName, submoduleKey: STATE.activeSubmoduleKey, recordId: recId, cells: row }) }).catch(function() {}); }
-      pkRenderWorkstation(); pkToast('Registro guardado correctamente.'); return;
+      pkRenderWorkstation(); pkToast('✓ Registro guardado: ' + recId); return;
     }
-
     if (pkHandleSuperAdminAction(target)) return;
   });
 
@@ -174,6 +173,7 @@ ${renderSuperAdminAndShellRuntimeJs()}
       else if (t.value === 'RECEPCION') { STATE.activeServiceKey = 'srv-hospitality'; STATE.activeSubmoduleKey = 'mod-rooms'; }
       pkRenderWorkstation(); return;
     }
+    if (t.id === 'wo-service-desc') { var prcEl = document.getElementById('wo-service-price'); if (prcEl && t.value.indexOf('|') !== -1) prcEl.value = t.value.split('|')[1]; return; }
     if (t.id === 'pos-select-customer') { STATE.posCustomerId = t.value; STATE.posVehicleId = ''; pkRenderWorkstation(); return; }
     if (t.id === 'pos-select-vehicle') { STATE.posVehicleId = t.value; pkRenderWorkstation(); return; }
     if (t.id === 'pos-payment-method') { STATE.posPaymentMethod = t.value; pkRenderWorkstation(); return; }

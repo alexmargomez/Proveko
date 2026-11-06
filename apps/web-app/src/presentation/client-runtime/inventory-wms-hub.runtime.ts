@@ -57,6 +57,7 @@ export function renderInventoryWmsHubRuntimeJs(): string {
         '<td><div class="row-actions">' +
         '<button type="button" class="btn btn-emerald btn-sm" data-open-restock-modal="' + pkEsc(p.id) + '">📥 Surtir</button>' +
         '<button type="button" class="btn btn-outline btn-sm" data-open-transfer-modal="' + pkEsc(p.id) + '">🔄 Trasladar</button>' +
+        '<button type="button" class="btn btn-outline btn-sm" title="Imprimir Ficha" data-print-product="' + pkEsc(p.id) + '">🖨️</button>' +
         '<button type="button" class="btn btn-outline btn-sm" data-inv-delete-id="' + pkEsc(p.id) + '">🗑️</button>' +
         '</div></td></tr>';
     }
@@ -65,6 +66,7 @@ export function renderInventoryWmsHubRuntimeJs(): string {
     }
 
     var potentialProfit = Math.max(0, totalSaleVal - totalCostVal);
+    var nextSku = 'PRD-' + (105 + db.products.length);
 
     stage.innerHTML =
       '<div class="kpi-row">' +
@@ -73,20 +75,22 @@ export function renderInventoryWmsHubRuntimeJs(): string {
       '<div class="kpi-box"><div class="kpi-label">Ganancia Estimada</div><div class="kpi-val" style="color:var(--pk-emerald)">' + pkCop(potentialProfit) + '</div></div>' +
       '<div class="kpi-box"><div class="kpi-label">Productos por Agotarse</div><div class="kpi-val" style="color:' + (lowStockCount > 0 ? 'var(--pk-amber)' : 'var(--pk-emerald)') + '">' + lowStockCount + ' productos</div></div>' +
       '</div>' +
-      '<div class="card"><div class="card-head"><div class="card-title">➕ Agregar Nuevo Producto al Inventario</div></div>' +
+      '<div class="card"><div class="card-head"><div class="card-title">➕ Agregar Nuevo Producto al Inventario (' + nextSku + ')</div>' +
+      '<button type="button" class="btn btn-outline btn-sm" data-open-quick-entity="WAREHOUSE">+ Nueva Bodega</button></div>' +
       '<div class="card-body"><div class="form-grid">' +
-      '<div class="field"><label>Código / SKU (Opcional)</label><input type="text" id="inv-new-sku" placeholder="Ej: REF-015 o Código de Barras" /></div>' +
+      '<div class="field"><label>Código / SKU (Automático)</label><input type="text" id="inv-new-sku" value="' + nextSku + '" readonly style="background:#e2e8f0;font-weight:800" /></div>' +
       '<div class="field"><label>Nombre del Producto o Repuesto *</label><input type="text" id="inv-new-name" placeholder="Ej: Pastillas de Freno / Bebida / Insumo" /></div>' +
       '<div class="field"><label>Proveedor</label><select id="inv-new-supplier">' + supOpts + '</select></div>' +
       '<div class="field"><label>Bodega</label><select id="inv-new-warehouse">' + whSelectForm + '</select></div>' +
-      '<div class="field"><label>Costo de Compra ($)</label><input type="number" id="inv-new-cost" placeholder="Ej: 22000" /></div>' +
-      '<div class="field"><label>Precio de Venta ($) *</label><input type="number" id="inv-new-sale" placeholder="Ej: 38000" /></div>' +
-      '<div class="field"><label>Cantidad Inicial (Stock) *</label><input type="number" id="inv-new-stock" placeholder="Ej: 15" /></div>' +
+      '<div class="field"><label>Costo de Compra ($)</label><input type="number" id="inv-new-cost" value="22000" /></div>' +
+      '<div class="field"><label>Precio de Venta ($) *</label><input type="number" id="inv-new-sale" value="38000" /></div>' +
+      '<div class="field"><label>Cantidad Inicial (Stock) *</label><input type="number" id="inv-new-stock" value="15" /></div>' +
       '<div class="field" style="display:flex;justify-content:flex-end"><button type="button" class="btn btn-primary" style="width:100%" id="btn-inv-create-product">+ Guardar Producto</button></div>' +
       '</div></div></div>' +
       '<div class="card"><div class="card-head">' +
       '<div class="card-title">📦 Productos en Inventario (' + db.products.length + ')</div>' +
       '<div class="row-actions">' +
+      '<button type="button" class="btn btn-outline btn-sm" id="btn-print-inventory-all">🖨️ Imprimir Inventario</button>' +
       '<select id="inv-filter-warehouse" style="padding:6px 10px;border-radius:8px;border:1px solid var(--pk-border);font-size:12px">' + whOpts + '</select>' +
       '<input type="text" id="inv-search-input" value="' + pkEsc(STATE.invSearchText || '') + '" placeholder="🔎 Buscar por código o nombre..." style="padding:6px 10px;border-radius:8px;border:1px solid var(--pk-border);font-size:12px;min-width:220px" />' +
       '</div></div>' +

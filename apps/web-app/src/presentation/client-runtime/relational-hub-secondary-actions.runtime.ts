@@ -71,27 +71,56 @@ export function renderRelationalHubSecondaryActionsRuntimeJs(): string {
       if (ordW) window.open('https://wa.me/573104558899?text=' + encodeURIComponent('Hola ' + ordW.customerName + ', tu vehículo placa ' + ordW.plate + ' está en estado: ' + ordW.status + '. Total: ' + pkCop(ordW.totalEstimated)), '_blank');
       return true;
     }
-    if (target.closest('#btn-wo-suggest-oil')) {
-      var curKm = Number((document.getElementById('wo-current-km') || {}).value || 45000);
-      var nextEl = document.getElementById('wo-next-oil-km'); if (nextEl) nextEl.value = String(curKm + 3000);
-      pkToast('Próximo cambio sugerido a los ' + (curKm + 3000).toLocaleString('es-CO') + ' km.'); return true;
+    var prHot = target.closest('[data-print-hotel-room]');
+    if (prHot) {
+      var rmP = pkFindById(db.hotelRooms, prHot.getAttribute('data-print-hotel-room'));
+      if (rmP) { var stayT = (Number(rmP.nights || 1) * Number(rmP.nightlyRate || 0)) + Number(rmP.extrasTotal || 0); pkPrintHtmlDocument('Cuenta Hotelera ' + rmP.roomNumber, '<div class="head"><div><h2>REGISTRO Y ESTADO DE CUENTA HOTELERA</h2><div>' + pkEsc(rmP.roomNumber + ' — ' + rmP.roomType + ' (' + rmP.floor + ')') + '</div></div><div><strong>Estado:</strong> ' + pkEsc(rmP.status) + '<br/><strong>Fecha:</strong> ' + pkEsc(rmP.checkInDate || new Date().toISOString().slice(0, 10)) + '</div></div><table><thead><tr><th>Concepto</th><th>Huésped</th><th>Cant. Noches</th><th>Tarifa / Noche</th><th>Consumos Extra</th><th>Total</th></tr></thead><tbody><tr><td>Alojamiento y Servicios</td><td>' + pkEsc(rmP.guestName || 'Disponible') + '</td><td>' + (rmP.nights || 1) + '</td><td>' + pkCop(rmP.nightlyRate) + '</td><td>' + pkCop(rmP.extrasTotal || 0) + '</td><td><strong>' + pkCop(stayT) + '</strong></td></tr></tbody></table>'); }
+      return true;
     }
+    var prWo = target.closest('[data-print-wo]');
+    if (prWo) { var woP = pkFindById(db.workOrders, prWo.getAttribute('data-print-wo')); if (woP) pkPrintHtmlDocument('Orden de Servicio ' + woP.id, '<div class="head"><div><h2>ORDEN DE TRABAJO ' + pkEsc(woP.id) + '</h2><div>Placa: <strong>' + pkEsc(woP.plate) + '</strong> · ' + pkEsc(woP.vehicleBrand) + '</div></div><div><strong>Cliente:</strong> ' + pkEsc(woP.customerName) + '<br/><strong>Técnico:</strong> ' + pkEsc(woP.workerName) + '</div></div><table><thead><tr><th>Estado</th><th>Km Ingreso</th><th>Próximo Cambio</th><th>Servicio Realizado</th><th>Total Estimado</th></tr></thead><tbody><tr><td>' + pkEsc(woP.status) + '</td><td>' + woP.currentKm + ' km</td><td>' + woP.nextOilKm + ' km</td><td>' + pkEsc((woP.services && woP.services[0]) ? woP.services[0].description : 'Mantenimiento') + '</td><td><strong>' + pkCop(woP.totalEstimated) + '</strong></td></tr></tbody></table>'); return true; }
+    var prVeh = target.closest('[data-print-veh]');
+    if (prVeh) { var vhP = pkFindById(db.vehicles, prVeh.getAttribute('data-print-veh')); if (vhP) pkPrintHtmlDocument('Ficha Vehículo ' + vhP.plate, '<div class="head"><div><h2>HOJA DE VIDA DE VEHÍCULO — ' + pkEsc(vhP.plate) + '</h2></div><div><strong>Propietario:</strong> ' + pkEsc(vhP.customerName) + '</div></div><table><thead><tr><th>Placa</th><th>Marca / Línea</th><th>Km Actual</th><th>Próx. Aceite</th><th>Venc. SOAT</th><th>Observaciones</th></tr></thead><tbody><tr><td>' + pkEsc(vhP.plate) + '</td><td>' + pkEsc(vhP.brand) + '</td><td>' + vhP.currentKm + ' km</td><td>' + vhP.nextOilChangeKm + ' km</td><td>' + pkEsc(vhP.soatExpiry) + '</td><td>' + pkEsc(vhP.notes) + '</td></tr></tbody></table>'); return true; }
+    var prCust = target.closest('[data-print-customer]');
+    if (prCust) { var csP = pkFindById(db.customers, prCust.getAttribute('data-print-customer')); if (csP) pkPrintHtmlDocument('Ficha Cliente ' + csP.name, '<div class="head"><div><h2>FICHA Y ESTADO DE CUENTA DE CLIENTE</h2></div><div><strong>Documento:</strong> ' + pkEsc(csP.docType + ' ' + csP.nit) + '</div></div><table><thead><tr><th>Cliente / Razón Social</th><th>Teléfono</th><th>Ciudad</th><th>Cupo Crédito</th><th>Saldo Pendiente CxC</th></tr></thead><tbody><tr><td>' + pkEsc(csP.name) + '</td><td>' + pkEsc(csP.phone) + '</td><td>' + pkEsc(csP.city) + '</td><td>' + pkCop(csP.creditLimit) + '</td><td><strong>' + pkCop(csP.currentDebt) + '</strong></td></tr></tbody></table>'); return true; }
+    var prGst = target.closest('[data-print-gastro-table]');
+    if (prGst) {
+      var tbP = pkFindById(db.diningTables, prGst.getAttribute('data-print-gastro-table'));
+      if (tbP) { var rG = ''; for (var gi = 0; gi < (tbP.items || []).length; gi++) { var itG = tbP.items[gi]; rG += '<tr><td>' + pkEsc(itG.name) + '</td><td>' + itG.qty + '</td><td>' + pkEsc(itG.note || 'Estándar') + '</td><td>' + pkCop(itG.price) + '</td><td>' + pkCop(itG.qty * itG.price) + '</td></tr>'; } pkPrintHtmlDocument('Comanda ' + tbP.name, '<div class="head"><div><h2>PRECUENTA / COMANDA — ' + pkEsc(tbP.name) + '</h2></div><div><strong>Mesero:</strong> ' + pkEsc(tbP.waiter || 'Turno') + '</div></div><table><thead><tr><th>Plato / Bebida</th><th>Cant.</th><th>Preparación</th><th>Vlr. Unit</th><th>Subtotal</th></tr></thead><tbody>' + rG + '</tbody></table><h3 style="text-align:right;margin-top:14px">Total Mesa: ' + pkCop(tbP.total) + '</h3>'); }
+      return true;
+    }
+    var prPrd = target.closest('[data-print-product]');
+    if (prPrd) { var pdP = pkFindById(db.products, prPrd.getAttribute('data-print-product')); if (pdP) pkPrintHtmlDocument('Ficha Producto ' + pdP.code, '<div class="head"><div><h2>FICHA KARDEX DE PRODUCTO — ' + pkEsc(pdP.code) + '</h2></div></div><table><thead><tr><th>SKU</th><th>Producto</th><th>Costo</th><th>Precio Venta</th><th>Existencia Actual</th></tr></thead><tbody><tr><td>' + pkEsc(pdP.code) + '</td><td>' + pkEsc(pdP.name) + '</td><td>' + pkCop(pdP.costPrice) + '</td><td>' + pkCop(pdP.salePrice) + '</td><td><strong>' + pdP.stock + ' und</strong></td></tr></tbody></table>'); return true; }
+    if (target.closest('#btn-print-inventory-all')) {
+      var rInvAll = ''; for (var ia = 0; ia < db.products.length; ia++) { var pa = db.products[ia]; rInvAll += '<tr><td>' + pkEsc(pa.code) + '</td><td>' + pkEsc(pa.name) + '</td><td>' + pkCop(pa.costPrice) + '</td><td>' + pkCop(pa.salePrice) + '</td><td>' + pa.stock + ' und</td></tr>'; }
+      pkPrintHtmlDocument('Inventario General Valorizado', '<div class="head"><div><h2>REPORTE DE INVENTARIO VALORIZADO</h2></div><div><strong>Total Referencias:</strong> ' + db.products.length + '</div></div><table><thead><tr><th>Código</th><th>Producto</th><th>Costo</th><th>Precio Venta</th><th>Stock</th></tr></thead><tbody>' + rInvAll + '</tbody></table>'); return true;
+    }
+    if (target.closest('#btn-print-cashbox') || target.closest('[data-print-expense]') || target.closest('[data-print-contract]') || target.closest('[data-print-supplier]') || target.closest('[data-print-worker]')) {
+      var mCash = pkComputeCashMetrics(db); pkPrintHtmlDocument('Comprobante Operativo / Arqueo', '<div class="head"><div><h2>COMPROBANTE OFICIAL Y ARQUEO DE OPERACIÓN</h2></div><div><strong>Fecha:</strong> ' + new Date().toISOString().slice(0, 16).replace('T', ' ') + '</div></div><table><thead><tr><th>Total Facturado</th><th>Efectivo Neto en Caja</th><th>Pagos Digitales</th><th>Total Gastos</th><th>Cartera CxC</th></tr></thead><tbody><tr><td>' + pkCop(mCash.totalInvoiced) + '</td><td><strong>' + pkCop(mCash.netCash) + '</strong></td><td>' + pkCop(mCash.digitalIn) + '</td><td>-' + pkCop(mCash.totalExpenses) + '</td><td>' + pkCop(mCash.totalCxc) + '</td></tr></tbody></table>'); return true;
+    }
+    var stdPrRow = target.closest('[data-std-print-idx]');
+    if (stdPrRow) {
+      var rIdx = Number(stdPrRow.getAttribute('data-std-print-idx')); var rowsList = STATE.submoduleRows[STATE.activeSubmoduleKey] || []; var rData = rowsList[rIdx];
+      if (rData) { var bodyCells = ''; for (var rc = 0; rc < rData.length; rc++) bodyCells += '<td>' + pkEsc(rData[rc]) + '</td>'; pkPrintHtmlDocument('Comprobante ' + rData[0], '<div class="head"><div><h2>COMPROBANTE OFICIAL DE REGISTRO — ' + pkEsc(rData[0]) + '</h2></div><div><strong>Fecha Impresión:</strong> ' + new Date().toISOString().slice(0, 16).replace('T', ' ') + '</div></div><table><tbody><tr>' + bodyCells + '</tr></tbody></table>'); }
+      return true;
+    }
+    if (target.closest('#btn-std-print-table')) { var tblEl = document.querySelector('#ws-module-stage table'); pkPrintHtmlDocument('Listado Oficial de Módulo', '<div class="head"><div><h2>REPORTE IMPRESO DE MÓDULO</h2></div><div><strong>Fecha:</strong> ' + new Date().toISOString().slice(0, 16).replace('T', ' ') + '</div></div>' + (tblEl ? tblEl.outerHTML : '')); return true; }
+    if (target.closest('#btn-wo-suggest-oil')) { var curKm = Number((document.getElementById('wo-current-km') || {}).value || 45000); var nextEl = document.getElementById('wo-next-oil-km'); if (nextEl) nextEl.value = String(curKm + 3000); pkToast('Próximo cambio sugerido a los ' + (curKm + 3000).toLocaleString('es-CO') + ' km.'); return true; }
     if (target.closest('#btn-wo-create-order')) {
       var custObj = pkFindById(db.customers, (document.getElementById('wo-customer-id') || {}).value) || db.customers[0];
-      var plate = ((document.getElementById('wo-plate') || {}).value || 'NEW-001').trim().toUpperCase();
-      var brand = ((document.getElementById('wo-brand') || {}).value || 'Vehículo / Equipo').trim();
+      var plate = ((document.getElementById('wo-plate') || {}).value || 'ABC-123').trim().toUpperCase();
       var curK = Number((document.getElementById('wo-current-km') || {}).value || 45000);
       var nxtK = Number((document.getElementById('wo-next-oil-km') || {}).value || (curK + 3000));
-      var soatD = (document.getElementById('wo-soat-date') || {}).value || '2026-12-31';
       var wkObj = pkFindById(db.workers, (document.getElementById('wo-worker-id') || {}).value) || db.workers[0];
-      var sDesc = ((document.getElementById('wo-service-desc') || {}).value || 'Mantenimiento General').trim();
-      var sPrc = Number((document.getElementById('wo-service-price') || {}).value || 120000);
+      var rawSvc = ((document.getElementById('wo-service-desc') || {}).value || 'Mantenimiento Preventivo|140000');
+      var sDesc = rawSvc.split('|')[0];
+      var sPrc = Number((document.getElementById('wo-service-price') || {}).value || rawSvc.split('|')[1] || 140000);
       var vehObj = null;
       for (var v = 0; v < db.vehicles.length; v++) if (db.vehicles[v].plate.toUpperCase() === plate) { vehObj = db.vehicles[v]; break; }
-      if (!vehObj) { vehObj = { id: 'veh-' + Date.now(), plate: plate, brand: brand, modelYear: '2025', customerId: custObj ? custObj.id : 'cust-1', customerName: custObj ? custObj.name : 'Cliente', currentKm: curK, nextOilChangeKm: nxtK, soatExpiry: soatD, tecnoExpiry: soatD, notes: sDesc }; db.vehicles.unshift(vehObj); }
-      else { vehObj.currentKm = curK; vehObj.nextOilChangeKm = nxtK; }
+      var brand = vehObj ? vehObj.brand : 'Vehículo Registrado';
+      if (vehObj) { vehObj.currentKm = curK; vehObj.nextOilChangeKm = nxtK; }
       var newWoId = 'OT-' + (3043 + db.workOrders.length);
-      db.workOrders.unshift({ id: newWoId, createdAt: new Date().toISOString().slice(0, 16).replace('T', ' '), customerId: custObj ? custObj.id : 'cust-1', customerName: custObj ? custObj.name : 'Cliente', vehicleId: vehObj.id, plate: plate, vehicleBrand: brand, currentKm: curK, nextOilKm: nxtK, workerId: wkObj ? wkObj.id : 'wk-1', workerName: wkObj ? wkObj.name : 'Técnico', status: 'Recibido', services: [{ description: sDesc, price: sPrc }], totalEstimated: sPrc });
+      db.workOrders.unshift({ id: newWoId, createdAt: new Date().toISOString().slice(0, 16).replace('T', ' '), customerId: custObj ? custObj.id : 'cust-1', customerName: custObj ? custObj.name : 'Cliente', vehicleId: vehObj ? vehObj.id : 'veh-1', plate: plate, vehicleBrand: brand, currentKm: curK, nextOilKm: nxtK, workerId: wkObj ? wkObj.id : 'wk-1', workerName: wkObj ? wkObj.name : 'Técnico', status: 'Recibido', services: [{ description: sDesc, price: sPrc }], totalEstimated: sPrc });
       pkPersistRelationalTx('CREATE_WORK_ORDER', { orderId: newWoId, plate: plate }); pkRenderWorkstation(); pkToast('Orden ' + newWoId + ' (' + plate + ') registrada.'); return true;
     }
     var woMove = target.closest('[data-wo-move]');
