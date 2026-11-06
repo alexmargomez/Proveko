@@ -104,6 +104,7 @@ export function renderSuperAdminAndShellRuntimeJs(): string {
         if (uLabel) uLabel.textContent = (cl ? cl.companyName : '') + ' — ' + STATE.session.username;
         if (topCtx) topCtx.textContent = '| ' + (cl ? cl.companyName : 'Plataforma Cliente');
         if (sWs) sWs.classList.add('active');
+        if (cl && cl.dbName) pkHydrateClientRelationalWorkspace(cl.dbName);
         pkRenderWorkstation();
       }
       return;

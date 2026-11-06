@@ -68,6 +68,35 @@ export async function handleControlPlaneAndCheckoutRoutes(params: {
     return true;
   }
 
+  if (method === 'GET' && url.startsWith('/api/v1/client-workspace/state')) {
+    const parsedUrl = new URL(url, 'http://localhost');
+    const dbName = parsedUrl.searchParams.get('dbName') ?? '';
+    const relationalState =
+      PostgresPsqlBootstrapRunner.getClientRelationalStateFromPostgres(dbName);
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ dbName, relationalState }));
+    return true;
+  }
+
+  if (method === 'POST' && url === '/api/v1/client-workspace/transaction') {
+    const body = ((await readJsonBody(req)) ?? {}) as Record<string, unknown>;
+    const ok = PostgresPsqlBootstrapRunner.executeClientRelationalTransactionInPostgres({
+      dbName: String(body.dbName ?? ''),
+      actionType: String(body.actionType ?? 'SYNC_STATE'),
+      entityPayload:
+        typeof body.entityPayload === 'object' && body.entityPayload !== null
+          ? (body.entityPayload as Record<string, unknown>)
+          : undefined,
+      fullRelationalState:
+        typeof body.fullRelationalState === 'object' && body.fullRelationalState !== null
+          ? (body.fullRelationalState as Record<string, unknown>)
+          : undefined,
+    });
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ ok }));
+    return true;
+  }
+
   if (method === 'POST' && url === '/api/v1/control/groups-catalog/group') {
     const body = ((await readJsonBody(req)) ?? {}) as Record<string, unknown>;
     const ok = PostgresPsqlBootstrapRunner.upsertClientBusinessGroupInPostgres({

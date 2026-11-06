@@ -26,6 +26,10 @@ import {
   PostgresTenantControlCatalogRepository,
   type RegisterTenantCatalogInput,
 } from './tenant-control-catalog.repository.js';
+import {
+  PostgresTenantRelationalWorkspaceRepository,
+  type RelationalTransactionPayload,
+} from './tenant-relational-workspace.repository.js';
 
 export type { PostgresEnvConfig };
 
@@ -260,6 +264,28 @@ export class PostgresPsqlBootstrapRunner {
     if (!driver.isReachable().ok) return false;
     const groupsRepo = new PostgresClientGroupsCatalogRepository(driver);
     return groupsRepo.registerDeveloperCatalogItem(input);
+  }
+
+  public static getClientRelationalStateFromPostgres(
+    dbName: string,
+  ): Record<string, unknown> | null {
+    const cfg = PostgresMigrationDatabaseDriverAdapter.resolveEnvConfig();
+    if (!cfg) return null;
+    const driver = new PostgresMigrationDatabaseDriverAdapter(cfg);
+    if (!driver.isReachable().ok) return null;
+    const repo = new PostgresTenantRelationalWorkspaceRepository(driver);
+    return repo.getRelationalStateSnapshot(dbName);
+  }
+
+  public static executeClientRelationalTransactionInPostgres(
+    input: RelationalTransactionPayload,
+  ): boolean {
+    const cfg = PostgresMigrationDatabaseDriverAdapter.resolveEnvConfig();
+    if (!cfg) return false;
+    const driver = new PostgresMigrationDatabaseDriverAdapter(cfg);
+    if (!driver.isReachable().ok) return false;
+    const repo = new PostgresTenantRelationalWorkspaceRepository(driver);
+    return repo.executeRelationalTransaction(input);
   }
 }
 
