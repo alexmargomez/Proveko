@@ -22,8 +22,9 @@ export interface MicroserviceComponentFeature {
   readonly componentKey: string;
   readonly externalName: string; // Ej: "Firma de encargado", "Seleccionar transportista"
   readonly description: string;
-  readonly parentModuleKey: string | 'independent';
-  readonly includedByDefault: boolean;
+  readonly parentModuleKey?: string | 'independent';
+  readonly parentServiceKey?: string;
+  readonly includedByDefault?: boolean;
   readonly monthlyAddonUsd: number;
 }
 

@@ -1,27 +1,85 @@
 /**
- * Controlador de Transacciones Relacionales Primarias (SOLID SRP <= 200 líneas):
- * POS Híbrido <-> Inventario/Kardex <-> Kanban Taller <-> Comisiones Técnicos <-> Contratos v2 <-> Cartera CxC.
+ * Controlador de Transacciones Operativas Primarias (SOLID SRP <= 200 líneas):
+ * POS, Modales de Nuevo Cliente, Surtir/Trasladar Inventario, Cargar Orden/Comanda a Caja y Facturar.
  */
 export function renderRelationalHubActionsRuntimeJs(): string {
   return `
   function pkPrintHtmlDocument(title, htmlContent) {
     var win = window.open('', '_blank', 'width=840,height=700');
-    if (!win) { pkToast('Permite ventanas emergentes para imprimir el PDF.'); return; }
+    if (!win) { pkToast('Permite ventanas emergentes para imprimir.'); return; }
     win.document.write('<html><head><title>' + pkEsc(title) + '</title>' +
       '<style>body{font-family:Inter,Arial,sans-serif;padding:24px;color:#0f172a}table{width:100%;border-collapse:collapse;margin-top:14px}th,td{border:1px solid #cbd5e1;padding:8px;text-align:left;font-size:12px}th{background:#f1f5f9}.head{display:flex;justify-content:space-between;border-bottom:2px solid #1d4ed8;padding-bottom:12px;margin-bottom:14px}</style>' +
       '</head><body>' + htmlContent + '<script>setTimeout(function(){window.print();},350);<\\/script></body></html>');
     win.document.close();
   }
 
+  function pkCloseRelModal() {
+    var m = document.getElementById('pk-relational-modal');
+    if (m) m.classList.remove('open');
+  }
+
   function pkHandleRelationalHubClick(target) {
     var db = STATE.relDb;
     if (!db) return false;
 
-    if (target.closest('#btn-close-rel-modal')) {
-      var m = document.getElementById('pk-relational-modal'); if (m) m.classList.remove('open'); return true;
+    if (target.closest('#btn-close-rel-modal')) { pkCloseRelModal(); return true; }
+    if (target.closest('[data-open-new-customer-modal]')) { pkOpenNewCustomerModal(); return true; }
+
+    if (target.closest('#btn-modal-save-customer')) {
+      var dType = (document.getElementById('modal-cust-doctype') || {}).value || 'CC';
+      var nitVal = ((document.getElementById('modal-cust-nit') || {}).value || ('901' + String(Date.now()).slice(-6))).trim();
+      var nameVal = ((document.getElementById('modal-cust-name') || {}).value || '').trim();
+      if (!nameVal) { pkToast('Escribe el nombre del cliente.'); return true; }
+      var phoneVal = ((document.getElementById('modal-cust-phone') || {}).value || '3001234567').trim();
+      var emailVal = ((document.getElementById('modal-cust-email') || {}).value || 'cliente@correo.com').trim();
+      var addrVal = ((document.getElementById('modal-cust-address') || {}).value || 'Ciudad Principal').trim();
+      var cntId = (document.getElementById('modal-cust-contract') || {}).value || 'cnt-particular';
+      var trfId = (document.getElementById('modal-cust-tariff') || {}).value || 'trf-plena';
+      var credLim = Number((document.getElementById('modal-cust-credit') || {}).value || 2000000);
+      var newCId = 'cust-' + Date.now();
+      db.customers.unshift({ id: newCId, docType: dType, nit: nitVal, dv: dType === 'NIT' ? '4' : '', name: nameVal, businessType: dType === 'NIT' ? 'Jurídica' : 'Natural', taxRegime: dType === 'NIT' ? 'Responsable de IVA' : 'No Responsable', phone: phoneVal, email: emailVal, city: addrVal.split('—')[0].trim(), address: addrVal, contractId: cntId, tariffId: trfId, creditLimit: credLim, currentDebt: 0 });
+      STATE.posCustomerId = newCId;
+      pkPersistRelationalTx('CREATE_CUSTOMER', { id: newCId, name: nameVal });
+      pkCloseRelModal(); pkRenderWorkstation(); pkToast('Cliente registrado y seleccionado: ' + nameVal);
+      return true;
     }
-    var hubBtn = target.closest('[data-ws-hub]');
-    if (hubBtn) { STATE.activeConvergedHub = hubBtn.getAttribute('data-ws-hub'); pkRenderWorkstation(); return true; }
+
+    var restockOpen = target.closest('[data-open-restock-modal]');
+    if (restockOpen) { pkOpenRestockModal(restockOpen.getAttribute('data-open-restock-modal')); return true; }
+
+    var restockConf = target.closest('[data-confirm-restock-id]');
+    if (restockConf) {
+      var prR = pkFindById(db.products, restockConf.getAttribute('data-confirm-restock-id'));
+      if (prR) {
+        var qIn = Math.max(1, Number((document.getElementById('modal-restock-qty') || {}).value || 10));
+        var cIn = Math.max(100, Number((document.getElementById('modal-restock-cost') || {}).value || prR.costPrice));
+        var sIn = Math.max(cIn, Number((document.getElementById('modal-restock-sale') || {}).value || prR.salePrice));
+        var supIn = (document.getElementById('modal-restock-sup') || {}).value || prR.supplierId;
+        var refIn = ((document.getElementById('modal-restock-ref') || {}).value || 'ENTRADA-INV').trim();
+        prR.stock = Number(prR.stock || 0) + qIn; prR.costPrice = cIn; prR.salePrice = sIn; prR.supplierId = supIn;
+        db.kardexMovements.unshift({ id: 'KDX-' + String(Date.now()).slice(-4), date: new Date().toISOString().slice(0, 16).replace('T', ' '), productId: prR.id, productName: prR.name, warehouseId: prR.warehouseId, movementType: 'ENTRADA_COMPRA', qty: qIn, unitCost: cIn, balanceAfter: prR.stock, referenceDoc: refIn, actor: 'Inventario' });
+        pkPersistRelationalTx('PURCHASE_ENTRY', { productCode: prR.code, productName: prR.name, costPrice: cIn, salePrice: sIn, stock: prR.stock });
+        pkCloseRelModal(); pkRenderWorkstation(); pkToast('Se agregaron +' + qIn + ' unidades a ' + prR.name);
+      }
+      return true;
+    }
+
+    var trfOpen = target.closest('[data-open-transfer-modal]');
+    if (trfOpen) { pkOpenTransferModal(trfOpen.getAttribute('data-open-transfer-modal')); return true; }
+
+    var trfConf = target.closest('[data-confirm-transfer-id]');
+    if (trfConf) {
+      var prT = pkFindById(db.products, trfConf.getAttribute('data-confirm-transfer-id'));
+      if (prT) {
+        var whDest = (document.getElementById('modal-transfer-wh') || {}).value || prT.warehouseId;
+        var qTrf = Math.max(1, Number((document.getElementById('modal-transfer-qty') || {}).value || 1));
+        var ntTrf = ((document.getElementById('modal-transfer-note') || {}).value || 'Traslado').trim();
+        prT.warehouseId = whDest;
+        db.kardexMovements.unshift({ id: 'KDX-' + String(Date.now()).slice(-4), date: new Date().toISOString().slice(0, 16).replace('T', ' '), productId: prT.id, productName: prT.name, warehouseId: whDest, movementType: 'TRASLADO_BODEGA', qty: qTrf, unitCost: prT.costPrice, balanceAfter: prT.stock, referenceDoc: ntTrf, actor: 'Bodega' });
+        pkCloseRelModal(); pkRenderWorkstation(); pkToast('Producto trasladado a la bodega seleccionada.');
+      }
+      return true;
+    }
 
     var c360 = target.closest('[data-open-customer-360]');
     if (c360) { pkOpenCustomer360Modal(c360.getAttribute('data-open-customer-360')); return true; }
@@ -35,7 +93,7 @@ export function renderRelationalHubActionsRuntimeJs(): string {
     var goCustPos = target.closest('[data-pos-select-cust-go]');
     if (goCustPos) {
       STATE.posCustomerId = goCustPos.getAttribute('data-pos-select-cust-go');
-      STATE.posVehicleId = ''; STATE.activeConvergedHub = 'pos'; pkRenderWorkstation(); return true;
+      STATE.posVehicleId = ''; STATE.activeServiceKey = 'srv-invoicing'; STATE.activeSubmoduleKey = 'mod-pos'; pkRenderWorkstation(); return true;
     }
 
     var loadOrd = target.closest('[data-pos-load-order]');
@@ -46,8 +104,8 @@ export function renderRelationalHubActionsRuntimeJs(): string {
         for (var s = 0; s < (wo.services || []).length; s++) {
           STATE.posCart.push({ kind: 'SERVICIO', refId: wo.id, code: 'OT-SRV', name: wo.services[s].description + ' (Placa ' + wo.plate + ')', qty: 1, price: Number(wo.services[s].price || 0), taxPct: 0, workerId: wo.workerId, workerName: wo.workerName });
         }
-        STATE.activeConvergedHub = 'pos'; pkRenderWorkstation();
-        pkToast('Orden Kanban ' + wo.id + ' (' + wo.plate + ') cargada al carrito de Caja POS.');
+        STATE.activeServiceKey = 'srv-invoicing'; STATE.activeSubmoduleKey = 'mod-pos'; pkRenderWorkstation();
+        pkToast('Orden ' + wo.id + ' (' + wo.plate + ') lista para cobrar en Caja.');
       }
       return true;
     }
@@ -56,12 +114,13 @@ export function renderRelationalHubActionsRuntimeJs(): string {
     if (loadTbl) {
       var tbl = pkFindById(db.diningTables, loadTbl.getAttribute('data-pos-load-table'));
       if (tbl) {
+        if (!tbl.items || tbl.items.length === 0) { pkToast('Agrega primero platos o bebidas a la comanda de ' + tbl.name); return true; }
         STATE.posLinkedTableId = tbl.id; STATE.posCart = [];
         for (var ti = 0; ti < tbl.items.length; ti++) {
           STATE.posCart.push({ kind: 'PRODUCTO', refId: tbl.items[ti].productId, code: 'MESA', name: tbl.items[ti].name + ' (' + tbl.name + ')', qty: tbl.items[ti].qty, price: tbl.items[ti].price, taxPct: 8 });
         }
-        STATE.activeConvergedHub = 'pos'; pkRenderWorkstation();
-        pkToast(tbl.name + ' cargada en Caja POS para cobro.');
+        STATE.activeServiceKey = 'srv-invoicing'; STATE.activeSubmoduleKey = 'mod-pos'; pkRenderWorkstation();
+        pkToast('Cuenta de ' + tbl.name + ' cargada en Caja para facturar.');
       }
       return true;
     }
@@ -77,17 +136,17 @@ export function renderRelationalHubActionsRuntimeJs(): string {
       if (!prod) prod = pkFindById(db.products, selProdId) || db.products[0];
       if (prod) {
         STATE.posCart.push({ kind: 'PRODUCTO', refId: prod.id, code: prod.code, name: prod.name, qty: qtyP, price: prod.salePrice, taxPct: prod.taxPct || 19 });
-        pkRenderWorkstation(); pkToast('Producto agregado: ' + prod.name);
+        pkRenderWorkstation(); pkToast('Agregado: ' + prod.name);
       }
       return true;
     }
 
     if (target.closest('#btn-pos-add-service')) {
-      var sDesc = ((document.getElementById('pos-service-desc') || {}).value || '').trim() || 'Mano de Obra Especializada';
+      var sDesc = ((document.getElementById('pos-service-desc') || {}).value || '').trim() || 'Mano de Obra / Servicio';
       var sPrice = Math.max(1000, Number((document.getElementById('pos-service-price') || {}).value || 65000));
       var wkObj = pkFindById(db.workers, (document.getElementById('pos-select-worker') || {}).value) || db.workers[0];
       STATE.posCart.push({ kind: 'SERVICIO', refId: 'SRV-' + Date.now(), code: 'MO', name: sDesc, qty: 1, price: sPrice, taxPct: 0, workerId: wkObj ? wkObj.id : '', workerName: wkObj ? wkObj.name : 'Técnico' });
-      pkRenderWorkstation(); pkToast('Mano de obra enlazada al técnico ' + (wkObj ? wkObj.name : ''));
+      pkRenderWorkstation(); pkToast('Servicio agregado al carrito.');
       return true;
     }
 
@@ -100,69 +159,6 @@ export function renderRelationalHubActionsRuntimeJs(): string {
 
     var delCart = target.closest('[data-pos-del-idx]');
     if (delCart) { STATE.posCart.splice(Number(delCart.getAttribute('data-pos-del-idx')), 1); pkRenderWorkstation(); return true; }
-
-    if (target.closest('#btn-pos-checkout-invoice')) {
-      if (STATE.posCart.length === 0) { pkToast('Agrega al menos un producto o servicio al carrito.'); return true; }
-      var cust = pkFindById(db.customers, STATE.posCustomerId) || db.customers[0];
-      var veh = pkFindById(db.vehicles, STATE.posVehicleId);
-      var contract = cust && cust.contractId ? pkFindById(db.contracts, cust.contractId) : null;
-      var tariff = cust && cust.tariffId ? pkFindById(db.tariffs, cust.tariffId) : null;
-      var discPct = tariff ? Number(tariff.discountPct || 0) : 0;
-
-      var subT = 0; var discT = 0; var taxT = 0;
-      for (var c = 0; c < STATE.posCart.length; c++) {
-        var item = STATE.posCart[c];
-        var gross = item.price * item.qty;
-        var disc = Math.round(gross * (discPct / 100));
-        var net = gross - disc;
-        var tx = Math.round(net * (Number(item.taxPct || 0) / 100));
-        subT += gross; discT += disc; taxT += tx;
-
-        if (item.kind === 'PRODUCTO') {
-          var prObj = pkFindById(db.products, item.refId);
-          if (prObj) {
-            prObj.stock = Math.max(0, Number(prObj.stock || 0) - item.qty);
-            db.kardexMovements.unshift({
-              id: 'KDX-' + String(Date.now()).slice(-4), date: new Date().toISOString().slice(0, 16).replace('T', ' '),
-              productId: prObj.id, productName: prObj.name, warehouseId: prObj.warehouseId,
-              movementType: 'SALIDA_VENTA', qty: -item.qty, unitCost: prObj.costPrice, balanceAfter: prObj.stock,
-              referenceDoc: 'POS-FACT', actor: cust ? cust.name : 'Caja'
-            });
-          }
-        } else if (item.kind === 'SERVICIO' && item.workerId) {
-          var wkTarget = pkFindById(db.workers, item.workerId);
-          if (wkTarget) wkTarget.totalDayGross = Number(wkTarget.totalDayGross || 0) + net;
-        }
-      }
-
-      var totalNet = subT - discT + taxT;
-      var payMethod = (document.getElementById('pos-payment-method') || {}).value || STATE.posPaymentMethod || 'Efectivo';
-      var cashInputVal = Number((document.getElementById('pos-cash-received') || {}).value || 0);
-      var isCredit = payMethod === 'Crédito / Cartera CxC';
-      var paidNow = isCredit ? Math.min(totalNet, Math.max(0, cashInputVal)) : totalNet;
-      var pendingBal = isCredit ? Math.max(0, totalNet - paidNow) : 0;
-
-      if (contract) { contract.consumedAmount += totalNet; contract.availableBalance = Math.max(0, contract.budgetCeiling - contract.consumedAmount); }
-      if (cust && pendingBal > 0) cust.currentDebt = Number(cust.currentDebt || 0) + pendingBal;
-      if (STATE.posLinkedOrderId) { var linkedWo = pkFindById(db.workOrders, STATE.posLinkedOrderId); if (linkedWo) linkedWo.status = 'Facturado'; STATE.posLinkedOrderId = ''; }
-      if (STATE.posLinkedTableId) { var linkedTb = pkFindById(db.diningTables, STATE.posLinkedTableId); if (linkedTb) { linkedTb.status = 'Libre'; linkedTb.items = []; linkedTb.total = 0; linkedTb.diners = 0; } STATE.posLinkedTableId = ''; }
-
-      var invId = 'FEVP-' + (9011 + db.invoices.length);
-      var newInv = {
-        id: invId, cufe: 'CUFE-DIAN-' + Date.now(), date: new Date().toISOString().slice(0, 16).replace('T', ' '),
-        customerId: cust ? cust.id : 'cust-1', customerName: cust ? cust.name : 'Consumidor Final',
-        customerNit: cust ? cust.nit : '222222222222', contractId: contract ? contract.id : '',
-        vehicleId: veh ? veh.id : '', plate: veh ? veh.plate : 'MOSTRADOR',
-        items: STATE.posCart.slice(), subtotal: subT, discountTotal: discT, taxTotal: taxT, total: totalNet,
-        paymentMethod: payMethod, amountPaid: paidNow, pendingBalance: pendingBal,
-        status: pendingBal > 0 ? 'Pendiente CxC' : 'Pagada', glosaStatus: 'Sin Glosa',
-        abonosHistory: paidNow > 0 ? [{ id: 'RC-' + String(Date.now()).slice(-4), date: new Date().toISOString().slice(0, 10), amount: paidNow, method: payMethod, note: 'Pago inicial en Caja POS' }] : []
-      };
-      db.invoices.unshift(newInv); STATE.posCart = [];
-      pkPersistRelationalTx('CREATE_INVOICE', { invoiceId: invId, customerName: newInv.customerName, total: totalNet });
-      pkRenderWorkstation(); pkToast('Factura ' + invId + ' emitida: Stock descontado, Kardex asentado y comisiones actualizadas.');
-      return true;
-    }
 
     return pkHandleSecondaryHubActions(target, db);
   }

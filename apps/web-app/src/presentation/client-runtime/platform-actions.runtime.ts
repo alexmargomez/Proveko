@@ -26,21 +26,21 @@ export function renderPlatformActionsRuntimeJs(): string {
     }
     el.innerHTML =
       '<div class="card" style="margin-bottom:14px">' +
-      '<div class="card-head"><div><div class="card-title">👥 Roles Internos en tu Base de Datos (' + pkEsc(client.dbName) + ')</div>' +
-      '<div style="font-size:12px;color:var(--pk-muted)">Se crean los roles básicos por defecto y puedes modificarlos o agregar nuevos dentro del cupo asignado por SuperAdmin.</div></div>' +
-      '<span class="badge badge-blue">Cupo de Roles: ' + client.internalRoles.length + ' / ' + client.maxRolesAllowed + '</span></div>' +
+      '<div class="card-head"><div><div class="card-title">👥 Perfiles y Roles de tu Equipo</div>' +
+      '<div style="font-size:12px;color:var(--pk-muted)">Configura qué secciones puede usar cada perfil de trabajo en tu empresa.</div></div>' +
+      '<span class="badge badge-blue">Roles: ' + client.internalRoles.length + ' / ' + client.maxRolesAllowed + '</span></div>' +
       '<div class="card-body">' +
       '<div class="grid-3" style="margin-bottom:12px">' +
-      '<div class="field"><label>Nombre del Nuevo Rol Interno</label><input type="text" id="new-role-name" placeholder="Ej: Auditor de Bodega" /></div>' +
-      '<div class="field"><label>Descripción de Permisos</label><input type="text" id="new-role-desc" placeholder="Ej: Revisión de traslados y existencias" /></div>' +
-      '<div class="field" style="justify-content:flex-end"><button type="button" class="btn btn-primary" id="btn-create-internal-role">+ Crear Rol Interno</button></div>' +
+      '<div class="field"><label>Nombre del Rol</label><input type="text" id="new-role-name" placeholder="Ej: Jefe de Bodega / Mesero / Cajero" /></div>' +
+      '<div class="field"><label>Funciones Permitidas</label><input type="text" id="new-role-desc" placeholder="Ej: Control de entradas, salidas y traslados" /></div>' +
+      '<div class="field" style="justify-content:flex-end"><button type="button" class="btn btn-primary" id="btn-create-internal-role">+ Crear Rol</button></div>' +
       '</div>' +
-      '<div class="table-wrap"><table><thead><tr><th>Rol Interno</th><th>Alcance</th><th>Submódulos Permitidos</th></tr></thead><tbody>' + rRows + '</tbody></table></div>' +
+      '<div class="table-wrap"><table><thead><tr><th>Rol</th><th>Descripción</th><th>Secciones Habilitadas</th></tr></thead><tbody>' + rRows + '</tbody></table></div>' +
       '</div></div>' +
       '<div class="card">' +
-      '<div class="card-head"><div><div class="card-title">🔐 Usuarios de tu Empresa (Conectados a ' + pkEsc(client.dbName) + ')</div>' +
-      '<div style="font-size:12px;color:var(--pk-muted)">Cuenta Admin generada automáticamente + usuarios operativos asignados a tus roles internos.</div></div>' +
-      '<span class="badge badge-emerald">Cupo de Usuarios: ' + client.internalUsers.length + ' / ' + client.maxUsersAllowed + '</span></div>' +
+      '<div class="card-head"><div><div class="card-title">🔐 Usuarios de tu Empresa</div>' +
+      '<div style="font-size:12px;color:var(--pk-muted)">Crea cuentas de acceso para tus empleados y asígnales su rol correspondiente.</div></div>' +
+      '<span class="badge badge-emerald">Usuarios: ' + client.internalUsers.length + ' / ' + client.maxUsersAllowed + '</span></div>' +
       '<div class="card-body">' +
       '<div class="grid-3" style="margin-bottom:12px">' +
       '<div class="field"><label>Nombre Completo</label><input type="text" id="new-user-fullname" placeholder="Ej: Camilo Vargas" /></div>' +

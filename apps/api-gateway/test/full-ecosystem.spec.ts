@@ -962,14 +962,17 @@ describe('Proveko — Full Outward Ecosystem: API Gateway, Multi-Server Topology
     expect(landingHtml).toContain('Muestra de la Plataforma');
     expect(landingHtml).toContain('Login / Registra tu Negocio');
     expect(landingHtml).toContain('Demo');
-    expect(landingHtml).toContain('Paso 1. Selecciona tu Tipo de Negocio');
-    expect(landingHtml).toContain('Paso 2. ¿Quieres agregar Módulos Principales o Submódulos adicionales?');
-    expect(landingHtml).toContain('Necesito otra funcionalidad');
-    expect(landingHtml).toContain('Solicitudes para Traslados');
-    expect(landingHtml).toContain('Firma de encargado');
-    expect(landingHtml).toContain('Seleccionar transportista');
+    expect(landingHtml).toContain('1. ¿Qué tipo de negocio tienes?');
+    expect(landingHtml).toContain('2. Módulos incluidos y adicionales (Opcional)');
+    expect(landingHtml).toContain('Activar Módulos');
+    expect(landingHtml).toContain('Solicitudes y Traslados');
+    expect(landingHtml).toContain('ws-principal-modules-nav');
+    expect(landingHtml).toContain('ws-submodule-tabs');
+    expect(landingHtml).toContain('ws-module-stage');
+    expect(landingHtml).toContain('ws-role-view-selector');
+    expect(landingHtml).toContain('data-open-new-customer-modal');
     expect(landingHtml).not.toContain('USD/mes');
-    expect(landingHtml).toContain('COP/mes');
+    expect(landingHtml).toContain('COP');
     expect(landingHtml).toContain('btn-hero-outline');
     expect(landingHtml).toContain('proveko_groups_db');
     expect(landingHtml).toContain('bares-discotecas');
@@ -982,7 +985,6 @@ describe('Proveko — Full Outward Ecosystem: API Gateway, Multi-Server Topology
     expect(landingHtml).toContain('srv-workshop');
     expect(landingHtml).toContain('srv-hr-payroll');
     expect(landingHtml).toContain('ws-v2-filter-input');
-    expect(landingHtml).toContain('Listado de Clientes y Terceros (v2)');
     expect(landingHtml).toContain('sa-groups-catalog-panel');
   });
 
