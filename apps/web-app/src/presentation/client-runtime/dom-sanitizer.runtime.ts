@@ -5,7 +5,7 @@
 export function renderDomSanitizerRuntimeJs(): string {
   return `
   var BOOT = window.__PROVEKO_BOOT__ || {};
-  var DEMO_STORAGE_KEY = 'proveko_demo_localstorage_v3';
+  var DEMO_STORAGE_KEY = 'proveko_demo_localstorage_v4';
   var defaultDemoClient = (BOOT.initialClients && BOOT.initialClients[0]) ? JSON.parse(JSON.stringify(BOOT.initialClients[0])) : null;
 
   var STATE = {
@@ -35,7 +35,7 @@ export function renderDomSanitizerRuntimeJs(): string {
     posLinkedOrderId: '',
     posLinkedTableId: '',
     posCart: [
-      { kind: 'PRODUCTO', refId: 'prd-1', code: 'ACE-20W50', name: 'Aceite Sintético 20W-50 4T / Galón', qty: 1, price: 48000, taxPct: 19 },
+      { kind: 'PRODUCTO', refId: 'prd-1', code: 'ACE-10W40', name: 'Aceite Sintético 10W-40 Alto Rendimiento (Galón)', qty: 1, price: 145000, taxPct: 19 },
       { kind: 'SERVICIO', refId: 'SRV-INI', code: 'MO', name: 'Sincronización Electrónica y Escáner', qty: 1, price: 85000, taxPct: 0, workerId: 'wk-1', workerName: 'Carlos Andrés Méndez' }
     ],
     bomLines: [
@@ -66,7 +66,7 @@ export function renderDomSanitizerRuntimeJs(): string {
           }
         }
       }
-      if (parsed && parsed.relDb && parsed.relDb.customers) STATE.relDb = parsed.relDb;
+      if (parsed && parsed.relDb) STATE.relDb = pkNormalizeRelDb(parsed.relDb);
     } catch (_e) {}
   }
   function pkSaveDemoToLocalStorage() {
@@ -79,8 +79,13 @@ export function renderDomSanitizerRuntimeJs(): string {
   function pkHydrateClientRelationalWorkspace(dbName) {
     if (!dbName || dbName.indexOf('localStorage') !== -1) return;
     fetch('/api/v1/client-workspace/state?dbName=' + encodeURIComponent(dbName)).then(function(r) { return r.json(); }).then(function(res) {
-      if (res && res.state && res.state.customers) { STATE.relDb = res.state; pkRenderWorkstation(); }
-      else { pkPersistRelationalTx('INIT_SEED', {}); }
+      var remoteDb = res && (res.relationalState || res.state);
+      if (remoteDb && remoteDb.customers && remoteDb.customers.length > 0) {
+        STATE.relDb = pkNormalizeRelDb(remoteDb);
+        pkRenderWorkstation();
+      } else {
+        pkPersistRelationalTx('INIT_SEED', {});
+      }
     }).catch(function() {});
   }
 
