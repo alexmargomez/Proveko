@@ -1,13 +1,12 @@
 /**
- * Runtime Cliente (Parte 1): Estado Reactivo, Página de Muestra (Apartado 1)
- * y Asistente "Registra tu Negocio" por Tipo de Negocio + Adicionales (Apartado 2B).
+ * Runtime Cliente (Parte 1): Estado Reactivo, Catálogo de Soluciones
+ * y Asistente "Registra tu Negocio" por Tipo de Negocio.
  */
 export function renderDomSanitizerRuntimeJs(): string {
   return `
   var BOOT = window.__PROVEKO_BOOT__ || {};
-  var DEMO_STORAGE_KEY = 'proveko_demo_localstorage_v1';
+  var DEMO_STORAGE_KEY = 'proveko_demo_localstorage_v3';
   var defaultDemoClient = (BOOT.initialClients && BOOT.initialClients[0]) ? JSON.parse(JSON.stringify(BOOT.initialClients[0])) : null;
-  if (defaultDemoClient) defaultDemoClient.dbName = 'localStorage (Navegador)';
 
   var STATE = {
     publicTab: 'showcase', // 'showcase' | 'auth' | 'demo'
@@ -23,7 +22,8 @@ export function renderDomSanitizerRuntimeJs(): string {
     activeServiceKey: 'srv-invoicing',
     activeSubmoduleKey: 'mod-pos',
     activeWorkstationPane: 'module', // 'module' | 'rbac' | 'need-feature'
-    activeConvergedHub: 'pos',       // 'pos' | 'kanban' | 'inventory' | 'look360' | 'reports' | 'gastro' | 'submodules'
+    roleViewFilter: 'ALL',           // 'ALL' | 'CAJERO' | 'MESERO' | 'COCINA' | 'BODEGA' | 'TECNICO' | 'RECEPCION'
+    selectedTableId: 'tbl-1',
     submoduleRows: JSON.parse(JSON.stringify(BOOT.initialRows || {})),
     featureRequests: [],
     relDb: pkCreateInitialRelationalDb(),
@@ -53,8 +53,19 @@ export function renderDomSanitizerRuntimeJs(): string {
       var raw = window.localStorage ? window.localStorage.getItem(DEMO_STORAGE_KEY) : null;
       if (!raw) return;
       var parsed = JSON.parse(raw);
-      if (parsed && parsed.demoClient) STATE.demoClient = parsed.demoClient;
-      if (parsed && parsed.submoduleRows) STATE.submoduleRows = parsed.submoduleRows;
+      if (parsed && parsed.demoClient && defaultDemoClient) {
+        STATE.demoClient = parsed.demoClient;
+        STATE.demoClient.activePrincipalServices = defaultDemoClient.activePrincipalServices.slice();
+        STATE.demoClient.activeSubmodules = defaultDemoClient.activeSubmodules.slice();
+        STATE.demoClient.activeFeatures = defaultDemoClient.activeFeatures.slice();
+      }
+      if (parsed && parsed.submoduleRows) {
+        for (var k in parsed.submoduleRows) {
+          if (Object.prototype.hasOwnProperty.call(parsed.submoduleRows, k)) {
+            STATE.submoduleRows[k] = parsed.submoduleRows[k];
+          }
+        }
+      }
       if (parsed && parsed.relDb && parsed.relDb.customers) STATE.relDb = parsed.relDb;
     } catch (_e) {}
   }
@@ -119,9 +130,9 @@ export function renderDomSanitizerRuntimeJs(): string {
         }
         sHtml += '<div class="center-pick-card">' +
           '<div class="center-pick-head"><div class="center-pick-title">' + pkEsc(s.icon + ' ' + s.externalPrincipalModuleName) + '</div>' +
-          '<span class="badge badge-blue">Módulo Principal</span></div>' +
+          '<span class="badge badge-blue">Módulo</span></div>' +
           '<div class="center-pick-desc">' + pkEsc(s.subtitle) + '</div>' +
-          '<div style="font-size:11px;font-weight:700;color:var(--pk-muted);margin-bottom:6px">Submódulos integrados en pestañas:</div>' +
+          '<div style="font-size:11px;font-weight:700;color:var(--pk-muted);margin-bottom:6px">Secciones incluidas:</div>' +
           '<div style="display:flex;flex-wrap:wrap;gap:5px">' + subBadges + '</div></div>';
       }
       svcGrid.innerHTML = sHtml;
@@ -138,7 +149,7 @@ export function renderDomSanitizerRuntimeJs(): string {
           '<span class="center-pick-price">' + pkCop(p.baseMonthlyUsd) + '/mes</span></div>' +
           '<div style="margin-bottom:6px"><span class="badge badge-emerald">' + pkEsc(p.badge) + '</span></div>' +
           '<div class="center-pick-desc">' + pkEsc(p.description) + '</div>' +
-          '<button type="button" class="btn btn-primary btn-sm" data-showcase-preset="' + pkEsc(p.id) + '">Elegir este Tipo de Negocio &rarr;</button></div>';
+          '<button type="button" class="btn btn-primary btn-sm" data-showcase-preset="' + pkEsc(p.id) + '">Elegir este Plan &rarr;</button></div>';
       }
       presetGrid.innerHTML = pHtml;
     }
@@ -171,13 +182,8 @@ export function renderDomSanitizerRuntimeJs(): string {
       }
     }
     return {
-      preset: preset,
-      baseUsd: baseUsd,
-      extraUsd: extraUsd,
-      totalUsd: baseUsd + extraUsd,
-      services: finalSvcs,
-      submodules: finalSubs,
-      features: incFeats.slice()
+      preset: preset, baseUsd: baseUsd, extraUsd: extraUsd, totalUsd: baseUsd + extraUsd,
+      services: finalSvcs, submodules: finalSubs, features: incFeats.slice()
     };
   }
 `;

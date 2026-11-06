@@ -1,5 +1,6 @@
 /**
- * Estilos de Estructura (Shell) para los 3 Apartados Públicos y Plataforma Empresarial de Proveko (SOLID SRP <= 200 líneas).
+ * Estilos de Estructura (Shell) para Proveko: Menú Lateral de Iconos con Títulos Cortos
+ * y Barra Superior de Secciones por Módulo (SOLID SRP <= 200 líneas).
  */
 export function renderLayoutShellStylesCss(): string {
   return `
@@ -9,7 +10,7 @@ export function renderLayoutShellStylesCss(): string {
       --pk-text: #0f172a;
       --pk-muted: #475569;
       --pk-border: #cbd5e1;
-      --pk-primary: #1d4ed8;
+      --pk-primary: #023047;
       --pk-primary-hover: #1e40af;
       --pk-emerald: #059669;
     }
@@ -24,11 +25,11 @@ export function renderLayoutShellStylesCss(): string {
     .pk-topbar {
       background: #ffffff;
       border-bottom: 1px solid var(--pk-border);
-      padding: 10px 20px;
+      padding: 8px 18px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 14px;
+      gap: 12px;
       flex-wrap: wrap;
       position: sticky;
       top: 0;
@@ -36,59 +37,74 @@ export function renderLayoutShellStylesCss(): string {
     }
     .pk-brand { display: flex; align-items: center; gap: 10px; }
     .pk-logo {
-      width: 36px; height: 36px; border-radius: 10px;
-      background: linear-gradient(135deg, #1e3a8a, #2563eb);
-      color: #fff; font-weight: 800; font-size: 15px;
+      width: 34px; height: 34px; border-radius: 9px;
+      background: #ffb703;
+      color: #023047; font-weight: 900; font-size: 14px;
       display: flex; align-items: center; justify-content: center;
     }
-    .pk-title { font-weight: 800; font-size: 16px; letter-spacing: -0.02em; }
+    .pk-title { font-weight: 800; font-size: 15px; letter-spacing: -0.02em; color: #023047; }
     .pk-subtitle { font-size: 11px; color: var(--pk-muted); }
     .pk-surface-tabs {
-      display: flex; gap: 6px; background: #f1f5f9; padding: 4px;
-      border-radius: 10px; border: 1px solid var(--pk-border);
+      display: flex; gap: 4px; background: #f1f5f9; padding: 3px;
+      border-radius: 9px; border: 1px solid var(--pk-border);
     }
     .pk-tab-btn {
-      border: 0; background: transparent; padding: 7px 13px; border-radius: 7px;
+      border: 0; background: transparent; padding: 6px 12px; border-radius: 7px;
       font-size: 12px; font-weight: 700; color: var(--pk-muted); cursor: pointer;
     }
     .pk-tab-btn.active {
-      background: #fff; color: var(--pk-primary);
-      box-shadow: 0 1px 3px rgba(15,23,42,0.1);
+      background: #023047; color: #fff;
+      box-shadow: 0 1px 3px rgba(15,23,42,0.12);
     }
-    .pk-context-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .surface { display: none; padding: 20px; max-width: 1440px; width: 100%; margin: 0 auto; }
+    .pk-context-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .surface { display: none; padding: 14px 18px; max-width: 1480px; width: 100%; margin: 0 auto; }
     .surface.active { display: block; }
     .hero-banner {
-      background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
-      color: #fff; border-radius: 16px; padding: 26px;
-      display: grid; grid-template-columns: 1.5fr 1fr; gap: 22px; margin-bottom: 20px;
+      background: linear-gradient(135deg, #023047 0%, #1e3a8a 100%);
+      color: #fff; border-radius: 16px; padding: 24px;
+      display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; margin-bottom: 18px;
     }
     .hero-badge {
-      display: inline-block; background: rgba(59,130,246,0.25); border: 1px solid rgba(147,197,253,0.4);
-      color: #bfdbfe; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; margin-bottom: 10px;
+      display: inline-block; background: rgba(255,183,3,0.2); border: 1px solid rgba(255,183,3,0.45);
+      color: #fde68a; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; margin-bottom: 10px;
     }
-    .hero-title { font-size: 25px; font-weight: 800; margin: 0 0 8px; line-height: 1.25; }
+    .hero-title { font-size: 24px; font-weight: 800; margin: 0 0 8px; line-height: 1.25; }
     .hero-sub { font-size: 13px; color: #cbd5e1; margin: 0; line-height: 1.5; }
     .quote-card {
       background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18);
-      border-radius: 14px; padding: 18px; display: flex; flex-direction: column; justify-content: space-between;
+      border-radius: 14px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between;
     }
-    .ws-layout { display: grid; grid-template-columns: 280px 1fr; gap: 18px; align-items: start; }
+    .ws-layout { display: grid; grid-template-columns: 210px 1fr; gap: 14px; align-items: start; }
     .ws-sidebar {
-      background: #fff; border: 1px solid var(--pk-border); border-radius: 14px;
-      padding: 12px; position: sticky; top: 74px;
+      background: #023047; color: #fff; border-radius: 14px;
+      padding: 12px 10px; position: sticky; top: 64px;
+      box-shadow: 0 10px 25px -5px rgba(2,48,71,0.25);
     }
-    .ws-nav-head { font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--pk-muted); padding: 6px 8px; }
-    .ws-nav-list { display: flex; flex-direction: column; gap: 5px; }
+    .ws-nav-head { font-size: 10px; font-weight: 800; text-transform: uppercase; color: #94a3b8; padding: 4px 8px; letter-spacing: 0.05em; }
+    .ws-nav-list { display: flex; flex-direction: column; gap: 4px; }
     .ws-nav-btn {
-      text-align: left; border: 1px solid transparent; background: transparent;
-      padding: 10px 12px; border-radius: 10px; cursor: pointer; transition: 0.15s;
+      text-align: left; border: 0; background: transparent; color: #e2e8f0;
+      padding: 9px 11px; border-radius: 10px; cursor: pointer; transition: 0.15s;
+      display: flex; align-items: center; gap: 9px; width: 100%;
     }
-    .ws-nav-btn:hover { background: #f8fafc; border-color: var(--pk-border); }
-    .ws-nav-btn.active { background: #eff6ff; border-color: #93c5fd; color: var(--pk-primary); }
-    .ws-nav-title { font-size: 13px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
-    .ws-nav-sub { font-size: 11px; color: var(--pk-muted); margin-top: 2px; }
-    .ws-main { display: flex; flex-direction: column; gap: 16px; }
+    .ws-nav-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+    .ws-nav-btn.active { background: #ffb703; color: #023047; font-weight: 800; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+    .ws-nav-icon { font-size: 18px; line-height: 1; flex-shrink: 0; }
+    .ws-nav-title { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ws-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+    .ws-top-subbar {
+      background: #fff; border: 1px solid var(--pk-border); border-radius: 12px;
+      padding: 10px 14px; display: flex; flex-direction: column; gap: 10px;
+    }
+    .ws-top-subbar-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .ws-subtabs-row { display: flex; gap: 6px; flex-wrap: wrap; padding-top: 8px; border-top: 1px solid #e2e8f0; }
+    .ws-subtab-pill {
+      border: 1px solid #cbd5e1; background: #f8fafc; color: #334155;
+      padding: 7px 13px; border-radius: 9px; font-size: 12px; font-weight: 700;
+      cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: 0.15s;
+    }
+    .ws-subtab-pill:hover { background: #e2e8f0; }
+    .ws-subtab-pill.active { background: #023047; color: #fff; border-color: #023047; }
   `;
 }
 

@@ -1,15 +1,12 @@
 /**
- * Hub Relacional 5 (`reports`) y Hub 6 (`gastro`):
- * - `reports`: Arqueo de Caja Real (Efectivo Neto, Utilidad Neta, Digital, CxC), Gastos Menores, Liquidación de Comisiones de Técnicos y Exportación CSV UTF-8 BOM (Inspirado en FactuPOS `report.jsx`).
- * - `gastro`: Mapa de Mesas, Comandas KDS y Pase directo de Cuenta a Caja POS.
+ * Plantillas Operativas 5 y 6:
+ * - `mod-petty-cash`: Cuadre de Caja del Día y Registro de Gastos (`srv-treasury`).
+ * - `srv-reports`: Reportes de Ventas, Ganancias, Inventario y Descarga directa en Excel (.CSV).
+ * - `mod-tables` y `mod-kds`: Mapa de Mesas, Toma de Comandas (Mesero) y Monitor de Cocina/Barra (`srv-gastro`).
  */
 export function renderReportsCashboxCommissionsHubRuntimeJs(): string {
   return `
-  function pkRenderReportsAndCashboxHub() {
-    var db = STATE.relDb;
-    var container = document.getElementById('ws-converged-hub-container');
-    if (!container || !db) return;
-
+  function pkComputeCashMetrics(db) {
     var totalInvoiced = 0; var cashIn = 0; var digitalIn = 0; var totalCxc = 0; var partsProfit = 0;
     for (var i = 0; i < db.invoices.length; i++) {
       var inv = db.invoices[i];
@@ -18,114 +15,154 @@ export function renderReportsCashboxCommissionsHubRuntimeJs(): string {
       var paid = Number(inv.amountPaid || 0);
       if (inv.paymentMethod === 'Efectivo' || inv.paymentMethod === 'Crédito / Cartera CxC') cashIn += paid;
       else digitalIn += paid;
-      var items = inv.items || [];
-      for (var k = 0; k < items.length; k++) {
-        if (items[k].kind === 'PRODUCTO') {
-          var pr = pkFindById(db.products, items[k].refId);
-          var unitCost = pr ? Number(pr.costPrice || 0) : Math.round(Number(items[k].price || 0) * 0.6);
-          partsProfit += (Number(items[k].price || 0) - unitCost) * Number(items[k].qty || 1);
+      for (var k = 0; k < (inv.items || []).length; k++) {
+        var it = inv.items[k];
+        if (it.kind === 'PRODUCTO') {
+          var pr = pkFindById(db.products, it.refId);
+          var uCost = pr ? Number(pr.costPrice || 0) : Math.round(Number(it.price || 0) * 0.6);
+          partsProfit += (Number(it.price || 0) - uCost) * Number(it.qty || 1);
         }
       }
     }
-
     var cashExpenses = 0; var totalExpenses = 0;
+    for (var e = 0; e < db.expenses.length; e++) {
+      totalExpenses += Number(db.expenses[e].amount || 0);
+      if (db.expenses[e].paymentSource === 'Efectivo Caja') cashExpenses += Number(db.expenses[e].amount || 0);
+    }
+    return { totalInvoiced: totalInvoiced, cashIn: cashIn, digitalIn: digitalIn, totalCxc: totalCxc, partsProfit: partsProfit, totalExpenses: totalExpenses, netCash: cashIn - cashExpenses };
+  }
+
+  function pkRenderPettyCashHub() {
+    var db = STATE.relDb;
+    var stage = document.getElementById('ws-module-stage');
+    if (!stage || !db) return;
+    var m = pkComputeCashMetrics(db);
     var expRows = '';
     for (var e = 0; e < db.expenses.length; e++) {
       var ex = db.expenses[e];
-      totalExpenses += Number(ex.amount || 0);
-      if (ex.paymentSource === 'Efectivo Caja') cashExpenses += Number(ex.amount || 0);
-      expRows += '<tr><td><code>' + pkEsc(ex.id) + '</code></td><td>' + pkEsc(ex.date) + '</td><td><span class="badge badge-slate">' + pkEsc(ex.category) + '</span></td><td><strong>' + pkEsc(ex.description) + '</strong></td><td>' + pkEsc(ex.paymentSource) + '</td><td style="color:var(--pk-amber);font-weight:800">-' + pkCop(ex.amount) + '</td></tr>';
+      expRows += '<tr><td>' + pkEsc(ex.date) + '</td><td><span class="badge badge-slate">' + pkEsc(ex.category) + '</span></td><td><strong>' + pkEsc(ex.description) + '</strong></td><td>' + pkEsc(ex.paymentSource) + '</td><td style="color:var(--pk-amber);font-weight:800">-' + pkCop(ex.amount) + '</td><td><button type="button" class="btn btn-outline btn-sm" data-exp-delete-id="' + pkEsc(ex.id) + '">🗑️</button></td></tr>';
     }
-
-    var netCashInBox = cashIn - cashExpenses;
-
-    var wkRows = '';
-    for (var w = 0; w < db.workers.length; w++) {
-      var wk = db.workers[w];
-      var gross = Number(wk.totalDayGross || 0);
-      var techPay = Math.round(gross * (Number(wk.commissionPct || 40) / 100));
-      var bizCut = gross - techPay;
-      wkRows += '<tr>' +
-        '<td><strong>' + pkEsc(wk.name) + '</strong><div style="font-size:11px;color:var(--pk-muted)">' + pkEsc(wk.specialty) + ' · 📞 ' + pkEsc(wk.phone) + '</div></td>' +
-        '<td><span class="badge badge-blue">' + wk.commissionPct + '% Técnico / ' + (100 - wk.commissionPct) + '% Empresa</span></td>' +
-        '<td>' + pkCop(gross) + '</td>' +
-        '<td style="color:var(--pk-primary);font-weight:800">' + pkCop(techPay) + '</td>' +
-        '<td style="color:var(--pk-emerald);font-weight:800">' + pkCop(bizCut) + '</td>' +
-        '<td>' + (gross > 0
-          ? '<button type="button" class="btn btn-emerald btn-sm" data-settle-worker="' + pkEsc(wk.id) + '">⚡ Liquidar Turno (' + pkCop(techPay) + ')</button>'
-          : '<span class="badge badge-slate">✓ Turno en $0</span>') + '</td></tr>';
-    }
-
-    var stRows = '';
-    for (var s = 0; s < db.settlements.length; s++) {
-      var st = db.settlements[s];
-      stRows += '<tr><td><code>' + pkEsc(st.id) + '</code></td><td>' + pkEsc(st.date) + '</td><td><strong>' + pkEsc(st.workerName) + '</strong></td><td>' + pkCop(st.grossLabor) + '</td><td>' + st.commissionPct + '%</td><td style="color:var(--pk-primary);font-weight:800">' + pkCop(st.technicianPayout) + '</td><td style="color:var(--pk-emerald);font-weight:800">' + pkCop(st.companyRetention) + '</td></tr>';
-    }
-
-    container.innerHTML =
+    stage.innerHTML =
       '<div class="kpi-row">' +
-      '<div class="kpi-box"><div class="kpi-label">Efectivo Neto Real en Gaveta (Ingresos - Gastos)</div><div class="kpi-val" style="color:var(--pk-emerald)">' + pkCop(netCashInBox) + '</div></div>' +
-      '<div class="kpi-box"><div class="kpi-label">Ingresos Digitales (Transferencias / Tarjeta)</div><div class="kpi-val" style="color:var(--pk-primary)">' + pkCop(digitalIn) + '</div></div>' +
-      '<div class="kpi-box"><div class="kpi-label">Utilidad Neta en Repuestos + Total Facturado</div><div class="kpi-val">+' + pkCop(partsProfit) + ' / ' + pkCop(totalInvoiced) + '</div></div>' +
-      '<div class="kpi-box"><div class="kpi-label">Cartera por Cobrar CxC / Gastos Menores</div><div class="kpi-val" style="color:var(--pk-amber)">CxC: ' + pkCop(totalCxc) + ' · Gastos: -' + pkCop(totalExpenses) + '</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Efectivo Neto en Caja (Ingresos - Gastos)</div><div class="kpi-val" style="color:var(--pk-emerald)">' + pkCop(m.netCash) + '</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Transferencias y Tarjetas</div><div class="kpi-val" style="color:var(--pk-primary)">' + pkCop(m.digitalIn) + '</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Total Gastos Registrados</div><div class="kpi-val" style="color:var(--pk-amber)">-' + pkCop(m.totalExpenses) + '</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Total Facturado</div><div class="kpi-val">' + pkCop(m.totalInvoiced) + '</div></div>' +
       '</div>' +
-
-      '<div class="card"><div class="card-head"><div>' +
-      '<div class="card-title">📥 Exportación Ejecutiva a Excel CSV (UTF-8 con BOM Compatible con Excel)</div>' +
-      '<div class="card-sub">Descarga al instante las tablas relacionales enlazadas de la plataforma</div></div>' +
-      '<div class="row-actions">' +
-      '<button type="button" class="btn btn-outline btn-sm" data-export-csv="invoices">📊 Exportar Ventas y Facturas (.CSV)</button>' +
-      '<button type="button" class="btn btn-outline btn-sm" data-export-csv="inventory">📦 Exportar Inventario Valorizado (.CSV)</button>' +
-      '<button type="button" class="btn btn-outline btn-sm" data-export-csv="expenses">💸 Exportar Gastos Caja (.CSV)</button>' +
-      '<button type="button" class="btn btn-outline btn-sm" data-export-csv="settlements">👨‍🔧 Exportar Liquidaciones (.CSV)</button>' +
-      '</div></div></div>' +
-
-      '<div class="card"><div class="card-head"><div>' +
-      '<div class="card-title">👨‍🔧 1. Liquidación de Comisiones de Técnicos / Profesionales (FK -> workers, settlements)</div>' +
-      '<div class="card-sub">Cada servicio facturado en el POS suma automáticamente al acumulado del técnico; liquida su turno con un clic</div></div></div>' +
-      '<div class="card-body"><div class="table-wrap" style="margin-bottom:12px"><table><thead><tr><th>Técnico / Profesional</th><th>Esquema Comisión</th><th>Producido Bruto Hoy</th><th>Pago al Técnico</th><th>Utilidad Empresa</th><th>Acción</th></tr></thead><tbody>' + wkRows + '</tbody></table></div>' +
-      '<div class="form-grid" style="background:#f8fafc;padding:10px;border-radius:10px;border:1px solid var(--pk-border)">' +
-      '<div class="field"><label>Nombre Nuevo Técnico / Profesional</label><input type="text" id="wk-new-name" placeholder="Ej: Jorge Iván Ríos" /></div>' +
-      '<div class="field"><label>Especialidad / Área</label><input type="text" id="wk-new-spec" placeholder="Ej: Diagnóstico Electrónico / Especialista" /></div>' +
-      '<div class="field"><label>% Comisión Técnico</label><div class="row-actions"><input type="number" id="wk-new-pct" value="40" min="5" max="90" style="flex:1" />' +
-      '<button type="button" class="btn btn-primary btn-sm" id="btn-wk-add">+ Vincular Técnico</button></div></div></div>' +
-      (stRows ? '<div style="margin-top:12px"><div style="font-size:12px;font-weight:800;margin-bottom:6px">Historial de Turnos Liquidados:</div><div class="table-wrap"><table><thead><tr><th>ID</th><th>Fecha</th><th>Técnico</th><th>Bruto</th><th>%</th><th>Pagado Técnico</th><th>Retención Empresa</th></tr></thead><tbody>' + stRows + '</tbody></table></div></div>' : '') +
-      '</div></div>' +
-
-      '<div class="card"><div class="card-head"><div>' +
-      '<div class="card-title">💸 2. Control de Gastos de Caja Menor y Egresos Operativos</div>' +
-      '<div class="card-sub">Los gastos pagados en Efectivo Caja se descuentan automáticamente del Efectivo Neto en Gaveta</div></div></div>' +
+      '<div class="card"><div class="card-head"><div class="card-title">💸 Registrar Salida o Gasto de Caja</div></div>' +
       '<div class="card-body"><div class="form-grid" style="margin-bottom:12px">' +
-      '<div class="field"><label>Concepto / Descripción del Gasto</label><input type="text" id="exp-new-desc" placeholder="Ej: Compra insumos aseo / Domicilio repuestos" /></div>' +
-      '<div class="field"><label>Categoría</label><select id="exp-new-cat"><option value="Insumos Operativos">Insumos Operativos</option><option value="Servicios Públicos">Servicios Públicos</option><option value="Transporte / Fletes">Transporte / Fletes</option><option value="Mantenimiento">Mantenimiento</option></select></div>' +
-      '<div class="field"><label>Origen del Dinero y Valor (COP)</label><div class="row-actions">' +
+      '<div class="field"><label>Concepto del Gasto *</label><input type="text" id="exp-new-desc" placeholder="Ej: Compra insumos de aseo / Domicilio" /></div>' +
+      '<div class="field"><label>Categoría</label><select id="exp-new-cat"><option value="Insumos Operativos">Insumos Operativos</option><option value="Transporte / Fletes">Transporte / Fletes</option><option value="Servicios Públicos">Servicios Públicos</option><option value="Adelanto / Vale">Adelanto / Vale</option></select></div>' +
+      '<div class="field"><label>Sale de y Valor ($)</label><div class="row-actions">' +
       '<select id="exp-new-source" style="width:140px"><option value="Efectivo Caja">Efectivo Caja</option><option value="Transferencia Bancaria">Banco / Nequi</option></select>' +
       '<input type="number" id="exp-new-amount" value="25000" style="flex:1" />' +
-      '<button type="button" class="btn btn-amber btn-sm" id="btn-exp-add">+ Registrar Gasto</button></div></div></div>' +
-      '<div class="table-wrap"><table><thead><tr><th>ID</th><th>Fecha</th><th>Categoría</th><th>Descripción</th><th>Origen</th><th>Monto</th></tr></thead><tbody>' + expRows + '</tbody></table></div></div></div>';
+      '<button type="button" class="btn btn-amber btn-sm" id="btn-exp-add">+ Guardar Gasto</button></div></div></div>' +
+      '<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Categoría</th><th>Concepto</th><th>Origen</th><th>Valor</th><th>Acción</th></tr></thead><tbody>' + expRows + '</tbody></table></div></div></div>';
   }
 
-  function pkRenderGastroHub() {
+  function pkRenderReportsAndCashboxHub() {
     var db = STATE.relDb;
-    var container = document.getElementById('ws-converged-hub-container');
-    if (!container || !db) return;
-    var cards = '';
+    var stage = document.getElementById('ws-module-stage');
+    if (!stage || !db) return;
+    var m = pkComputeCashMetrics(db);
+    var invRows = '';
+    for (var i = 0; i < db.invoices.length; i++) {
+      var iv = db.invoices[i];
+      invRows += '<tr><td><strong>' + pkEsc(iv.id) + '</strong></td><td>' + pkEsc(iv.date) + '</td><td>' + pkEsc(iv.customerName) + '</td><td>' + pkEsc(iv.paymentMethod) + '</td><td><strong>' + pkCop(iv.total) + '</strong></td><td><span class="badge ' + (iv.pendingBalance > 0 ? 'badge-amber' : 'badge-emerald') + '">' + pkEsc(iv.status) + '</span></td></tr>';
+    }
+    stage.innerHTML =
+      '<div class="kpi-row">' +
+      '<div class="kpi-box"><div class="kpi-label">Ventas Totales Facturadas</div><div class="kpi-val">' + pkCop(m.totalInvoiced) + '</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Ganancia en Productos</div><div class="kpi-val" style="color:var(--pk-emerald)">+' + pkCop(m.partsProfit) + '</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Efectivo Neto en Caja</div><div class="kpi-val" style="color:var(--pk-primary)">' + pkCop(m.netCash) + '</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Cuentas por Cobrar (Cartera)</div><div class="kpi-val" style="color:var(--pk-amber)">' + pkCop(m.totalCxc) + '</div></div>' +
+      '</div>' +
+      '<div class="card"><div class="card-head"><div class="card-title">📥 Descargar Reportes en Excel (.CSV)</div></div>' +
+      '<div class="card-body"><div class="row-actions">' +
+      '<button type="button" class="btn btn-primary btn-sm" data-export-csv="invoices">📊 Descargar Reporte de Ventas y Facturas</button>' +
+      '<button type="button" class="btn btn-outline btn-sm" data-export-csv="inventory">📦 Descargar Inventario Valorizado</button>' +
+      '<button type="button" class="btn btn-outline btn-sm" data-export-csv="expenses">💸 Descargar Gastos de Caja</button>' +
+      '<button type="button" class="btn btn-outline btn-sm" data-export-csv="settlements">👷 Descargar Comisiones de Técnicos</button>' +
+      '</div></div></div>' +
+      '<div class="card"><div class="card-head"><div class="card-title">🧾 Detalle de Ventas Recientes</div></div>' +
+      '<div class="card-body"><div class="table-wrap"><table><thead><tr><th>Factura</th><th>Fecha</th><th>Cliente</th><th>Medio de Pago</th><th>Total</th><th>Estado</th></tr></thead><tbody>' + invRows + '</tbody></table></div></div></div>';
+  }
+
+  function pkRenderGastroHub(subKey) {
+    var db = STATE.relDb;
+    var stage = document.getElementById('ws-module-stage');
+    if (!stage || !db) return;
+
+    if (subKey === 'mod-kds') {
+      var kdsCards = '';
+      for (var k = 0; k < db.diningTables.length; k++) {
+        var tk = db.diningTables[k];
+        if (!tk.items || tk.items.length === 0) continue;
+        var listK = '';
+        for (var m = 0; m < tk.items.length; m++) {
+          listK += '<div style="padding:6px 0;border-bottom:1px dashed var(--pk-border);font-size:13px"><strong>' + tk.items[m].qty + 'x ' + pkEsc(tk.items[m].name) + '</strong>' +
+            (tk.items[m].note ? '<div style="font-size:11px;color:#b45309">Nota: ' + pkEsc(tk.items[m].note) + '</div>' : '') + '</div>';
+        }
+        kdsCards += '<div class="card"><div class="card-head" style="background:#fef3c7"><div class="card-title">👨‍🍳 ' + pkEsc(tk.name) + ' (' + pkEsc(tk.zone) + ')</div><span class="badge badge-amber">Mesero: ' + pkEsc(tk.waiter) + '</span></div>' +
+          '<div class="card-body">' + listK + '<div style="margin-top:12px"><button type="button" class="btn btn-emerald btn-sm" style="width:100%" data-kds-ready-table="' + pkEsc(tk.id) + '">✅ Marcar Pedido Listo para Servir</button></div></div></div>';
+      }
+      stage.innerHTML = '<div class="grid-3">' + (kdsCards || '<div class="card"><div class="card-body">No hay comandas pendientes en cocina en este momento.</div></div>') + '</div>';
+      return;
+    }
+
+    var selTable = pkFindById(db.diningTables, STATE.activeTableId) || db.diningTables[0];
+    if (selTable) STATE.activeTableId = selTable.id;
+
+    var tableButtons = '';
     for (var i = 0; i < db.diningTables.length; i++) {
       var t = db.diningTables[i];
-      var itemsHtml = '';
-      for (var j = 0; j < t.items.length; j++) {
-        itemsHtml += '<div style="font-size:11px;display:flex;justify-content:space-between"><span>' + t.items[j].qty + 'x ' + pkEsc(t.items[j].name) + '</span><strong>' + pkCop(t.items[j].price * t.items[j].qty) + '</strong></div>';
-      }
-      cards += '<div class="card"><div class="card-head"><div><div class="card-title">🍽️ ' + pkEsc(t.name) + ' (' + pkEsc(t.zone) + ')</div>' +
-        '<div class="card-sub">Mesero: ' + pkEsc(t.waiter) + ' · Comensales: ' + t.diners + '</div></div>' +
-        '<span class="badge ' + (t.status === 'Libre' ? 'badge-slate' : (t.status === 'Cuenta' ? 'badge-amber' : 'badge-emerald')) + '">' + pkEsc(t.status) + '</span></div>' +
-        '<div class="card-body"><div style="background:#f8fafc;padding:8px;border-radius:8px;min-height:54px;margin-bottom:8px">' + (itemsHtml || '<span style="font-size:11px;color:var(--pk-muted)">Mesa disponible sin comanda activa</span>') + '</div>' +
-        '<div style="display:flex;justify-content:space-between;align-items:center">' +
-        '<strong>Total: ' + pkCop(t.total) + '</strong>' +
-        (t.total > 0 ? '<button type="button" class="btn btn-emerald btn-sm" data-pos-load-table="' + pkEsc(t.id) + '">🛒 Pasar Cuenta a Caja POS</button>' : '<button type="button" class="btn btn-outline btn-sm" data-gastro-add-demo="' + pkEsc(t.id) + '">+ Comanda Rápida</button>') +
-        '</div></div></div>';
+      var isSel = selTable && selTable.id === t.id;
+      var isOcc = t.items && t.items.length > 0;
+      tableButtons += '<button type="button" data-select-table="' + pkEsc(t.id) + '" style="padding:12px 16px;border-radius:12px;cursor:pointer;text-align:left;min-width:165px;border:2px solid ' + (isSel ? '#023047' : (isOcc ? '#10b981' : '#cbd5e1')) + ';background:' + (isSel ? '#023047' : (isOcc ? '#ecfdf5' : '#fff')) + ';color:' + (isSel ? '#fff' : '#0f172a') + '">' +
+        '<div style="font-weight:800;font-size:14px">🍽️ ' + pkEsc(t.name) + '</div>' +
+        '<div style="font-size:11px;opacity:0.85">' + pkEsc(t.zone) + ' · ' + (isOcc ? pkCop(t.total) : 'Libre') + '</div></button>';
     }
-    container.innerHTML = '<div class="grid-3">' + cards + '</div>';
+
+    var menuOpts = '';
+    for (var p = 0; p < db.products.length; p++) {
+      menuOpts += '<option value="' + pkEsc(db.products[p].id) + '">' + pkEsc(db.products[p].name + ' — ' + pkCop(db.products[p].salePrice)) + '</option>';
+    }
+
+    var cmdRows = '';
+    if (selTable && selTable.items) {
+      for (var c = 0; c < selTable.items.length; c++) {
+        var it = selTable.items[c];
+        cmdRows += '<tr><td><strong>' + pkEsc(it.name) + '</strong>' + (it.note ? '<div style="font-size:11px;color:var(--pk-muted)">Nota: ' + pkEsc(it.note) + '</div>' : '') + '</td>' +
+          '<td><div class="row-actions"><button type="button" class="btn btn-outline btn-sm" data-cmd-qty="-1" data-cmd-idx="' + c + '">➖</button><strong>' + it.qty + '</strong><button type="button" class="btn btn-outline btn-sm" data-cmd-qty="1" data-cmd-idx="' + c + '">➕</button></div></td>' +
+          '<td>' + pkCop(it.price) + '</td><td><strong>' + pkCop(it.price * it.qty) + '</strong></td>' +
+          '<td><button type="button" class="btn btn-outline btn-sm" data-cmd-del="' + c + '">🗑️</button></td></tr>';
+      }
+    }
+    if (!cmdRows) cmdRows = '<tr><td colspan="5" style="text-align:center;color:var(--pk-muted);padding:16px">Esta mesa está libre. Selecciona un plato o bebida arriba y haz clic en "+ Agregar a la Comanda".</td></tr>';
+
+    stage.innerHTML =
+      '<div class="card"><div class="card-head"><div class="card-title">1. Selecciona la Mesa (Haz clic en una mesa para ver o crear su comanda)</div>' +
+      '<button type="button" class="btn btn-outline btn-sm" id="btn-gastro-new-table">+ Crear Nueva Mesa</button></div>' +
+      '<div class="card-body"><div style="display:flex;gap:10px;flex-wrap:wrap">' + tableButtons + '</div></div></div>' +
+
+      (selTable ? (
+        '<div class="card"><div class="card-head" style="background:#f8fafc"><div class="card-title">📝 2. Comanda de ' + pkEsc(selTable.name) + ' (' + pkEsc(selTable.zone) + ')</div>' +
+        '<span class="badge badge-emerald" style="font-size:14px">Total Mesa: ' + pkCop(selTable.total) + '</span></div>' +
+        '<div class="card-body">' +
+        '<div class="form-grid" style="background:#f1f5f9;padding:12px;border-radius:10px;margin-bottom:14px">' +
+        '<div class="field"><label>Plato / Bebida / Producto *</label><select id="cmd-product-id">' + menuOpts + '</select></div>' +
+        '<div class="field"><label>O escribir plato personalizado</label><input type="text" id="cmd-custom-name" placeholder="Ej: Churrasco 350g / Limonada Cerezada" /></div>' +
+        '<div class="field"><label>Precio ($) (Si es personalizado)</label><input type="number" id="cmd-custom-price" placeholder="Ej: 38000" /></div>' +
+        '<div class="field"><label>Cantidad</label><input type="number" id="cmd-qty-input" value="1" min="1" /></div>' +
+        '<div class="field"><label>Nota para Cocina / Barra</label><input type="text" id="cmd-note-input" placeholder="Ej: Término 3/4, sin cebolla, bien fría" /></div>' +
+        '<div class="field" style="display:flex;justify-content:flex-end"><button type="button" class="btn btn-primary" style="width:100%" id="btn-cmd-add-item">+ Agregar a la Comanda</button></div>' +
+        '</div>' +
+        '<div class="table-wrap" style="margin-bottom:12px"><table><thead><tr><th>Plato / Bebida</th><th>Cantidad</th><th>Precio Unit.</th><th>Subtotal</th><th>Quitar</th></tr></thead><tbody>' + cmdRows + '</tbody></table></div>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">' +
+        '<button type="button" class="btn btn-amber" id="btn-cmd-send-kitchen">👨‍🍳 Enviar Comanda a Cocina / Barra</button>' +
+        '<button type="button" class="btn btn-emerald" data-pos-load-table="' + pkEsc(selTable.id) + '">💵 Pasar Cuenta de ' + pkEsc(selTable.name) + ' a Caja para Cobrar</button>' +
+        '</div></div></div>'
+      ) : '');
   }
 `;
 }

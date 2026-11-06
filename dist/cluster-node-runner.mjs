@@ -1,3 +1,5 @@
+import { createRequire } from 'module'; const require = createRequire(import.meta.url);
+
 // apps/api-gateway/src/cluster-node-runner.ts
 import { existsSync as existsSync3 } from "node:fs";
 import http from "node:http";
@@ -12810,1544 +12812,1129 @@ function createSrvInvoicingHostRunner(guard, enabledMicroservicesEnv, hostNodeId
 // apps/srv-appointments/frontend/appointments-service.view.ts
 var SRV_APPOINTMENTS_FRONTEND_VIEW = {
   serviceKey: "srv-appointments",
-  externalPrincipalModuleName: "Agendamiento, Turnos y Recordatorios IA (v2)",
+  externalPrincipalModuleName: "Agenda y Citas",
   icon: "\u{1F4C5}",
-  subtitle: "Motor de agendas multi-profesional y consultorios/recursos estilo v2, recordatorios interactivos WhatsApp IA y turnador.",
-  standaloneMonthlyUsd: 135e3,
+  subtitle: "Agendamiento de citas, horarios de profesionales y sala de espera.",
+  standaloneMonthlyUsd: 119e3,
   submodules: [
     {
       moduleKey: "mod-calendar-slots",
       parentServiceKey: "srv-appointments",
-      externalSubmoduleName: "Agenda Multi-Profesional y Recursos (v2)",
-      tabIcon: "\u{1F5D3}\uFE0F",
-      summary: "Calendario por bloques horarios, asignaci\xF3n de sala/consultorio/bah\xEDa, control de inasistencias y estados de cita.",
-      monthlyAddonUsd: 45e3,
-      actionButtonLabel: "Agendar Cita / Bloque Horario",
-      tableHeaders: ["C\xF3digo Cita", "Cliente / Usuario", "Profesional / Recurso", "Fecha y Hora", "Servicio Programado"],
+      externalSubmoduleName: "Agenda de Citas",
+      tabIcon: "\u{1F4C5}",
+      summary: "",
+      monthlyAddonUsd: 39e3,
+      actionButtonLabel: "+ Agendar Cita",
+      tableHeaders: ["C\xF3digo", "Fecha y Hora", "Cliente / Paciente", "Profesional", "Servicio", "Estado", "Acciones"],
       fields: [
-        { key: "appointmentCode", label: "C\xF3digo de Cita", type: "text", placeholder: "CIT-2026-0412" },
-        { key: "customerName", label: "Cliente / Usuario y WhatsApp", type: "text", placeholder: "Laura Valentina R\xEDos \u2014 315 884 1200" },
-        { key: "specialistResource", label: "Profesional y Sala / Consultorio", type: "select", options: ["Dr. Alejandro Mej\xEDa \u2014 Consultorio 201", "Esp. Camila Pineda \u2014 Cabina 02", "Ing. Mateo G\xF3mez \u2014 Bah\xEDa Diagn\xF3stico 01"] },
-        { key: "slotDateTime", label: "Fecha y Bloque Horario", type: "text", placeholder: "2026-11-12 09:30 AM (45 min)" },
-        { key: "serviceName", label: "Servicio / Procedimiento Agendado", type: "text", placeholder: "Valoraci\xF3n Especializada Integral" }
+        { key: "slotDateTime", label: "Fecha y Hora", type: "text", placeholder: "Ma\xF1ana 10:00 AM" },
+        { key: "patientOrClient", label: "Cliente / Paciente", type: "text", placeholder: "Mar\xEDa Fernanda L\xF3pez" },
+        { key: "professionalAssigned", label: "Profesional / Especialista", type: "text", placeholder: "Dr. Alejandro Mart\xEDnez" },
+        { key: "serviceProcedure", label: "Motivo / Servicio", type: "text", placeholder: "Consulta General / Valoraci\xF3n" }
       ]
     },
     {
       moduleKey: "mod-staff-schedules",
       parentServiceKey: "srv-appointments",
-      externalSubmoduleName: "Mallas Horarias, Bloqueos y Excepciones",
-      tabIcon: "\u23F0",
-      summary: "Configuraci\xF3n de turnos semanales por especialista, vacaciones, permisos y tiempos de alistamiento.",
-      monthlyAddonUsd: 35e3,
-      actionButtonLabel: "Publicar Malla Horaria",
-      tableHeaders: ["Especialista", "Sede / Consultorio", "Franja Horaria", "Duraci\xF3n Bloque (min)", "Estado Malla"],
+      externalSubmoduleName: "Horarios de Profesionales",
+      tabIcon: "\u{1F552}",
+      summary: "",
+      monthlyAddonUsd: 29e3,
+      actionButtonLabel: "+ Guardar Horario",
+      tableHeaders: ["ID", "Profesional", "D\xEDas de Atenci\xF3n", "Horario", "Consultorio / Sede", "Estado", "Acciones"],
       fields: [
-        { key: "specialistName", label: "Profesional / Especialista", type: "text", placeholder: "Dr. Alejandro Mej\xEDa" },
-        { key: "branchRoom", label: "Sede y Recurso F\xEDsico", type: "select", options: ["Sede Principal \u2014 Consultorio 201", "Sede Norte \u2014 Sala Especial 03", "Atenci\xF3n Virtual Teleconsulta"] },
-        { key: "workDaysSchedule", label: "D\xEDas y Franja Horaria", type: "text", placeholder: "Lunes a Viernes 07:00 AM - 05:00 PM" },
-        { key: "slotDurationMin", label: "Duraci\xF3n por Cita (Minutos)", type: "number", placeholder: "30" }
-      ]
-    },
-    {
-      moduleKey: "mod-interactive-reminders",
-      parentServiceKey: "srv-appointments",
-      externalSubmoduleName: "Recordatorios Interactivos WhatsApp / Email",
-      tabIcon: "\u{1F4AC}",
-      summary: "Env\xEDo automatizado 24h y 2h antes con botones interactivos para Confirmar, Cancelar o Reprogramar en vivo.",
-      monthlyAddonUsd: 39e3,
-      actionButtonLabel: "Disparar Recordatorio Interactivo",
-      tableHeaders: ["Env\xEDo #", "Destinatario", "Canal", "Respuesta Cliente", "Estado Cupo"],
-      fields: [
-        { key: "notificationCode", label: "C\xF3digo de Notificaci\xF3n", type: "text", placeholder: "WSP-2026-8812" },
-        { key: "customerName", label: "Cliente y Tel\xE9fono", type: "text", placeholder: "Laura Valentina R\xEDos \u2014 +57 3158841200" },
-        { key: "channel", label: "Canal de Recordatorio", type: "select", options: ["WhatsApp Interactivo IA (24h/2h)", "Correo Electr\xF3nico + ICS", "SMS Transaccional"] },
-        { key: "clientResponse", label: "Acci\xF3n del Usuario", type: "select", options: ["Confirmada por WhatsApp", "Solicit\xF3 Reprogramar", "Cancelada \u2014 Cupo Liberado"] }
+        { key: "staffName", label: "Profesional", type: "text", placeholder: "Dra. Carolina G\xF3mez" },
+        { key: "workDays", label: "D\xEDas de Atenci\xF3n", type: "text", placeholder: "Lunes a Viernes" },
+        { key: "shiftHours", label: "Horario", type: "text", placeholder: "08:00 AM a 05:00 PM" }
       ]
     },
     {
       moduleKey: "mod-queue-turnador",
       parentServiceKey: "srv-appointments",
-      externalSubmoduleName: "Sala de Espera, Check-In QR y Turnador TV",
-      tabIcon: "\u{1F4FA}",
-      summary: "Registro de llegada en kiosco o QR, llamado en pantalla de sala de espera por m\xF3dulo y m\xE9trica de espera.",
-      monthlyAddonUsd: 35e3,
-      actionButtonLabel: "Llamar Siguiente Turno en Pantalla",
-      tableHeaders: ["Turno Sala", "Cliente en Espera", "M\xF3dulo / Consultorio", "Espera (Min)", "Estado Llamado"],
+      externalSubmoduleName: "Turnos y Sala de Espera",
+      tabIcon: "\u{1F514}",
+      summary: "",
+      monthlyAddonUsd: 25e3,
+      actionButtonLabel: "+ Llamar Turno",
+      tableHeaders: ["Turno", "Cliente / Paciente", "M\xF3dulo / Consultorio", "Profesional", "Estado", "Acciones"],
       fields: [
-        { key: "turnTicket", label: "C\xF3digo de Turno", type: "text", placeholder: "A-042 (Prioritario)" },
-        { key: "customerName", label: "Nombre en Sala de Espera", type: "text", placeholder: "Jorge Enrique Vargas" },
-        { key: "deskModule", label: "Consultorio / Ventanilla que Llama", type: "select", options: ["Consultorio 201", "Recepci\xF3n Admisiones 01", "Sala de Procedimientos 02"] },
-        { key: "waitingMinutes", label: "Minutos en Sala de Espera", type: "number", placeholder: "8" }
+        { key: "turnCode", label: "Turno", type: "text", placeholder: "A-015" },
+        { key: "waitingPerson", label: "Nombre", type: "text", placeholder: "Jorge Iv\xE1n Cano" },
+        { key: "deskRoom", label: "Consultorio / M\xF3dulo", type: "text", placeholder: "Consultorio 2" }
       ]
     }
   ],
   features: [
-    {
-      componentKey: "comp-overbooking-guard",
-      externalName: "Candado anti-cruce de profesional y consultorio/sala",
-      description: "Bloquea colisiones simult\xE1neas de especialista o recurso f\xEDsico al reservar o reprogramar citas.",
-      parentModuleKey: "mod-calendar-slots",
-      includedByDefault: true,
-      monthlyAddonUsd: 19e3
-    },
-    {
-      componentKey: "comp-whatsapp-ai-reschedule",
-      externalName: "Auto-reprogramaci\xF3n conversacional por WhatsApp IA",
-      description: "Libera el cupo autom\xE1ticamente al cancelar y ofrece 3 nuevos horarios disponibles al cliente.",
-      parentModuleKey: "mod-interactive-reminders",
-      includedByDefault: true,
-      monthlyAddonUsd: 25e3
-    }
+    { componentKey: "comp-overbooking-guard", parentServiceKey: "srv-appointments", externalName: "Bloqueo de Cruce de Horarios", description: "Evita citas duplicadas.", monthlyAddonUsd: 15e3 },
+    { componentKey: "comp-whatsapp-ai-reschedule", parentServiceKey: "srv-appointments", externalName: "Recordatorio por WhatsApp", description: "Env\xEDa confirmaci\xF3n de cita.", monthlyAddonUsd: 19e3 }
   ]
 };
 
 // apps/srv-crm/frontend/crm-service.view.ts
 var SRV_CRM_FRONTEND_VIEW = {
   serviceKey: "srv-crm",
-  externalPrincipalModuleName: "Clientes, Proveedores, Contratos (v2) y CRM 360",
-  icon: "\u{1F91D}",
-  subtitle: "Directorio maestro estilo v2 (NIT+DV, DANE, sucursales), contratos con bolsa presupuestal, LTV 360\xB0 y fidelizaci\xF3n.",
+  externalPrincipalModuleName: "Clientes",
+  icon: "\u{1F465}",
+  subtitle: "Directorio de clientes, convenios y seguimiento comercial.",
   standaloneMonthlyUsd: 115e3,
   submodules: [
     {
       moduleKey: "mod-directory",
       parentServiceKey: "srv-crm",
-      externalSubmoduleName: "Listado de Clientes y Terceros (v2)",
-      tabIcon: "\u{1F4C7}",
-      summary: "Directorio completo estilo version2: identificaci\xF3n NIT+DV, responsabilidades DIAN, DANE, sucursales y cupo de cr\xE9dito.",
+      externalSubmoduleName: "Directorio de Clientes",
+      tabIcon: "\u{1F465}",
+      summary: "",
       monthlyAddonUsd: 29e3,
-      actionButtonLabel: "Guardar Cliente / Tercero en BD",
-      tableHeaders: ["NIT / Documento", "Raz\xF3n Social / Nombre", "Tipo de Tercero", "Ciudad / Tel\xE9fono", "Cupo Aprobado (COP)"],
+      actionButtonLabel: "+ Guardar Cliente",
+      tableHeaders: ["NIT / C\xE9dula", "Cliente", "Tel\xE9fono / Ciudad", "Cupo Cr\xE9dito", "Saldo Pendiente", "Acciones"],
       fields: [
-        { key: "docType", label: "Tipo de Documento", type: "select", options: ["NIT Empresarial", "C\xE9dula de Ciudadan\xEDa (CC)", "C\xE9dula de Extranjer\xEDa (CE)", "Pasaporte"] },
-        { key: "taxId", label: "N\xFAmero NIT / Documento (Con DV)", type: "text", placeholder: "900.812.441-9" },
-        { key: "legalName", label: "Raz\xF3n Social o Nombre Completo", type: "text", placeholder: "Distribuidora del Caribe S.A.S." },
-        { key: "partyRole", label: "Clasificaci\xF3n del Tercero", type: "select", options: ["Cliente Corporativo", "Cliente Frecuente / Mostrador", "Proveedor de Insumos", "Empresa Transportista", "Cliente y Proveedor"] },
-        { key: "taxRegime", label: "R\xE9gimen Tributario DIAN", type: "select", options: ["Responsable de IVA (R\xE9gimen Com\xFAn)", "No Responsable de IVA", "Gran Contribuyente", "R\xE9gimen Simple RST"] },
-        { key: "cityPhone", label: "Ciudad DANE, Direcci\xF3n y WhatsApp", type: "text", placeholder: "Barranquilla (08001) \u2014 300 412 8890" },
-        { key: "billingEmail", label: "Correo Recepci\xF3n Factura Electr\xF3nica", type: "text", placeholder: "facturacion@empresa.co" },
-        { key: "paymentTerm", label: "Condici\xF3n y Plazo de Pago", type: "select", options: ["Contado Inmediato", "Cr\xE9dito 15 D\xEDas", "Cr\xE9dito 30 D\xEDas", "Cr\xE9dito 60 D\xEDas"] },
-        { key: "creditLimit", label: "Cupo de Cr\xE9dito Aprobado ($ COP)", type: "number", placeholder: "15000000" }
+        { key: "docType", label: "Tipo Doc.", type: "select", options: ["NIT", "CC", "CE", "Pasaporte"] },
+        { key: "taxId", label: "NIT / C\xE9dula", type: "text", placeholder: "900.812.441-9" },
+        { key: "legalName", label: "Nombre o Raz\xF3n Social", type: "text", placeholder: "Comercializadora del Norte S.A.S." },
+        { key: "cityPhone", label: "Tel\xE9fono / WhatsApp", type: "text", placeholder: "300 412 8890" },
+        { key: "billingEmail", label: "Ciudad / Direcci\xF3n", type: "text", placeholder: "Bogot\xE1 \u2014 Calle 80 # 15-20" },
+        { key: "creditLimit", label: "Cupo de Cr\xE9dito ($)", type: "number", placeholder: "5000000" }
       ]
     },
     {
       moduleKey: "mod-contracts",
       parentServiceKey: "srv-crm",
-      externalSubmoduleName: "Contratos Comerciales y Bolsas Presupuestales (v2)",
-      tabIcon: "\u{1F4DC}",
-      summary: "Convenios corporativos estilo EmpresaContrato v2 con techo presupuestal, consumo acumulado, vigencias y p\xF3lizas.",
+      externalSubmoduleName: "Contratos y Convenios",
+      tabIcon: "\u{1F4D1}",
+      summary: "",
       monthlyAddonUsd: 45e3,
-      actionButtonLabel: "Crear / Actualizar Contrato Corporativo",
-      tableHeaders: ["N\xB0 Contrato", "Empresa / Convenio", "Vigencia", "Techo Presupuestal", "Saldo Disponible (COP)"],
+      actionButtonLabel: "+ Crear Convenio",
+      tableHeaders: ["C\xF3digo", "Empresa / Convenio", "Tarifa / Descuento", "Cupo Total", "Consumido", "Disponible"],
       fields: [
-        { key: "contractNumber", label: "N\xFAmero de Contrato / Convenio", type: "text", placeholder: "CNT-2026-0084" },
-        { key: "companyName", label: "Empresa Contratante", type: "text", placeholder: "Grupo Industrial del Pac\xEDfico S.A." },
-        { key: "validityRange", label: "Vigencia Inicial \u2014 Final", type: "text", placeholder: "2026-01-01 a 2026-12-31" },
-        { key: "budgetCeiling", label: "Bolsa / Techo Presupuestal ($ COP)", type: "number", placeholder: "120000000" },
-        { key: "availableBalance", label: "Saldo Disponible Actual ($ COP)", type: "number", placeholder: "84500000" }
-      ]
-    },
-    {
-      moduleKey: "mod-customer-360",
-      parentServiceKey: "srv-crm",
-      externalSubmoduleName: "Expediente 360\xB0 LTV y Segmentaci\xF3n RFM",
-      tabIcon: "\u{1F3AF}",
-      summary: "M\xE9tricas tipo FixMotor: valor hist\xF3rico comprado (LTV), ticket promedio, frecuencia de visita y alerta de inactividad.",
-      monthlyAddonUsd: 35e3,
-      actionButtonLabel: "Actualizar Ficha 360\xB0 y Segmento",
-      tableHeaders: ["Cliente", "Segmento RFM", "Total Hist\xF3rico LTV", "Ticket Promedio", "D\xEDas Sin Compra"],
-      fields: [
-        { key: "customerName", label: "Cliente Analizado", type: "text", placeholder: "Inversiones automotrices del Norte" },
-        { key: "rfmSegment", label: "Segmento RFM", type: "select", options: ["Campe\xF3n VIP (Alta Frecuencia)", "Leal Recurrente", "En Riesgo de Fuga (>60 d\xEDas)", "Nuevo Cliente"] },
-        { key: "lifetimeValueCop", label: "LTV Hist\xF3rico Acumulado ($ COP)", type: "number", placeholder: "42800000" },
-        { key: "avgTicketCop", label: "Ticket Promedio ($ COP)", type: "number", placeholder: "1850000" }
+        { key: "contractNumber", label: "C\xF3digo Convenio", type: "text", placeholder: "CNV-2026-01" },
+        { key: "companyName", label: "Empresa Cliente", type: "text", placeholder: "Transportes del Caribe S.A." },
+        { key: "validityRange", label: "Tarifa Aplicada", type: "select", options: ["Convenio Corporativo (-12%)", "Mayorista (-15%)", "Tarifa Plena (0%)"] },
+        { key: "budgetCeiling", label: "Cupo Aprobado ($)", type: "number", placeholder: "25000000" }
       ]
     },
     {
       moduleKey: "mod-pipelines",
       parentServiceKey: "srv-crm",
-      externalSubmoduleName: "Oportunidades y Embudo Comercial",
-      tabIcon: "\u{1F4C8}",
-      summary: "Seguimiento de negocios en negociaci\xF3n, etapa comercial, ejecutivo asignado y cierre esperado.",
-      monthlyAddonUsd: 39e3,
-      actionButtonLabel: "Registrar Oportunidad",
-      tableHeaders: ["Negocio", "Cliente Prospecto", "Etapa del Embudo", "Ejecutivo", "Valor Estimado"],
+      externalSubmoduleName: "Cotizaciones en Seguimiento",
+      tabIcon: "\u{1F3AF}",
+      summary: "",
+      monthlyAddonUsd: 35e3,
+      actionButtonLabel: "+ Registrar Seguimiento",
+      tableHeaders: ["C\xF3digo", "Cliente", "Inter\xE9s / Cotizaci\xF3n", "Valor Estimado", "Etapa", "Acciones"],
       fields: [
-        { key: "dealTitle", label: "Nombre del Negocio / Contrato", type: "text", placeholder: "Suministro Mensual Dotaci\xF3n Industrial" },
-        { key: "prospectName", label: "Empresa Prospecto", type: "text", placeholder: "Ingenios Unidos S.A." },
-        { key: "stage", label: "Etapa Actual", type: "select", options: ["Contacto Inicial", "Propuesta Enviada", "Negociaci\xF3n Final", "Ganada / Cerrada"] },
-        { key: "expectedValue", label: "Valor Estimado ($ COP)", type: "number", placeholder: "18500000" }
+        { key: "leadName", label: "Cliente / Prospecto", type: "text", placeholder: "Constructora Los Alpes" },
+        { key: "interest", label: "Producto o Servicio de Inter\xE9s", type: "text", placeholder: "Suministro mensual de insumos" },
+        { key: "dealValue", label: "Valor Estimado ($)", type: "number", placeholder: "4500000" },
+        { key: "stage", label: "Estado", type: "select", options: ["Contactado", "Cotizaci\xF3n Enviada", "En Negociaci\xF3n", "Cerrado Ganado"] }
       ]
     },
     {
       moduleKey: "mod-loyalty",
       parentServiceKey: "srv-crm",
-      externalSubmoduleName: "Fidelizaci\xF3n, Puntos y Cashback",
+      externalSubmoduleName: "Puntos y Fidelizaci\xF3n",
       tabIcon: "\u2B50",
-      summary: "Acumulaci\xF3n y redenci\xF3n de puntos por compras frecuentes y categor\xEDas de cliente.",
-      monthlyAddonUsd: 29e3,
-      actionButtonLabel: "Acreditar / Redimir Puntos",
-      tableHeaders: ["Cliente", "Categor\xEDa", "Puntos Acumulados", "\xDAltima Compra", "Beneficio Activo"],
+      summary: "",
+      monthlyAddonUsd: 25e3,
+      actionButtonLabel: "+ Asignar Puntos",
+      tableHeaders: ["ID", "Cliente", "Nivel", "Puntos Acumulados", "Beneficio", "Acciones"],
       fields: [
-        { key: "memberName", label: "Cliente Afiliado", type: "text", placeholder: "Diana Marcela Pineda" },
-        { key: "tierLevel", label: "Nivel de Fidelidad", type: "select", options: ["Oro Preferencial", "Plata", "Bronce"] },
-        { key: "pointsBalance", label: "Puntos a Registrar", type: "number", placeholder: "1250" }
+        { key: "memberName", label: "Cliente", type: "text", placeholder: "Juan Sebasti\xE1n G\xF3mez" },
+        { key: "tier", label: "Categor\xEDa", type: "select", options: ["Cliente Oro", "Cliente Plata", "Frecuente"] },
+        { key: "points", label: "Puntos", type: "number", placeholder: "1200" },
+        { key: "reward", label: "Beneficio Disponible", type: "text", placeholder: "10% Descuento pr\xF3xima compra" }
       ]
     }
   ],
   features: [
-    {
-      componentKey: "comp-nit-dv-auto",
-      externalName: "C\xE1lculo autom\xE1tico de D\xEDgito de Verificaci\xF3n NIT (M\xF3dulo 11 DIAN)",
-      description: "Calcula autom\xE1ticamente el DV fiscal al registrar clientes, proveedores o transportistas.",
-      parentModuleKey: "mod-directory",
-      includedByDefault: true,
-      monthlyAddonUsd: 15e3
-    },
-    {
-      componentKey: "comp-credit-quota-lock",
-      externalName: "Bloqueo autom\xE1tico de despacho por cupo de cr\xE9dito o mora",
-      description: "Impide facturar a cr\xE9dito cuando el cliente supera su cupo aprobado o presenta facturas vencidas.",
-      parentModuleKey: "mod-directory",
-      includedByDefault: true,
-      monthlyAddonUsd: 19e3
-    },
-    {
-      componentKey: "comp-contract-budget-alert",
-      externalName: "Alerta de agotamiento de bolsa presupuestal de contrato (v2)",
-      description: "Notifica cuando el consumo acumulado de un convenio supera el 80% del techo contratado.",
-      parentModuleKey: "mod-contracts",
-      includedByDefault: true,
-      monthlyAddonUsd: 19e3
-    }
+    { componentKey: "comp-nit-dv-auto", parentServiceKey: "srv-crm", externalName: "C\xE1lculo de D\xEDgito de Verificaci\xF3n NIT", description: "Calcula el DV autom\xE1ticamente.", monthlyAddonUsd: 15e3 },
+    { componentKey: "comp-credit-quota-lock", parentServiceKey: "srv-crm", externalName: "Control de Cupo de Cr\xE9dito", description: "Alerta cuando el cliente supera su cupo.", monthlyAddonUsd: 19e3 },
+    { componentKey: "comp-contract-budget-alert", parentServiceKey: "srv-crm", externalName: "Control de Saldo de Convenios", description: "Descuenta autom\xE1ticamente del cupo del contrato.", monthlyAddonUsd: 25e3 }
   ]
 };
 
 // apps/srv-finance/frontend/finance-service.view.ts
 var SRV_FINANCE_FRONTEND_VIEW = {
   serviceKey: "srv-finance",
-  externalPrincipalModuleName: "Contabilidad NIIF, PUC, Activos Fijos y Ex\xF3gena DIAN",
+  externalPrincipalModuleName: "Contabilidad",
   icon: "\u{1F4D8}",
-  subtitle: "Plan \xDAnico de Cuentas PUC Colombia, asientos contables, centros de costo, activos fijos y medios magn\xE9ticos Ex\xF3gena DIAN.",
-  standaloneMonthlyUsd: 139e3,
+  subtitle: "Cuentas contables, asientos, centros de costo, activos fijos e impuestos.",
+  standaloneMonthlyUsd: 169e3,
   submodules: [
     {
       moduleKey: "mod-puc",
       parentServiceKey: "srv-finance",
-      externalSubmoduleName: "Plan \xDAnico de Cuentas (PUC) y Comprobantes",
+      externalSubmoduleName: "Asientos y Cuentas Contables",
       tabIcon: "\u{1F4D8}",
-      summary: "Comprobantes de diario, causaci\xF3n autom\xE1tica por cuenta PUC de 6-8 d\xEDgitos y validaci\xF3n de partida doble.",
-      monthlyAddonUsd: 45e3,
-      actionButtonLabel: "Asentar Comprobante Contable",
-      tableHeaders: ["Asiento", "Cuenta PUC", "Tercero NIT", "Detalle", "D\xE9bito / Cr\xE9dito", "Estado"],
+      summary: "",
+      monthlyAddonUsd: 55e3,
+      actionButtonLabel: "+ Registrar Asiento Contable",
+      tableHeaders: ["Comprobante", "Cuenta Contable", "Tercero", "D\xE9bito", "Cr\xE9dito", "Acciones"],
       fields: [
-        { key: "pucCode", label: "Cuenta Contable PUC", type: "select", options: ["110505 - Caja General", "130505 - Clientes Nacionales", "220501 - Proveedores Nacionales", "236540 - ReteFuente Compras 2.5%", "413501 - Comercio al por Mayor y Menor"] },
-        { key: "thirdPartyNit", label: "NIT Tercero", type: "text", placeholder: "900.412.110-1" },
-        { key: "entryDetail", label: "Concepto Contable", type: "text", placeholder: "Causaci\xF3n Factura de Venta FEV-1042" },
-        { key: "entryAmount", label: "Valor Asiento ($ COP)", type: "number", placeholder: "2350000" }
-      ]
-    },
-    {
-      moduleKey: "mod-cashbook",
-      parentServiceKey: "srv-finance",
-      externalSubmoduleName: "Libro de Caja, Bancos y Movimientos",
-      tabIcon: "\u{1F4B5}",
-      summary: "Ingresos, egresos contables, arqueo de turno y saldos conciliados en cuentas bancarias.",
-      monthlyAddonUsd: 39e3,
-      actionButtonLabel: "Registrar Movimiento Contable",
-      tableHeaders: ["Comprobante", "Cuenta / Caja", "Tipo", "Concepto", "Firma Encargado", "Monto"],
-      fields: [
-        { key: "accountName", label: "Caja o Cuenta Bancaria", type: "select", options: ["Caja General Principal", "Bancolombia Cuenta Corriente", "Davivienda Recaudos"] },
-        { key: "movementType", label: "Naturaleza", type: "select", options: ["Ingreso / Recaudo", "Egreso / Pago", "Traslado entre Cuentas"] },
-        { key: "concept", label: "Concepto del Movimiento", type: "text", placeholder: "Pago Flete Transporte Nacional" },
-        { key: "managerSignature", label: "Firma de Encargado que Autoriza", type: "text", placeholder: "Autorizado: Tesorer\xEDa General", requiredFeatureKey: "comp-manager-signature" },
-        { key: "amount", label: "Valor del Movimiento ($ COP)", type: "number", placeholder: "890000" }
-      ]
-    },
-    {
-      moduleKey: "mod-arap",
-      parentServiceKey: "srv-finance",
-      externalSubmoduleName: "Auxiliar de Cartera Fiscal CxC y CxP",
-      tabIcon: "\u{1F4D1}",
-      summary: "Saldos contables por tercero para cruce de cuentas 1305 (Clientes) y 2205/2335 (Proveedores y Costos por Pagar).",
-      monthlyAddonUsd: 42e3,
-      actionButtonLabel: "Registrar Cruce / Obligaci\xF3n",
-      tableHeaders: ["Documento", "Tercero", "Tipo de Cartera", "Vencimiento", "Saldo Pendiente", "Estado"],
-      fields: [
-        { key: "thirdParty", label: "Cliente o Proveedor", type: "text", placeholder: "Agroinsumos del Norte S.A.S." },
-        { key: "ledgerType", label: "Tipo de Cartera", type: "select", options: ["Cuenta por Cobrar (Cliente)", "Cuenta por Pagar (Proveedor)"] },
-        { key: "dueDate", label: "Fecha de Vencimiento", type: "date" },
-        { key: "balanceAmount", label: "Valor / Abono ($ COP)", type: "number", placeholder: "4200000" }
+        { key: "accountCode", label: "Cuenta Contable", type: "text", placeholder: "110505 \u2014 Caja General / 4135 \u2014 Ventas" },
+        { key: "thirdPartyNit", label: "Cliente o Proveedor", type: "text", placeholder: "NIT 900.812.441-9" },
+        { key: "debitAmount", label: "Valor D\xE9bito ($)", type: "number", placeholder: "500000" },
+        { key: "creditAmount", label: "Valor Cr\xE9dito ($)", type: "number", placeholder: "500000" }
       ]
     },
     {
       moduleKey: "mod-cost-centers",
       parentServiceKey: "srv-finance",
-      externalSubmoduleName: "Centros y Subcentros de Costo / Proyectos",
-      tabIcon: "\u{1F3D7}\uFE0F",
-      summary: "Contabilidad anal\xEDtica por sede, unidad de negocio, proyecto o veh\xEDculo para medir rentabilidad real.",
+      externalSubmoduleName: "Centros de Costo / Sedes",
+      tabIcon: "\u{1F3E2}",
+      summary: "",
       monthlyAddonUsd: 35e3,
-      actionButtonLabel: "Crear / Imputar Centro de Costo",
-      tableHeaders: ["C\xF3digo CC", "Centro de Costo / Proyecto", "Sede", "Presupuesto Mensual", "Ejecutado ($ COP)"],
+      actionButtonLabel: "+ Crear Centro de Costo",
+      tableHeaders: ["C\xF3digo", "Centro de Costo / Sede", "Responsable", "Presupuesto Mensual", "Ejecutado", "Acciones"],
       fields: [
-        { key: "costCenterCode", label: "C\xF3digo Centro de Costo", type: "text", placeholder: "CC-200-LOGISTICA" },
-        { key: "costCenterName", label: "Nombre del Centro o Proyecto", type: "text", placeholder: "Operaci\xF3n Planta Norte y Distribuci\xF3n" },
-        { key: "monthlyBudget", label: "Presupuesto Mensual ($ COP)", type: "number", placeholder: "45000000" },
-        { key: "executedAmount", label: "Ejecuci\xF3n Acumulada ($ COP)", type: "number", placeholder: "31800000" }
+        { key: "ccCode", label: "C\xF3digo", type: "text", placeholder: "CC-01" },
+        { key: "ccName", label: "Nombre de Sede o Proyecto", type: "text", placeholder: "Sede Principal / Taller" },
+        { key: "monthlyBudget", label: "Presupuesto Mensual ($)", type: "number", placeholder: "15000000" }
       ]
     },
     {
       moduleKey: "mod-fixed-assets",
       parentServiceKey: "srv-finance",
-      externalSubmoduleName: "Activos Fijos y Depreciaci\xF3n NIIF",
-      tabIcon: "\u{1F3E2}",
-      summary: "Hoja de vida de maquinaria, veh\xEDculos y equipos con c\xE1lculo mensual autom\xE1tico de depreciaci\xF3n NIIF.",
+      externalSubmoduleName: "Equipos y Activos Fijos",
+      tabIcon: "\u{1F3D7}\uFE0F",
+      summary: "",
       monthlyAddonUsd: 39e3,
-      actionButtonLabel: "Registrar Activo Fijo / Depreciar",
-      tableHeaders: ["Placa Activo", "Descripci\xF3n del Bien", "Vida \xDAtil (Meses)", "Costo Hist\xF3rico", "Valor Neto Libros (COP)"],
+      actionButtonLabel: "+ Registrar Activo o Equipo",
+      tableHeaders: ["C\xF3digo", "Equipo / Activo", "Ubicaci\xF3n", "Valor Compra", "Estado", "Acciones"],
       fields: [
-        { key: "assetTag", label: "Placa / C\xF3digo de Activo Fijo", type: "text", placeholder: "AF-MAQ-0042" },
-        { key: "assetDescription", label: "Nombre del Activo", type: "text", placeholder: "Montacargas El\xE9ctrico Toyota 2.5 Ton" },
-        { key: "usefulLifeMonths", label: "Vida \xDAtil NIIF (Meses)", type: "number", placeholder: "60" },
-        { key: "acquisitionCost", label: "Costo de Adquisici\xF3n ($ COP)", type: "number", placeholder: "95000000" }
+        { key: "assetPlate", label: "Placa / Serial Inventario", type: "text", placeholder: "ACT-001" },
+        { key: "assetName", label: "Nombre del Equipo o Maquinaria", type: "text", placeholder: "Elevador Hidr\xE1ulico / Horno Industrial" },
+        { key: "purchaseCost", label: "Valor de Compra ($)", type: "number", placeholder: "8500000" }
       ]
     },
     {
       moduleKey: "mod-exogena-taxes",
       parentServiceKey: "srv-finance",
-      externalSubmoduleName: "Certificados de Retenci\xF3n y Ex\xF3gena DIAN (1001-1009)",
+      externalSubmoduleName: "Certificados y Retenciones",
       tabIcon: "\u{1F3DB}\uFE0F",
-      summary: "Generaci\xF3n de formatos de Informaci\xF3n Ex\xF3gena DIAN (1001, 1003, 1005, 1006, 1007, 1008, 1009) y certificados.",
+      summary: "",
       monthlyAddonUsd: 49e3,
-      actionButtonLabel: "Generar Formato Ex\xF3gena / Certificado",
-      tableHeaders: ["Formato DIAN", "Concepto Fiscal", "Terceros Reportados", "A\xF1o Gravable", "Total Reportado (COP)"],
+      actionButtonLabel: "+ Generar Certificado",
+      tableHeaders: ["C\xF3digo", "Tercero / Proveedor", "Tipo de Certificado", "A\xF1o / Per\xEDodo", "Valor Retenido", "Acciones"],
       fields: [
-        { key: "exogenaFormat", label: "Formato Medios Magn\xE9ticos DIAN", type: "select", options: ["Formato 1001 \u2014 Pagos y Retenciones Practicadas", "Formato 1007 \u2014 Ingresos Recibidos", "Formato 1008 \u2014 Saldo Cuentas por Cobrar", "Formato 1009 \u2014 Saldo Cuentas por Pagar", "Certificado Anual de Retenci\xF3n en la Fuente"] },
-        { key: "dianConceptCode", label: "Concepto DIAN", type: "text", placeholder: "5004 \u2014 Compra de Activos Movibles / Inventarios" },
-        { key: "reportedThirdParties", label: "Cantidad de NITs Incluidos", type: "number", placeholder: "128" },
-        { key: "totalReportedCop", label: "Monto Total Reportado ($ COP)", type: "number", placeholder: "845000000" }
+        { key: "formatCode", label: "Tipo de Certificado", type: "select", options: ["Certificado Retenci\xF3n en la Fuente", "Certificado ReteICA", "Certificado ReteIVA", "Reporte Anual"] },
+        { key: "fiscalYear", label: "Proveedor / Tercero", type: "text", placeholder: "Distribuidora Nacional S.A.S." },
+        { key: "totalReported", label: "Valor Retenido ($)", type: "number", placeholder: "420000" }
       ]
     }
   ],
   features: [
-    {
-      componentKey: "comp-withholding-calc",
-      externalName: "Motor autom\xE1tico de ReteFuente, ReteIVA, ReteICA y Autorretenci\xF3n por topes UVT",
-      description: "Calcula autom\xE1ticamente las retenciones seg\xFAn el r\xE9gimen tributario del emisor y del tercero.",
-      parentModuleKey: "mod-puc",
-      includedByDefault: true,
-      monthlyAddonUsd: 25e3
-    }
+    { componentKey: "comp-dian-xml-exporter", parentServiceKey: "srv-finance", externalName: "Exportaci\xF3n Contable a Excel", description: "Descarga asientos y balances.", monthlyAddonUsd: 19e3 }
   ]
 };
 
 // apps/srv-fleet/frontend/fleet-service.view.ts
 var SRV_FLEET_FRONTEND_VIEW = {
   serviceKey: "srv-fleet",
-  externalPrincipalModuleName: "Flotas, B\xE1scula Camionera y RNDC",
+  externalPrincipalModuleName: "Transporte y B\xE1scula",
   icon: "\u{1F69B}",
-  subtitle: "B\xE1scula camionera RS-232 (Bruto/Tara/Neto), manifiestos RNDC Ministerio de Transporte, anticipos de viaje y control de llantas.",
-  standaloneMonthlyUsd: 165e3,
+  subtitle: "Pesaje en b\xE1scula, despachos de carga, anticipos de viaje y mantenimiento.",
+  standaloneMonthlyUsd: 159e3,
   submodules: [
     {
       moduleKey: "mod-fleet-scale",
       parentServiceKey: "srv-fleet",
-      externalSubmoduleName: "B\xE1scula Camionera RS-232 y Destare de Flota",
+      externalSubmoduleName: "Pesaje en B\xE1scula",
       tabIcon: "\u2696\uFE0F",
-      summary: "Pesaje camionero Bruto / Tara / Neto en kilogramos y toneladas, descuento por humedad/impureza y transportista.",
-      monthlyAddonUsd: 65e3,
-      actionButtonLabel: "Emitir Tiquete de B\xE1scula",
-      tableHeaders: ["Tiquete", "Placa / Remolque", "Transportista / Conductor", "Peso Bruto", "Peso Tara", "Peso Neto"],
+      summary: "",
+      monthlyAddonUsd: 49e3,
+      actionButtonLabel: "+ Registrar Tiquete de B\xE1scula",
       hasTruckScaleWeighbridge: true,
+      tableHeaders: ["Tiquete", "Placa", "Conductor", "Producto", "Peso Neto", "Estado", "Acciones"],
       fields: [
-        { key: "truckPlate", label: "Placa Cabezote / Remolque", type: "text", placeholder: "SXT-942 / R-4481" },
-        { key: "driverName", label: "Conductor y C\xE9dula", type: "text", placeholder: "Hernando Valencia \u2014 CC 79.412.880" },
-        {
-          key: "carrierCompany",
-          label: "Seleccionar Transportista",
-          type: "select",
-          options: ["TransCarga Pesada de Colombia", "Cooperativa de Tractomulas del Sur", "Particular / Flota Propia"],
-          requiredFeatureKey: "comp-carrier-select"
-        },
-        { key: "cargoType", label: "Carga y Muelle Asignado", type: "text", placeholder: "Granel Ma\xEDz Amarillo \u2014 Muelle 3" }
+        { key: "ticketCode", label: "N\xB0 Tiquete", type: "text", placeholder: "BAS-001" },
+        { key: "tractorPlate", label: "Placa del Cami\xF3n", type: "text", placeholder: "SXT-881" },
+        { key: "driverFullName", label: "Conductor", type: "text", placeholder: "Ramiro C\xF3rdoba" },
+        { key: "cargoType", label: "Carga / Producto", type: "text", placeholder: "Granel / Cemento / Ma\xEDz" }
       ]
     },
     {
       moduleKey: "mod-fleet-dispatch-rndc",
       parentServiceKey: "srv-fleet",
-      externalSubmoduleName: "Despachos, Remesas y Manifiestos RNDC",
-      tabIcon: "\u{1F6E3}\uFE0F",
-      summary: "Emisi\xF3n de remesas terrestres de carga, manifiestos electr\xF3nicos RNDC, conductores y piso SICETAC.",
-      monthlyAddonUsd: 55e3,
-      actionButtonLabel: "Radicar Manifiesto RNDC",
-      tableHeaders: ["Manifiesto RNDC", "Ruta Origen \u2192 Destino", "Tractomula / Remolque", "Conductor", "Flete Pactado ($ COP)"],
+      externalSubmoduleName: "Manifiestos y Despachos",
+      tabIcon: "\u{1F4CB}",
+      summary: "",
+      monthlyAddonUsd: 45e3,
+      actionButtonLabel: "+ Emitir Manifiesto de Carga",
+      tableHeaders: ["Manifiesto", "Placa", "Origen - Destino", "Conductor", "Valor Flete", "Estado", "Acciones"],
       fields: [
-        { key: "manifestCode", label: "Consecutivo Manifiesto RNDC", type: "text", placeholder: "MN-2026-08841" },
-        { key: "routeDetail", label: "Ruta Origen \u2192 Destino (DANE)", type: "text", placeholder: "Buenaventura (Valle) \u2192 Bogot\xE1 D.C." },
-        { key: "vehiclePlate", label: "Placa Cabezote y Tr\xE1iler", type: "text", placeholder: "WXY-812 / R-5520" },
-        { key: "driverName", label: "Conductor Asignado", type: "text", placeholder: "\xC1lvaro G\xF3mez \u2014 Lic. C3" },
-        { key: "agreedFreight", label: "Valor Flete Pactado ($ COP)", type: "number", placeholder: "4850000" }
+        { key: "manifestNo", label: "N\xB0 Manifiesto", type: "text", placeholder: "MNF-2026-01" },
+        { key: "originDest", label: "Ruta (Origen - Destino)", type: "text", placeholder: "Buenaventura \u2014 Bogot\xE1" },
+        { key: "vehicleAssigned", label: "Placa y Conductor", type: "text", placeholder: "SXT-881 \u2014 Ramiro C\xF3rdoba" },
+        { key: "freightValue", label: "Valor del Flete ($)", type: "number", placeholder: "4200000" }
       ]
     },
     {
       moduleKey: "mod-trip-settlements",
       parentServiceKey: "srv-fleet",
-      externalSubmoduleName: "Anticipos de Viaje, Peajes, ACPM y Liquidaci\xF3n",
+      externalSubmoduleName: "Anticipos y Gastos de Viaje",
       tabIcon: "\u26FD",
-      summary: "Legalizaci\xF3n de anticipos de conductores, peajes, ACPM (rendimiento Km/Gal\xF3n), vi\xE1ticos y cumplido de remesa.",
-      monthlyAddonUsd: 49e3,
-      actionButtonLabel: "Liquidar Viaje y Cumplido",
-      tableHeaders: ["Liquidaci\xF3n", "Manifiesto", "Anticipos Giro", "Peajes + ACPM + Vi\xE1ticos", "Saldo a Pagar ($ COP)"],
+      summary: "",
+      monthlyAddonUsd: 39e3,
+      actionButtonLabel: "+ Legalizar Viaje",
+      tableHeaders: ["Liquidaci\xF3n", "Viaje / Placa", "Anticipo Entregado", "Peajes y Combustible", "Saldo a Pagar", "Acciones"],
       fields: [
-        { key: "settlementCode", label: "N\xB0 Liquidaci\xF3n de Viaje", type: "text", placeholder: "LIQ-V-2026-310" },
-        { key: "manifestRef", label: "Manifiesto RNDC Cumplido", type: "text", placeholder: "MN-2026-08841" },
-        { key: "advancePaid", label: "Anticipo Entregado ($ COP)", type: "number", placeholder: "2200000" },
-        { key: "tollsAndFuel", label: "Total Peajes + ACPM (Galones)", type: "text", placeholder: "18 Peajes + 145 Gal ACPM ($1.950.000)" },
-        { key: "netBalance", label: "Saldo Neto Propietario ($ COP)", type: "number", placeholder: "2601500" }
+        { key: "tripRef", label: "Viaje / Placa", type: "text", placeholder: "MNF-2026-01 \u2014 SXT-881" },
+        { key: "advanceGiven", label: "Anticipo Entregado ($)", type: "number", placeholder: "1500000" },
+        { key: "tollsAndFuel", label: "Gastos de Peajes y Combustible ($)", type: "number", placeholder: "1320000" }
       ]
     },
     {
       moduleKey: "mod-tires-fleet-maint",
       parentServiceKey: "srv-fleet",
-      externalSubmoduleName: "Control de Llantas por Eje, SOAT y Tecnomec\xE1nica",
+      externalSubmoduleName: "Llantas y Documentos de Flota",
       tabIcon: "\u{1F6DE}",
-      summary: "Mapa de llantas por posici\xF3n de eje, profundidad de labrado (mm), reencauches y alertas SOAT/Tecnomec\xE1nica.",
-      monthlyAddonUsd: 45e3,
-      actionButtonLabel: "Registrar Inspecci\xF3n de Llanta / Veh\xEDculo",
-      tableHeaders: ["Serial Llanta", "Placa / Posici\xF3n Eje", "Labrado (mm)", "Km Acumulados", "Estado / SOAT"],
+      summary: "",
+      monthlyAddonUsd: 35e3,
+      actionButtonLabel: "+ Registrar Control de Veh\xEDculo",
+      tableHeaders: ["ID", "Placa", "Kilometraje", "Estado Llantas", "Vencimiento SOAT / Tecno", "Acciones"],
       fields: [
-        { key: "tireSerial", label: "Serial de Llanta / Marca", type: "text", placeholder: "MICH-295-80R22-991" },
-        { key: "axlePosition", label: "Veh\xEDculo y Posici\xF3n de Eje", type: "select", options: ["Eje 1 Direccional Izq", "Eje 1 Direccional Der", "Eje 2 Tracci\xF3n Ext", "Tr\xE1iler Eje 3 Int"] },
-        { key: "treadDepthMm", label: "Profundidad Labrado (mm)", type: "text", placeholder: "8.5 mm (\xD3ptimo)" },
-        { key: "accumulatedKm", label: "Kil\xF3metros Acumulados", type: "number", placeholder: "64200" }
+        { key: "unitPlate", label: "Placa", type: "text", placeholder: "SXT-881" },
+        { key: "tireAxisStatus", label: "Novedad o Revisi\xF3n", type: "text", placeholder: "Rotaci\xF3n de llantas eje trasero" },
+        { key: "soatTecnoDate", label: "Fecha Vencimiento SOAT / Tecno", type: "text", placeholder: "2026-12-15" }
       ]
     }
   ],
   features: [
-    {
-      componentKey: "comp-weighbridge-humidity-discount",
-      externalName: "Descuento autom\xE1tico por humedad e impureza en b\xE1scula camionera",
-      description: "Resta autom\xE1ticamente el porcentaje de humedad e impureza de laboratorio sobre el peso neto destarado.",
-      parentModuleKey: "mod-fleet-scale",
-      includedByDefault: true,
-      monthlyAddonUsd: 25e3
-    },
-    {
-      componentKey: "comp-rndc-manifest-sync",
-      externalName: "Validaci\xF3n SICETAC y Radicaci\xF3n RNDC Ministerio de Transporte",
-      description: "Verifica piso tarifario SICETAC, retenci\xF3n 1% transporte y radicaci\xF3n de manifiesto de carga.",
-      parentModuleKey: "mod-fleet-dispatch-rndc",
-      includedByDefault: true,
-      monthlyAddonUsd: 25e3
-    }
+    { componentKey: "comp-weighbridge-humidity-discount", parentServiceKey: "srv-fleet", externalName: "Descuento por Humedad / Impureza", description: "Ajusta el peso neto en compras agr\xEDcolas.", monthlyAddonUsd: 19e3 },
+    { componentKey: "comp-rndc-manifest-sync", parentServiceKey: "srv-fleet", externalName: "Control de Manifiestos de Carga", description: "Genera hoja de ruta y flete.", monthlyAddonUsd: 25e3 }
   ]
 };
 
 // apps/srv-gastro/frontend/gastro-service.view.ts
 var SRV_GASTRO_FRONTEND_VIEW = {
   serviceKey: "srv-gastro",
-  externalPrincipalModuleName: "Restaurantes, Bares, Comandas KDS y Domicilios",
+  externalPrincipalModuleName: "Mesas y Comandas",
   icon: "\u{1F37D}\uFE0F",
-  subtitle: "Sal\xF3n y barras, comandas KDS por estaci\xF3n, carta con modificadores, divisi\xF3n de cuentas y despacho de domicilios.",
-  standaloneMonthlyUsd: 129e3,
+  subtitle: "Atenci\xF3n de mesas, toma de comandas, cocina/barra y domicilios.",
+  standaloneMonthlyUsd: 139e3,
   submodules: [
     {
       moduleKey: "mod-tables",
       parentServiceKey: "srv-gastro",
-      externalSubmoduleName: "Sal\xF3n, Barras y Mapa de Mesas",
-      tabIcon: "\u{1FA91}",
-      summary: "Ocupaci\xF3n de mesas por terraza o sal\xF3n, comensales activos, medidas de licor y asignaci\xF3n de mesero.",
+      externalSubmoduleName: "Sal\xF3n, Mesas y Tomar Comanda (Mesero)",
+      tabIcon: "\u{1F37D}\uFE0F",
+      summary: "",
       monthlyAddonUsd: 39e3,
-      actionButtonLabel: "Abrir / Actualizar Mesa",
-      tableHeaders: ["Mesa / Zona", "Comensales", "Mesero Asignado", "Consumo Acumulado", "Estado"],
+      actionButtonLabel: "+ Abrir Mesa / Agregar Comanda",
+      tableHeaders: ["Mesa", "Zona", "Mesero", "Personas", "Consumo Actual", "Estado", "Acciones"],
       fields: [
-        { key: "tableCode", label: "Mesa y Zona", type: "select", options: ["Mesa 01 \u2014 Sal\xF3n Principal", "Mesa 05 \u2014 Terraza", "Mesa 12 \u2014 VIP", "Barra Principal 02"] },
-        { key: "guestsCount", label: "N\xFAmero de Comensales", type: "number", placeholder: "4" },
-        { key: "waiterName", label: "Mesero / Bartender Asignado", type: "text", placeholder: "Mateo R\xEDos", requiredFeatureKey: "comp-waiter-assign" },
-        { key: "barBottleMeasure", label: "Medida de Licor / Botella (Bares)", type: "select", options: ["Botella Completa 750ml", "Media Botella 375ml", "Trago / Shot 1.5 Oz", "C\xF3ctel de Autor"], requiredFeatureKey: "comp-bar-shot-measure" },
-        { key: "currentTotal", label: "Consumo Inicial ($ COP)", type: "number", placeholder: "148000" }
+        { key: "tableCode", label: "Mesa / Ubicaci\xF3n", type: "text", placeholder: "Mesa 5 / Terraza" },
+        { key: "guestsCount", label: "N\xB0 Personas", type: "number", placeholder: "4" },
+        { key: "waiterAssigned", label: "Mesero", type: "text", placeholder: "Camila Torres" }
       ]
     },
     {
       moduleKey: "mod-kds",
       parentServiceKey: "srv-gastro",
-      externalSubmoduleName: "Monitor de Cocina y Barra (KDS)",
-      tabIcon: "\u{1F525}",
-      summary: "Tablero de comandas por estaci\xF3n de preparaci\xF3n (parrilla, cocina fr\xEDa, barra de licores) y tiempos SLA.",
+      externalSubmoduleName: "Vista Cocina y Barra (Preparaci\xF3n)",
+      tabIcon: "\u{1F468}\u200D\u{1F373}",
+      summary: "",
       monthlyAddonUsd: 45e3,
-      actionButtonLabel: "Enviar Comanda a Cocina / Barra",
-      tableHeaders: ["Comanda", "Mesa / Barra", "Pedido y Notas", "Estaci\xF3n", "Tiempo / Estado"],
+      actionButtonLabel: "+ Enviar Comanda a Cocina",
+      tableHeaders: ["Comanda", "Mesa", "Platos / Bebidas", "Notas de Cocina", "Estado", "Acciones"],
       fields: [
-        { key: "originTable", label: "Mesa / Barra", type: "text", placeholder: "Mesa 05 \u2014 Terraza / Barra 02" },
-        { key: "dishesDetail", label: "Platos o Tragos Solicitados", type: "text", placeholder: "2x Punta de Anca 3/4, 2x Gin Tonic" },
-        { key: "stationName", label: "Estaci\xF3n Destino", type: "select", options: ["Barra Principal y Cocteler\xEDa", "Parrilla y Calientes", "Cocina Fr\xEDa y Entradas", "Reposter\xEDa"] }
+        { key: "station", label: "Estaci\xF3n Destino", type: "select", options: ["Cocina Caliente", "Parrilla", "Barra / Licores", "Postres y Caf\xE9"] },
+        { key: "orderTicket", label: "Mesa y Pedido", type: "text", placeholder: "Mesa 4 \u2014 2x Churrasco, 1x Limonada" },
+        { key: "prepTime", label: "Observaciones", type: "text", placeholder: "T\xE9rmino 3/4, sin ensalada" }
       ]
     },
     {
       moduleKey: "mod-modifiers-menu",
       parentServiceKey: "srv-gastro",
-      externalSubmoduleName: "Carta Digital, T\xE9rminos de Cocci\xF3n y Adiciones",
-      tabIcon: "\u{1F969}",
-      summary: 'Configuraci\xF3n de t\xE9rminos de carne, adiciones con cobro extra, exclusiones ("sin cebolla") y combos.',
+      externalSubmoduleName: "Carta, Platos y Precios",
+      tabIcon: "\u{1F4D6}",
+      summary: "",
       monthlyAddonUsd: 29e3,
-      actionButtonLabel: "Guardar Grupo de Modificadores",
-      tableHeaders: ["Grupo Modificador", "Plato / Categor\xEDa", "Opciones Disponibles", "Recargo Adici\xF3n (COP)", "Estado"],
+      actionButtonLabel: "+ Agregar Plato a la Carta",
+      tableHeaders: ["C\xF3digo", "Plato / Bebida", "Categor\xEDa", "Opciones / Adiciones", "Precio Venta", "Acciones"],
       fields: [
-        { key: "modifierGroup", label: "Grupo de Modificador", type: "text", placeholder: "T\xE9rmino de Cocci\xF3n / Adiciones Parrilla" },
-        { key: "dishTarget", label: "Categor\xEDa Aplicable", type: "select", options: ["Cortes de Parrilla y Hamburguesas", "Cocteler\xEDa y Licores", "Pizzas y Pastas", "Desayunos y Combos"] },
-        { key: "optionsList", label: "Opciones de Selecci\xF3n", type: "text", placeholder: "Azul, Medio, Tres Cuartos (3/4), Bien Asado + Tocineta" },
-        { key: "extraPriceCop", label: "Recargo Adici\xF3n ($ COP)", type: "number", placeholder: "8500" }
+        { key: "dishItem", label: "Nombre del Plato o Bebida", type: "text", placeholder: "Punta de Anca 350g" },
+        { key: "cookingTerm", label: "Categor\xEDa de la Carta", type: "select", options: ["Platos Fuertes", "Entradas", "Bebidas y Jugos", "Cervezas y Licores", "Adiciones"] },
+        { key: "paidAddons", label: "Precio de Venta ($)", type: "number", placeholder: "42000" }
       ]
     },
     {
       moduleKey: "mod-split",
       parentServiceKey: "srv-gastro",
-      externalSubmoduleName: "Divisi\xF3n de Cuentas y Pre-Cuentas",
+      externalSubmoduleName: "Dividir Cuentas (Cajero)",
       tabIcon: "\u2797",
-      summary: "Separaci\xF3n de cuenta por silla, por comensal o en partes iguales con c\xE1lculo de Impoconsumo 8% y propina.",
-      monthlyAddonUsd: 29e3,
-      actionButtonLabel: "Registrar Divisi\xF3n de Cuenta",
-      tableHeaders: ["Referencia", "Mesa", "Modalidad", "Pagadores", "Total por Pagador"],
+      summary: "",
+      monthlyAddonUsd: 25e3,
+      actionButtonLabel: "+ Dividir Cuenta de Mesa",
+      tableHeaders: ["C\xF3digo", "Mesa", "Tipo de Divisi\xF3n", "Valor por Persona", "Propina", "Acciones"],
       fields: [
-        { key: "tableRef", label: "Mesa a Dividir", type: "text", placeholder: "Mesa 12 \u2014 VIP" },
-        { key: "splitMode", label: "Modalidad de Divisi\xF3n", type: "select", options: ["Por Comensal / Silla", "Partes Iguales", "Por Producto Consumido"] },
-        { key: "payersCount", label: "Cantidad de Pagadores", type: "number", placeholder: "3" },
-        { key: "amountPerPayer", label: "Valor Promedio por Pagador ($ COP)", type: "number", placeholder: "85000" }
+        { key: "tableOrigin", label: "Mesa a Dividir", type: "text", placeholder: "Mesa 2" },
+        { key: "splitMode", label: "Forma de Divisi\xF3n", type: "select", options: ["Partes Iguales", "Por Consumo Individual"] },
+        { key: "subcheckTotal", label: "Valor a Cobrar ($)", type: "number", placeholder: "65000" }
       ]
     },
     {
       moduleKey: "mod-deliveries",
       parentServiceKey: "srv-gastro",
-      externalSubmoduleName: "Domicilios Propios,Plataformas y Motorizados",
+      externalSubmoduleName: "Domicilios (Despacho)",
       tabIcon: "\u{1F6F5}",
-      summary: "Despacho de pedidos a domicilio por WhatsApp/Web/Rappi, asignaci\xF3n de domiciliario y cuadre de efectivo.",
+      summary: "",
       monthlyAddonUsd: 35e3,
-      actionButtonLabel: "Despachar Pedido con Domiciliario",
-      tableHeaders: ["Pedido #", "Cliente y Direcci\xF3n", "Canal", "Domiciliario", "Total + Env\xEDo (COP)"],
+      actionButtonLabel: "+ Despachar Domicilio",
+      tableHeaders: ["Pedido", "Cliente y Direcci\xF3n", "Tel\xE9fono", "Domiciliario", "Total", "Estado", "Acciones"],
       fields: [
-        { key: "orderCode", label: "Consecutivo Domicilio", type: "text", placeholder: "DOM-2026-419" },
-        { key: "customerAddress", label: "Cliente, Tel\xE9fono y Direcci\xF3n", type: "text", placeholder: "Cra 15 # 88-20 Apto 502 \u2014 310 554 1190" },
-        { key: "channel", label: "Canal de Entrada", type: "select", options: ["WhatsApp Directo Restaurante", "P\xE1gina Web Propia", "Rappi / Didi Food", "Tel\xE9fono PBX"] },
-        { key: "courierName", label: "Motorizado Asignado", type: "text", placeholder: "Kevin Andr\xE9s Mora \u2014 Moto Placa KLM-45D" },
-        { key: "totalWithDelivery", label: "Total a Recaudar ($ COP)", type: "number", placeholder: "94000" }
+        { key: "channel", label: "Cliente y Direcci\xF3n de Entrega", type: "text", placeholder: "Juan P\xE9rez \u2014 Cra 15 # 104-20 Apto 402" },
+        { key: "customerAddress", label: "Tel\xE9fono Cliente", type: "text", placeholder: "310 445 9988" },
+        { key: "riderName", label: "Domiciliario Asignado", type: "text", placeholder: "Andr\xE9s Moto #2" },
+        { key: "deliveryTotal", label: "Valor del Pedido ($)", type: "number", placeholder: "58000" }
       ]
     }
   ],
   features: [
-    { componentKey: "comp-waiter-assign", externalName: "Asignaci\xF3n de mesero / bartender por mesa", description: "Registra el mesero o bartender responsable en apertura de mesa y liquidaci\xF3n de propinas.", parentModuleKey: "mod-tables", includedByDefault: true, monthlyAddonUsd: 15e3 },
-    { componentKey: "comp-bar-shot-measure", externalName: "Control de inventario por trago / botella (Bares)", description: "Descuenta autom\xE1ticamente onzas o mililitros de botellas abiertas al vender tragos o c\xF3cteles.", parentModuleKey: "mod-tables", includedByDefault: true, monthlyAddonUsd: 19e3 },
-    { componentKey: "comp-happy-hour-pricing", externalName: "Tarifas autom\xE1ticas Happy Hour (Bares)", description: "Activa precios promocionales por franja horaria en barra y mesas.", parentModuleKey: "mod-tables", includedByDefault: true, monthlyAddonUsd: 15e3 },
-    { componentKey: "comp-courtesy-auth", externalName: "PIN supervisor para cortes\xEDas y anulaciones de comanda", description: "Exige autorizaci\xF3n de administrador y motivo al anular un plato ya enviado a cocina.", parentModuleKey: "mod-kds", includedByDefault: true, monthlyAddonUsd: 15e3 }
+    { componentKey: "comp-waiter-assign", parentServiceKey: "srv-gastro", externalName: "Control por Mesero", description: "Asigna mesero a cada mesa.", monthlyAddonUsd: 15e3 },
+    { componentKey: "comp-courtesy-auth", parentServiceKey: "srv-gastro", externalName: "Autorizaci\xF3n de Cortes\xEDas", description: "Controla descuentos y cortes\xEDas.", monthlyAddonUsd: 15e3 },
+    { componentKey: "comp-bar-shot-measure", parentServiceKey: "srv-gastro", externalName: "Control de Licores por Trago/Botella", description: "Descuenta tragos de cada botella.", monthlyAddonUsd: 25e3 },
+    { componentKey: "comp-happy-hour-pricing", parentServiceKey: "srv-gastro", externalName: "Precios Especiales por Horario", description: "Activa promociones autom\xE1ticas.", monthlyAddonUsd: 19e3 }
   ]
 };
 
 // apps/srv-hotel/frontend/hotel-service.view.ts
 var SRV_HOTEL_FRONTEND_VIEW = {
   serviceKey: "srv-hotel",
-  externalPrincipalModuleName: "Hoteler\xEDa, Alojamiento, Folios y Reservas",
+  externalPrincipalModuleName: "Hoteler\xEDa y Alojamiento",
   icon: "\u{1F3E8}",
-  subtitle: "Rack de habitaciones, check-in/out, folios de cargos (minibar/restaurante), tarifas por temporada y ama de llaves.",
-  standaloneMonthlyUsd: 129e3,
+  subtitle: "Habitaciones, check-in, reservas, consumos a la habitaci\xF3n y camareras.",
+  standaloneMonthlyUsd: 159e3,
   submodules: [
-    {
-      moduleKey: "mod-bookings",
-      parentServiceKey: "srv-hotel",
-      externalSubmoduleName: "Reserva de Cupos, Caba\xF1as y Salones",
-      tabIcon: "\u{1F4C5}",
-      summary: "Control de disponibilidad por fecha, temporada, anticipo garantizado y bloqueo en calendario.",
-      monthlyAddonUsd: 39e3,
-      actionButtonLabel: "Confirmar Reserva de Alojamiento",
-      tableHeaders: ["C\xF3digo Reserva", "Titular", "Espacio / Habitaci\xF3n", "Fecha y Franja", "Cupos / Hu\xE9spedes", "Estado"],
-      fields: [
-        { key: "holderName", label: "Nombre del Titular", type: "text", placeholder: "Valeria Mendoza" },
-        { key: "spaceName", label: "Habitaci\xF3n / Caba\xF1a / Sal\xF3n", type: "select", options: ["Suite Ejecutiva Matrimonial", "Caba\xF1a Familiar Glamping", "Sal\xF3n Auditorio Empresarial"] },
-        { key: "bookingDate", label: "Fecha de Check-In", type: "date" },
-        { key: "slotsBooked", label: "Cantidad de Hu\xE9spedes", type: "number", placeholder: "4" }
-      ]
-    },
     {
       moduleKey: "mod-rooms",
       parentServiceKey: "srv-hotel",
-      externalSubmoduleName: "Recepci\xF3n, Check-In y Folio de Hu\xE9sped",
-      tabIcon: "\u{1F6CE}\uFE0F",
-      summary: "Check-in, registro TRA MinCIT, estado de habitaciones y cuenta maestra (folio) de consumos.",
-      monthlyAddonUsd: 45e3,
-      actionButtonLabel: "Registrar Check-In / Cargo a Habitaci\xF3n",
-      tableHeaders: ["Habitaci\xF3n / Unidad", "Hu\xE9sped Titular", "Ingreso / Salida", "Tarifa Noche", "Estado"],
+      externalSubmoduleName: "Habitaciones y Check-In (Recepci\xF3n)",
+      tabIcon: "\u{1F6CF}\uFE0F",
+      summary: "",
+      monthlyAddonUsd: 49e3,
+      actionButtonLabel: "+ Registrar Check-In",
+      tableHeaders: ["Habitaci\xF3n", "Tipo", "Hu\xE9sped Actual", "Noches", "Saldo Consumos", "Estado", "Acciones"],
       fields: [
-        { key: "roomNumber", label: "Unidad / Habitaci\xF3n", type: "text", placeholder: "Habitaci\xF3n 304 \u2014 Vista Jard\xEDn" },
-        { key: "guestName", label: "Hu\xE9sped Titular y Documento", type: "text", placeholder: "Camila Restrepo \u2014 CC 1.020.441.210" },
-        { key: "nightsCount", label: "Noches de Estad\xEDa", type: "number", placeholder: "2" },
-        { key: "nightlyRate", label: "Tarifa por Noche ($ COP)", type: "number", placeholder: "210000" }
+        { key: "roomNumber", label: "Habitaci\xF3n / Caba\xF1a", type: "text", placeholder: "Habitaci\xF3n 204" },
+        { key: "guestDocument", label: "Nombre del Hu\xE9sped", type: "text", placeholder: "Carlos Alberto R\xEDos" },
+        { key: "extraCharges", label: "Documento / Tel\xE9fono", type: "text", placeholder: "CC 79.884.112 \u2014 315 220 1190" },
+        { key: "folioBalance", label: "Tarifa por Noche ($)", type: "number", placeholder: "180000" }
       ]
     },
     {
-      moduleKey: "mod-seasonal-rates",
+      moduleKey: "mod-bookings",
       parentServiceKey: "srv-hotel",
-      externalSubmoduleName: "Tarifas por Temporada y Planes de Estad\xEDa",
-      tabIcon: "\u{1F31E}",
-      summary: "Configuraci\xF3n de tarifas din\xE1micas por temporada alta/media/baja, puentes festivos y planes con desayuno.",
-      monthlyAddonUsd: 35e3,
-      actionButtonLabel: "Guardar Plan Tarifario de Temporada",
-      tableHeaders: ["Plan / Temporada", "Tipo Habitaci\xF3n", "Vigencia", "Incluye Alimentaci\xF3n", "Tarifa Noche ($ COP)"],
+      externalSubmoduleName: "Reservas",
+      tabIcon: "\u{1F4C5}",
+      summary: "",
+      monthlyAddonUsd: 45e3,
+      actionButtonLabel: "+ Crear Reserva",
+      tableHeaders: ["C\xF3digo", "Hu\xE9sped", "Habitaci\xF3n / Caba\xF1a", "Llegada - Salida", "Abono", "Estado", "Acciones"],
       fields: [
-        { key: "seasonPlanName", label: "Nombre de Temporada / Plan", type: "text", placeholder: "Temporada Alta Puentes Festivos \u2014 Plan Americano" },
-        { key: "roomType", label: "Categor\xEDa de Alojamiento", type: "select", options: ["Est\xE1ndar Doble", "Suite Junior VIP", "Caba\xF1a Familiar 6 Personas"] },
-        { key: "mealPlan", label: "R\xE9gimen de Alimentaci\xF3n", type: "select", options: ["Alojamiento + Desayuno Buffet", "Todo Incluido (Pensi\xF3n Completa)", "Solo Alojamiento"] },
-        { key: "seasonRateCop", label: "Tarifa Noche Temporada ($ COP)", type: "number", placeholder: "340000" }
+        { key: "guestName", label: "Hu\xE9sped", type: "text", placeholder: "Familia Mart\xEDnez" },
+        { key: "unitType", label: "Habitaci\xF3n / Caba\xF1a", type: "select", options: ["Habitaci\xF3n Doble", "Suite Principal", "Caba\xF1a Familiar", "Sal\xF3n de Eventos"] },
+        { key: "checkInOut", label: "Fecha Entrada y Salida", type: "text", placeholder: "12 Nov al 15 Nov" },
+        { key: "totalStay", label: "Valor Reserva ($)", type: "number", placeholder: "540000" }
       ]
     },
     {
       moduleKey: "mod-housekeeping",
       parentServiceKey: "srv-hotel",
-      externalSubmoduleName: "Ama de Llaves, Aseo y Mantenimiento",
+      externalSubmoduleName: "Aseo y Camareras",
       tabIcon: "\u{1F9F9}",
-      summary: "Tablero operativo de habitaciones (Sucia, En Limpieza, Inspeccionada, Bloqueada) y conteo de lencer\xEDa/minibar.",
-      monthlyAddonUsd: 32e3,
-      actionButtonLabel: "Actualizar Estado de Habitaci\xF3n",
-      tableHeaders: ["Habitaci\xF3n", "Camarera Asignada", "Estado Limpieza", "Novedad Minibar / Lencer\xEDa", "Hora Liberaci\xF3n"],
+      summary: "",
+      monthlyAddonUsd: 29e3,
+      actionButtonLabel: "+ Asignar Aseo / Mantenimiento",
+      tableHeaders: ["ID", "Habitaci\xF3n", "Estado Aseo", "Camarera Asignada", "Novedad", "Acciones"],
       fields: [
-        { key: "roomCode", label: "Habitaci\xF3n / Caba\xF1a", type: "text", placeholder: "Habitaci\xF3n 304" },
-        { key: "staffAssigned", label: "Camarera / Auxiliar Asignado", type: "text", placeholder: "Luz Marina Pineda" },
-        { key: "cleaningState", label: "Estado de Ama de Llaves", type: "select", options: ["Inspeccionada \u2014 Lista para Check-In", "Sucia (Salida Reciente)", "En Proceso de Limpieza", "Fuera de Servicio / Mantenimiento"] },
-        { key: "minibarReport", label: "Consumo Minibar / Novedad", type: "text", placeholder: "2x Agua Cristal + 1x Chocolatina (Cargado a Folio)" }
+        { key: "roomCode", label: "Habitaci\xF3n", type: "text", placeholder: "Habitaci\xF3n 102" },
+        { key: "cleaningStatus", label: "Estado", type: "select", options: ["Sucia \u2014 Por Asear", "En Limpieza", "Limpia y Lista", "En Mantenimiento"] },
+        { key: "staffAssigned", label: "Encargada", type: "text", placeholder: "Marta Luc\xEDa" }
+      ]
+    },
+    {
+      moduleKey: "mod-seasonal-rates",
+      parentServiceKey: "srv-hotel",
+      externalSubmoduleName: "Tarifas y Planes",
+      tabIcon: "\u{1F3F7}\uFE0F",
+      summary: "",
+      monthlyAddonUsd: 29e3,
+      actionButtonLabel: "+ Guardar Tarifa",
+      tableHeaders: ["C\xF3digo", "Plan / Temporada", "Tipo Habitaci\xF3n", "Incluye", "Tarifa Noche", "Acciones"],
+      fields: [
+        { key: "seasonName", label: "Nombre del Plan o Temporada", type: "text", placeholder: "Temporada Alta / Fin de Semana" },
+        { key: "planIncluded", label: "Qu\xE9 Incluye", type: "select", options: ["Alojamiento + Desayuno", "Todo Incluido", "Solo Alojamiento"] },
+        { key: "nightRate", label: "Valor por Noche ($)", type: "number", placeholder: "220000" }
       ]
     },
     {
       moduleKey: "mod-tickets",
       parentServiceKey: "srv-hotel",
-      externalSubmoduleName: "Pasad\xEDas, Eventos y Tickets de Acceso QR",
-      tabIcon: "\u{1F3AB}",
-      summary: "Expedici\xF3n de pases de d\xEDa (Day Pass), acceso a piscina/zonas h\xFAmedas y validaci\xF3n QR en porter\xEDa.",
-      monthlyAddonUsd: 39e3,
-      actionButtonLabel: "Emitir Pase / Ticket QR",
-      tableHeaders: ["N\xB0 Ticket", "Categor\xEDa", "Visitante / Comprador", "C\xF3digo QR", "Tarifa", "Estado Porter\xEDa"],
+      externalSubmoduleName: "Pasad\xEDas y Entradas",
+      tabIcon: "\u{1F39F}\uFE0F",
+      summary: "",
+      monthlyAddonUsd: 35e3,
+      actionButtonLabel: "+ Vender Pasad\xEDa",
+      tableHeaders: ["Ticket", "Visitante", "Plan Pasad\xEDa", "Personas", "Total Pagado", "Acciones"],
       fields: [
-        { key: "ticketCategory", label: "Categor\xEDa de Ticket", type: "select", options: ["Pasad\xEDa Adulto (Incluye Almuerzo)", "Pasad\xEDa Ni\xF1o", "Ticket Parqueadero / Evento"] },
-        { key: "visitorName", label: "Nombre del Visitante", type: "text", placeholder: "Santiago Ospina" },
-        { key: "qrToken", label: "C\xF3digo QR de Control", type: "text", placeholder: "QR-PK-88412", requiredFeatureKey: "comp-qr-ticket" },
-        { key: "ticketPrice", label: "Valor del Ticket ($ COP)", type: "number", placeholder: "85000" }
+        { key: "visitorName", label: "Visitante", type: "text", placeholder: "Laura M\xE9ndez" },
+        { key: "passType", label: "Tipo de Pasad\xEDa", type: "select", options: ["Pasad\xEDa Piscina + Almuerzo", "Pasad\xEDa Infantil", "Entrada General"] },
+        { key: "passPrice", label: "Valor Total ($)", type: "number", placeholder: "95000" }
       ]
     }
   ],
   features: [
-    {
-      componentKey: "comp-qr-ticket",
-      externalName: "Validador QR de ticket en porter\xEDa",
-      description: "Genera y valida token QR \xFAnico para control de acceso en eventos, pasad\xEDas y parqueaderos.",
-      parentModuleKey: "mod-tickets",
-      includedByDefault: true,
-      monthlyAddonUsd: 19e3
-    }
+    { componentKey: "comp-qr-ticket", parentServiceKey: "srv-hotel", externalName: "Manilla / Ticket QR", description: "Control de ingreso de hu\xE9spedes y pasad\xEDas.", monthlyAddonUsd: 19e3 }
   ]
 };
 
 // apps/srv-hr-payroll/frontend/hr-payroll-service.view.ts
 var SRV_HR_PAYROLL_FRONTEND_VIEW = {
   serviceKey: "srv-hr-payroll",
-  externalPrincipalModuleName: "N\xF3mina Electr\xF3nica DIAN, PILA y RRHH",
-  icon: "\u{1F465}",
-  subtitle: "Contratos laborales, liquidaci\xF3n quincenal/mensual, horas extras, seguridad social PILA, prestaciones y N\xF3mina Electr\xF3nica DIAN (CUNE).",
-  standaloneMonthlyUsd: 17e4,
+  externalPrincipalModuleName: "N\xF3mina y Empleados",
+  icon: "\u{1F454}",
+  subtitle: "Empleados, contratos, pago de n\xF3mina, horas extras y seguridad social.",
+  standaloneMonthlyUsd: 149e3,
   submodules: [
     {
       moduleKey: "mod-employees-contracts",
       parentServiceKey: "srv-hr-payroll",
-      externalSubmoduleName: "Empleados, Contratos, EPS, AFP, ARL y Fondos",
-      tabIcon: "\u{1FAAA}",
-      summary: "Ficha laboral completa, tipo de contrato (t\xE9rmino fijo, indefinido, aprendizaje, integral) y nivel de riesgo ARL I-V.",
-      monthlyAddonUsd: 45e3,
-      actionButtonLabel: "Registrar Contrato Laboral",
-      tableHeaders: ["Documento", "Empleado y Cargo", "Tipo Contrato", "EPS / Pensi\xF3n / ARL", "Salario Base ($ COP)"],
+      externalSubmoduleName: "Empleados y Contratos",
+      tabIcon: "\u{1F465}",
+      summary: "",
+      monthlyAddonUsd: 39e3,
+      actionButtonLabel: "+ Registrar Empleado",
+      tableHeaders: ["C\xE9dula", "Empleado", "Cargo", "Tipo Contrato", "Salario Base", "Estado", "Acciones"],
       fields: [
-        { key: "employeeDoc", label: "C\xE9dula / Documento Empleado", type: "text", placeholder: "CC 1.032.488.910" },
-        { key: "fullNameRole", label: "Nombre Completo y Cargo", type: "text", placeholder: "Juli\xE1n David Torres \u2014 Jefe de Operaciones" },
-        { key: "contractType", label: "Modalidad de Contrato", type: "select", options: ["T\xE9rmino Indefinido", "T\xE9rmino Fijo", "Obra o Labor", "Aprendizaje SENA", "Salario Integral"] },
-        { key: "fundsSummary", label: "Fondos EPS / Pensi\xF3n / ARL Riesgo", type: "text", placeholder: "Sura EPS / Porvenir AFP / Sura ARL Nivel II" },
-        { key: "baseSalaryCop", label: "Salario B\xE1sico Mensual ($ COP)", type: "number", placeholder: "2850000" }
+        { key: "empDoc", label: "C\xE9dula", type: "text", placeholder: "1.020.445.890" },
+        { key: "empName", label: "Nombre Completo", type: "text", placeholder: "Valentina R\xEDos" },
+        { key: "jobRole", label: "Cargo", type: "text", placeholder: "Cajera / Administrador / T\xE9cnico" },
+        { key: "baseSalary", label: "Salario Mensual ($)", type: "number", placeholder: "1650000" }
       ]
     },
     {
       moduleKey: "mod-payroll-settlement",
       parentServiceKey: "srv-hr-payroll",
-      externalSubmoduleName: "Liquidaci\xF3n de N\xF3mina, Horas Extras y Novedades",
-      tabIcon: "\u{1F9EE}",
-      summary: "C\xE1lculo de auxilio de transporte, HED (25%), HEN (75%), HRN (35%), dominicales, incapacidades, FSP y libranzas.",
-      monthlyAddonUsd: 52e3,
-      actionButtonLabel: "Liquidar Per\xEDodo de N\xF3mina",
-      tableHeaders: ["Per\xEDodo", "Colaborador", "Total Devengado", "Deducciones Salud/Pensi\xF3n", "Neto a Pagar ($ COP)"],
+      externalSubmoduleName: "Pago de N\xF3mina y Turnos",
+      tabIcon: "\u{1F4B5}",
+      summary: "",
+      monthlyAddonUsd: 49e3,
+      actionButtonLabel: "+ Liquidar Pago de N\xF3mina",
+      tableHeaders: ["Comprobante", "Empleado", "Per\xEDodo", "Salario + Extras", "Descuentos", "Neto Pagado", "Acciones"],
       fields: [
-        { key: "periodCode", label: "Per\xEDodo de Liquidaci\xF3n", type: "text", placeholder: "NOM-2026-11-Q1" },
-        { key: "employeeName", label: "Colaborador", type: "text", placeholder: "Juli\xE1n David Torres" },
-        { key: "accruedCop", label: "Total Devengado + Auxilio + Extras ($ COP)", type: "number", placeholder: "3120000" },
-        { key: "deductedCop", label: "Deducciones Empleado (Salud 4% + Pensi\xF3n 4%)", type: "number", placeholder: "228000" },
-        { key: "netPayCop", label: "Neto a Dispersar en Banco ($ COP)", type: "number", placeholder: "2892000" }
+        { key: "payrollPeriod", label: "Empleado", type: "text", placeholder: "Valentina R\xEDos" },
+        { key: "overtimeHours", label: "Quincena / Mes", type: "select", options: ["Primera Quincena", "Segunda Quincena", "Mes Completo"] },
+        { key: "netPayable", label: "Neto a Pagar ($)", type: "number", placeholder: "825000" }
       ]
     },
     {
       moduleKey: "mod-social-benefits-pila",
       parentServiceKey: "srv-hr-payroll",
-      externalSubmoduleName: "Seguridad Social PILA y Prestaciones Sociales",
-      tabIcon: "\u{1F3E6}",
-      summary: "Provisiones mensuales y liquidaci\xF3n de Prima de Servicios, Cesant\xEDas, Intereses (12%), Vacaciones y archivo plano PILA.",
-      monthlyAddonUsd: 49e3,
-      actionButtonLabel: "Generar Planilla PILA / Prestaciones",
-      tableHeaders: ["Planilla / Liquidaci\xF3n", "Concepto", "Empleados", "Exoneraci\xF3n Ley 1607", "Valor Liquidado ($ COP)"],
+      externalSubmoduleName: "Primas, Vacaciones y Liquidaciones",
+      tabIcon: "\u{1F3D6}\uFE0F",
+      summary: "",
+      monthlyAddonUsd: 39e3,
+      actionButtonLabel: "+ Registrar Pago de Prestaciones",
+      tableHeaders: ["ID", "Empleado", "Concepto", "Per\xEDodo", "Valor Pagado", "Estado", "Acciones"],
       fields: [
-        { key: "benefitCode", label: "N\xFAmero Planilla PILA / Liquidaci\xF3n", type: "text", placeholder: "PILA-2026-11-8841" },
-        { key: "benefitType", label: "Concepto Liquidado", type: "select", options: ["Planilla Integrada PILA Mensual", "Prima Legal de Servicios", "Consignaci\xF3n Cesant\xEDas a Fondo", "Liquidaci\xF3n Definitiva de Contrato"] },
-        { key: "employeesCount", label: "Empleados Incluidos", type: "number", placeholder: "14" },
-        { key: "provisionTotalCop", label: "Total Aportes / Prestaciones ($ COP)", type: "number", placeholder: "9450000" }
-      ]
-    },
-    {
-      moduleKey: "mod-electronic-payroll-dian",
-      parentServiceKey: "srv-hr-payroll",
-      externalSubmoduleName: "Transmisi\xF3n N\xF3mina Electr\xF3nica DIAN (NI / CUNE)",
-      tabIcon: "\u{1F3DB}\uFE0F",
-      summary: "Generaci\xF3n XML mensual de Soporte de Pago de N\xF3mina Electr\xF3nica (NI) y Notas de Ajuste (NA) con firma digital y CUNE.",
-      monthlyAddonUsd: 55e3,
-      actionButtonLabel: "Transmitir N\xF3mina Electr\xF3nica a DIAN",
-      tableHeaders: ["Consecutivo NI", "Empleado Reportado", "CUNE DIAN", "Estado DIAN", "Neto Reportado ($ COP)"],
-      fields: [
-        { key: "niConsecutive", label: "Consecutivo Soporte N\xF3mina (NI)", type: "text", placeholder: "NE-2026-00314" },
-        { key: "employeeName", label: "Empleado Reportado", type: "text", placeholder: "Juli\xE1n David Torres" },
-        { key: "cuneHash", label: "CUNE SHA-384 Validado DIAN", type: "text", placeholder: "CUNE-9f82a41c-dian-2026-ok" },
-        { key: "reportedTotalCop", label: "Neto Reportado en XML ($ COP)", type: "number", placeholder: "2892000" }
+        { key: "benefitType", label: "Concepto", type: "select", options: ["Prima de Servicios", "Vacaciones", "Cesant\xEDas", "Liquidaci\xF3n de Contrato", "Seguridad Social"] },
+        { key: "pilaOperator", label: "Empleado", type: "text", placeholder: "Nombre del empleado" },
+        { key: "provisionTotal", label: "Valor ($)", type: "number", placeholder: "950000" }
       ]
     }
   ],
   features: [
-    {
-      componentKey: "comp-ley1607-exoneration",
-      externalName: "Exoneraci\xF3n autom\xE1tica de aportes Ley 1607 (Art. 114-1 E.T.)",
-      description: "Aplica exoneraci\xF3n autom\xE1tica de Salud Patronal (8.5%), SENA (2%) e ICBF (3%) para devengos menores a 10 SMMLV.",
-      parentModuleKey: "mod-employees-contracts",
-      includedByDefault: true,
-      monthlyAddonUsd: 19e3
-    },
-    {
-      componentKey: "comp-cune-dian-payroll",
-      externalName: "Firmador XAdES-EPES y validador CUNE de N\xF3mina Electr\xF3nica DIAN",
-      description: "Genera el C\xF3digo \xDAnico de N\xF3mina Electr\xF3nica (CUNE SHA-384) y valida reglas DIAN antes de transmitir.",
-      parentModuleKey: "mod-electronic-payroll-dian",
-      includedByDefault: true,
-      monthlyAddonUsd: 25e3
-    }
+    { componentKey: "comp-ley1607-exoneration", parentServiceKey: "srv-hr-payroll", externalName: "C\xE1lculo Autom\xE1tico de Horas Extras", description: "Liquida recargos diurnos, nocturnos y festivos.", monthlyAddonUsd: 19e3 },
+    { componentKey: "comp-cune-dian-payroll", parentServiceKey: "srv-hr-payroll", externalName: "Soporte de N\xF3mina Electr\xF3nica", description: "Genera desprendible electr\xF3nico.", monthlyAddonUsd: 25e3 }
   ]
 };
 
 // apps/srv-inventory/frontend/inventory-service.view.ts
 var SRV_INVENTORY_FRONTEND_VIEW = {
   serviceKey: "srv-inventory",
-  externalPrincipalModuleName: "Inventario, Bodegas, Lotes FEFO y Actas (v2)",
+  externalPrincipalModuleName: "Inventario",
   icon: "\u{1F4E6}",
-  subtitle: "Kardex valorizado, bodegas, solicitudes de traslado, actas de recepci\xF3n t\xE9cnica v2, conteo f\xEDsico ciego, recetas y b\xE1scula.",
+  subtitle: "Productos, existencias, proveedores, bodegas, traslados, insumos y transportistas.",
   standaloneMonthlyUsd: 149e3,
   submodules: [
     {
       moduleKey: "mod-stock",
       parentServiceKey: "srv-inventory",
-      externalSubmoduleName: "Existencias, Variantes y Kardex Valorizado",
-      tabIcon: "\u{1F4CA}",
-      summary: "Kardex valorizado de productos, variantes/seriales, costo promedio ponderado y punto de reorden.",
+      externalSubmoduleName: "Productos y Existencias",
+      tabIcon: "\u{1F4E6}",
+      summary: "",
       monthlyAddonUsd: 39e3,
-      actionButtonLabel: "Registrar Producto / Ajuste",
-      tableHeaders: ["C\xF3digo SKU", "Producto / Insumo", "Bodega Base", "Disponible", "Stock M\xEDnimo", "Costo Unitario"],
+      actionButtonLabel: "+ Guardar Producto",
+      tableHeaders: ["SKU", "Producto", "Proveedor / Bodega", "Costo", "Precio Venta", "Existencias", "Acciones"],
       fields: [
-        { key: "sku", label: "C\xF3digo SKU / Barras", type: "text", placeholder: "INS-00412" },
-        { key: "productName", label: "Nombre del Producto o Insumo", type: "text", placeholder: "Cemento Gris Estructural 50Kg" },
-        { key: "warehouseName", label: "Bodega Asignada", type: "select", options: ["Bodega Central Principal", "Bodega Norte Punto Venta", "Bodega Materia Prima"] },
-        { key: "onHandQty", label: "Cantidad Disponible", type: "number", placeholder: "180" },
-        { key: "minStock", label: "Alerta Stock M\xEDnimo", type: "number", placeholder: "30" },
-        { key: "unitCost", label: "Costo Unitario ($ COP)", type: "number", placeholder: "31500" }
+        { key: "sku", label: "C\xF3digo / SKU", type: "text", placeholder: "REF-001" },
+        { key: "productName", label: "Nombre del Producto", type: "text", placeholder: "Nombre del producto" },
+        { key: "onHandQty", label: "Cantidad Inicial", type: "number", placeholder: "20" },
+        { key: "unitCost", label: "Costo Compra ($)", type: "number", placeholder: "25000" }
       ]
     },
     {
       moduleKey: "mod-warehouses",
       parentServiceKey: "srv-inventory",
-      externalSubmoduleName: "Bodegas y Ubicaciones WMS",
+      externalSubmoduleName: "Bodegas",
       tabIcon: "\u{1F3ED}",
-      summary: "Administraci\xF3n de bodegas f\xEDsicas, pasillos/estantes, capacidad instalada y responsable.",
+      summary: "",
       monthlyAddonUsd: 45e3,
-      actionButtonLabel: "Crear / Actualizar Bodega",
-      tableHeaders: ["C\xF3digo", "Nombre de Bodega", "Ciudad / Sede", "Capacidad", "Encargado / Firma", "Estado"],
+      actionButtonLabel: "+ Crear Bodega",
+      tableHeaders: ["C\xF3digo", "Bodega", "Ciudad / Ubicaci\xF3n", "Responsable", "Estado", "Acciones"],
       fields: [
-        { key: "warehouseCode", label: "C\xF3digo de Bodega", type: "text", placeholder: "BOD-NORTE-02" },
-        { key: "warehouseTitle", label: "Nombre de la Bodega", type: "text", placeholder: "Bodega Log\xEDstica Zona Franca" },
-        { key: "cityLocation", label: "Ciudad / Direcci\xF3n", type: "text", placeholder: "Yumbo \u2014 Autopista Cali Km 4" },
-        { key: "capacityTons", label: "Capacidad Operativa (Ton / Estibas)", type: "text", placeholder: "450 Toneladas / 120 Estibas" },
-        { key: "managerSignature", label: "Firma de Encargado de Bodega", type: "text", placeholder: "Firmado: Jorge Eliecer Pardo", requiredFeatureKey: "comp-manager-signature" }
+        { key: "warehouseCode", label: "C\xF3digo", type: "text", placeholder: "BOD-01" },
+        { key: "warehouseTitle", label: "Nombre de la Bodega", type: "text", placeholder: "Bodega Principal" },
+        { key: "cityLocation", label: "Ubicaci\xF3n / Sede", type: "text", placeholder: "Sede Central" },
+        { key: "managerSignature", label: "Encargado", type: "text", placeholder: "Jorge Pardo" }
       ]
     },
     {
       moduleKey: "mod-transfers",
       parentServiceKey: "srv-inventory",
-      externalSubmoduleName: "Solicitudes para Traslados entre Bodegas",
+      externalSubmoduleName: "Solicitudes y Traslados",
       tabIcon: "\u{1F504}",
-      summary: "Solicitudes de traslado entre bodegas con despacho en tr\xE1nsito, recepci\xF3n, transportista y firma.",
+      summary: "",
       monthlyAddonUsd: 55e3,
-      actionButtonLabel: "Emitir Solicitud de Traslado",
-      tableHeaders: ["Solicitud", "Bodega Origen", "Bodega Destino", "\xCDtem y Cantidad", "Transportista", "Firma Encargado"],
+      actionButtonLabel: "+ Solicitar Traslado",
+      tableHeaders: ["N\xB0 Solicitud", "Bodega Origen", "Bodega Destino", "Producto y Cantidad", "Transportista", "Estado", "Acciones"],
       fields: [
-        { key: "originWarehouse", label: "Bodega Origen", type: "select", options: ["Bodega Central Principal", "Planta de Producci\xF3n", "Bodega Zona Franca"] },
-        { key: "targetWarehouse", label: "Bodega Destino", type: "select", options: ["Bodega Norte Punto Venta", "Bodega Sur Despachos", "Bodega Principal"] },
-        { key: "itemSummary", label: "Producto y Cantidad a Trasladar", type: "text", placeholder: "120 Sacos Harina Fortificada x 50Kg" },
-        { key: "carrierName", label: "Seleccionar Transportista", type: "select", options: ["Transportes R\xE1pidos del Norte S.A.S.", "Flota Propia \u2014 Cami\xF3n NPR Placa WXY-412", "Log\xEDstica Nacional Carga Segura"], requiredFeatureKey: "comp-carrier-select" },
-        { key: "managerSignature", label: "Firma de Encargado que Autoriza", type: "text", placeholder: "Autorizado: Ing. Andr\xE9s Mej\xEDa", requiredFeatureKey: "comp-manager-signature" }
+        { key: "originWarehouse", label: "Bodega Origen", type: "select", options: ["Bodega Central Principal", "Bodega Punto de Venta", "Bodega Insumos"] },
+        { key: "targetWarehouse", label: "Bodega Destino", type: "select", options: ["Bodega Punto de Venta", "Bodega Norte", "Bodega Central Principal"] },
+        { key: "itemSummary", label: "Producto y Cantidad", type: "text", placeholder: "20 unidades \u2014 Aceite 20W50" },
+        { key: "carrierName", label: "Transportista Asignado", type: "select", options: ["Transporte Interno Empresa", "Servientrega / Interrapidisimo", "Transportadora Nacional"] }
       ]
     },
     {
       moduleKey: "mod-tech-reception",
       parentServiceKey: "srv-inventory",
-      externalSubmoduleName: "Actas de Recepci\xF3n T\xE9cnica de Mercanc\xEDa (v2)",
-      tabIcon: "\u{1F321}\uFE0F",
-      summary: "Inspecci\xF3n t\xE9cnica estilo InventarioActaRecepcion v2: control de temperatura, cadena de fr\xEDo, registro sanitario y cuarentena.",
+      externalSubmoduleName: "Proveedores y Entradas",
+      tabIcon: "\u{1F69A}",
+      summary: "",
       monthlyAddonUsd: 42e3,
-      actionButtonLabel: "Firmar Acta de Recepci\xF3n T\xE9cnica",
-      tableHeaders: ["N\xB0 Acta", "Proveedor / Factura", "Lote y Temp (\xB0C)", "Estado Empaque", "Concepto T\xE9cnico"],
+      actionButtonLabel: "+ Guardar Proveedor",
+      tableHeaders: ["NIT", "Proveedor", "Contacto", "Tel\xE9fono", "Ciudad", "Acciones"],
       fields: [
-        { key: "actaNumber", label: "Consecutivo Acta T\xE9cnica", type: "text", placeholder: "ACT-REC-2026-118" },
-        { key: "supplierInvoice", label: "Proveedor y Factura", type: "text", placeholder: "Laboratorios / Distribuidora Nacional \u2014 FE-9941" },
-        { key: "lotAndTemp", label: "Lote, Registro INVIMA/ICA y Temperatura (\xB0C)", type: "text", placeholder: "Lote L-8841 \u2014 Temp: 4.2 \xB0C (Cadena Fr\xEDo OK)" },
-        { key: "technicalConcept", label: "Dictamen de Recepci\xF3n", type: "select", options: ["Aprobado \u2014 Ingresa a Stock Disponible", "Aprobado con Observaciones", "Rechazado / En Bodega de Cuarentena"] }
-      ]
-    },
-    {
-      moduleKey: "mod-physical-count",
-      parentServiceKey: "srv-inventory",
-      externalSubmoduleName: "Toma F\xEDsica Ciega y Conciliaci\xF3n de Mermas",
-      tabIcon: "\u{1F4CB}",
-      summary: "Conteo f\xEDsico ciego sin mostrar saldo del sistema a los operarios, c\xE1lculo de diferencias y ajuste autom\xE1tico.",
-      monthlyAddonUsd: 39e3,
-      actionButtonLabel: "Cerrar Conteo Ciego y Ajustar",
-      tableHeaders: ["Sesi\xF3n Conteo", "Bodega Auditada", "\xCDtems Contados", "Diferencia Neta ($ COP)", "Estado Ajuste"],
-      fields: [
-        { key: "countSessionCode", label: "C\xF3digo de Toma F\xEDsica", type: "text", placeholder: "TOM-CIEGA-2026-09" },
-        { key: "warehouseAudited", label: "Bodega en Conteo", type: "select", options: ["Bodega Central Principal", "Bodega Norte Punto Venta", "Barra / Cava de Licores"] },
-        { key: "itemsCounted", label: "Referencias Verificadas", type: "number", placeholder: "145" },
-        { key: "netVarianceCop", label: "Diferencia Valorizada ($ COP)", type: "number", placeholder: "-48000" }
+        { key: "actaNumber", label: "NIT Proveedor", type: "text", placeholder: "900.331.220-1" },
+        { key: "supplierInvoice", label: "Nombre del Proveedor", type: "text", placeholder: "Distribuidora Nacional S.A.S." },
+        { key: "lotAndTemp", label: "Nombre de Contacto", type: "text", placeholder: "Ricardo G\xF3mez" },
+        { key: "technicalConcept", label: "Tel\xE9fono / WhatsApp", type: "text", placeholder: "310 555 8899" }
       ]
     },
     {
       moduleKey: "mod-recipes",
       parentServiceKey: "srv-inventory",
-      externalSubmoduleName: "Recetas y Producci\xF3n BOM",
+      externalSubmoduleName: "Insumos y Recetas",
       tabIcon: "\u{1F9EA}",
-      summary: "F\xF3rmulas de producci\xF3n y escandallos con descuento autom\xE1tico de insumos por unidad.",
-      monthlyAddonUsd: 55e3,
-      actionButtonLabel: "Guardar Receta / F\xF3rmula",
-      tableHeaders: ["C\xF3digo", "Producto Terminado", "Insumos de la Receta", "Rendimiento", "Costo Total"],
-      hasVisualRecipeBuilder: true,
-      fields: [
-        { key: "finishedName", label: "Producto Terminado / Plato", type: "text", placeholder: "Mezcla Lista / Men\xFA Ejecutivo" },
-        { key: "yieldQty", label: "Rendimiento por Lote", type: "number", placeholder: "1" }
-      ]
-    },
-    {
-      moduleKey: "mod-lots",
-      parentServiceKey: "srv-inventory",
-      externalSubmoduleName: "Lotes y Vencimientos FEFO",
-      tabIcon: "\u{1F4C5}",
-      summary: "Trazabilidad sanitaria por lote, fecha de vencimiento y despacho prioritario FEFO con sem\xE1foro.",
+      summary: "",
       monthlyAddonUsd: 39e3,
-      actionButtonLabel: "Registrar Lote",
-      tableHeaders: ["N\xB0 Lote", "Producto", "Bodega", "Vencimiento", "Cantidad", "Estado FEFO"],
+      actionButtonLabel: "+ Guardar Insumo / Receta",
+      hasVisualRecipeBuilder: true,
+      tableHeaders: ["C\xF3digo", "Plato o Producto Final", "Insumo Requerido", "Cantidad por Unidad", "Costo Insumo", "Acciones"],
       fields: [
-        { key: "lotCode", label: "N\xFAmero de Lote", type: "text", placeholder: "LOT-2026-884" },
-        { key: "productName", label: "Producto", type: "text", placeholder: "L\xE1cteo / Insumo Perecedero" },
-        { key: "expiryDate", label: "Fecha de Vencimiento", type: "date" },
-        { key: "qty", label: "Cantidad del Lote", type: "number", placeholder: "250" }
+        { key: "dishName", label: "Producto / Plato", type: "text", placeholder: "Hamburguesa Artesanal / Kit Mantenimiento" },
+        { key: "ingredientName", label: "Insumo Descontado", type: "text", placeholder: "Carne Res 180g / Filtro" },
+        { key: "qtyUsed", label: "Cantidad Usada", type: "text", placeholder: "1 Unidad" },
+        { key: "ingredientCost", label: "Costo ($)", type: "number", placeholder: "8500" }
       ]
     },
     {
       moduleKey: "mod-scale",
       parentServiceKey: "srv-inventory",
-      externalSubmoduleName: "B\xE1scula y Tractomulas",
+      externalSubmoduleName: "Transportistas y Pesaje",
       tabIcon: "\u{1F69B}",
-      summary: "Control de tractomulas en b\xE1scula camionera, pesaje Bruto/Tara/Neto, transportista y muelle.",
-      monthlyAddonUsd: 75e3,
-      actionButtonLabel: "Emitir Tiquete de B\xE1scula",
-      tableHeaders: ["Tiquete", "Placa / Remolque", "Transportista / Conductor", "Peso Bruto", "Peso Tara", "Peso Neto"],
+      summary: "",
+      monthlyAddonUsd: 45e3,
+      actionButtonLabel: "+ Registrar Transportista / Despacho",
       hasTruckScaleWeighbridge: true,
+      tableHeaders: ["C\xF3digo", "Transportista / Conductor", "Placa Veh\xEDculo", "Ruta / Destino", "Tel\xE9fono", "Acciones"],
       fields: [
-        { key: "truckPlate", label: "Placa Cabezote / Remolque", type: "text", placeholder: "SXT-942 / R-4481" },
-        { key: "driverName", label: "Conductor y C\xE9dula", type: "text", placeholder: "Hernando Valencia \u2014 CC 79.412.880" },
-        { key: "carrierCompany", label: "Seleccionar Transportista", type: "select", options: ["TransCarga Pesada de Colombia", "Cooperativa de Tractomulas del Sur", "Particular / Flota Propia"], requiredFeatureKey: "comp-carrier-select" },
-        { key: "cargoType", label: "Carga y Muelle Asignado", type: "text", placeholder: "Granel Ma\xEDz Amarillo \u2014 Muelle 3" }
+        { key: "carrierDriver", label: "Transportista / Conductor", type: "text", placeholder: "Hernando Rojas" },
+        { key: "truckPlate", label: "Placa del Veh\xEDculo", type: "text", placeholder: "WXY-412" },
+        { key: "routeDest", label: "Ruta / Ciudad Destino", type: "text", placeholder: "Medell\xEDn - Bogot\xE1" },
+        { key: "driverPhone", label: "Tel\xE9fono Conductor", type: "text", placeholder: "315 222 3344" }
+      ]
+    },
+    {
+      moduleKey: "mod-lots",
+      parentServiceKey: "srv-inventory",
+      externalSubmoduleName: "Kardex de Movimientos",
+      tabIcon: "\u{1F4CA}",
+      summary: "",
+      monthlyAddonUsd: 35e3,
+      actionButtonLabel: "+ Registrar Ajuste Manual",
+      tableHeaders: ["ID", "Fecha", "Tipo", "Producto", "Cantidad", "Saldo", "Referencia"],
+      fields: [
+        { key: "lotNumber", label: "Producto", type: "text", placeholder: "Nombre del producto" },
+        { key: "expiryDate", label: "Tipo de Movimiento", type: "select", options: ["Entrada de Mercanc\xEDa", "Salida por Ajuste", "Baja por Aver\xEDa"] },
+        { key: "qtyLot", label: "Cantidad", type: "number", placeholder: "5" }
       ]
     }
   ],
   features: [
-    { componentKey: "comp-manager-signature", externalName: "Firma de encargado", description: "Exige registrar la firma o nombre del encargado responsable en bodegas, traslados y remisiones.", parentModuleKey: "independent", includedByDefault: true, monthlyAddonUsd: 19e3 },
-    { componentKey: "comp-carrier-select", externalName: "Seleccionar transportista", description: "Habilita el selector de empresa transportista y placa en traslados de bodega y b\xE1scula.", parentModuleKey: "mod-transfers", includedByDefault: true, monthlyAddonUsd: 19e3 },
-    { componentKey: "comp-scale-tare", externalName: "C\xE1lculo autom\xE1tico Bruto / Tara / Neto en b\xE1scula", description: "Calcula en vivo el peso neto destarado en kilogramos y toneladas para tractomulas.", parentModuleKey: "mod-scale", includedByDefault: true, monthlyAddonUsd: 25e3 },
-    { componentKey: "comp-expiry-semaphore", externalName: "Sem\xE1foro visual FEFO de lotes pr\xF3ximos a vencer (30/60/90 d\xEDas)", description: "Destaca en rojo/\xE1mbar/verde los lotes seg\xFAn sus d\xEDas restantes de vida \xFAtil.", parentModuleKey: "mod-lots", includedByDefault: true, monthlyAddonUsd: 15e3 }
+    { componentKey: "comp-manager-signature", parentServiceKey: "srv-inventory", externalName: "Responsable de Bodega", description: "Registra qui\xE9n autoriza traslados.", monthlyAddonUsd: 15e3 },
+    { componentKey: "comp-carrier-select", parentServiceKey: "srv-inventory", externalName: "Control de Transportistas", description: "Asigna transportista en despachos.", monthlyAddonUsd: 19e3 },
+    { componentKey: "comp-scale-tare", parentServiceKey: "srv-inventory", externalName: "C\xE1lculo de Peso Neto", description: "Destare autom\xE1tico de pesaje.", monthlyAddonUsd: 25e3 },
+    { componentKey: "comp-expiry-semaphore", parentServiceKey: "srv-inventory", externalName: "Alertas de Stock M\xEDnimo", description: "Resalta productos por agotarse.", monthlyAddonUsd: 15e3 }
   ]
 };
 
 // apps/srv-invoicing/frontend/invoicing-service.view.ts
 var SRV_INVOICING_FRONTEND_VIEW = {
   serviceKey: "srv-invoicing",
-  externalPrincipalModuleName: "Facturaci\xF3n DIAN, POS, Tarifarios (v2) y Glosas",
+  externalPrincipalModuleName: "Facturar y Punto de Venta",
   icon: "\u{1F9FE}",
-  subtitle: "Caja POS con arqueo ciego, facturaci\xF3n electr\xF3nica UBL 2.1, tarifarios v2, facturaci\xF3n agrupada y auditor\xEDa de glosas.",
+  subtitle: "Ventas en mostrador, facturaci\xF3n, cotizaciones y listas de precios.",
   standaloneMonthlyUsd: 145e3,
   submodules: [
     {
       moduleKey: "mod-pos",
       parentServiceKey: "srv-invoicing",
-      externalSubmoduleName: "Caja POS, Turnos y Tirilla Electr\xF3nica",
+      externalSubmoduleName: "Punto de Venta (Facturar)",
       tabIcon: "\u{1F6D2}",
-      summary: "Terminal de venta r\xE1pida con carrito interactivo, pagos mixtos, arqueo ciego X/Z y c\xE1lculo de vueltas.",
+      summary: "",
       monthlyAddonUsd: 45e3,
-      actionButtonLabel: "Emitir Comprobante POS",
-      tableHeaders: ["Comprobante", "Cliente", "Cajero / Turno", "Medio de Pago", "Total", "Estado"],
+      actionButtonLabel: "Facturar Venta",
+      tableHeaders: ["Factura", "Cliente", "Medio de Pago", "Total", "Estado"],
       hasInteractivePosCart: true,
       fields: [
-        { key: "customerName", label: "Cliente / Comprador", type: "text", placeholder: "Consumidor Final o Raz\xF3n Social" },
-        { key: "customerNit", label: "NIT o Documento", type: "text", placeholder: "222222222-2" },
-        { key: "cashierName", label: "Nombre de Cajero y Turno", type: "text", placeholder: "Laura G\xF3mez \u2014 Turno Ma\xF1ana", requiredFeatureKey: "comp-cashier-name" },
-        { key: "paymentMethod", label: "Medio de Pago", type: "select", options: ["Efectivo", "Tarjeta D\xE9bito / Cr\xE9dito", "Transferencia Nequi / Daviplata / QR", "Pago Mixto"] },
-        { key: "tipPct", label: "Propina Voluntaria (%)", type: "number", placeholder: "10", requiredFeatureKey: "comp-tip" }
+        { key: "customerName", label: "Cliente", type: "text", placeholder: "Consumidor Final" },
+        { key: "customerNit", label: "NIT / C\xE9dula", type: "text", placeholder: "222222222-2" },
+        { key: "paymentMethod", label: "Medio de Pago", type: "select", options: ["Efectivo", "Transferencia / Nequi", "Tarjeta", "Cr\xE9dito / Cartera"] }
       ]
     },
     {
       moduleKey: "mod-dian",
       parentServiceKey: "srv-invoicing",
-      externalSubmoduleName: "Facturaci\xF3n Electr\xF3nica DIAN (UBL 2.1)",
-      tabIcon: "\u{1F3DB}\uFE0F",
-      summary: "Emisi\xF3n de facturas electr\xF3nicas FEV, Notas Cr\xE9dito y D\xE9bito con validaci\xF3n previa, CUFE y XML/PDF.",
+      externalSubmoduleName: "Historial de Facturas",
+      tabIcon: "\u{1F9FE}",
+      summary: "",
       monthlyAddonUsd: 69e3,
-      actionButtonLabel: "Emitir Factura Electr\xF3nica",
-      tableHeaders: ["Prefijo / N\xFAmero", "Adquirente", "NIT", "Total Gravado", "CUFE / Estado DIAN", "Fecha"],
+      actionButtonLabel: "Registrar Factura",
+      tableHeaders: ["N\xB0 Factura", "Cliente", "NIT / C\xE9dula", "Total", "Estado", "Fecha"],
       fields: [
-        { key: "resolutionPrefix", label: "Prefijo de Resoluci\xF3n", type: "select", options: ["FEV - Factura Electr\xF3nica", "NC - Nota Cr\xE9dito", "ND - Nota D\xE9bito"] },
-        { key: "buyerLegalName", label: "Raz\xF3n Social del Adquirente", type: "text", placeholder: "Comercializadora del Valle S.A.S." },
-        { key: "buyerTaxId", label: "NIT con D\xEDgito de Verificaci\xF3n", type: "text", placeholder: "901.452.110-4" },
-        { key: "buyerEmail", label: "Correo de Recepci\xF3n XML/PDF", type: "text", placeholder: "facturacion@empresa.co" },
-        { key: "totalAmount", label: "Valor Total Factura ($ COP)", type: "number", placeholder: "1450000" }
-      ]
-    },
-    {
-      moduleKey: "mod-tariffs",
-      parentServiceKey: "srv-invoicing",
-      externalSubmoduleName: "Listas de Precios y Tarifarios Pactados (v2)",
-      tabIcon: "\u{1F3F7}\uFE0F",
-      summary: "Motor de tarifas estilo TarifaConvenio v2 con recargos/descuentos porcentuales y precios pactados por convenio.",
-      monthlyAddonUsd: 39e3,
-      actionButtonLabel: "Guardar Lista / Tarifa Pactada",
-      tableHeaders: ["C\xF3digo Tarifa", "Nombre Tarifario / Convenio", "Regla de C\xE1lculo", "Vigencia", "Precio Base / Factor"],
-      fields: [
-        { key: "tariffCode", label: "C\xF3digo de Lista / Tarifario", type: "text", placeholder: "TAR-CORP-2026" },
-        { key: "tariffName", label: "Nombre de Lista o Convenio", type: "text", placeholder: "Tarifario Mayorista Institucional (-15%)" },
-        { key: "pricingRule", label: "F\xF3rmula de Liquidaci\xF3n", type: "select", options: ["Precio Fijo Pactado por \xCDtem", "Descuento % sobre Lista Base", "Margen % sobre Costo Promedio"] },
-        { key: "sampleRateCop", label: "Valor Referencia / Tarifa Base ($ COP)", type: "number", placeholder: "125000" }
-      ]
-    },
-    {
-      moduleKey: "mod-grouped-billing",
-      parentServiceKey: "srv-invoicing",
-      externalSubmoduleName: "Facturaci\xF3n Agrupada de \xD3rdenes y Remisiones (v2)",
-      tabIcon: "\u{1F4E6}",
-      summary: "Consolida m\xFAltiples \xF3rdenes de servicio, remisiones o atenciones del mes en una sola Factura Corporativa con anexo.",
-      monthlyAddonUsd: 45e3,
-      actionButtonLabel: "Consolidar y Emitir Factura Agrupada",
-      tableHeaders: ["Lote Consolidado", "Empresa / Contrato", "\xD3rdenes Incluidas", "Corte Per\xEDodo", "Total Facturado (COP)"],
-      fields: [
-        { key: "batchCode", label: "Consecutivo de Consolidaci\xF3n", type: "text", placeholder: "FAC-AGR-2026-089" },
-        { key: "contractClient", label: "Empresa y Contrato (v2)", type: "text", placeholder: "Grupo Industrial del Pac\xEDfico \u2014 CNT-2026-0084" },
-        { key: "ordersIncluded", label: "Cantidad de Remisiones / \xD3rdenes Agrupadas", type: "text", placeholder: "28 Remisiones Verificadas (Mes Octubre)" },
-        { key: "consolidatedTotal", label: "Total Factura Consolidada ($ COP)", type: "number", placeholder: "18950000" }
-      ]
-    },
-    {
-      moduleKey: "mod-glosas-disputes",
-      parentServiceKey: "srv-invoicing",
-      externalSubmoduleName: "Radicaci\xF3n de Facturas y Auditor\xEDa de Glosas (v2)",
-      tabIcon: "\u2696\uFE0F",
-      summary: "Control de radicaci\xF3n ante clientes corporativos, registro de objeciones/glosas parciales, conciliaci\xF3n y nota cr\xE9dito.",
-      monthlyAddonUsd: 45e3,
-      actionButtonLabel: "Registrar Radicado / Respuesta a Glosa",
-      tableHeaders: ["Radicado / Glosa", "Factura Afectada", "Causal de Objeci\xF3n", "Valor Objetado", "Estado Conciliaci\xF3n"],
-      fields: [
-        { key: "disputeCode", label: "N\xFAmero de Radicado / Glosa", type: "text", placeholder: "GLO-2026-00312" },
-        { key: "invoiceRef", label: "Factura Radicada", type: "text", placeholder: "FEV-10428 \u2014 Constructora Andina" },
-        { key: "disputeReason", label: "Causal de Glosa / Devoluci\xF3n", type: "select", options: ["Diferencia en Tarifa Pactada", "Soporte o Firma de Entrega Faltante", "Diferencia en Cantidad Recibida", "Radicaci\xF3n Exitosa Sin Glosa"] },
-        { key: "disputedAmount", label: "Valor Objetado / Conciliado ($ COP)", type: "number", placeholder: "420000" }
+        { key: "resolutionPrefix", label: "Tipo de Comprobante", type: "select", options: ["Factura de Venta", "Nota Cr\xE9dito", "Nota D\xE9bito"] },
+        { key: "buyerLegalName", label: "Cliente", type: "text", placeholder: "Nombre o Raz\xF3n Social" },
+        { key: "buyerTaxId", label: "NIT / C\xE9dula", type: "text", placeholder: "901.452.110-4" },
+        { key: "buyerEmail", label: "Correo del Cliente", type: "text", placeholder: "cliente@correo.com" },
+        { key: "totalAmount", label: "Valor Total ($)", type: "number", placeholder: "150000" }
       ]
     },
     {
       moduleKey: "mod-quotes",
       parentServiceKey: "srv-invoicing",
-      externalSubmoduleName: "Cotizaciones, Pedidos y Plan Separe",
+      externalSubmoduleName: "Cotizaciones y Pedidos",
       tabIcon: "\u{1F4CB}",
-      summary: "Propuestas comerciales, remisiones de entrega de mercanc\xEDa, plan separe con abonos y conversi\xF3n a factura.",
-      monthlyAddonUsd: 39e3,
-      actionButtonLabel: "Guardar Cotizaci\xF3n / Plan Separe",
-      tableHeaders: ["Documento", "Cliente", "Vigencia", "Encargado Autorizador", "Valor Estimado", "Estado"],
+      summary: "",
+      monthlyAddonUsd: 29e3,
+      actionButtonLabel: "Guardar Cotizaci\xF3n",
+      tableHeaders: ["N\xB0 Cotizaci\xF3n", "Cliente", "Concepto", "Valor Total", "Vence", "Estado"],
       fields: [
-        { key: "docType", label: "Tipo de Documento", type: "select", options: ["Cotizaci\xF3n Comercial", "Remisi\xF3n de Salida", "Plan Separe con Abono Inicial"] },
-        { key: "clientName", label: "Empresa / Cliente", type: "text", placeholder: "Constructora Andina S.A.S." },
-        { key: "validUntil", label: "V\xE1lido Hasta", type: "date" },
-        { key: "managerSignature", label: "Firma de Encargado que Autoriza", type: "text", placeholder: "Ing. Carlos Ruiz", requiredFeatureKey: "comp-manager-signature" },
-        { key: "quotedTotal", label: "Valor Total ($ COP)", type: "number", placeholder: "3200000" }
+        { key: "quoteNumber", label: "N\xB0 Cotizaci\xF3n", type: "text", placeholder: "COT-001" },
+        { key: "customerName", label: "Cliente", type: "text", placeholder: "Nombre del cliente" },
+        { key: "itemsSummary", label: "Productos o Servicios Cotizados", type: "text", placeholder: "Descripci\xF3n de productos o servicios" },
+        { key: "quotedTotal", label: "Valor Total ($)", type: "number", placeholder: "250000" },
+        { key: "validUntil", label: "Validez", type: "select", options: ["15 D\xEDas", "30 D\xEDas", "Contado Inmediato"] }
+      ]
+    },
+    {
+      moduleKey: "mod-tariffs",
+      parentServiceKey: "srv-invoicing",
+      externalSubmoduleName: "Listas de Precios y Descuentos",
+      tabIcon: "\u{1F3F7}\uFE0F",
+      summary: "",
+      monthlyAddonUsd: 39e3,
+      actionButtonLabel: "Guardar Lista de Precios",
+      tableHeaders: ["C\xF3digo", "Nombre de Lista", "Tipo de Descuento", "Vigencia", "Valor / %"],
+      fields: [
+        { key: "tariffCode", label: "C\xF3digo", type: "text", placeholder: "MAYORISTA" },
+        { key: "tariffName", label: "Nombre de la Lista", type: "text", placeholder: "Cliente Frecuente (-10%)" },
+        { key: "pricingRule", label: "Tipo de Beneficio", type: "select", options: ["Descuento % sobre Precio", "Precio Fijo Especial", "Precio Mayorista"] },
+        { key: "sampleRateCop", label: "Porcentaje o Valor", type: "number", placeholder: "10" }
+      ]
+    },
+    {
+      moduleKey: "mod-grouped-billing",
+      parentServiceKey: "srv-invoicing",
+      externalSubmoduleName: "Facturaci\xF3n por Lotes / Empresas",
+      tabIcon: "\u{1F4E6}",
+      summary: "",
+      monthlyAddonUsd: 45e3,
+      actionButtonLabel: "Generar Factura Agrupada",
+      tableHeaders: ["Consecutivo", "Empresa / Convenio", "\xD3rdenes Incluidas", "Mes", "Total Facturado"],
+      fields: [
+        { key: "batchCode", label: "Consecutivo", type: "text", placeholder: "FAC-EMP-01" },
+        { key: "contractClient", label: "Empresa Cliente", type: "text", placeholder: "Nombre de la empresa" },
+        { key: "ordersIncluded", label: "\xD3rdenes o Remisiones Incluidas", type: "text", placeholder: "15 servicios del mes" },
+        { key: "consolidatedTotal", label: "Valor Total ($)", type: "number", placeholder: "3500000" }
+      ]
+    },
+    {
+      moduleKey: "mod-glosas-disputes",
+      parentServiceKey: "srv-invoicing",
+      externalSubmoduleName: "Devoluciones y Reclamos de Facturas",
+      tabIcon: "\u2696\uFE0F",
+      summary: "",
+      monthlyAddonUsd: 45e3,
+      actionButtonLabel: "Registrar Devoluci\xF3n / Reclamo",
+      tableHeaders: ["N\xB0 Caso", "Factura", "Motivo", "Valor", "Estado"],
+      fields: [
+        { key: "disputeCode", label: "N\xB0 Caso", type: "text", placeholder: "DEV-001" },
+        { key: "invoiceRef", label: "Factura Asociada", type: "text", placeholder: "FEVP-9010" },
+        { key: "disputeReason", label: "Motivo", type: "select", options: ["Devoluci\xF3n de Producto", "Ajuste de Precio", "Cambio por Garant\xEDa"] },
+        { key: "disputedAmount", label: "Valor ($)", type: "number", placeholder: "48000" }
       ]
     }
   ],
   features: [
-    {
-      componentKey: "comp-cashier-name",
-      externalName: "Ingreso de nombre de cajero y turno",
-      description: "Habilita la identificaci\xF3n del cajero responsable en cada comprobante POS.",
-      parentModuleKey: "mod-pos",
-      includedByDefault: true,
-      monthlyAddonUsd: 15e3
-    },
-    {
-      componentKey: "comp-tip",
-      externalName: "Propina sugerida voluntaria en cuenta",
-      description: "Permite registrar porcentaje de propina voluntaria en la liquidaci\xF3n de caja.",
-      parentModuleKey: "mod-pos",
-      includedByDefault: true,
-      monthlyAddonUsd: 15e3
-    },
-    {
-      componentKey: "comp-line-discount",
-      externalName: "Descuento por l\xEDnea en carrito POS",
-      description: "Permite aplicar porcentaje de descuento individual por producto en el carrito POS.",
-      parentModuleKey: "mod-pos",
-      includedByDefault: true,
-      monthlyAddonUsd: 19e3
-    },
-    {
-      componentKey: "comp-blind-cash-count",
-      externalName: "Arqueo ciego de caja X/Z por denominaci\xF3n de billetes y monedas",
-      description: "Exige declarar el conteo f\xEDsico en efectivo sin ver el saldo te\xF3rico antes de cerrar turno.",
-      parentModuleKey: "mod-pos",
-      includedByDefault: true,
-      monthlyAddonUsd: 19e3
-    }
+    { componentKey: "comp-cashier-name", parentServiceKey: "srv-invoicing", externalName: "Control de Cajero por Turno", description: "Registra qui\xE9n realiza cada cobro.", monthlyAddonUsd: 15e3 },
+    { componentKey: "comp-line-discount", parentServiceKey: "srv-invoicing", externalName: "Descuentos en Caja", description: "Permite aplicar descuentos por cliente o producto.", monthlyAddonUsd: 19e3 },
+    { componentKey: "comp-tip", parentServiceKey: "srv-invoicing", externalName: "Propina en Cuenta", description: "Permite agregar propina sugerida en caja.", monthlyAddonUsd: 15e3 }
   ]
 };
 
 // apps/srv-procurement/frontend/procurement-service.view.ts
 var SRV_PROCUREMENT_FRONTEND_VIEW = {
   serviceKey: "srv-procurement",
-  externalPrincipalModuleName: "Compras, Proveedores, RADIAN y Doc Soporte",
-  icon: "\u{1F6CD}\uFE0F",
-  subtitle: "\xD3rdenes de compra a proveedores, recepci\xF3n de facturas, buz\xF3n RADIAN (030/032/033) y Documento Soporte DIAN.",
-  standaloneMonthlyUsd: 119e3,
+  externalPrincipalModuleName: "Compras y Proveedores",
+  icon: "\u{1F69A}",
+  subtitle: "\xD3rdenes de compra, facturas de proveedores y recepci\xF3n de mercanc\xEDa.",
+  standaloneMonthlyUsd: 129e3,
   submodules: [
     {
       moduleKey: "mod-purchase-orders",
       parentServiceKey: "srv-procurement",
-      externalSubmoduleName: "\xD3rdenes de Compra (OC)",
+      externalSubmoduleName: "\xD3rdenes de Compra",
       tabIcon: "\u{1F4DD}",
-      summary: "Emisi\xF3n de \xF3rdenes de compra (EgresoOrden v2) con control de cantidad pedida vs recibida en bodega.",
+      summary: "",
       monthlyAddonUsd: 39e3,
-      actionButtonLabel: "Emitir Orden de Compra",
-      tableHeaders: ["N\xB0 Orden", "Proveedor NIT", "Bodega Destino", "Estado Recepci\xF3n", "Total Orden ($ COP)"],
+      actionButtonLabel: "+ Crear Orden de Compra",
+      tableHeaders: ["N\xB0 Orden", "Proveedor", "Productos Solicitados", "Bodega Destino", "Total", "Estado", "Acciones"],
       fields: [
-        { key: "poNumber", label: "Consecutivo Orden de Compra", type: "text", placeholder: "OC-2026-00418" },
-        { key: "supplierName", label: "Proveedor y NIT", type: "text", placeholder: "Distribuidora Nacional de Insumos S.A.S. \u2014 900.412.889-1" },
-        { key: "targetWarehouse", label: "Bodega de Recepci\xF3n", type: "select", options: ["Bodega Central Principal", "Bodega Norte Punto Venta", "Bodega Materia Prima"] },
-        { key: "itemsSummary", label: "Detalle y Cantidades Pedidas", type: "text", placeholder: "80 Und Aceite Sint\xE9tico 20W50 + 40 Filtros" },
-        {
-          key: "approvalSignature",
-          label: "Firma de Aprobaci\xF3n de Compra",
-          type: "text",
-          placeholder: "Aprobado: Gerencia de Compras",
-          requiredFeatureKey: "comp-po-approval-signature"
-        },
-        { key: "totalAmount", label: "Valor Total Orden ($ COP)", type: "number", placeholder: "4850000" }
+        { key: "poNumber", label: "N\xB0 Orden", type: "text", placeholder: "OC-2026-01" },
+        { key: "supplierName", label: "Proveedor", type: "text", placeholder: "Distribuidora Nacional" },
+        { key: "itemsRequested", label: "Productos y Cantidades", type: "text", placeholder: "20 Cajas Aceite / 50 Filtros" },
+        { key: "totalOrderCop", label: "Valor Total ($)", type: "number", placeholder: "1850000" }
       ]
     },
     {
       moduleKey: "mod-purchase-invoices",
       parentServiceKey: "srv-procurement",
-      externalSubmoduleName: "Facturas de Compra y Gastos",
-      tabIcon: "\u{1F9FE}",
-      summary: "Causaci\xF3n de facturas de proveedores con cruce de OC, actualizaci\xF3n de costo promedio y retenciones.",
-      monthlyAddonUsd: 39e3,
-      actionButtonLabel: "Causar Factura de Compra",
-      tableHeaders: ["Factura Proveedor", "Proveedor", "Orden Cruzada", "IVA / Retenciones", "Neto por Pagar ($ COP)"],
+      externalSubmoduleName: "Facturas de Compra",
+      tabIcon: "\u{1F4E5}",
+      summary: "",
+      monthlyAddonUsd: 42e3,
+      actionButtonLabel: "+ Registrar Factura de Compra",
+      tableHeaders: ["N\xB0 Factura", "Proveedor", "Fecha", "Condici\xF3n Pago", "Total", "Estado", "Acciones"],
       fields: [
-        { key: "supplierInvoiceNum", label: "Prefijo y N\xFAmero Factura Proveedor", type: "text", placeholder: "FE-99412" },
-        { key: "supplierName", label: "Proveedor Emisor", type: "text", placeholder: "Importadora Andina S.A.S." },
-        { key: "poRef", label: "Orden de Compra / Entrada Almac\xE9n", type: "text", placeholder: "OC-2026-00418 / EA-109" },
-        { key: "taxSummary", label: "IVA Descontable y ReteFuente Aplicada", type: "select", options: ["IVA 19% + ReteFuente Compras 2.5%", "IVA 5% + ReteFuente 2.5%", "Servicio Gravado + ReteFuente 4%", "Exento / R\xE9gimen Simple"] },
-        { key: "netPayable", label: "Valor Neto a Pagar ($ COP)", type: "number", placeholder: "5420000" }
+        { key: "supplierInvoiceNo", label: "N\xB0 Factura Proveedor", type: "text", placeholder: "FC-9940" },
+        { key: "supplierVendor", label: "Proveedor", type: "text", placeholder: "Importadora Andina" },
+        { key: "paymentDue", label: "Forma de Pago", type: "select", options: ["Contado", "Cr\xE9dito 30 D\xEDas", "Cr\xE9dito 60 D\xEDas"] },
+        { key: "invoiceTotal", label: "Valor Total ($)", type: "number", placeholder: "2400000" }
       ]
     },
     {
       moduleKey: "mod-support-doc-dse",
       parentServiceKey: "srv-procurement",
-      externalSubmoduleName: "Documento Soporte DIAN (No Obligados)",
-      tabIcon: "\u{1F3DB}\uFE0F",
-      summary: "Transmisi\xF3n electr\xF3nica de Documento Soporte (CUDS) para compras y cuentas de cobro a no responsables de IVA.",
-      monthlyAddonUsd: 45e3,
-      actionButtonLabel: "Transmitir Documento Soporte DIAN",
-      tableHeaders: ["N\xB0 DSE", "Proveedor Cuenta de Cobro", "Concepto", "CUDS / Estado DIAN", "Valor ($ COP)"],
-      fields: [
-        { key: "dseNumber", label: "Consecutivo Resoluci\xF3n DSE", type: "text", placeholder: "DSE-000215" },
-        { key: "naturalSupplier", label: "Persona Natural / Cuenta de Cobro (CC)", type: "text", placeholder: "Jairo Alberto M\xE9ndez \u2014 CC 79.884.120" },
-        { key: "serviceConcept", label: "Concepto de Adquisici\xF3n o Servicio", type: "text", placeholder: "Mantenimiento El\xE9ctrico Local Norte" },
-        { key: "withholdingApplied", label: "Retenci\xF3n Practicada", type: "select", options: ["ReteFuente Servicios No Declarante 6%", "ReteFuente Honorarios 10%", "ReteFuente Compras 3.5%", "Sin Retenci\xF3n (< Tope UVT)"] },
-        { key: "dseTotal", label: "Valor Documento Soporte ($ COP)", type: "number", placeholder: "950000" }
-      ]
-    },
-    {
-      moduleKey: "mod-radian-events",
-      parentServiceKey: "srv-procurement",
-      externalSubmoduleName: "Buz\xF3n Tributario y Eventos RADIAN",
-      tabIcon: "\u{1F4E8}",
-      summary: "Recepci\xF3n de XML de proveedores y emisi\xF3n de eventos DIAN 030 (Acuse), 032 (Recibo Bien) y 033 (Aceptaci\xF3n).",
-      monthlyAddonUsd: 39e3,
-      actionButtonLabel: "Emitir Evento RADIAN a DIAN",
-      tableHeaders: ["Factura / CUFE", "Proveedor Emisor", "Evento RADIAN", "Estado DIAN", "Valor Factura ($ COP)"],
-      fields: [
-        { key: "supplierInvoice", label: "Factura Electr\xF3nica Recibida", type: "text", placeholder: "FEV-88410 (XML Adjunto)" },
-        { key: "issuerName", label: "Proveedor Emisor", type: "text", placeholder: "Licores y Bebidas Nacionales S.A." },
-        { key: "radianEventCode", label: "Evento RADIAN a Transmitir", type: "select", options: ["030 - Acuse de Recibo de Factura", "032 - Recibo del Bien o Servicio", "033 - Aceptaci\xF3n Expresa", "031 - Reclamo / Rechazo de Factura"] },
-        { key: "invoiceAmount", label: "Valor Factura ($ COP)", type: "number", placeholder: "3680000" }
-      ]
-    },
-    {
-      moduleKey: "mod-landed-costs",
-      parentServiceKey: "srv-procurement",
-      externalSubmoduleName: "Prorrateo de Fletes e Importaci\xF3n",
-      tabIcon: "\u{1F6A2}",
-      summary: "Distribuci\xF3n de costos de transporte, seguros y aranceles sobre el costo unitario del Kardex.",
+      externalSubmoduleName: "Compras a No Obligados (Doc. Soporte)",
+      tabIcon: "\u{1F4C4}",
+      summary: "",
       monthlyAddonUsd: 35e3,
-      actionButtonLabel: "Prorratear Costo en Kardex",
-      tableHeaders: ["Liquidaci\xF3n", "Entrada de Almac\xE9n", "Concepto Flete/Aduana", "M\xE9todo Prorrateo", "Costo Distribuido ($ COP)"],
+      actionButtonLabel: "+ Emitir Documento Soporte",
+      tableHeaders: ["Consecutivo", "Proveedor / Persona", "C\xE9dula", "Concepto", "Valor", "Estado", "Acciones"],
       fields: [
-        { key: "allocationCode", label: "C\xF3digo de Prorrateo", type: "text", placeholder: "PRF-2026-041" },
-        { key: "receiptRef", label: "Entrada de Almac\xE9n Destino", type: "text", placeholder: "EA-2026-109 (Bodega Central)" },
-        { key: "freightConcept", label: "Factura de Flete / Nacionalizaci\xF3n", type: "text", placeholder: "Flete Tractomula Puerto Buenaventura - Cali" },
-        { key: "allocationMethod", label: "Criterio de Distribuci\xF3n", type: "select", options: ["Por Valor FOB / Costo", "Por Peso en Kilogramos", "Por Volumen (m3)", "Por Cantidad de Unidades"] },
-        { key: "freightAmount", label: "Valor Flete a Distribuir ($ COP)", type: "number", placeholder: "1850000" }
+        { key: "dseNumber", label: "Consecutivo", type: "text", placeholder: "DSE-001" },
+        { key: "informalSeller", label: "Nombre de la Persona", type: "text", placeholder: "Pedro Nel Ospina" },
+        { key: "sellerDoc", label: "C\xE9dula", type: "text", placeholder: "71.224.890" },
+        { key: "serviceOrGood", label: "Servicio o Producto Comprado", type: "text", placeholder: "Arreglo el\xE9ctrico / Transporte" },
+        { key: "dseAmount", label: "Valor Pagado ($)", type: "number", placeholder: "180000" }
       ]
     }
   ],
   features: [
-    {
-      componentKey: "comp-margin-drop-alert",
-      externalName: "Alerta de ca\xEDda de margen por alza de costo de proveedor",
-      description: "Advierte autom\xE1ticamente al registrar una compra si el nuevo costo reduce el margen comercial esperado.",
-      parentModuleKey: "mod-purchase-invoices",
-      includedByDefault: true,
-      monthlyAddonUsd: 15e3
-    },
-    {
-      componentKey: "comp-po-approval-signature",
-      externalName: "Firma de aprobaci\xF3n gerencial en \xD3rdenes de Compra",
-      description: "Exige autorizaci\xF3n firmada del jefe de compras o gerencia antes de despachar la orden al proveedor.",
-      parentModuleKey: "mod-purchase-orders",
-      includedByDefault: true,
-      monthlyAddonUsd: 15e3
-    }
+    { componentKey: "comp-margin-drop-alert", parentServiceKey: "srv-procurement", externalName: "Alerta de Subida de Costo", description: "Avisa si un proveedor sube el precio.", monthlyAddonUsd: 15e3 }
   ]
 };
 
 // apps/srv-reports/frontend/reports-service.view.ts
 var SRV_REPORTS_FRONTEND_VIEW = {
   serviceKey: "srv-reports",
-  externalPrincipalModuleName: "Reportes Financieros, Anal\xEDtica BI y Exportador",
+  externalPrincipalModuleName: "Reportes",
   icon: "\u{1F4CA}",
-  subtitle: "Estado de Resultados P&G en vivo, Balance de Prueba por Tercero, rentabilidad por producto, anexos DIAN y constructor BI.",
-  standaloneMonthlyUsd: 99e3,
+  subtitle: "Resumen de ventas, ganancias, inventario y descargas en Excel.",
+  standaloneMonthlyUsd: 119e3,
   submodules: [
-    {
-      moduleKey: "mod-financial-reports",
-      parentServiceKey: "srv-reports",
-      externalSubmoduleName: "Estado de Resultados (P&G) y Balance por Tercero",
-      tabIcon: "\u{1F4C8}",
-      summary: "Utilidad Neta Real (Ventas - Costo Kardex + Mano de Obra - Gastos - Comisiones), Balance General NIIF y Balance de Prueba por NIT.",
-      monthlyAddonUsd: 39e3,
-      actionButtonLabel: "Generar y Exportar Estado Financiero",
-      tableHeaders: ["Reporte Financiero", "Per\xEDodo / Corte", "Ingresos Brutos", "Costos y Gastos", "Utilidad Neta Real ($ COP)"],
-      fields: [
-        { key: "reportType", label: "Tipo de Estado Financiero", type: "select", options: ["Estado de Resultados Operativo (P&G Real FixMotor)", "Balance de Prueba por Tercero (NIT)", "Estado de Situaci\xF3n Financiera (Balance General NIIF)", "Libro Auxiliar por Cuenta y Centro de Costo"] },
-        { key: "periodRange", label: "Per\xEDodo o Rango de Fechas", type: "text", placeholder: "Noviembre 2026 (Acumulado Mensual)" },
-        { key: "grossRevenue", label: "Ingresos Totales del Per\xEDodo ($ COP)", type: "number", placeholder: "84500000" },
-        { key: "totalCostsExpenses", label: "Costo Kardex (COGS) + Gastos + Comisiones ($ COP)", type: "number", placeholder: "56200000" },
-        { key: "netProfit", label: "Utilidad Neta Real Calculada ($ COP)", type: "number", placeholder: "28300000" }
-      ]
-    },
     {
       moduleKey: "mod-sales-profitability-reports",
       parentServiceKey: "srv-reports",
-      externalSubmoduleName: "Rentabilidad de Ventas y Arqueos de Caja",
-      tabIcon: "\u{1F4B9}",
-      summary: "Margen bruto por producto, categor\xEDa, vendedor y sucursal, m\xE1s consolidado de Efectivo Neto en Caja F\xEDsica vs Medios Digitales.",
+      externalSubmoduleName: "Resumen de Ventas y Descargas Excel",
+      tabIcon: "\u{1F4CA}",
+      summary: "",
       monthlyAddonUsd: 35e3,
-      actionButtonLabel: "Generar Reporte de Rentabilidad / Arqueo",
-      tableHeaders: ["Corte / Categor\xEDa", "Sede / Cajero", "Efectivo Neto Caja", "Digitales (Nequi/Tarjeta)", "Margen Ponderado (%)"],
+      actionButtonLabel: "+ Generar Corte de Ventas",
+      tableHeaders: ["Reporte", "Per\xEDodo", "Ventas Totales", "Utilidad Neta", "Formato"],
       fields: [
-        { key: "analysisScope", label: "Agrupaci\xF3n del Reporte", type: "select", options: ["Rentabilidad por Producto y Categor\xEDa", "Consolidado Arqueo de Caja (Efectivo Neto vs Digital)", "Ventas y Comisiones por Vendedor / T\xE9cnico", "Ventas por Franja Horaria y D\xEDa"] },
-        { key: "branchCashier", label: "Sucursal / Caja / Vendedor", type: "text", placeholder: "Sede Principal \u2014 Todas las Cajas" },
-        { key: "netCashBox", label: "Efectivo Neto en Caja F\xEDsica ($ COP)", type: "number", placeholder: "12450000" },
-        { key: "digitalCollected", label: "Recaudo Transferencias / Nequi / Dat\xE1fono ($ COP)", type: "number", placeholder: "19800000" },
-        { key: "weightedMarginPct", label: "Margen Bruto Ponderado (%)", type: "text", placeholder: "38.4% Utilidad sobre Venta" }
+        { key: "dateRange", label: "Per\xEDodo a Consultar", type: "select", options: ["Hoy", "\xDAltimos 7 D\xEDas", "Mes Actual", "Mes Anterior"] },
+        { key: "branchFilter", label: "Sede / Caja", type: "select", options: ["Todas las Sedes", "Caja Principal", "Punto de Venta Norte"] }
+      ]
+    },
+    {
+      moduleKey: "mod-financial-reports",
+      parentServiceKey: "srv-reports",
+      externalSubmoduleName: "Ingresos vs Gastos (Ganancias)",
+      tabIcon: "\u{1F4C8}",
+      summary: "",
+      monthlyAddonUsd: 39e3,
+      actionButtonLabel: "+ Generar Balance",
+      tableHeaders: ["Per\xEDodo", "Ingresos por Ventas", "Costo de Mercanc\xEDa", "Gastos Operativos", "Ganancia Neta"],
+      fields: [
+        { key: "reportType", label: "Tipo de Balance", type: "select", options: ["Ingresos vs Gastos del Mes", "Balance por Cliente", "Resumen de Caja y Bancos"] },
+        { key: "periodMonth", label: "Mes / A\xF1o", type: "text", placeholder: "Noviembre 2026" }
       ]
     },
     {
       moduleKey: "mod-inventory-reports",
       parentServiceKey: "srv-reports",
-      externalSubmoduleName: "Valorizaci\xF3n de Inventario, Rotaci\xF3n ABC y Vencimientos",
+      externalSubmoduleName: "Reporte de Inventario y Rotaci\xF3n",
       tabIcon: "\u{1F4E6}",
-      summary: "Capital invertido al costo vs venta potencial (FixMotor), rotaci\xF3n ABC (v2), alertas bajo m\xEDnimo y lotes por vencer.",
-      monthlyAddonUsd: 35e3,
-      actionButtonLabel: "Ejecutar Auditor\xEDa de Inventario",
-      tableHeaders: ["Bodega / Familia", "Capital al Costo", "Venta Potencial", "Utilidad Proyectada", "SKUs en Alerta / Vencimiento"],
+      summary: "",
+      monthlyAddonUsd: 29e3,
+      actionButtonLabel: "+ Consultar Inventario",
+      tableHeaders: ["Bodega", "Total Referencias", "Costo en Bodega", "Valor de Venta", "Alertas Stock Bajo"],
       fields: [
-        { key: "warehouseFilter", label: "Bodega Auditada", type: "select", options: ["Todas las Bodegas Consolidadas", "Bodega Central Principal", "Bodega Norte Punto Venta"] },
-        { key: "capitalAtCost", label: "Capital Invertido al Costo ($ COP)", type: "number", placeholder: "62400000" },
-        { key: "potentialRevenue", label: "Valor Potencial de Venta ($ COP)", type: "number", placeholder: "98500000" },
-        { key: "projectedProfit", label: "Utilidad Bruta Proyectada ($ COP)", type: "number", placeholder: "36100000" },
-        { key: "alertsSummary", label: "Alertas de Reorden y Vencimiento FEFO", type: "text", placeholder: "4 SKUs Bajo M\xEDnimo | 2 Lotes en Alerta Naranja (<30 d\xEDas)" }
+        { key: "warehouseReport", label: "Bodega", type: "select", options: ["Todas las Bodegas", "Bodega Principal", "Bodega Punto de Venta"] }
       ]
     },
     {
       moduleKey: "mod-tax-dian-reports",
       parentServiceKey: "srv-reports",
-      externalSubmoduleName: "Anexos Tributarios DIAN (IVA 300, ReteFuente 350, ICA)",
+      externalSubmoduleName: "Resumen de Impuestos",
       tabIcon: "\u{1F3DB}\uFE0F",
-      summary: "Borradores autom\xE1ticos de IVA Generado vs Descontable, Retenciones practicadas por rengl\xF3n e ICA municipal.",
-      monthlyAddonUsd: 39e3,
-      actionButtonLabel: "Generar Anexo Tributario DIAN",
-      tableHeaders: ["Declaraci\xF3n / Anexo", "Per\xEDodo Fiscal", "Base Gravable Total", "Impuesto / Retenci\xF3n Liquidada", "Estado Pre-Auditor\xEDa"],
+      summary: "",
+      monthlyAddonUsd: 35e3,
+      actionButtonLabel: "+ Generar Resumen Tributario",
+      tableHeaders: ["Impuesto", "Per\xEDodo", "Base Gravable", "Impuesto Generado", "Estado"],
       fields: [
-        { key: "taxFormType", label: "Formulario / Anexo Oficial", type: "select", options: ["Formulario 300 \u2014 Declaraci\xF3n de IVA (Generado vs Descontable)", "Formulario 350 \u2014 Retenci\xF3n en la Fuente Mensual", "Anexo Industria y Comercio (ICA y ReteICA por Municipio)", "Certificados de Retenci\xF3n Bimestral/Anual en PDF"] },
-        { key: "taxPeriod", label: "Bimestre / Cuatrimestre / Mes", type: "text", placeholder: "2026 \u2014 Per\xEDodo 06 (Noviembre)" },
-        { key: "taxableBaseCop", label: "Base Gravable Consolidada ($ COP)", type: "number", placeholder: "142000000" },
-        { key: "taxPayableCop", label: "Saldo Neto Impuesto / Retenci\xF3n ($ COP)", type: "number", placeholder: "14850000" }
-      ]
-    },
-    {
-      moduleKey: "mod-custom-report-builder",
-      parentServiceKey: "srv-reports",
-      externalSubmoduleName: "Constructor Din\xE1mico BI y Exportaci\xF3n As\xEDncrona (v2)",
-      tabIcon: "\u{1F6E0}\uFE0F",
-      summary: "Cruce din\xE1mico de tablas (ConfiguracionReportes v2) y descarga masiva en Excel (.xlsx), CSV UTF-8 BOM y PDF.",
-      monthlyAddonUsd: 39e3,
-      actionButtonLabel: "Encolar y Descargar Reporte BI",
-      tableHeaders: ["Nombre del Reporte", "Tabla Principal y Cruces", "Formato Salida", "Filas Procesadas", "Estado Exportaci\xF3n"],
-      fields: [
-        { key: "customReportName", label: "T\xEDtulo de la Plantilla de Reporte", type: "text", placeholder: "Cruces Ventas + Kardex + Cartera por Contrato" },
-        { key: "sourceTables", label: "M\xF3dulo Principal y Relaciones Cruzadas", type: "select", options: ["Facturaci\xF3n + Clientes + Detalle \xCDtems + Kardex", "Inventario + Lotes + Recepciones T\xE9cnicas + Proveedores", "\xD3rdenes de Taller + Veh\xEDculos + Comisiones de T\xE9cnicos", "Agendamiento + Recursos + Tiempos de Espera Turnador"] },
-        { key: "exportFormat", label: "Formato de Exportaci\xF3n", type: "select", options: ["Excel Nativo (.xlsx)", "CSV Contable UTF-8 con BOM (;)", "PDF Membreteado con QR (DocForge)"] },
-        { key: "rowsCount", label: "Registros Estimados", type: "number", placeholder: "4520" }
+        { key: "taxType", label: "Tipo de Impuesto", type: "select", options: ["IVA Ventas vs Compras", "Impuesto al Consumo", "Retenciones Aplicadas"] },
+        { key: "taxPeriod", label: "Bimestre / Mes", type: "text", placeholder: "Bimestre Actual" }
       ]
     }
   ],
   features: [
-    {
-      componentKey: "comp-csv-utf8-bom-export",
-      externalName: "Exportaci\xF3n contable CSV con BOM UTF-8 para Excel en espa\xF1ol",
-      description: "Genera archivos planos separados por punto y coma (;) con codificaci\xF3n UTF-8-SIG listos para Excel y contadores.",
-      parentModuleKey: "mod-financial-reports",
-      includedByDefault: true,
-      monthlyAddonUsd: 15e3
-    }
+    { componentKey: "comp-dian-xml-exporter", parentServiceKey: "srv-reports", externalName: "Exportaci\xF3n directa a Excel (.CSV)", description: "Descarga reportes listos para Excel.", monthlyAddonUsd: 15e3 }
   ]
 };
 
 // apps/srv-ticketing/frontend/ticketing-service.view.ts
 var SRV_TICKETING_FRONTEND_VIEW = {
   serviceKey: "srv-ticketing",
-  externalPrincipalModuleName: "Taquilla QR, Eventos y Mesa PQRSF SLA",
-  icon: "\u{1F3AB}",
-  subtitle: "Venta de boleter\xEDa/covers con c\xF3digo QR antifraude, control de aforo en torniquetes y mesa PQRSF con SLA en d\xEDas h\xE1biles.",
-  standaloneMonthlyUsd: 13e4,
+  externalPrincipalModuleName: "Taquilla y Soporte",
+  icon: "\u{1F39F}\uFE0F",
+  subtitle: "Venta de entradas/covers, control de ingreso y atenci\xF3n de reclamos.",
+  standaloneMonthlyUsd: 119e3,
   submodules: [
     {
       moduleKey: "mod-event-tickets",
       parentServiceKey: "srv-ticketing",
-      externalSubmoduleName: "Taquilla, Covers, Palcos y Preventa QR",
+      externalSubmoduleName: "Venta de Entradas y Covers",
       tabIcon: "\u{1F39F}\uFE0F",
-      summary: "Emisi\xF3n de entradas generales, VIP y palcos con consumo m\xEDnimo incluido y c\xF3digo QR \xFAnico criptogr\xE1fico.",
+      summary: "",
       monthlyAddonUsd: 45e3,
-      actionButtonLabel: "Emitir Ticket / Cover QR",
-      tableHeaders: ["N\xB0 Ticket", "Categor\xEDa / Palco", "Visitante / Comprador", "C\xF3digo QR", "Tarifa ($ COP)"],
+      actionButtonLabel: "+ Vender Entrada / Cover",
+      tableHeaders: ["Ticket", "Evento / Zona", "Cliente", "Cantidad", "Total Pagado", "Estado", "Acciones"],
       fields: [
-        { key: "ticketCategory", label: "Categor\xEDa de Ticket / Localidad", type: "select", options: ["Cover General Noche", "Palco VIP (Incluye Consumo)", "Preventa Evento Especial", "Pase Parqueadero"] },
-        { key: "visitorName", label: "Nombre del Asistente / Comprador", type: "text", placeholder: "Santiago Ospina" },
-        {
-          key: "qrToken",
-          label: "C\xF3digo QR Criptogr\xE1fico de Control",
-          type: "text",
-          placeholder: "QR-PK-88412",
-          requiredFeatureKey: "comp-anti-clone-qr-gate"
-        },
-        { key: "ticketPrice", label: "Valor del Ticket ($ COP)", type: "number", placeholder: "65000" }
+        { key: "eventName", label: "Evento / Localidad", type: "select", options: ["Cover General", "Zona VIP / Palco", "Preventa Evento Especial"] },
+        { key: "buyerAttendee", label: "Cliente", type: "text", placeholder: "Sebasti\xE1n Restrepo" },
+        { key: "ticketPriceCop", label: "Valor Total ($)", type: "number", placeholder: "50000" }
       ]
     },
     {
       moduleKey: "mod-gate-scanner",
       parentServiceKey: "srv-ticketing",
-      externalSubmoduleName: "Esc\xE1ner de Puerta, Torniquetes y Aforo en Vivo",
-      tabIcon: "\u{1F6A7}",
-      summary: "Control de acceso en tiempo real por porter\xEDa, contador de ocupaci\xF3n m\xE1xima legal y lista de cortes\xEDas.",
-      monthlyAddonUsd: 39e3,
-      actionButtonLabel: "Validar Ingreso en Porter\xEDa",
-      tableHeaders: ["Porter\xEDa / Acceso", "Evento Activo", "Ingresos Validados", "Aforo M\xE1ximo", "Estado Puerta"],
+      externalSubmoduleName: "Control de Entrada en Puerta",
+      tabIcon: "\u{1F4F2}",
+      summary: "",
+      monthlyAddonUsd: 35e3,
+      actionButtonLabel: "+ Validar Entrada",
+      tableHeaders: ["C\xF3digo Ticket", "Asistente", "Zona", "Hora Ingreso", "Estado", "Acciones"],
       fields: [
-        { key: "gateCode", label: "Punto de Acceso / Torniquete", type: "select", options: ["Porter\xEDa Principal Calle 85", "Acceso VIP Palcos", "Porter\xEDa Vehicular"] },
-        { key: "eventName", label: "Evento / Noche Activa", type: "text", placeholder: "S\xE1bado Concierto en Vivo" },
-        { key: "checkedInCount", label: "Asistentes Dentro del Recinto", type: "number", placeholder: "340" },
-        { key: "maxCapacity", label: "Aforo Legal Permitido", type: "number", placeholder: "450" }
+        { key: "qrToken", label: "C\xF3digo de Boleta / QR", type: "text", placeholder: "TCK-9921" },
+        { key: "gateDoor", label: "Puerta de Acceso", type: "select", options: ["Entrada Principal", "Acceso VIP"] }
       ]
     },
     {
       moduleKey: "mod-pqrsf-helpdesk",
       parentServiceKey: "srv-ticketing",
-      externalSubmoduleName: "Mesa de Ayuda PQRSF y SLA D\xEDas H\xE1biles (Ley 1755)",
-      tabIcon: "\u{1F6CE}\uFE0F",
-      summary: "Radicaci\xF3n de Peticiones, Quejas, Reclamos y Solicitudes con sem\xE1foro de vencimiento en d\xEDas h\xE1biles de Colombia.",
-      monthlyAddonUsd: 45e3,
-      actionButtonLabel: "Radicar Caso PQRSF",
-      tableHeaders: ["Radicado PQRSF", "Tipo (P/Q/R/S/F)", "Solicitante", "D\xEDas H\xE1biles SLA", "Estado Tr\xE1mite"],
+      externalSubmoduleName: "Solicitudes y Garant\xEDas de Clientes",
+      tabIcon: "\u{1F3A7}",
+      summary: "",
+      monthlyAddonUsd: 35e3,
+      actionButtonLabel: "+ Crear Caso de Atenci\xF3n",
+      tableHeaders: ["Caso", "Cliente", "Tipo", "Descripci\xF3n", "Estado", "Acciones"],
       fields: [
-        { key: "radicadoNumber", label: "N\xFAmero de Radicado Oficial", type: "text", placeholder: "PQRS-2026-00914" },
-        { key: "requestType", label: "Tipolog\xEDa Ley 1755", type: "select", options: ["Petici\xF3n (15 d\xEDas h\xE1biles)", "Queja de Servicio (15 d\xEDas h\xE1biles)", "Reclamo de Facturaci\xF3n / Garant\xEDa", "Solicitud de Informaci\xF3n (10 d\xEDas h\xE1biles)"] },
-        { key: "petitionerName", label: "Nombre del Solicitante y Correo", type: "text", placeholder: "Marcela Quintero \u2014 marcela@cliente.co" },
-        { key: "businessDaysLeft", label: "D\xEDas H\xE1biles Restantes (Sin Festivos)", type: "number", placeholder: "12" }
+        { key: "ticketType", label: "Tipo de Solicitud", type: "select", options: ["Soporte / Garant\xEDa", "Petici\xF3n", "Reclamo", "Sugerencia"] },
+        { key: "requesterName", label: "Cliente", type: "text", placeholder: "Nombre del cliente" },
+        { key: "caseSubject", label: "Detalle del Caso", type: "text", placeholder: "Descripci\xF3n breve" }
       ]
     }
   ],
   features: [
-    {
-      componentKey: "comp-anti-clone-qr-gate",
-      externalName: "Generador y validador QR criptogr\xE1fico anti-clonaci\xF3n en torniquetes",
-      description: "Invalida el token QR en milisegundos tras la primera lectura en puerta para impedir reingresos.",
-      parentModuleKey: "mod-event-tickets",
-      includedByDefault: true,
-      monthlyAddonUsd: 19e3
-    },
-    {
-      componentKey: "comp-sla-business-days",
-      externalName: "Calculadora SLA con festivos oficiales de Colombia (Ley Emiliani)",
-      description: "Descuenta domingos y festivos oficiales de Colombia al calcular t\xE9rminos legales de respuesta PQRSF.",
-      parentModuleKey: "mod-pqrsf-helpdesk",
-      includedByDefault: true,
-      monthlyAddonUsd: 19e3
-    }
+    { componentKey: "comp-anti-clone-qr-gate", parentServiceKey: "srv-ticketing", externalName: "Lector de C\xF3digo QR en Puerta", description: "Evita doble uso de entradas.", monthlyAddonUsd: 19e3 }
   ]
 };
 
 // apps/srv-treasury/frontend/treasury-service.view.ts
 var SRV_TREASURY_FRONTEND_VIEW = {
   serviceKey: "srv-treasury",
-  externalPrincipalModuleName: "Tesorer\xEDa, Cartera por Edades, Bancos y Cajas Menores",
-  icon: "\u{1F4B0}",
-  subtitle: "Recibos de caja, edades de cartera CxC, comprobantes de egreso CxP, conciliaci\xF3n bancaria y gastos menores.",
-  standaloneMonthlyUsd: 119e3,
+  externalPrincipalModuleName: "Caja y Cartera",
+  icon: "\u{1F4B5}",
+  subtitle: "Cuadre de caja, cuentas por cobrar a clientes, pagos a proveedores y gastos.",
+  standaloneMonthlyUsd: 129e3,
   submodules: [
+    {
+      moduleKey: "mod-petty-cash",
+      parentServiceKey: "srv-treasury",
+      externalSubmoduleName: "Caja del D\xEDa y Gastos",
+      tabIcon: "\u{1F4B5}",
+      summary: "",
+      monthlyAddonUsd: 35e3,
+      actionButtonLabel: "+ Registrar Gasto de Caja",
+      tableHeaders: ["Recibo", "Fecha", "Categor\xEDa", "Concepto del Gasto", "Origen", "Valor", "Acciones"],
+      fields: [
+        { key: "expenseConcept", label: "Concepto del Gasto", type: "text", placeholder: "Compra de insumos / Domicilio" },
+        { key: "expenseCategory", label: "Categor\xEDa", type: "select", options: ["Insumos Operativos", "Transporte / Domicilios", "Servicios / Aseo", "Adelanto / Vale"] },
+        { key: "expenseAmount", label: "Valor ($)", type: "number", placeholder: "25000" }
+      ]
+    },
     {
       moduleKey: "mod-receivables-cxc",
       parentServiceKey: "srv-treasury",
-      externalSubmoduleName: "Cartera Clientes (CxC) y Recibos de Caja",
-      tabIcon: "\u{1F4E5}",
-      summary: "Edades de cartera (Al d\xEDa, 15, 30, 60, +90 d\xEDas), abonos parciales con retenciones y cobro jur\xEDdico.",
-      monthlyAddonUsd: 39e3,
-      actionButtonLabel: "Emitir Recibo de Caja (Abono CxC)",
-      tableHeaders: ["Recibo / Factura", "Cliente", "Edad de Mora", "Retenciones Aplicadas", "Abono Recibido ($ COP)"],
+      externalSubmoduleName: "Cuentas por Cobrar (Clientes)",
+      tabIcon: "\u{1F4D2}",
+      summary: "",
+      monthlyAddonUsd: 45e3,
+      actionButtonLabel: "+ Registrar Abono de Cliente",
+      tableHeaders: ["Factura", "Cliente", "Total Factura", "Total Abonado", "Saldo Pendiente", "Estado", "Acciones"],
       fields: [
-        { key: "receiptNumber", label: "N\xB0 Recibo de Caja y Factura Cruzada", type: "text", placeholder: "RC-001420 -> FEV-1042" },
-        { key: "customerName", label: "Cliente Pagador", type: "text", placeholder: "Cl\xEDnica / Comercializadora del Norte S.A.S." },
-        { key: "agingBucket", label: "Tramo de Cartera / Estado", type: "select", options: ["Al D\xEDa (0-15 d\xEDas)", "Mora Temprana (16-30 d\xEDas)", "Mora Media (31-60 d\xEDas)", "Cartera Cr\xEDtica (+60 d\xEDas)", "En Cobro Jur\xEDdico"] },
-        {
-          key: "withholdingDeducted",
-          label: "Retenciones Practicadas por el Cliente al Pagar",
-          type: "text",
-          placeholder: "ReteFuente $85.000 + ReteICA $24.000",
-          requiredFeatureKey: "comp-payment-withholding-deduct"
-        },
-        { key: "amountReceived", label: "Valor Neto Ingresado a Caja/Banco ($ COP)", type: "number", placeholder: "3450000" }
+        { key: "receiptNumber", label: "N\xB0 Factura", type: "text", placeholder: "FEVP-9010" },
+        { key: "customerDebtor", label: "Cliente", type: "text", placeholder: "Nombre del cliente" },
+        { key: "amountCollected", label: "Valor Abonado ($)", type: "number", placeholder: "100000" },
+        { key: "paymentChannel", label: "Medio de Pago", type: "select", options: ["Efectivo", "Transferencia / Nequi", "Tarjeta"] }
       ]
     },
     {
       moduleKey: "mod-payables-cxp",
       parentServiceKey: "srv-treasury",
-      externalSubmoduleName: "Cuentas por Pagar (CxP) y Comprobantes de Egreso",
+      externalSubmoduleName: "Cuentas por Pagar (Proveedores)",
       tabIcon: "\u{1F4E4}",
-      summary: "Programaci\xF3n de pagos a proveedores, abonos a \xF3rdenes de compra y exportaci\xF3n de archivo plano ACH.",
-      monthlyAddonUsd: 39e3,
-      actionButtonLabel: "Emitir Comprobante de Egreso (CE)",
-      tableHeaders: ["Comprobante CE", "Proveedor Beneficiario", "Factura / OC Cruzada", "Banco / Medio", "Valor Pagado ($ COP)"],
+      summary: "",
+      monthlyAddonUsd: 42e3,
+      actionButtonLabel: "+ Registrar Pago a Proveedor",
+      tableHeaders: ["Comprobante", "Proveedor", "Factura Proveedor", "Medio de Pago", "Valor Pagado", "Estado", "Acciones"],
       fields: [
-        { key: "ceNumber", label: "Consecutivo Comprobante de Egreso", type: "text", placeholder: "CE-2026-00892" },
-        { key: "supplierBeneficiary", label: "Proveedor / Beneficiario", type: "text", placeholder: "Distribuidora Mayorista del Eje S.A.S." },
-        { key: "invoiceRef", label: "Factura de Compra / Orden Cruzada", type: "text", placeholder: "FC-99412 / OC-00418" },
-        { key: "bankSource", label: "Cuenta Bancaria o Caja Origen", type: "select", options: ["Bancolombia Cta Corriente \u2014 Dispersiones PAB", "Davivienda Empresarial ACH", "Nequi Negocios", "Caja General Principal"] },
-        { key: "paidAmount", label: "Valor Girado ($ COP)", type: "number", placeholder: "2890000" }
+        { key: "voucherCode", label: "N\xB0 Comprobante", type: "text", placeholder: "CE-001" },
+        { key: "supplierCreditor", label: "Proveedor", type: "text", placeholder: "Distribuidora Nacional" },
+        { key: "invoiceRef", label: "Factura que se Paga", type: "text", placeholder: "FC-4410" },
+        { key: "amountPaid", label: "Valor a Pagar ($)", type: "number", placeholder: "450000" }
       ]
     },
     {
       moduleKey: "mod-banks-reconciliation",
       parentServiceKey: "srv-treasury",
-      externalSubmoduleName: "Bancos, Traslados y Conciliaci\xF3n Bancaria",
+      externalSubmoduleName: "Bancos y Cuentas",
       tabIcon: "\u{1F3E6}",
-      summary: "Saldos en libros vs extracto bancario, traslados entre cajas/bancos e imputaci\xF3n autom\xE1tica de 4x1000.",
+      summary: "",
       monthlyAddonUsd: 39e3,
-      actionButtonLabel: "Registrar Conciliaci\xF3n / Traslado",
-      tableHeaders: ["Cuenta Bancaria", "Per\xEDodo Corte", "Saldo en Libros", "Saldo Extracto", "Diferencia Conciliada ($ COP)"],
+      actionButtonLabel: "+ Registrar Movimiento Bancario",
+      tableHeaders: ["ID", "Cuenta / Billetera", "Tipo Movimiento", "Referencia", "Valor", "Saldo", "Acciones"],
       fields: [
-        { key: "bankAccount", label: "Cuenta Bancaria o Billetera", type: "select", options: ["Bancolombia Corriente #412-88901-2", "Davivienda Ahorros #0051-99120", "BBVA Empresarial #110-44521", "Billetera Nequi / QR Bre-B"] },
-        { key: "cutoffPeriod", label: "Mes de Conciliaci\xF3n / Operaci\xF3n", type: "text", placeholder: "Noviembre 2026 \u2014 Corte Mensual" },
-        { key: "bookBalance", label: "Saldo Seg\xFAn Libros ($ COP)", type: "number", placeholder: "48520000" },
-        { key: "statementBalance", label: "Saldo Seg\xFAn Extracto Bancario ($ COP)", type: "number", placeholder: "48520000" }
-      ]
-    },
-    {
-      moduleKey: "mod-petty-cash",
-      parentServiceKey: "srv-treasury",
-      externalSubmoduleName: "Cajas Menores y Gastos de Turno (FixMotor)",
-      tabIcon: "\u{1FA99}",
-      summary: "Control de salidas operativas de efectivo (Expenses FixMotor), vales provisionales y reembolso de caja menor.",
-      monthlyAddonUsd: 29e3,
-      actionButtonLabel: "Registrar Gasto / Legalizaci\xF3n",
-      tableHeaders: ["Comprobante", "Categor\xEDa de Gasto", "Concepto / Tercero", "Medio de Salida", "Valor Gasto ($ COP)"],
-      fields: [
-        { key: "expenseCategory", label: "Categor\xEDa Operativa", type: "select", options: ["Insumos y Suministros R\xE1pidos", "Transporte, Peajes y Mensajer\xEDa", "Servicios P\xFAblicos y Aseo", "Gastos Generales de Turno"] },
-        { key: "expenseDescription", label: "Concepto y NIT del Soporte", type: "text", placeholder: "Compra Jab\xF3n Desengrasante y Papeler\xEDa \u2014 NIT 800.112.440" },
-        { key: "paymentSource", label: "Pagado Desde", type: "select", options: ["Efectivo de Caja (Resta Efectivo Neto)", "Fondo Fijo Caja Menor Administraci\xF3n", "Transferencia Nequi Menor"] },
-        { key: "expenseAmount", label: "Valor del Gasto ($ COP)", type: "number", placeholder: "65000" }
+        { key: "bankAccount", label: "Cuenta o Billetera Digital", type: "select", options: ["Bancolombia Ahorros", "Nequi Negocios", "Daviplata", "Banco de Bogot\xE1"] },
+        { key: "txDescription", label: "Concepto / Referencia", type: "text", placeholder: "Transferencia cliente / Consignaci\xF3n" },
+        { key: "txAmount", label: "Valor ($)", type: "number", placeholder: "320000" }
       ]
     }
   ],
   features: [
-    {
-      componentKey: "comp-payment-withholding-deduct",
-      externalName: "Liquidaci\xF3n de retenciones aplicadas por el cliente en el recaudo (v2)",
-      description: "Permite descontar ReteFuente, ReteICA y ReteIVA practicadas por el cliente al registrar el Recibo de Caja.",
-      parentModuleKey: "mod-receivables-cxc",
-      includedByDefault: true,
-      monthlyAddonUsd: 15e3
-    },
-    {
-      componentKey: "comp-gmf-4x1000-auto",
-      externalName: "C\xE1lculo autom\xE1tico de GMF (4x1000) en egresos bancarios",
-      description: "Calcula y contabiliza autom\xE1ticamente el gravamen a los movimientos financieros (4x1000) en cuentas no exentas.",
-      parentModuleKey: "mod-banks-reconciliation",
-      includedByDefault: true,
-      monthlyAddonUsd: 15e3
-    }
+    { componentKey: "comp-withholding-calc", parentServiceKey: "srv-treasury", externalName: "Descuento por Retenciones", description: "Permite registrar retenciones en pagos.", monthlyAddonUsd: 19e3 }
   ]
 };
 
 // apps/srv-workshop/frontend/workshop-service.view.ts
 var SRV_WORKSHOP_FRONTEND_VIEW = {
   serviceKey: "srv-workshop",
-  externalPrincipalModuleName: "Talleres Automotrices, OT Kanban y Comisiones (FixMotor)",
+  externalPrincipalModuleName: "Taller y Servicios",
   icon: "\u{1F527}",
-  subtitle: "Recepci\xF3n t\xE9cnica por placa, sem\xE1foro SOAT/Tecnomec\xE1nica/Aceite, tablero Kanban de 5 etapas y liquidaci\xF3n de mec\xE1nicos.",
+  subtitle: "Recepci\xF3n de veh\xEDculos o equipos, \xF3rdenes de trabajo y comisiones de t\xE9cnicos.",
   standaloneMonthlyUsd: 129e3,
   submodules: [
     {
-      moduleKey: "mod-vehicles-assets",
+      moduleKey: "mod-work-orders-kanban",
       parentServiceKey: "srv-workshop",
-      externalSubmoduleName: "Parque Automotor / Equipos y Alertas (SOAT / Aceite)",
-      tabIcon: "\u{1F3CD}\uFE0F",
-      summary: "Hoja de vida cl\xEDnica por placa/serial, od\xF3metro actual, pr\xF3ximo cambio de aceite y vencimientos SOAT/Tecnomec\xE1nica.",
-      monthlyAddonUsd: 39e3,
-      actionButtonLabel: "Guardar Veh\xEDculo / Activo en BD",
-      tableHeaders: ["Placa / Serial", "Marca y L\xEDnea", "Propietario", "Kilometraje / Pr\xF3ximo Aceite", "Sem\xE1foro SOAT / Tecno"],
+      externalSubmoduleName: "\xD3rdenes de Trabajo (Tablero)",
+      tabIcon: "\u{1F4CB}",
+      summary: "",
+      monthlyAddonUsd: 49e3,
+      actionButtonLabel: "+ Ingresar Orden de Trabajo",
+      tableHeaders: ["Orden", "Placa", "Cliente", "T\xE9cnico", "Estado", "Total Estimado", "Acciones"],
       fields: [
-        { key: "plate", label: "Placa del Veh\xEDculo o Serial Equipo", type: "text", placeholder: "KLM-84G / WXY-912" },
-        { key: "makeModel", label: "Marca y L\xEDnea / Modelo", type: "text", placeholder: "Yamaha NMAX Connected 155 \u2014 Mod 2025" },
-        { key: "ownerName", label: "Cliente Propietario y WhatsApp", type: "text", placeholder: "Andr\xE9s Felipe Toro \u2014 315 842 9910" },
-        { key: "mileageInfo", label: "Kilometraje Actual / Pr\xF3ximo Cambio Aceite", type: "text", placeholder: "Actual: 14.200 Km | Pr\xF3ximo Aceite: 17.000 Km" },
-        {
-          key: "legalAlerts",
-          label: "Estado SOAT y Revisi\xF3n Tecnomec\xE1nica",
-          type: "select",
-          options: ["Vigente al D\xEDa (Verde)", "Pr\xF3ximo a Vencer < 15 D\xEDas (Naranja)", "SOAT / Tecnomec\xE1nica Vencido (Rojo)"],
-          requiredFeatureKey: "comp-soat-tecno-oil-alerts"
-        }
+        { key: "otNumber", label: "Placa", type: "text", placeholder: "KLM-84G" },
+        { key: "vehicleAndClient", label: "Cliente", type: "text", placeholder: "Nombre del propietario" },
+        { key: "servicesChecklist", label: "Trabajo a Realizar", type: "text", placeholder: "Cambio de aceite y revisi\xF3n de frenos" },
+        { key: "estimatedTotal", label: "Valor Mano de Obra ($)", type: "number", placeholder: "85000" }
       ]
     },
     {
-      moduleKey: "mod-work-orders-kanban",
+      moduleKey: "mod-vehicles-assets",
       parentServiceKey: "srv-workshop",
-      externalSubmoduleName: "Recepci\xF3n 360\xB0 y Tablero Kanban de Taller (5 Etapas)",
-      tabIcon: "\u{1F4CB}",
-      summary: "\xD3rdenes de trabajo (Recibido -> Diagn\xF3stico -> Esperando Repuesto -> En Reparaci\xF3n -> Listo para Entrega) con aviso WhatsApp.",
-      monthlyAddonUsd: 49e3,
-      actionButtonLabel: "Crear / Avanzar Orden en Kanban",
-      tableHeaders: ["N\xB0 Orden (OT)", "Placa y Cliente", "T\xE9cnico Asignado", "Etapa Kanban", "Trabajos y Total ($ COP)"],
+      externalSubmoduleName: "Veh\xEDculos y Equipos",
+      tabIcon: "\u{1F697}",
+      summary: "",
+      monthlyAddonUsd: 39e3,
+      actionButtonLabel: "+ Registrar Veh\xEDculo / Equipo",
+      tableHeaders: ["Placa / Serial", "Marca y L\xEDnea", "Propietario", "Kilometraje / Pr\xF3x. Aceite", "SOAT / Tecno", "Acciones"],
       fields: [
-        { key: "otNumber", label: "N\xFAmero de Orden de Trabajo", type: "text", placeholder: "OT-2026-00914" },
-        { key: "vehicleAndClient", label: "Placa y Propietario", type: "text", placeholder: "KLM-84G \u2014 Andr\xE9s Felipe Toro" },
-        { key: "assignedWorker", label: "Mec\xE1nico / T\xE9cnico Responsable", type: "select", options: ["Carlos Julio Pineda (Especialista Inyecci\xF3n)", "Robinson Morales (Frenos y Suspensi\xF3n)", "Diego Fernando R\xEDos (Electricidad y Diagn\xF3stico)"] },
-        { key: "kanbanStage", label: "Etapa en el Tablero Kanban", type: "select", options: ["1. Recibido en Taller", "2. En Diagn\xF3stico T\xE9cnico", "3. Esperando Repuesto", "4. En Reparaci\xF3n en Bah\xEDa", "5. Listo para Entrega (Notificar WhatsApp)"] },
-        { key: "servicesChecklist", label: "Trabajos Solicitados y Checklist Recepci\xF3n", type: "text", placeholder: "Cambio Aceite + Pastillas Delanteras (Deja Casco, Combustible 50%)" },
-        { key: "estimatedTotal", label: "Total Repuestos + Mano de Obra ($ COP)", type: "number", placeholder: "285000" }
+        { key: "plate", label: "Placa o Serial", type: "text", placeholder: "KLM-84G" },
+        { key: "makeModel", label: "Marca / L\xEDnea / Modelo", type: "text", placeholder: "Mazda CX-30 2024" },
+        { key: "ownerName", label: "Propietario", type: "text", placeholder: "Andr\xE9s Toro" },
+        { key: "mileageInfo", label: "Kilometraje Actual", type: "number", placeholder: "45000" }
       ]
     },
     {
       moduleKey: "mod-worker-commissions",
       parentServiceKey: "srv-workshop",
-      externalSubmoduleName: "Liquidaci\xF3n de Comisiones de Mec\xE1nicos / T\xE9cnicos",
+      externalSubmoduleName: "Comisiones de T\xE9cnicos",
       tabIcon: "\u{1F477}",
-      summary: "Acumulador de mano de obra producida en el turno (totalDia), porcentaje del t\xE9cnico vs taller y liquidaci\xF3n auditable.",
+      summary: "",
       monthlyAddonUsd: 39e3,
-      actionButtonLabel: "Liquidar Corte de Comisi\xF3n a T\xE9cnico",
-      tableHeaders: ["Liquidaci\xF3n", "Mec\xE1nico / T\xE9cnico", "Mano de Obra Bruta", "% Comisi\xF3n", "Pagado a T\xE9cnico ($ COP)"],
+      actionButtonLabel: "+ Registrar T\xE9cnico",
+      tableHeaders: ["T\xE9cnico", "Especialidad", "% Comisi\xF3n", "Producido Hoy", "Pago al T\xE9cnico", "Utilidad Taller", "Acciones"],
       fields: [
-        { key: "settlementCode", label: "C\xF3digo de Liquidaci\xF3n", type: "text", placeholder: "LIQ-TEC-00312" },
-        { key: "workerName", label: "Mec\xE1nico / T\xE9cnico", type: "text", placeholder: "Carlos Julio Pineda" },
-        { key: "grossLabor", label: "Total Bruto Mano de Obra del Turno ($ COP)", type: "number", placeholder: "640000" },
-        { key: "commissionPct", label: "Esquema de Participaci\xF3n (%)", type: "select", options: ["60% T\xE9cnico / 40% Taller", "50% T\xE9cnico / 50% Taller", "40% T\xE9cnico / 60% Taller", "70% Especialista Externo / 30% Taller"] },
-        { key: "paidToWorker", label: "Neto Pagado al T\xE9cnico ($ COP)", type: "number", placeholder: "384000" }
+        { key: "workerName", label: "Nombre del T\xE9cnico", type: "text", placeholder: "Carlos M\xE9ndez" },
+        { key: "settlementCode", label: "Especialidad", type: "text", placeholder: "Mec\xE1nica General / Inyecci\xF3n" },
+        { key: "grossLabor", label: "% Comisi\xF3n T\xE9cnico", type: "number", placeholder: "40" }
       ]
     },
     {
       moduleKey: "mod-warranties",
       parentServiceKey: "srv-workshop",
-      externalSubmoduleName: "Garant\xEDas de Repuestos y Mano de Obra",
+      externalSubmoduleName: "Garant\xEDas",
       tabIcon: "\u{1F6E1}\uFE0F",
-      summary: "Control de reingresos por garant\xEDa vinculados a la factura original o serial del repuesto instalado.",
+      summary: "",
       monthlyAddonUsd: 29e3,
-      actionButtonLabel: "Registrar Caso de Garant\xEDa",
-      tableHeaders: ["Radicado Garant\xEDa", "Factura / OT Origen", "Placa / Repuesto", "Dictamen T\xE9cnico", "Costo Asumido ($ COP)"],
+      actionButtonLabel: "+ Registrar Garant\xEDa",
+      tableHeaders: ["N\xB0 Caso", "Factura / Orden", "Placa / Repuesto", "Soluci\xF3n", "Costo", "Acciones"],
       fields: [
-        { key: "warrantyCode", label: "Radicado de Garant\xEDa", type: "text", placeholder: "GAR-2026-0048" },
-        { key: "originInvoiceOt", label: "Factura y OT Original", type: "text", placeholder: "FEV-1088 / OT-2026-00810" },
-        { key: "itemOrService", label: "Placa y Repuesto / Trabajo Reclamado", type: "text", placeholder: "KLM-84G \u2014 Bater\xEDa Gel 12V 7Ah (Serial BAT-9912)" },
-        { key: "resolutionType", label: "Resoluci\xF3n T\xE9cnica", type: "select", options: ["Reposici\xF3n sin Costo por Proveedor", "Ajuste Mano de Obra Taller", "Improcedente por Mal Uso"] },
-        { key: "assumedCost", label: "Valor Cubierto ($ COP)", type: "number", placeholder: "145000" }
+        { key: "warrantyCode", label: "Factura u Orden Origen", type: "text", placeholder: "OT-3041" },
+        { key: "itemOrService", label: "Placa y Motivo de Garant\xEDa", type: "text", placeholder: "KLM-84G \u2014 Ajuste de frenos" },
+        { key: "resolutionType", label: "Soluci\xF3n Aplicada", type: "select", options: ["Ajuste sin Costo", "Cambio de Repuesto por Proveedor", "No Aplica Garant\xEDa"] },
+        { key: "assumedCost", label: "Costo Asumido ($)", type: "number", placeholder: "0" }
       ]
     }
   ],
   features: [
-    {
-      componentKey: "comp-soat-tecno-oil-alerts",
-      externalName: "Sem\xE1foro preventivo de SOAT, Tecnomec\xE1nica y Cambio de Aceite",
-      description: "Muestra alertas autom\xE1ticas al digitar la placa si el veh\xEDculo tiene documentos o cambio de aceite pr\xF3ximos a vencer.",
-      parentModuleKey: "mod-vehicles-assets",
-      includedByDefault: true,
-      monthlyAddonUsd: 15e3
-    },
-    {
-      componentKey: "comp-kanban-whatsapp-notify",
-      externalName: "Notificaci\xF3n WhatsApp en 1 clic por etapa del Kanban",
-      description: "Env\xEDa mensaje autom\xE1tico al celular del cliente cuando su veh\xEDculo avanza de etapa o est\xE1 Listo para Entrega.",
-      parentModuleKey: "mod-work-orders-kanban",
-      includedByDefault: true,
-      monthlyAddonUsd: 15e3
-    },
-    {
-      componentKey: "comp-pos-ot-preload",
-      externalName: "Precarga autom\xE1tica de Orden de Trabajo en Caja POS",
-      description: "Al facturar una placa con orden pendiente en el taller, carga autom\xE1ticamente sus repuestos, mano de obra y mec\xE1nico.",
-      parentModuleKey: "mod-work-orders-kanban",
-      includedByDefault: true,
-      monthlyAddonUsd: 19e3
-    }
+    { componentKey: "comp-intake-checklist-sign", parentServiceKey: "srv-workshop", externalName: "Alertas de Cambio de Aceite y SOAT", description: "Calcula pr\xF3ximo cambio de aceite.", monthlyAddonUsd: 19e3 },
+    { componentKey: "comp-warranty-vin-alert", parentServiceKey: "srv-workshop", externalName: "Control de Garant\xEDas por Placa", description: "Historial por placa.", monthlyAddonUsd: 15e3 }
   ]
 };
 
@@ -14355,27 +13942,27 @@ var SRV_WORKSHOP_FRONTEND_VIEW = {
 var MICROSERVICE_FRONTEND_CATALOG = [
   SRV_INVOICING_FRONTEND_VIEW,
   SRV_INVENTORY_FRONTEND_VIEW,
-  SRV_PROCUREMENT_FRONTEND_VIEW,
-  SRV_TREASURY_FRONTEND_VIEW,
-  SRV_CRM_FRONTEND_VIEW,
-  SRV_FINANCE_FRONTEND_VIEW,
-  SRV_HR_PAYROLL_FRONTEND_VIEW,
-  SRV_REPORTS_FRONTEND_VIEW,
   SRV_GASTRO_FRONTEND_VIEW,
   SRV_WORKSHOP_FRONTEND_VIEW,
-  SRV_FLEET_FRONTEND_VIEW,
-  SRV_APPOINTMENTS_FRONTEND_VIEW,
+  SRV_CRM_FRONTEND_VIEW,
+  SRV_TREASURY_FRONTEND_VIEW,
+  SRV_PROCUREMENT_FRONTEND_VIEW,
   SRV_HOTEL_FRONTEND_VIEW,
-  SRV_TICKETING_FRONTEND_VIEW
+  SRV_APPOINTMENTS_FRONTEND_VIEW,
+  SRV_FLEET_FRONTEND_VIEW,
+  SRV_TICKETING_FRONTEND_VIEW,
+  SRV_FINANCE_FRONTEND_VIEW,
+  SRV_HR_PAYROLL_FRONTEND_VIEW,
+  SRV_REPORTS_FRONTEND_VIEW
 ];
 var ALL_SUBMODULES_FLAT = MICROSERVICE_FRONTEND_CATALOG.flatMap((svc) => svc.submodules);
 var ALL_FEATURES_FLAT = MICROSERVICE_FRONTEND_CATALOG.flatMap((svc) => svc.features);
 var BUSINESS_TYPE_PRESETS = [
   {
     id: "comercio-retail",
-    name: "Comercio, Tienda & Ferreter\xEDa",
-    badge: "Plan Base Completo Comercial",
-    description: "Incluye Caja POS, Cotizaciones, Existencias, Bodega Base, Compras a Proveedores, Directorio de Clientes, Cartera y Reportes.",
+    name: "Comercio, Tienda y Ferreter\xEDa",
+    badge: "Comercio y Ventas",
+    description: "Punto de Venta, Inventario, Proveedores, Clientes, Caja y Reportes.",
     baseMonthlyUsd: 169e3,
     includedPrincipalServices: ["srv-invoicing", "srv-inventory", "srv-procurement", "srv-crm", "srv-treasury", "srv-reports"],
     includedSubmodules: ["mod-pos", "mod-quotes", "mod-stock", "mod-warehouses", "mod-purchase-orders", "mod-directory", "mod-receivables-cxc", "mod-sales-profitability-reports"],
@@ -14383,9 +13970,9 @@ var BUSINESS_TYPE_PRESETS = [
   },
   {
     id: "restaurante-gastro",
-    name: "Restaurante, Gastrobar & Cafeter\xEDa",
-    badge: "Plan Base Completo Gastron\xF3mico",
-    description: "Incluye Sal\xF3n y Mesas, Monitor KDS, Modificadores de Carta, Divisi\xF3n de Cuentas, Domicilios, Caja POS con Propina y Recetas BOM.",
+    name: "Restaurante, Gastrobar y Cafeter\xEDa",
+    badge: "Gastronom\xEDa",
+    description: "Mesas, Comandas para Cocina/Barra, Carta, Divisi\xF3n de Cuentas, Domicilios, Caja e Inventario.",
     baseMonthlyUsd: 199e3,
     includedPrincipalServices: ["srv-gastro", "srv-invoicing", "srv-inventory", "srv-procurement", "srv-treasury", "srv-reports"],
     includedSubmodules: ["mod-tables", "mod-kds", "mod-modifiers-menu", "mod-split", "mod-deliveries", "mod-pos", "mod-stock", "mod-recipes", "mod-petty-cash", "mod-sales-profitability-reports"],
@@ -14393,9 +13980,9 @@ var BUSINESS_TYPE_PRESETS = [
   },
   {
     id: "bares-discotecas",
-    name: "Bares, Licores & Entretenimiento Nocturno",
-    badge: "Plan Base Especializado Bares",
-    description: "Incluye Barra y Mesas, Comandas KDS, Control por Trago/Botella, Happy Hour, Taquilla/Covers QR, Torniquetes y Caja POS.",
+    name: "Bares, Licores y Eventos",
+    badge: "Bares y Eventos",
+    description: "Mesas y Barra, Comandas, Taquilla/Covers, Control de Puerta, Inventario de Licores y Caja.",
     baseMonthlyUsd: 199e3,
     includedPrincipalServices: ["srv-gastro", "srv-ticketing", "srv-invoicing", "srv-inventory", "srv-treasury", "srv-reports"],
     includedSubmodules: ["mod-tables", "mod-kds", "mod-split", "mod-event-tickets", "mod-gate-scanner", "mod-pos", "mod-stock", "mod-recipes", "mod-petty-cash"],
@@ -14403,29 +13990,29 @@ var BUSINESS_TYPE_PRESETS = [
   },
   {
     id: "talleres-fixmotor",
-    name: "Talleres Automotrices, CDA & Servicio T\xE9cnico (FixMotor)",
-    badge: "Plan Especializado FixMotor",
-    description: "Incluye Flota/Veh\xEDculos de Clientes, \xD3rdenes de Trabajo Kanban con Checklist, Comisiones de T\xE9cnicos, Garant\xEDas, Repuestos y POS/FE.",
+    name: "Talleres Automotrices y Servicio T\xE9cnico",
+    badge: "Talleres y Repuestos",
+    description: "Recepci\xF3n de Veh\xEDculos, Tablero de \xD3rdenes, Comisiones de T\xE9cnicos, Inventario de Repuestos, Clientes y Facturaci\xF3n.",
     baseMonthlyUsd: 229e3,
     includedPrincipalServices: ["srv-workshop", "srv-inventory", "srv-procurement", "srv-invoicing", "srv-crm", "srv-treasury", "srv-reports"],
-    includedSubmodules: ["mod-vehicles-assets", "mod-work-orders-kanban", "mod-worker-commissions", "mod-warranties", "mod-stock", "mod-warehouses", "mod-purchase-orders", "mod-pos", "mod-dian", "mod-directory", "mod-customer-360"],
+    includedSubmodules: ["mod-vehicles-assets", "mod-work-orders-kanban", "mod-worker-commissions", "mod-warranties", "mod-stock", "mod-warehouses", "mod-purchase-orders", "mod-pos", "mod-dian", "mod-directory"],
     includedFeatures: ["comp-intake-checklist-sign", "comp-warranty-vin-alert", "comp-nit-dv-auto", "comp-cashier-name"]
   },
   {
     id: "servicios-citas-v2",
-    name: "Consultorios, IPS, Centros de Servicios & Citas (v2)",
-    badge: "Plan Especializado Estilo v2",
-    description: "Incluye Agendas Multi-Profesional, Recordatorios WhatsApp IA, Turnador TV, Contratos con Bolsa v2, Tarifarios, Facturaci\xF3n Agrupada y Glosas.",
+    name: "Consultorios, Centros de Servicios y Citas",
+    badge: "Citas y Convenios",
+    description: "Agenda de Citas, Horarios de Profesionales, Clientes, Convenios, Facturaci\xF3n y Cartera.",
     baseMonthlyUsd: 249e3,
     includedPrincipalServices: ["srv-appointments", "srv-crm", "srv-invoicing", "srv-inventory", "srv-treasury", "srv-reports"],
-    includedSubmodules: ["mod-calendar-slots", "mod-staff-schedules", "mod-interactive-reminders", "mod-queue-turnador", "mod-directory", "mod-contracts", "mod-tariffs", "mod-grouped-billing", "mod-glosas-disputes", "mod-dian", "mod-tech-reception", "mod-lots"],
+    includedSubmodules: ["mod-calendar-slots", "mod-staff-schedules", "mod-queue-turnador", "mod-directory", "mod-contracts", "mod-tariffs", "mod-grouped-billing", "mod-glosas-disputes", "mod-dian", "mod-tech-reception", "mod-lots"],
     includedFeatures: ["comp-overbooking-guard", "comp-whatsapp-ai-reschedule", "comp-contract-budget-alert", "comp-expiry-semaphore"]
   },
   {
     id: "reservas-tickets-hotel",
-    name: "Hoteles, Glamping, Clubes & Taquilla de Eventos",
-    badge: "Plan Base Alojamiento y Cupos",
-    description: "Incluye Reserva de Caba\xF1as/Salones, Recepci\xF3n y Folio de Hu\xE9sped, Tarifas por Temporada, Ama de Llaves, Pasad\xEDas QR y Facturaci\xF3n.",
+    name: "Hoteles, Caba\xF1as, Clubes y Pasad\xEDas",
+    badge: "Hoteler\xEDa y Turismo",
+    description: "Habitaciones y Check-In, Reservas, Camareras, Pasad\xEDas, Restaurante y Facturaci\xF3n.",
     baseMonthlyUsd: 229e3,
     includedPrincipalServices: ["srv-hotel", "srv-ticketing", "srv-gastro", "srv-invoicing", "srv-crm", "srv-treasury"],
     includedSubmodules: ["mod-bookings", "mod-rooms", "mod-seasonal-rates", "mod-housekeeping", "mod-tickets", "mod-tables", "mod-pos", "mod-dian", "mod-directory"],
@@ -14433,19 +14020,19 @@ var BUSINESS_TYPE_PRESETS = [
   },
   {
     id: "distribuidora-mayorista",
-    name: "Distribuidora Mayorista, Importadora & Multi-Bodega",
-    badge: "Plan Base Completo Mayorista",
-    description: "Incluye Facturaci\xF3n DIAN, Tarifarios, Bodegas WMS, Traslados, Toma F\xEDsica Ciega, Compras, RADIAN, Documento Soporte, Cartera CxC/CxP y PUC.",
+    name: "Distribuidora Mayorista y Multi-Bodega",
+    badge: "Mayorista y Bodegas",
+    description: "Facturaci\xF3n, Listas de Precios, Bodegas, Traslados, Compras, Cartera Clientes/Proveedores y Contabilidad.",
     baseMonthlyUsd: 259e3,
     includedPrincipalServices: ["srv-invoicing", "srv-inventory", "srv-procurement", "srv-treasury", "srv-crm", "srv-finance", "srv-reports"],
-    includedSubmodules: ["mod-pos", "mod-dian", "mod-tariffs", "mod-quotes", "mod-stock", "mod-warehouses", "mod-transfers", "mod-physical-count", "mod-purchase-orders", "mod-purchase-invoices", "mod-radian-events", "mod-landed-costs", "mod-receivables-cxc", "mod-payables-cxp", "mod-directory", "mod-puc"],
+    includedSubmodules: ["mod-pos", "mod-dian", "mod-tariffs", "mod-quotes", "mod-stock", "mod-warehouses", "mod-transfers", "mod-purchase-orders", "mod-purchase-invoices", "mod-receivables-cxc", "mod-payables-cxp", "mod-directory", "mod-puc"],
     includedFeatures: ["comp-manager-signature", "comp-carrier-select", "comp-credit-quota-lock", "comp-margin-drop-alert"]
   },
   {
     id: "agro-logistica-bascula",
-    name: "Agroindustria, Transporte de Carga RNDC & B\xE1scula Camionera",
-    badge: "Plan Base Completo Log\xEDstico y Pesaje",
-    description: "Incluye B\xE1scula Camionera RS-232 (Bruto/Tara/Neto), Manifiestos RNDC, Anticipos y Liquidaci\xF3n de Viajes, Llantas, Bodegas, Lotes y DIAN.",
+    name: "Agroindustria, Transporte de Carga y B\xE1scula",
+    badge: "Transporte y Pesaje",
+    description: "Pesaje en B\xE1scula, Despachos de Carga, Anticipos de Viaje, Bodegas, Compras y Facturaci\xF3n.",
     baseMonthlyUsd: 289e3,
     includedPrincipalServices: ["srv-fleet", "srv-inventory", "srv-procurement", "srv-invoicing", "srv-treasury", "srv-crm", "srv-finance"],
     includedSubmodules: ["mod-fleet-scale", "mod-fleet-dispatch-rndc", "mod-trip-settlements", "mod-tires-fleet-maint", "mod-stock", "mod-warehouses", "mod-transfers", "mod-lots", "mod-scale", "mod-support-doc-dse", "mod-dian", "mod-receivables-cxc", "mod-payables-cxp", "mod-directory"],
@@ -14453,12 +14040,12 @@ var BUSINESS_TYPE_PRESETS = [
   },
   {
     id: "erp-corporativo-integral",
-    name: "ERP Corporativo Multi-Sede (NIIF + N\xF3mina DIAN + BI)",
-    badge: "Suite Empresarial Todo-en-Uno",
-    description: "Habilita Contabilidad NIIF, Ex\xF3gena DIAN, N\xF3mina Electr\xF3nica CUNE + PILA, Tesorer\xEDa, Compras RADIAN, Inventario WMS, Facturaci\xF3n y BI.",
+    name: "Empresa Integral Multi-Sede (Todos los M\xF3dulos)",
+    badge: "Plan Empresarial Completo",
+    description: "Incluye Facturaci\xF3n, Inventario, Compras, Clientes, Caja, Contabilidad, N\xF3mina y Reportes.",
     baseMonthlyUsd: 389e3,
-    includedPrincipalServices: ["srv-invoicing", "srv-inventory", "srv-procurement", "srv-treasury", "srv-finance", "srv-hr-payroll", "srv-reports", "srv-crm"],
-    includedSubmodules: ["mod-pos", "mod-dian", "mod-tariffs", "mod-grouped-billing", "mod-stock", "mod-warehouses", "mod-transfers", "mod-physical-count", "mod-purchase-orders", "mod-purchase-invoices", "mod-support-doc-dse", "mod-radian-events", "mod-receivables-cxc", "mod-payables-cxp", "mod-banks-reconciliation", "mod-puc", "mod-cost-centers", "mod-fixed-assets", "mod-exogena-taxes", "mod-employees-contracts", "mod-payroll-settlement", "mod-social-benefits-pila", "mod-electronic-payroll-dian", "mod-financial-reports", "mod-tax-dian-reports", "mod-directory", "mod-contracts"],
+    includedPrincipalServices: ["srv-invoicing", "srv-inventory", "srv-gastro", "srv-workshop", "srv-procurement", "srv-treasury", "srv-finance", "srv-hr-payroll", "srv-reports", "srv-crm", "srv-hotel", "srv-appointments", "srv-fleet", "srv-ticketing"],
+    includedSubmodules: ["mod-pos", "mod-dian", "mod-tariffs", "mod-grouped-billing", "mod-stock", "mod-warehouses", "mod-transfers", "mod-purchase-orders", "mod-purchase-invoices", "mod-support-doc-dse", "mod-receivables-cxc", "mod-payables-cxp", "mod-banks-reconciliation", "mod-puc", "mod-cost-centers", "mod-fixed-assets", "mod-exogena-taxes", "mod-employees-contracts", "mod-payroll-settlement", "mod-social-benefits-pila", "mod-financial-reports", "mod-tax-dian-reports", "mod-directory", "mod-contracts"],
     includedFeatures: ["comp-nit-dv-auto", "comp-credit-quota-lock", "comp-withholding-calc", "comp-ley1607-exoneration", "comp-cune-dian-payroll", "comp-dian-xml-exporter"]
   }
 ];
@@ -14760,122 +14347,118 @@ var INITIAL_SUBMODULE_ROWS = {
 // apps/web-app/src/presentation/client-runtime/crm-360-cxc-hub.runtime.ts
 function renderCrm360CxcHubRuntimeJs() {
   return `
-  function pkRenderLook360Hub() {
+  function pkRenderLook360Hub(subKey) {
     var db = STATE.relDb;
-    var container = document.getElementById('ws-converged-hub-container');
-    if (!container || !db) return;
+    var stage = document.getElementById('ws-module-stage');
+    if (!stage || !db) return;
 
-    var tab = STATE.look360Tab || 'customers';
     var q = (STATE.look360Search || '').trim().toLowerCase();
 
-    var totalCxc = 0; var creditInvoicesCount = 0;
-    for (var invIdx = 0; invIdx < db.invoices.length; invIdx++) {
-      var inv = db.invoices[invIdx];
-      if (Number(inv.pendingBalance || 0) > 0) {
-        totalCxc += Number(inv.pendingBalance);
-        creditInvoicesCount++;
-      }
-    }
-
-    var tableHtml = '';
-    if (tab === 'customers') {
-      var cRows = '';
-      for (var c = 0; c < db.customers.length; c++) {
-        var cu = db.customers[c];
-        if (q && (cu.name + ' ' + cu.nit + ' ' + cu.city).toLowerCase().indexOf(q) === -1) continue;
-        var contract = cu.contractId ? pkFindById(db.contracts, cu.contractId) : null;
-        var tariff = cu.tariffId ? pkFindById(db.tariffs, cu.tariffId) : null;
-        var vehCount = 0; var invCount = 0;
-        for (var v = 0; v < db.vehicles.length; v++) if (db.vehicles[v].customerId === cu.id) vehCount++;
-        for (var iv = 0; iv < db.invoices.length; iv++) if (db.invoices[iv].customerId === cu.id) invCount++;
-        cRows += '<tr>' +
-          '<td><strong>' + pkEsc(cu.name) + '</strong><div style="font-size:11px;color:var(--pk-muted)">' + pkEsc(cu.docType + ' ' + cu.nit + (cu.dv ? '-' + cu.dv : '') + ' \xB7 ' + cu.taxRegime) + '</div></td>' +
-          '<td>' + pkEsc(cu.city) + '<div style="font-size:11px;color:var(--pk-muted)">\u{1F4DE} ' + pkEsc(cu.phone) + '</div></td>' +
-          '<td><span class="badge badge-blue">' + pkEsc(contract ? contract.code : 'Contado') + '</span> <span class="badge badge-slate">' + pkEsc(tariff ? tariff.name : 'Plena') + '</span></td>' +
-          '<td><span class="badge badge-emerald">\u{1F697} ' + vehCount + ' activos</span> <span class="badge badge-blue">\u{1F9FE} ' + invCount + ' fact.</span></td>' +
-          '<td><strong style="color:' + (cu.currentDebt > 0 ? 'var(--pk-amber)' : 'var(--pk-emerald)') + '">' + pkCop(cu.currentDebt) + '</strong> / Cupo: ' + pkCop(cu.creditLimit) + '</td>' +
-          '<td><div class="row-actions">' +
-          '<button type="button" class="btn btn-primary btn-sm" data-open-customer-360="' + pkEsc(cu.id) + '">\u{1F441}\uFE0F Expediente 360\xB0</button>' +
-          '<button type="button" class="btn btn-outline btn-sm" data-pos-select-cust-go="' + pkEsc(cu.id) + '">\u{1F6D2} Facturarle</button></div></td></tr>';
-      }
-      tableHtml = '<table><thead><tr><th>Tercero / NIT DIAN</th><th>Ciudad / WhatsApp</th><th>Contrato y Tarifa (FK)</th><th>Relaciones FK</th><th>Deuda CxC / Cupo</th><th>Acciones 360\xB0</th></tr></thead><tbody>' + cRows + '</tbody></table>';
-    } else if (tab === 'cxc') {
-      var dRows = '';
-      for (var d = 0; d < db.invoices.length; d++) {
-        var f = db.invoices[d];
-        if (q && (f.id + ' ' + f.customerName + ' ' + f.plate).toLowerCase().indexOf(q) === -1) continue;
-        var hasDebt = Number(f.pendingBalance || 0) > 0;
-        dRows += '<tr>' +
-          '<td><strong>' + pkEsc(f.id) + '</strong><div style="font-size:11px;color:var(--pk-muted)">' + pkEsc(f.date) + '</div></td>' +
-          '<td><strong>' + pkEsc(f.customerName) + '</strong><div style="font-size:11px;color:var(--pk-muted)">\u{1F697} Placa FK: ' + pkEsc(f.plate || 'Mostrador') + '</div></td>' +
-          '<td>' + pkCop(f.total) + '</td>' +
-          '<td style="color:var(--pk-emerald);font-weight:700">' + pkCop(f.amountPaid) + '</td>' +
-          '<td><span class="badge ' + (hasDebt ? 'badge-amber' : 'badge-emerald') + '" style="font-size:12px">' + (hasDebt ? 'Debe: ' + pkCop(f.pendingBalance) : '\u2713 Paz y Salvo') + '</span></td>' +
-          '<td><div class="row-actions">' +
-          (hasDebt ? '<button type="button" class="btn btn-emerald btn-sm" data-open-abono-modal="' + pkEsc(f.id) + '">\u{1F4B5} Registrar Abono / Pagar</button>' : '') +
-          '<button type="button" class="btn btn-outline btn-sm" data-open-invoice-modal="' + pkEsc(f.id) + '">\u{1F5A8}\uFE0F Ver Factura / Glosa</button></div></td></tr>';
-      }
-      tableHtml = '<table><thead><tr><th>Factura / Fecha</th><th>Cliente y Veh\xEDculo (FK)</th><th>Total Factura</th><th>Total Abonado</th><th>Saldo Pendiente CxC</th><th>Recaudo / Visor</th></tr></thead><tbody>' + dRows + '</tbody></table>';
-    } else if (tab === 'vehicles') {
-      var vRows = '';
-      for (var vh = 0; vh < db.vehicles.length; vh++) {
-        var ve = db.vehicles[vh];
-        if (q && (ve.plate + ' ' + ve.brand + ' ' + ve.customerName).toLowerCase().indexOf(q) === -1) continue;
-        vRows += '<tr>' +
-          '<td><span class="badge badge-blue" style="font-size:12px">\u{1F697} ' + pkEsc(ve.plate) + '</span></td>' +
-          '<td><strong>' + pkEsc(ve.brand) + '</strong> (' + ve.modelYear + ')</td>' +
-          '<td>\u{1F464} <strong>' + pkEsc(ve.customerName) + '</strong></td>' +
-          '<td>Actual: <strong>' + ve.currentKm.toLocaleString('es-CO') + ' km</strong> \xB7 Pr\xF3x Aceite: <strong>' + ve.nextOilChangeKm.toLocaleString('es-CO') + ' km</strong></td>' +
-          '<td>SOAT: ' + pkEsc(ve.soatExpiry) + ' \xB7 Tecno: ' + pkEsc(ve.tecnoExpiry) + '</td>' +
-          '<td><button type="button" class="btn btn-primary btn-sm" data-open-vehicle-360="' + pkEsc(ve.id) + '">\u{1F441}\uFE0F Hoja de Vida Placa</button></td></tr>';
-      }
-      tableHtml = '<table><thead><tr><th>Placa</th><th>Marca / L\xEDnea</th><th>Propietario (FK -> customers)</th><th>Control Kilometraje / Aceite</th><th>Vencimientos Legales</th><th>Historial</th></tr></thead><tbody>' + vRows + '</tbody></table>';
-    } else if (tab === 'contracts') {
+    if (subKey === 'mod-contracts') {
       var ctRows = '';
       for (var ct = 0; ct < db.contracts.length; ct++) {
         var co = db.contracts[ct];
         var tf = pkFindById(db.tariffs, co.tariffId);
-        ctRows += '<tr>' +
-          '<td><code>' + pkEsc(co.code) + '</code></td>' +
-          '<td><strong>' + pkEsc(co.name) + '</strong><div style="font-size:11px;color:var(--pk-muted)">Entidad: ' + pkEsc(co.entityNit) + '</div></td>' +
-          '<td><span class="badge badge-blue">' + pkEsc(tf ? tf.name + ' (-' + tf.discountPct + '%)' : co.tariffId) + '</span></td>' +
-          '<td>' + pkCop(co.budgetCeiling) + '</td>' +
-          '<td>' + pkCop(co.consumedAmount) + '</td>' +
+        ctRows += '<tr><td><code>' + pkEsc(co.code) + '</code></td><td><strong>' + pkEsc(co.name) + '</strong><div style="font-size:11px;color:var(--pk-muted)">NIT: ' + pkEsc(co.entityNit) + '</div></td>' +
+          '<td><span class="badge badge-blue">' + pkEsc(tf ? tf.name + ' (-' + tf.discountPct + '%)' : 'Plena') + '</span></td>' +
+          '<td>' + pkCop(co.budgetCeiling) + '</td><td>' + pkCop(co.consumedAmount) + '</td>' +
           '<td><strong style="color:var(--pk-emerald)">' + pkCop(co.availableBalance) + '</strong></td></tr>';
       }
-      tableHtml = '<table><thead><tr><th>C\xF3digo Contrato</th><th>Convenio / Entidad (Estilo v2)</th><th>Tarifario Enlazado (FK)</th><th>Techo Presupuestal</th><th>Ejecutado / Facturado</th><th>Saldo Disponible</th></tr></thead><tbody>' + ctRows + '</tbody></table>';
-    } else {
+      stage.innerHTML =
+        '<div class="card"><div class="card-head"><div class="card-title">\u{1F4D1} Contratos y Convenios Activos</div></div>' +
+        '<div class="card-body"><div class="form-grid" style="background:#f8fafc;padding:12px;border-radius:10px;border:1px solid var(--pk-border);margin-bottom:12px">' +
+        '<div class="field"><label>C\xF3digo Convenio</label><input type="text" id="cnt-new-code" placeholder="Ej: CNV-2026-09" /></div>' +
+        '<div class="field"><label>Empresa / Entidad *</label><input type="text" id="cnt-new-name" placeholder="Ej: Transportes del Caribe S.A." /></div>' +
+        '<div class="field"><label>Cupo Presupuestal ($)</label><div class="row-actions"><input type="number" id="cnt-new-budget" value="25000000" style="flex:1" />' +
+        '<button type="button" class="btn btn-primary btn-sm" id="btn-cnt-add">+ Crear Convenio</button></div></div></div>' +
+        '<div class="table-wrap"><table><thead><tr><th>C\xF3digo</th><th>Empresa</th><th>Tarifa / Descuento</th><th>Cupo Total</th><th>Consumido</th><th>Saldo Disponible</th></tr></thead><tbody>' + ctRows + '</tbody></table></div></div></div>';
+      return;
+    }
+
+    if (subKey === 'mod-receivables-cxc' || subKey === 'mod-dian') {
+      var dRows = ''; var totalPending = 0;
+      for (var d = 0; d < db.invoices.length; d++) {
+        var f = db.invoices[d];
+        var hasDebt = Number(f.pendingBalance || 0) > 0;
+        if (subKey === 'mod-receivables-cxc' && !hasDebt && db.invoices.length > 2) continue;
+        totalPending += Number(f.pendingBalance || 0);
+        dRows += '<tr>' +
+          '<td><strong>' + pkEsc(f.id) + '</strong><div style="font-size:11px;color:var(--pk-muted)">' + pkEsc(f.date) + '</div></td>' +
+          '<td><strong>' + pkEsc(f.customerName) + '</strong><div style="font-size:11px;color:var(--pk-muted)">' + pkEsc(f.plate || 'Mostrador') + '</div></td>' +
+          '<td>' + pkCop(f.total) + '</td>' +
+          '<td style="color:var(--pk-emerald);font-weight:700">' + pkCop(f.amountPaid) + '</td>' +
+          '<td><span class="badge ' + (hasDebt ? 'badge-amber' : 'badge-emerald') + '">' + (hasDebt ? 'Debe: ' + pkCop(f.pendingBalance) : '\u2713 Pagada') + '</span></td>' +
+          '<td><div class="row-actions">' +
+          (hasDebt ? '<button type="button" class="btn btn-emerald btn-sm" data-open-abono-modal="' + pkEsc(f.id) + '">\u{1F4B5} Abonar / Pagar</button>' : '') +
+          '<button type="button" class="btn btn-outline btn-sm" data-open-invoice-modal="' + pkEsc(f.id) + '">\u{1F5A8}\uFE0F Ver Factura</button>' +
+          '</div></td></tr>';
+      }
+      stage.innerHTML =
+        '<div class="card"><div class="card-head">' +
+        '<div class="card-title">' + (subKey === 'mod-receivables-cxc' ? '\u{1F4D2} Cuentas por Cobrar a Clientes (Cartera)' : '\u{1F9FE} Historial de Facturas Emitidas') + '</div>' +
+        '<span class="badge badge-amber" style="font-size:13px">Total por Cobrar: ' + pkCop(totalPending) + '</span></div>' +
+        '<div class="card-body"><div class="table-wrap"><table><thead><tr>' +
+        '<th>Factura / Fecha</th><th>Cliente</th><th>Total Factura</th><th>Abonado</th><th>Saldo Pendiente</th><th>Acciones</th>' +
+        '</tr></thead><tbody>' + (dRows || '<tr><td colspan="6" style="text-align:center;padding:16px">No hay facturas pendientes de cobro.</td></tr>') + '</tbody></table></div></div></div>';
+      return;
+    }
+
+    if (subKey === 'mod-tech-reception') {
+      var sRows = '';
+      for (var s = 0; s < db.suppliers.length; s++) {
+        var sp = db.suppliers[s];
+        sRows += '<tr><td><code>' + pkEsc(sp.nit) + '</code></td><td><strong>' + pkEsc(sp.name) + '</strong></td><td>' + pkEsc(sp.contactName) + '</td><td>' + pkEsc(sp.phone) + '</td><td>' + pkEsc(sp.city) + '</td>' +
+          '<td><button type="button" class="btn btn-outline btn-sm" data-sup-delete-id="' + pkEsc(sp.id) + '">\u{1F5D1}\uFE0F</button></td></tr>';
+      }
+      stage.innerHTML =
+        '<div class="card"><div class="card-head"><div class="card-title">\u{1F69A} Proveedores Registrados (' + db.suppliers.length + ')</div></div>' +
+        '<div class="card-body"><div class="form-grid" style="background:#f8fafc;padding:12px;border-radius:10px;border:1px solid var(--pk-border);margin-bottom:12px">' +
+        '<div class="field"><label>NIT</label><input type="text" id="sup-new-nit" placeholder="Ej: 900.441.220-1" /></div>' +
+        '<div class="field"><label>Nombre del Proveedor *</label><input type="text" id="sup-new-name" placeholder="Ej: Importadora de Repuestos S.A." /></div>' +
+        '<div class="field"><label>Tel\xE9fono y Contacto</label><div class="row-actions"><input type="text" id="sup-new-phone" placeholder="Ej: 310 555 8899" style="flex:1" />' +
+        '<button type="button" class="btn btn-primary btn-sm" id="btn-sup-add">+ Guardar Proveedor</button></div></div></div>' +
+        '<div class="table-wrap"><table><thead><tr><th>NIT</th><th>Proveedor</th><th>Contacto</th><th>Tel\xE9fono</th><th>Ciudad</th><th>Acci\xF3n</th></tr></thead><tbody>' + sRows + '</tbody></table></div></div></div>';
+      return;
+    }
+
+    if (subKey === 'mod-lots') {
       var kRows = '';
       for (var km = 0; km < db.kardexMovements.length; km++) {
         var kv = db.kardexMovements[km];
-        kRows += '<tr>' +
-          '<td><code>' + pkEsc(kv.id) + '</code><div style="font-size:10px;color:var(--pk-muted)">' + pkEsc(kv.date) + '</div></td>' +
-          '<td><span class="badge ' + (kv.movementType.indexOf('ENTRADA') !== -1 ? 'badge-emerald' : 'badge-amber') + '">' + pkEsc(kv.movementType) + '</span></td>' +
-          '<td><strong>' + pkEsc(kv.productName) + '</strong></td>' +
-          '<td>' + (kv.qty > 0 ? '+' + kv.qty : kv.qty) + ' und (Saldo: <strong>' + kv.balanceAfter + '</strong>)</td>' +
-          '<td>' + pkCop(kv.unitCost) + '</td>' +
-          '<td><code>' + pkEsc(kv.referenceDoc) + '</code> \xB7 ' + pkEsc(kv.actor) + '</td></tr>';
+        kRows += '<tr><td>' + pkEsc(kv.date) + '</td><td><span class="badge ' + (kv.qty > 0 ? 'badge-emerald' : 'badge-amber') + '">' + pkEsc(kv.movementType) + '</span></td>' +
+          '<td><strong>' + pkEsc(kv.productName) + '</strong></td><td>' + (kv.qty > 0 ? '+' + kv.qty : kv.qty) + ' und</td><td><strong>' + kv.balanceAfter + ' und</strong></td><td><code>' + pkEsc(kv.referenceDoc) + '</code></td></tr>';
       }
-      tableHtml = '<table><thead><tr><th>Movimiento / Fecha</th><th>Tipo Operaci\xF3n</th><th>Producto (FK)</th><th>Cantidad / Saldo Post</th><th>Costo Unit.</th><th>Documento Origen (FK)</th></tr></thead><tbody>' + kRows + '</tbody></table>';
+      stage.innerHTML =
+        '<div class="card"><div class="card-head"><div class="card-title">\u{1F4CA} Historial de Entradas y Salidas de Inventario (Kardex)</div></div>' +
+        '<div class="card-body"><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Producto</th><th>Cantidad</th><th>Saldo en Bodega</th><th>Referencia</th></tr></thead><tbody>' + kRows + '</tbody></table></div></div></div>';
+      return;
     }
 
-    container.innerHTML =
-      '<div class="kpi-row">' +
-      '<div class="kpi-box"><div class="kpi-label">Terceros / Clientes Activos</div><div class="kpi-val">' + db.customers.length + ' empresas/personas</div></div>' +
-      '<div class="kpi-box"><div class="kpi-label">Veh\xEDculos / Activos Enlazados</div><div class="kpi-val" style="color:var(--pk-primary)">' + db.vehicles.length + ' placas con FK</div></div>' +
-      '<div class="kpi-box"><div class="kpi-label">Total Cartera por Cobrar (CxC)</div><div class="kpi-val" style="color:var(--pk-amber)">' + pkCop(totalCxc) + ' (' + creditInvoicesCount + ' fact.)</div></div>' +
-      '<div class="kpi-box"><div class="kpi-label">Contratos y Convenios v2</div><div class="kpi-val" style="color:var(--pk-emerald)">' + db.contracts.length + ' vigentes</div></div>' +
-      '</div>' +
-
-      '<div class="card"><div class="card-head"><div class="row-actions">' +
-      '<button type="button" class="btn ' + (tab === 'customers' ? 'btn-primary' : 'btn-outline') + ' btn-sm" data-look360-tab="customers">\u{1F465} Clientes y Terceros 360\xB0 (' + db.customers.length + ')</button>' +
-      '<button type="button" class="btn ' + (tab === 'cxc' ? 'btn-primary' : 'btn-outline') + ' btn-sm" data-look360-tab="cxc">\u{1F4B5} Cartera CxC, Facturas y Abonos (' + db.invoices.length + ')</button>' +
-      '<button type="button" class="btn ' + (tab === 'vehicles' ? 'btn-primary' : 'btn-outline') + ' btn-sm" data-look360-tab="vehicles">\u{1F697} Veh\xEDculos y Activos (' + db.vehicles.length + ')</button>' +
-      '<button type="button" class="btn ' + (tab === 'contracts' ? 'btn-primary' : 'btn-outline') + ' btn-sm" data-look360-tab="contracts">\u{1F4D1} Contratos y Tarifarios v2 (' + db.contracts.length + ')</button>' +
-      '<button type="button" class="btn ' + (tab === 'kardex' ? 'btn-primary' : 'btn-outline') + ' btn-sm" data-look360-tab="kardex">\u{1F4CA} Kardex Auditor\xEDa (' + db.kardexMovements.length + ')</button>' +
-      '</div>' +
-      '<input type="text" id="look360-search-input" value="' + pkEsc(STATE.look360Search || '') + '" placeholder="\u{1F50E} Filtrar por cliente, NIT, placa o factura..." style="padding:6px 10px;border-radius:8px;border:1px solid var(--pk-border);font-size:12px;min-width:220px" />' +
-      '</div><div class="card-body"><div class="table-wrap">' + tableHtml + '</div></div></div>';
+    var cRows = '';
+    for (var c = 0; c < db.customers.length; c++) {
+      var cu = db.customers[c];
+      if (q && (cu.name + ' ' + cu.nit + ' ' + cu.city).toLowerCase().indexOf(q) === -1) continue;
+      cRows += '<tr>' +
+        '<td><code>' + pkEsc(cu.docType + ' ' + cu.nit + (cu.dv ? '-' + cu.dv : '')) + '</code></td>' +
+        '<td><strong>' + pkEsc(cu.name) + '</strong></td>' +
+        '<td>\u{1F4DE} ' + pkEsc(cu.phone) + ' \xB7 ' + pkEsc(cu.city) + '</td>' +
+        '<td>' + pkCop(cu.creditLimit) + '</td>' +
+        '<td><strong style="color:' + (cu.currentDebt > 0 ? 'var(--pk-amber)' : 'var(--pk-emerald)') + '">' + pkCop(cu.currentDebt) + '</strong></td>' +
+        '<td><div class="row-actions">' +
+        '<button type="button" class="btn btn-primary btn-sm" data-open-customer-360="' + pkEsc(cu.id) + '">\u{1F441}\uFE0F Historial</button>' +
+        '<button type="button" class="btn btn-emerald btn-sm" data-pos-select-cust-go="' + pkEsc(cu.id) + '">\u{1F6D2} Facturarle</button>' +
+        '<button type="button" class="btn btn-outline btn-sm" data-cust-delete-id="' + pkEsc(cu.id) + '">\u{1F5D1}\uFE0F</button>' +
+        '</div></td></tr>';
+    }
+    stage.innerHTML =
+      '<div class="card"><div class="card-head"><div class="card-title">\u{1F465} Directorio de Clientes (' + db.customers.length + ')</div>' +
+      '<div class="row-actions">' +
+      '<input type="text" id="look360-search-input" value="' + pkEsc(STATE.look360Search || '') + '" placeholder="\u{1F50E} Buscar por nombre, NIT o ciudad..." style="padding:6px 10px;border-radius:8px;border:1px solid var(--pk-border);font-size:12px;min-width:220px" />' +
+      '<button type="button" class="btn btn-primary btn-sm" data-open-new-customer-modal="1">+ Registrar Nuevo Cliente</button>' +
+      '</div></div>' +
+      '<div class="card-body"><div class="table-wrap"><table><thead><tr>' +
+      '<th>NIT / Documento</th><th>Nombre o Raz\xF3n Social</th><th>Tel\xE9fono / Ciudad</th><th>Cupo Cr\xE9dito</th><th>Saldo Pendiente</th><th>Acciones</th>' +
+      '</tr></thead><tbody>' + cRows + '</tbody></table></div></div></div>';
   }
 `;
 }
@@ -15035,9 +14618,8 @@ function renderDeveloperGroupsCatalogRuntimeJs() {
 function renderDomSanitizerRuntimeJs() {
   return `
   var BOOT = window.__PROVEKO_BOOT__ || {};
-  var DEMO_STORAGE_KEY = 'proveko_demo_localstorage_v1';
+  var DEMO_STORAGE_KEY = 'proveko_demo_localstorage_v3';
   var defaultDemoClient = (BOOT.initialClients && BOOT.initialClients[0]) ? JSON.parse(JSON.stringify(BOOT.initialClients[0])) : null;
-  if (defaultDemoClient) defaultDemoClient.dbName = 'localStorage (Navegador)';
 
   var STATE = {
     publicTab: 'showcase', // 'showcase' | 'auth' | 'demo'
@@ -15053,7 +14635,8 @@ function renderDomSanitizerRuntimeJs() {
     activeServiceKey: 'srv-invoicing',
     activeSubmoduleKey: 'mod-pos',
     activeWorkstationPane: 'module', // 'module' | 'rbac' | 'need-feature'
-    activeConvergedHub: 'pos',       // 'pos' | 'kanban' | 'inventory' | 'look360' | 'reports' | 'gastro' | 'submodules'
+    roleViewFilter: 'ALL',           // 'ALL' | 'CAJERO' | 'MESERO' | 'COCINA' | 'BODEGA' | 'TECNICO' | 'RECEPCION'
+    selectedTableId: 'tbl-1',
     submoduleRows: JSON.parse(JSON.stringify(BOOT.initialRows || {})),
     featureRequests: [],
     relDb: pkCreateInitialRelationalDb(),
@@ -15083,8 +14666,19 @@ function renderDomSanitizerRuntimeJs() {
       var raw = window.localStorage ? window.localStorage.getItem(DEMO_STORAGE_KEY) : null;
       if (!raw) return;
       var parsed = JSON.parse(raw);
-      if (parsed && parsed.demoClient) STATE.demoClient = parsed.demoClient;
-      if (parsed && parsed.submoduleRows) STATE.submoduleRows = parsed.submoduleRows;
+      if (parsed && parsed.demoClient && defaultDemoClient) {
+        STATE.demoClient = parsed.demoClient;
+        STATE.demoClient.activePrincipalServices = defaultDemoClient.activePrincipalServices.slice();
+        STATE.demoClient.activeSubmodules = defaultDemoClient.activeSubmodules.slice();
+        STATE.demoClient.activeFeatures = defaultDemoClient.activeFeatures.slice();
+      }
+      if (parsed && parsed.submoduleRows) {
+        for (var k in parsed.submoduleRows) {
+          if (Object.prototype.hasOwnProperty.call(parsed.submoduleRows, k)) {
+            STATE.submoduleRows[k] = parsed.submoduleRows[k];
+          }
+        }
+      }
       if (parsed && parsed.relDb && parsed.relDb.customers) STATE.relDb = parsed.relDb;
     } catch (_e) {}
   }
@@ -15149,9 +14743,9 @@ function renderDomSanitizerRuntimeJs() {
         }
         sHtml += '<div class="center-pick-card">' +
           '<div class="center-pick-head"><div class="center-pick-title">' + pkEsc(s.icon + ' ' + s.externalPrincipalModuleName) + '</div>' +
-          '<span class="badge badge-blue">M\xF3dulo Principal</span></div>' +
+          '<span class="badge badge-blue">M\xF3dulo</span></div>' +
           '<div class="center-pick-desc">' + pkEsc(s.subtitle) + '</div>' +
-          '<div style="font-size:11px;font-weight:700;color:var(--pk-muted);margin-bottom:6px">Subm\xF3dulos integrados en pesta\xF1as:</div>' +
+          '<div style="font-size:11px;font-weight:700;color:var(--pk-muted);margin-bottom:6px">Secciones incluidas:</div>' +
           '<div style="display:flex;flex-wrap:wrap;gap:5px">' + subBadges + '</div></div>';
       }
       svcGrid.innerHTML = sHtml;
@@ -15168,7 +14762,7 @@ function renderDomSanitizerRuntimeJs() {
           '<span class="center-pick-price">' + pkCop(p.baseMonthlyUsd) + '/mes</span></div>' +
           '<div style="margin-bottom:6px"><span class="badge badge-emerald">' + pkEsc(p.badge) + '</span></div>' +
           '<div class="center-pick-desc">' + pkEsc(p.description) + '</div>' +
-          '<button type="button" class="btn btn-primary btn-sm" data-showcase-preset="' + pkEsc(p.id) + '">Elegir este Tipo de Negocio &rarr;</button></div>';
+          '<button type="button" class="btn btn-primary btn-sm" data-showcase-preset="' + pkEsc(p.id) + '">Elegir este Plan &rarr;</button></div>';
       }
       presetGrid.innerHTML = pHtml;
     }
@@ -15201,13 +14795,8 @@ function renderDomSanitizerRuntimeJs() {
       }
     }
     return {
-      preset: preset,
-      baseUsd: baseUsd,
-      extraUsd: extraUsd,
-      totalUsd: baseUsd + extraUsd,
-      services: finalSvcs,
-      submodules: finalSubs,
-      features: incFeats.slice()
+      preset: preset, baseUsd: baseUsd, extraUsd: extraUsd, totalUsd: baseUsd + extraUsd,
+      services: finalSvcs, submodules: finalSubs, features: incFeats.slice()
     };
   }
 `;
@@ -15325,6 +14914,15 @@ function renderFormAndTableRuntimeJs() {
 // apps/web-app/src/presentation/client-runtime/gateway-transport.runtime.ts
 function renderGatewayTransportRuntimeJs() {
   return `
+  function pkGetRoleAllowedServices(roleView) {
+    if (roleView === 'CAJERO') return ['srv-invoicing', 'srv-treasury', 'srv-crm', 'srv-reports'];
+    if (roleView === 'MESERO' || roleView === 'COCINA') return ['srv-gastro', 'srv-invoicing'];
+    if (roleView === 'BODEGA') return ['srv-inventory', 'srv-procurement', 'srv-fleet'];
+    if (roleView === 'TECNICO') return ['srv-workshop', 'srv-inventory', 'srv-appointments'];
+    if (roleView === 'RECEPCION') return ['srv-hospitality', 'srv-appointments', 'srv-ticketing', 'srv-crm'];
+    return null;
+  }
+
   function pkRenderWorkstation() {
     var client = pkGetActiveClient();
     if (!client) return;
@@ -15334,25 +14932,32 @@ function renderGatewayTransportRuntimeJs() {
       demoBanner.style.display = (STATE.publicTab === 'demo' && !STATE.session) ? 'flex' : 'none';
     }
 
-    var quotaSub = document.getElementById('ws-rbac-quota-sub');
-    if (quotaSub) {
-      quotaSub.textContent = 'Roles: ' + client.internalRoles.length + '/' + client.maxRolesAllowed +
-        ' \xB7 Usuarios: ' + client.internalUsers.length + '/' + client.maxUsersAllowed;
+    var roleSel = document.getElementById('ws-role-view-selector');
+    if (roleSel && roleSel.value !== (STATE.roleViewFilter || 'ALL')) {
+      roleSel.value = STATE.roleViewFilter || 'ALL';
     }
 
     var navEl = document.getElementById('ws-principal-modules-nav');
     var svcs = BOOT.services || [];
+    var roleFilterList = pkGetRoleAllowedServices(STATE.roleViewFilter || 'ALL');
     var activeSvc = null;
     if (navEl) {
       var nHtml = '';
       for (var i = 0; i < svcs.length; i++) {
         var s = svcs[i];
-        if (client.activePrincipalServices.indexOf(s.serviceKey) === -1) continue;
+        if (client.activePrincipalServices && client.activePrincipalServices.length > 0 && client.activePrincipalServices.indexOf(s.serviceKey) === -1) continue;
+        if (roleFilterList && roleFilterList.indexOf(s.serviceKey) === -1) continue;
         if (!activeSvc || s.serviceKey === STATE.activeServiceKey) activeSvc = s;
-        var isCurrent = (STATE.activeWorkstationPane === 'module' && s.serviceKey === STATE.activeServiceKey);
-        nHtml += '<button type="button" class="ws-nav-btn ' + (isCurrent ? 'active' : '') + '" data-ws-service="' + pkEsc(s.serviceKey) + '">' +
-          '<div class="ws-nav-title">' + pkEsc(s.icon + ' ' + s.externalPrincipalModuleName) + '</div>' +
-          '<div class="ws-nav-sub">' + s.submodules.length + ' Subm\xF3dulos integrados</div></button>';
+      }
+      if (!activeSvc && svcs.length > 0) activeSvc = svcs[0];
+      for (var n = 0; n < svcs.length; n++) {
+        var sv = svcs[n];
+        if (client.activePrincipalServices && client.activePrincipalServices.length > 0 && client.activePrincipalServices.indexOf(sv.serviceKey) === -1) continue;
+        if (roleFilterList && roleFilterList.indexOf(sv.serviceKey) === -1) continue;
+        var isCurrent = (STATE.activeWorkstationPane === 'module' && activeSvc && sv.serviceKey === activeSvc.serviceKey);
+        nHtml += '<button type="button" class="ws-nav-btn ' + (isCurrent ? 'active' : '') + '" data-ws-service="' + pkEsc(sv.serviceKey) + '">' +
+          '<span class="ws-nav-icon">' + pkEsc(sv.icon) + '</span>' +
+          '<span class="ws-nav-title">' + pkEsc(sv.externalPrincipalModuleName) + '</span></button>';
       }
       navEl.innerHTML = nHtml;
     }
@@ -15369,152 +14974,110 @@ function renderGatewayTransportRuntimeJs() {
     if (paneRbac) paneRbac.style.display = STATE.activeWorkstationPane === 'rbac' ? 'block' : 'none';
     if (paneFeat) paneFeat.style.display = STATE.activeWorkstationPane === 'need-feature' ? 'block' : 'none';
 
-    if (STATE.activeWorkstationPane === 'rbac') {
-      pkRenderInternalRbacPane(client);
-      return;
-    }
-    if (STATE.activeWorkstationPane === 'need-feature') {
-      pkRenderNeedFeaturePane(client);
-      return;
-    }
+    if (STATE.activeWorkstationPane === 'rbac') { pkRenderInternalRbacPane(client); return; }
+    if (STATE.activeWorkstationPane === 'need-feature') { pkRenderNeedFeaturePane(client); return; }
     if (!activeSvc) return;
     STATE.activeServiceKey = activeSvc.serviceKey;
 
     var iconEl = document.getElementById('ws-active-service-icon');
     var titleEl = document.getElementById('ws-active-service-title');
-    var subEl = document.getElementById('ws-active-service-sub');
-    var dbEl = document.getElementById('ws-active-db-badge');
     if (iconEl) iconEl.textContent = activeSvc.icon;
     if (titleEl) titleEl.textContent = activeSvc.externalPrincipalModuleName;
-    if (subEl) subEl.textContent = activeSvc.subtitle;
-    if (dbEl) {
-      dbEl.textContent = pkIsDemoMode()
-        ? 'Almacenamiento Demo: localStorage (Navegador)'
-        : 'BD PostgreSQL Aislada: ' + client.dbName;
-    }
 
-    var pillsEl = document.getElementById('ws-active-features-pills');
-    if (pillsEl) {
-      var pHtml = '';
-      for (var fIdx = 0; fIdx < activeSvc.features.length; fIdx++) {
-        var feat = activeSvc.features[fIdx];
-        if (client.activeFeatures.indexOf(feat.componentKey) !== -1) {
-          pHtml += '<span class="badge badge-blue">\u2713 Funcionalidad: ' + pkEsc(feat.externalName) + '</span>';
-        }
-      }
-      pillsEl.innerHTML = pHtml;
-    }
-
-    var tabsEl = document.getElementById('ws-submodule-tabs');
-    var activeSub = null;
     var availableSubs = [];
+    var activeSub = null;
     for (var j = 0; j < activeSvc.submodules.length; j++) {
       var sm = activeSvc.submodules[j];
-      if (client.activeSubmodules.indexOf(sm.moduleKey) !== -1) {
+      if (!client.activeSubmodules || client.activeSubmodules.length === 0 || client.activeSubmodules.indexOf(sm.moduleKey) !== -1) {
         availableSubs.push(sm);
         if (sm.moduleKey === STATE.activeSubmoduleKey) activeSub = sm;
       }
     }
+    if (availableSubs.length === 0) availableSubs = activeSvc.submodules.slice();
     if (!activeSub && availableSubs.length > 0) {
       activeSub = availableSubs[0];
       STATE.activeSubmoduleKey = activeSub.moduleKey;
     }
 
+    var tabsEl = document.getElementById('ws-submodule-tabs');
     if (tabsEl) {
       var tHtml = '';
       for (var k = 0; k < availableSubs.length; k++) {
         var subTab = availableSubs[k];
-        var isTabAct = activeSub && subTab.moduleKey === activeSub.moduleKey && STATE.activeConvergedHub === 'submodules';
-        tHtml += '<button type="button" class="btn ' + (isTabAct ? 'btn-primary' : 'btn-outline') + ' btn-sm" data-ws-submodule="' + pkEsc(subTab.moduleKey) + '">' +
+        var isTabAct = activeSub && subTab.moduleKey === activeSub.moduleKey;
+        tHtml += '<button type="button" class="ws-subtab-pill ' + (isTabAct ? 'active' : '') + '" data-ws-submodule="' + pkEsc(subTab.moduleKey) + '">' +
           pkEsc(subTab.tabIcon + ' ' + subTab.externalSubmoduleName) + '</button>';
       }
       tabsEl.innerHTML = tHtml;
     }
 
-    var hubBtns = document.querySelectorAll('[data-ws-hub]');
-    for (var hb = 0; hb < hubBtns.length; hb++) {
-      var hKey = hubBtns[hb].getAttribute('data-ws-hub');
-      hubBtns[hb].className = 'btn ' + (STATE.activeConvergedHub === hKey ? 'btn-primary' : 'btn-outline') + ' btn-sm';
-    }
-
-    var hubContainer = document.getElementById('ws-converged-hub-container');
-    var stdWrapper = document.getElementById('ws-standard-submodules-wrapper');
-    if (STATE.activeConvergedHub && STATE.activeConvergedHub !== 'submodules') {
-      if (hubContainer) hubContainer.style.display = 'block';
-      if (stdWrapper) stdWrapper.style.display = 'none';
-      if (STATE.activeConvergedHub === 'pos') pkRenderPosHub();
-      else if (STATE.activeConvergedHub === 'kanban') pkRenderKanbanHub();
-      else if (STATE.activeConvergedHub === 'inventory') pkRenderInventoryHub();
-      else if (STATE.activeConvergedHub === 'look360') pkRenderLook360Hub();
-      else if (STATE.activeConvergedHub === 'reports') pkRenderReportsAndCashboxHub();
-      else if (STATE.activeConvergedHub === 'gastro') pkRenderGastroHub();
-      return;
-    } else {
-      if (hubContainer) hubContainer.style.display = 'none';
-      if (stdWrapper) stdWrapper.style.display = 'block';
-    }
-
     if (!activeSub) return;
-    var sumEl = document.getElementById('ws-submodule-summary');
-    if (sumEl) sumEl.textContent = activeSub.summary;
+    var mKey = activeSub.moduleKey;
+    if (mKey === 'mod-pos') { pkRenderPosHub(); return; }
+    if (mKey === 'mod-stock') { pkRenderInventoryHub(); return; }
+    if (mKey === 'mod-tables' || mKey === 'mod-kds') { pkRenderGastroHub(mKey); return; }
+    if (mKey === 'mod-work-orders-kanban' || mKey === 'mod-vehicles-assets' || mKey === 'mod-worker-commissions') { pkRenderKanbanHub(mKey); return; }
+    if (mKey === 'mod-directory' || mKey === 'mod-contracts' || mKey === 'mod-receivables-cxc' || mKey === 'mod-dian' || mKey === 'mod-tech-reception' || mKey === 'mod-lots') { pkRenderLook360Hub(mKey); return; }
+    if (mKey === 'mod-petty-cash') { pkRenderPettyCashHub(); return; }
+    if (activeSvc.serviceKey === 'srv-reports') { pkRenderReportsAndCashboxHub(); return; }
+
+    pkRenderStandardSectionStage(activeSub, client);
+  }
+
+  function pkRenderStandardSectionStage(activeSub, client) {
+    var stage = document.getElementById('ws-module-stage');
+    if (!stage) return;
+
+    var fHtml = '';
+    for (var m = 0; m < activeSub.fields.length; m++) {
+      var fld = activeSub.fields[m];
+      fHtml += '<div class="field"><label>' + pkEsc(fld.label) + '</label>';
+      if (fld.type === 'select') {
+        fHtml += '<select data-ws-field="' + pkEsc(fld.key) + '">';
+        var opts = fld.options || [];
+        for (var o = 0; o < opts.length; o++) fHtml += '<option value="' + pkEsc(opts[o]) + '">' + pkEsc(opts[o]) + '</option>';
+        fHtml += '</select>';
+      } else {
+        fHtml += '<input type="' + pkEsc(fld.type) + '" data-ws-field="' + pkEsc(fld.key) + '" placeholder="' + pkEsc(fld.placeholder || '') + '" />';
+      }
+      fHtml += '</div>';
+    }
+
+    var hHtml = '<tr>';
+    for (var h = 0; h < activeSub.tableHeaders.length; h++) hHtml += '<th>' + pkEsc(activeSub.tableHeaders[h]) + '</th>';
+    hHtml += '<th>Acciones</th></tr>';
+
+    var rows = STATE.submoduleRows[activeSub.moduleKey] || [];
+    var qFilter = (STATE.v2FilterText || '').trim().toLowerCase();
+    var rHtml = ''; var matchedCount = 0;
+    for (var r = 0; r < rows.length; r++) {
+      var rowStr = rows[r].join(' ').toLowerCase();
+      if (qFilter && rowStr.indexOf(qFilter) === -1) continue;
+      matchedCount++;
+      rHtml += '<tr>';
+      for (var c = 0; c < rows[r].length; c++) {
+        rHtml += '<td>' + (c === 0 ? '<strong>' + pkEsc(rows[r][c]) + '</strong>' : pkEsc(rows[r][c])) + '</td>';
+      }
+      rHtml += '<td><div class="row-actions">' +
+        '<button type="button" class="btn btn-outline btn-sm" style="color:var(--pk-rose)" data-std-del-idx="' + r + '">\u{1F5D1}\uFE0F Eliminar</button>' +
+        '</div></td></tr>';
+    }
+
+    stage.innerHTML =
+      '<div class="card" style="border:2px solid #bfdbfe;background:#f8fafc;margin-bottom:14px">' +
+      '<div class="card-head"><div><div class="card-title">\u2795 ' + pkEsc(activeSub.externalSubmoduleName) + '</div>' +
+      '<div class="card-sub">' + pkEsc(activeSub.summary) + '</div></div>' +
+      '<button type="button" class="btn btn-emerald" id="btn-ws-save-record">\u2713 ' + pkEsc(activeSub.actionButtonLabel) + '</button></div>' +
+      '<div id="ws-specialized-widget-slot" style="margin-bottom:10px"></div>' +
+      '<div class="form-grid">' + fHtml + '</div></div>' +
+      '<div class="card"><div class="card-head"><div><div class="card-title">\u{1F4CB} Registros en ' + pkEsc(activeSub.externalSubmoduleName) + '</div></div>' +
+      '<div class="row-actions"><input type="text" id="ws-v2-filter-input" value="' + pkEsc(STATE.v2FilterText || '') + '" placeholder="\u{1F50D} Buscar registro..." style="padding:7px 12px;border-radius:8px;border:1px solid var(--pk-border);font-size:12px;min-width:220px" />' +
+      '<span class="badge badge-blue">' + matchedCount + ' registros</span></div></div>' +
+      '<div class="table-wrap"><table><thead>' + hHtml + '</thead><tbody>' +
+      (rHtml || '<tr><td colspan="' + (activeSub.tableHeaders.length + 1) + '" style="text-align:center;color:var(--pk-muted)">Sin registros a\xFAn. Usa el formulario superior para agregar el primero.</td></tr>') +
+      '</tbody></table></div></div>';
 
     pkRenderSpecializedWidget(activeSub, client);
-
-    var fieldsEl = document.getElementById('ws-submodule-form-fields');
-    if (fieldsEl) {
-      var fHtml = '';
-      for (var m = 0; m < activeSub.fields.length; m++) {
-        var fld = activeSub.fields[m];
-        if (fld.requiredFeatureKey && client.activeFeatures.indexOf(fld.requiredFeatureKey) === -1) continue;
-        fHtml += '<div class="field"><label>' + pkEsc(fld.label) + '</label>';
-        if (fld.type === 'select') {
-          fHtml += '<select data-ws-field="' + pkEsc(fld.key) + '">';
-          var opts = fld.options || [];
-          for (var o = 0; o < opts.length; o++) {
-            fHtml += '<option value="' + pkEsc(opts[o]) + '">' + pkEsc(opts[o]) + '</option>';
-          }
-          fHtml += '</select>';
-        } else {
-          fHtml += '<input type="' + pkEsc(fld.type) + '" data-ws-field="' + pkEsc(fld.key) + '" placeholder="' + pkEsc(fld.placeholder || '') + '" />';
-        }
-        fHtml += '</div>';
-      }
-      fieldsEl.innerHTML = fHtml;
-    }
-
-    var saveBtn = document.getElementById('btn-ws-save-record');
-    if (saveBtn) saveBtn.textContent = activeSub.actionButtonLabel;
-
-    var thead = document.getElementById('ws-submodule-thead');
-    if (thead) {
-      var hHtml = '<tr>';
-      for (var h = 0; h < activeSub.tableHeaders.length; h++) {
-        hHtml += '<th>' + pkEsc(activeSub.tableHeaders[h]) + '</th>';
-      }
-      hHtml += '</tr>';
-      thead.innerHTML = hHtml;
-    }
-
-    var tbody = document.getElementById('ws-submodule-tbody');
-    if (tbody) {
-      var rows = STATE.submoduleRows[activeSub.moduleKey] || [];
-      var qFilter = (STATE.v2FilterText || '').trim().toLowerCase();
-      var rHtml = '';
-      var matchedCount = 0;
-      for (var r = 0; r < rows.length; r++) {
-        var rowStr = rows[r].join(' ').toLowerCase();
-        if (qFilter && rowStr.indexOf(qFilter) === -1) continue;
-        matchedCount++;
-        rHtml += '<tr>';
-        for (var c = 0; c < rows[r].length; c++) {
-          rHtml += '<td>' + (c === 0 ? '<strong>' + pkEsc(rows[r][c]) + '</strong>' : pkEsc(rows[r][c])) + '</td>';
-        }
-        rHtml += '</tr>';
-      }
-      tbody.innerHTML = rHtml;
-      var cntBadge = document.getElementById('ws-v2-count-badge');
-      if (cntBadge) cntBadge.textContent = matchedCount + ' / ' + rows.length + ' registros';
-    }
   }
 `;
 }
@@ -15524,12 +15087,10 @@ function renderInventoryWmsHubRuntimeJs() {
   return `
   function pkRenderInventoryHub() {
     var db = STATE.relDb;
-    var container = document.getElementById('ws-converged-hub-container');
-    if (!container || !db) return;
+    var stage = document.getElementById('ws-module-stage');
+    if (!stage || !db) return;
 
-    var totalCostVal = 0;
-    var totalSaleVal = 0;
-    var lowStockCount = 0;
+    var totalCostVal = 0; var totalSaleVal = 0; var lowStockCount = 0;
     var whFilter = STATE.invWarehouseFilter || 'ALL';
     var qSearch = (STATE.invSearchText || '').trim().toLowerCase();
 
@@ -15537,25 +15098,21 @@ function renderInventoryWmsHubRuntimeJs() {
     var whSelectForm = '';
     for (var w = 0; w < db.warehouses.length; w++) {
       var wh = db.warehouses[w];
-      whOpts += '<option value="' + pkEsc(wh.id) + '" ' + (whFilter === wh.id ? 'selected' : '') + '>' + pkEsc(wh.code + ' \u2014 ' + wh.name) + '</option>';
-      whSelectForm += '<option value="' + pkEsc(wh.id) + '">' + pkEsc(wh.code + ' \u2014 ' + wh.name) + '</option>';
+      whOpts += '<option value="' + pkEsc(wh.id) + '" ' + (whFilter === wh.id ? 'selected' : '') + '>' + pkEsc(wh.name) + '</option>';
+      whSelectForm += '<option value="' + pkEsc(wh.id) + '">' + pkEsc(wh.name) + '</option>';
     }
 
-    var supOpts = '';
+    var supOpts = '<option value="">Sin proveedor espec\xEDfico</option>';
     for (var s = 0; s < db.suppliers.length; s++) {
       var sp = db.suppliers[s];
-      supOpts += '<option value="' + pkEsc(sp.id) + '">' + pkEsc(sp.name + ' (NIT ' + sp.nit + ' \xB7 ' + sp.city + ')') + '</option>';
+      supOpts += '<option value="' + pkEsc(sp.id) + '">' + pkEsc(sp.name) + '</option>';
     }
 
-    var prodOpts = '<option value="NEW">+ Crear Nuevo Producto / Referencia en Cat\xE1logo</option>';
     var rowsHtml = '';
     for (var i = 0; i < db.products.length; i++) {
       var p = db.products[i];
-      prodOpts += '<option value="' + pkEsc(p.id) + '">' + pkEsc('[' + p.code + '] ' + p.name + ' (Stock actual: ' + p.stock + ')') + '</option>';
-      var costLine = Number(p.costPrice || 0) * Number(p.stock || 0);
-      var saleLine = Number(p.salePrice || 0) * Number(p.stock || 0);
-      totalCostVal += costLine;
-      totalSaleVal += saleLine;
+      totalCostVal += Number(p.costPrice || 0) * Number(p.stock || 0);
+      totalSaleVal += Number(p.salePrice || 0) * Number(p.stock || 0);
       if (Number(p.stock || 0) <= Number(p.minStock || 5)) lowStockCount++;
 
       if (whFilter !== 'ALL' && p.warehouseId !== whFilter) continue;
@@ -15568,57 +15125,144 @@ function renderInventoryWmsHubRuntimeJs() {
       var isLow = Number(p.stock || 0) <= Number(p.minStock || 5);
 
       rowsHtml += '<tr>' +
-        '<td><code>' + pkEsc(p.code) + '</code><div style="font-size:10px;color:var(--pk-muted)">Lote: ' + pkEsc(p.lotCode || 'N/A') + '</div></td>' +
-        '<td><strong>' + pkEsc(p.name) + '</strong><div style="font-size:11px;color:var(--pk-muted)">\u{1F3F7}\uFE0F ' + pkEsc(p.category) + ' \xB7 \u{1F91D} FK Prov: ' + pkEsc(supObj ? supObj.name : 'Directo') + '</div></td>' +
-        '<td><span class="badge badge-slate">' + pkEsc(whObj ? whObj.name : p.warehouseId) + '</span></td>' +
+        '<td><code>' + pkEsc(p.code) + '</code></td>' +
+        '<td><strong>' + pkEsc(p.name) + '</strong>' +
+        '<div style="font-size:11px;color:var(--pk-muted)">\u{1F69A} ' + pkEsc(supObj ? supObj.name : 'Directo') + ' \xB7 \u{1F3ED} ' + pkEsc(whObj ? whObj.name : 'Principal') + '</div></td>' +
         '<td>' + pkCop(p.costPrice) + '</td>' +
         '<td><strong>' + pkCop(p.salePrice) + '</strong></td>' +
         '<td><span class="badge badge-emerald">+' + pkCop(unitProfit) + ' (' + marginPct + '%)</span></td>' +
         '<td><div class="row-actions">' +
-        '<button type="button" class="btn btn-outline btn-sm" data-inv-delta="-1" data-inv-id="' + pkEsc(p.id) + '">-1</button>' +
-        '<span class="badge ' + (isLow ? 'badge-amber' : 'badge-blue') + '" style="font-size:12px">' + p.stock + ' und' + (isLow ? ' \u26A0\uFE0F Bajo' : '') + '</span>' +
-        '<button type="button" class="btn btn-outline btn-sm" data-inv-delta="1" data-inv-id="' + pkEsc(p.id) + '">+1</button>' +
+        '<button type="button" class="btn btn-outline btn-sm" title="Quitar 1 unidad" data-inv-delta="-1" data-inv-id="' + pkEsc(p.id) + '">\u2796</button>' +
+        '<span class="badge ' + (isLow ? 'badge-amber' : 'badge-blue') + '" style="font-size:13px;min-width:64px;text-align:center">' + p.stock + ' und' + (isLow ? ' \u26A0\uFE0F' : '') + '</span>' +
+        '<button type="button" class="btn btn-outline btn-sm" title="Agregar 1 unidad" data-inv-delta="1" data-inv-id="' + pkEsc(p.id) + '">\u2795</button>' +
+        '</div></td>' +
+        '<td><div class="row-actions">' +
+        '<button type="button" class="btn btn-emerald btn-sm" data-open-restock-modal="' + pkEsc(p.id) + '">\u{1F4E5} Surtir</button>' +
+        '<button type="button" class="btn btn-outline btn-sm" data-open-transfer-modal="' + pkEsc(p.id) + '">\u{1F504} Trasladar</button>' +
+        '<button type="button" class="btn btn-outline btn-sm" data-inv-delete-id="' + pkEsc(p.id) + '">\u{1F5D1}\uFE0F</button>' +
         '</div></td></tr>';
     }
+    if (!rowsHtml) {
+      rowsHtml = '<tr><td colspan="7" style="text-align:center;color:var(--pk-muted);padding:18px">No se encontraron productos con ese filtro.</td></tr>';
+    }
 
-    var potentialProfit = totalSaleVal - totalCostVal;
-    var globalMarginPct = totalSaleVal > 0 ? Math.round((potentialProfit / totalSaleVal) * 100) : 0;
+    var potentialProfit = Math.max(0, totalSaleVal - totalCostVal);
 
-    container.innerHTML =
+    stage.innerHTML =
       '<div class="kpi-row">' +
-      '<div class="kpi-box"><div class="kpi-label">Costo Total en Bodega (Inversi\xF3n)</div><div class="kpi-val">' + pkCop(totalCostVal) + '</div></div>' +
-      '<div class="kpi-box"><div class="kpi-label">Valor Total de Venta (PVP)</div><div class="kpi-val" style="color:var(--pk-primary)">' + pkCop(totalSaleVal) + '</div></div>' +
-      '<div class="kpi-box"><div class="kpi-label">Ganancia Potencial Estimada</div><div class="kpi-val" style="color:var(--pk-emerald)">' + pkCop(potentialProfit) + ' (' + globalMarginPct + '%)</div></div>' +
-      '<div class="kpi-box"><div class="kpi-label">Alertas Stock M\xEDnimo / Cr\xEDtico</div><div class="kpi-val" style="color:' + (lowStockCount > 0 ? 'var(--pk-amber)' : 'var(--pk-emerald)') + '">' + lowStockCount + ' referencias</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Capital en Bodega (Costo)</div><div class="kpi-val">' + pkCop(totalCostVal) + '</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Valor Comercial (Venta)</div><div class="kpi-val" style="color:var(--pk-primary)">' + pkCop(totalSaleVal) + '</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Ganancia Estimada</div><div class="kpi-val" style="color:var(--pk-emerald)">' + pkCop(potentialProfit) + '</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Productos por Agotarse</div><div class="kpi-val" style="color:' + (lowStockCount > 0 ? 'var(--pk-amber)' : 'var(--pk-emerald)') + '">' + lowStockCount + ' productos</div></div>' +
       '</div>' +
-
-      '<div class="card"><div class="card-head"><div>' +
-      '<div class="card-title">\u{1F4E5} 1. Registrar Entrada de Compra a Proveedor / Acta de Recepci\xF3n T\xE9cnica v2 (FK -> suppliers, warehouses, kardex)</div>' +
-      '<div class="card-sub">Incrementa existencias autom\xE1ticamente, actualiza el costo de compra/PVP y deja trazabilidad auditable en el Kardex Valorizado</div></div></div>' +
+      '<div class="card"><div class="card-head"><div class="card-title">\u2795 Agregar Nuevo Producto al Inventario</div></div>' +
       '<div class="card-body"><div class="form-grid">' +
-      '<div class="field"><label>Producto Existente o Nuevo (FK -> products)</label><select id="inv-entry-product-id">' + prodOpts + '</select></div>' +
-      '<div class="field"><label>Proveedor Emisor (FK -> suppliers)</label><select id="inv-entry-supplier-id">' + supOpts + '</select></div>' +
-      '<div class="field"><label>Bodega Destino (FK -> warehouses)</label><select id="inv-entry-warehouse-id">' + whSelectForm + '</select></div>' +
-      '<div class="field"><label>Factura Compra / Acta v2 N\xBA</label><input type="text" id="inv-entry-invoice-ref" placeholder="Ej: FC-PROV-8841 / ACTA-2026" value="ACTA-REC-' + String(Date.now()).slice(-4) + '" /></div>' +
-      '<div class="field"><label>C\xF3digo SKU (Si es nuevo)</label><input type="text" id="inv-entry-sku" placeholder="Ej: REP-9920" /></div>' +
-      '<div class="field"><label>Nombre Producto (Si es nuevo)</label><input type="text" id="inv-entry-name" placeholder="Ej: Amortiguador Trasero Gas / Insumo" /></div>' +
-      '<div class="field"><label>Cantidad Recibida (+ Stock)</label><input type="number" id="inv-entry-qty" value="10" min="1" /></div>' +
-      '<div class="field"><label>Costo Unitario Compra (COP)</label><input type="number" id="inv-entry-cost" value="35000" /></div>' +
-      '<div class="field"><label>Precio Venta P\xFAblico (COP)</label><input type="number" id="inv-entry-sale" value="58000" /></div>' +
-      '<div class="field"><label>Lote / Vencimiento / Temp. Acta v2</label><input type="text" id="inv-entry-lot" placeholder="Ej: LOTE-2026B \xB7 Vence 2028 \xB7 22\xB0C Conforme" value="LOTE-2026B \xB7 Conforme" /></div>' +
-      '</div><div style="margin-top:10px;display:flex;justify-content:flex-end">' +
-      '<button type="button" class="btn btn-emerald" id="btn-inv-register-purchase">\u{1F4E5} Procesar Entrada de Almac\xE9n, Sumar Stock y Asentar Kardex</button></div></div></div>' +
-
-      '<div class="card"><div class="card-head"><div>' +
-      '<div class="card-title">\u{1F4E6} 2. Cat\xE1logo Maestro Valorizado con Enlaces a Bodegas y Proveedores</div>' +
-      '<div class="card-sub">Ajusta existencias en tiempo real (-1 / +1) o filtra por bodega y referencia</div></div>' +
+      '<div class="field"><label>C\xF3digo / SKU (Opcional)</label><input type="text" id="inv-new-sku" placeholder="Ej: REF-015 o C\xF3digo de Barras" /></div>' +
+      '<div class="field"><label>Nombre del Producto o Repuesto *</label><input type="text" id="inv-new-name" placeholder="Ej: Pastillas de Freno / Bebida / Insumo" /></div>' +
+      '<div class="field"><label>Proveedor</label><select id="inv-new-supplier">' + supOpts + '</select></div>' +
+      '<div class="field"><label>Bodega</label><select id="inv-new-warehouse">' + whSelectForm + '</select></div>' +
+      '<div class="field"><label>Costo de Compra ($)</label><input type="number" id="inv-new-cost" placeholder="Ej: 22000" /></div>' +
+      '<div class="field"><label>Precio de Venta ($) *</label><input type="number" id="inv-new-sale" placeholder="Ej: 38000" /></div>' +
+      '<div class="field"><label>Cantidad Inicial (Stock) *</label><input type="number" id="inv-new-stock" placeholder="Ej: 15" /></div>' +
+      '<div class="field" style="display:flex;justify-content:flex-end"><button type="button" class="btn btn-primary" style="width:100%" id="btn-inv-create-product">+ Guardar Producto</button></div>' +
+      '</div></div></div>' +
+      '<div class="card"><div class="card-head">' +
+      '<div class="card-title">\u{1F4E6} Productos en Inventario (' + db.products.length + ')</div>' +
       '<div class="row-actions">' +
       '<select id="inv-filter-warehouse" style="padding:6px 10px;border-radius:8px;border:1px solid var(--pk-border);font-size:12px">' + whOpts + '</select>' +
-      '<input type="text" id="inv-search-input" value="' + pkEsc(STATE.invSearchText || '') + '" placeholder="\u{1F50E} Buscar SKU, nombre o categor\xEDa..." style="padding:6px 10px;border-radius:8px;border:1px solid var(--pk-border);font-size:12px;min-width:210px" />' +
+      '<input type="text" id="inv-search-input" value="' + pkEsc(STATE.invSearchText || '') + '" placeholder="\u{1F50E} Buscar por c\xF3digo o nombre..." style="padding:6px 10px;border-radius:8px;border:1px solid var(--pk-border);font-size:12px;min-width:220px" />' +
       '</div></div>' +
       '<div class="card-body"><div class="table-wrap"><table><thead><tr>' +
-      '<th>SKU / Lote</th><th>Producto y Proveedor (FK)</th><th>Bodega (FK)</th><th>Costo</th><th>Precio Venta</th><th>Utilidad / Margen</th><th>Existencias (Kardex)</th>' +
+      '<th>C\xF3digo</th><th>Producto / Proveedor / Bodega</th><th>Costo Compra</th><th>Precio Venta</th><th>Margen</th><th>Quitar / Agregar Stock</th><th>Acciones</th>' +
       '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div></div></div>';
+  }
+
+  function pkHandleGastroAndInventoryActions(target, db) {
+    if (target.closest('#btn-inv-create-product')) {
+      var nName = ((document.getElementById('inv-new-name') || {}).value || '').trim();
+      if (!nName) { pkToast('Escribe el nombre del producto.'); return true; }
+      var nSku = ((document.getElementById('inv-new-sku') || {}).value || ('PRD-' + String(Date.now()).slice(-4))).trim().toUpperCase();
+      var nWh = (document.getElementById('inv-new-warehouse') || {}).value || (db.warehouses[0] ? db.warehouses[0].id : 'wh-1');
+      var nSup = (document.getElementById('inv-new-supplier') || {}).value || (db.suppliers[0] ? db.suppliers[0].id : 'sup-1');
+      var nStock = Math.max(0, Number((document.getElementById('inv-new-stock') || {}).value || 10));
+      var nCost = Math.max(0, Number((document.getElementById('inv-new-cost') || {}).value || 22000));
+      var nSale = Math.max(nCost, Number((document.getElementById('inv-new-sale') || {}).value || 38000));
+      var newPrd = { id: 'prd-' + Date.now(), code: nSku, name: nName, category: 'General', warehouseId: nWh, supplierId: nSup, costPrice: nCost, salePrice: nSale, taxPct: 19, stock: nStock, minStock: 5, lotCode: 'LOTE-2026', expiryDate: '2028-12-31' };
+      db.products.unshift(newPrd);
+      db.kardexMovements.unshift({ id: 'KDX-' + String(Date.now()).slice(-4), date: new Date().toISOString().slice(0, 16).replace('T', ' '), productId: newPrd.id, productName: newPrd.name, warehouseId: nWh, movementType: 'INVENTARIO_INICIAL', qty: nStock, unitCost: nCost, balanceAfter: nStock, referenceDoc: 'ALTA-PRODUCTO', actor: 'Inventario' });
+      pkPersistRelationalTx('PURCHASE_ENTRY', { productCode: newPrd.code, productName: newPrd.name, costPrice: nCost, salePrice: nSale, stock: nStock });
+      pkRenderWorkstation(); pkToast('Producto guardado en inventario: ' + nName);
+      return true;
+    }
+    var invDel = target.closest('[data-inv-delete-id]');
+    if (invDel) {
+      var idDel = invDel.getAttribute('data-inv-delete-id');
+      for (var d1 = 0; d1 < db.products.length; d1++) if (db.products[d1].id === idDel) { db.products.splice(d1, 1); break; }
+      pkRenderWorkstation(); pkToast('Producto eliminado del inventario.'); return true;
+    }
+    var selTbl = target.closest('[data-select-table]');
+    if (selTbl) { STATE.selectedTableId = selTbl.getAttribute('data-select-table'); pkRenderWorkstation(); return true; }
+    if (target.closest('#btn-gastro-new-table')) {
+      var nTblNum = db.diningTables.length + 1; var nTblId = 'tbl-' + Date.now();
+      db.diningTables.push({ id: nTblId, name: 'Mesa ' + nTblNum, waiter: 'Mesero Turno', diners: 0, status: 'Libre', items: [], total: 0 });
+      STATE.selectedTableId = nTblId; pkRenderWorkstation(); pkToast('Mesa ' + nTblNum + ' creada.'); return true;
+    }
+    if (target.closest('#btn-cmd-add-item')) {
+      var tbC = pkFindById(db.diningTables, STATE.selectedTableId) || db.diningTables[0];
+      if (tbC) {
+        var dishVal = (document.getElementById('cmd-dish-select') || {}).value || 'Plato Especial|35000';
+        var customName = ((document.getElementById('cmd-custom-name') || {}).value || '').trim();
+        var customPrice = Number((document.getElementById('cmd-custom-price') || {}).value || 0);
+        var parts = dishVal.split('|');
+        var itemName = customName || parts[0];
+        var itemPrice = customPrice > 0 ? customPrice : Number(parts[1] || 25000);
+        var itemQty = Math.max(1, Number((document.getElementById('cmd-qty') || {}).value || 1));
+        var itemNote = ((document.getElementById('cmd-note') || {}).value || '').trim();
+        tbC.waiter = ((document.getElementById('cmd-waiter') || {}).value || 'Mesero').trim();
+        tbC.diners = Math.max(1, Number((document.getElementById('cmd-diners') || {}).value || 2));
+        if (tbC.status === 'Libre') tbC.status = 'Ocupada';
+        tbC.items.push({ productId: 'cmd-' + Date.now(), name: itemName, qty: itemQty, price: itemPrice, note: itemNote });
+        var sumT = 0; for (var k = 0; k < tbC.items.length; k++) sumT += tbC.items[k].qty * tbC.items[k].price;
+        tbC.total = sumT; pkPersistRelationalTx('GASTRO_ORDER', { tableId: tbC.id }); pkRenderWorkstation(); pkToast('Agregado a ' + tbC.name + ': ' + itemQty + 'x ' + itemName);
+      }
+      return true;
+    }
+    var cmdQty = target.closest('[data-cmd-qty]');
+    if (cmdQty) {
+      var tbQ = pkFindById(db.diningTables, STATE.selectedTableId) || db.diningTables[0];
+      var idxC = Number(cmdQty.getAttribute('data-cmd-idx'));
+      if (tbQ && tbQ.items[idxC]) {
+        tbQ.items[idxC].qty = Math.max(1, tbQ.items[idxC].qty + Number(cmdQty.getAttribute('data-cmd-qty')));
+        var sQ = 0; for (var q1 = 0; q1 < tbQ.items.length; q1++) sQ += tbQ.items[q1].qty * tbQ.items[q1].price;
+        tbQ.total = sQ; pkRenderWorkstation();
+      }
+      return true;
+    }
+    var cmdDel = target.closest('[data-cmd-del]');
+    if (cmdDel) {
+      var tbX = pkFindById(db.diningTables, STATE.selectedTableId) || db.diningTables[0];
+      if (tbX) {
+        tbX.items.splice(Number(cmdDel.getAttribute('data-cmd-del')), 1);
+        var sX = 0; for (var x1 = 0; x1 < tbX.items.length; x1++) sX += tbX.items[x1].qty * tbX.items[x1].price;
+        tbX.total = sX; if (tbX.items.length === 0) tbX.status = 'Libre'; pkRenderWorkstation();
+      }
+      return true;
+    }
+    if (target.closest('#btn-cmd-send-kitchen')) {
+      var tbK = pkFindById(db.diningTables, STATE.selectedTableId) || db.diningTables[0];
+      if (tbK) {
+        if (!tbK.items || tbK.items.length === 0) { pkToast('Agrega al menos un plato o bebida antes de enviar a cocina.'); return true; }
+        tbK.status = 'En Cocina'; pkRenderWorkstation(); pkToast('Comanda de ' + tbK.name + ' enviada a Cocina y Barra.');
+      }
+      return true;
+    }
+    var kdsReady = target.closest('[data-kds-ready-table]');
+    if (kdsReady) {
+      var tbR = pkFindById(db.diningTables, kdsReady.getAttribute('data-kds-ready-table'));
+      if (tbR) { tbR.status = 'Ocupada'; pkRenderWorkstation(); pkToast('Pedido de ' + tbR.name + ' marcado como entregado.'); }
+      return true;
+    }
+    return false;
   }
 `;
 }
@@ -15648,21 +15292,21 @@ function renderPlatformActionsRuntimeJs() {
     }
     el.innerHTML =
       '<div class="card" style="margin-bottom:14px">' +
-      '<div class="card-head"><div><div class="card-title">\u{1F465} Roles Internos en tu Base de Datos (' + pkEsc(client.dbName) + ')</div>' +
-      '<div style="font-size:12px;color:var(--pk-muted)">Se crean los roles b\xE1sicos por defecto y puedes modificarlos o agregar nuevos dentro del cupo asignado por SuperAdmin.</div></div>' +
-      '<span class="badge badge-blue">Cupo de Roles: ' + client.internalRoles.length + ' / ' + client.maxRolesAllowed + '</span></div>' +
+      '<div class="card-head"><div><div class="card-title">\u{1F465} Perfiles y Roles de tu Equipo</div>' +
+      '<div style="font-size:12px;color:var(--pk-muted)">Configura qu\xE9 secciones puede usar cada perfil de trabajo en tu empresa.</div></div>' +
+      '<span class="badge badge-blue">Roles: ' + client.internalRoles.length + ' / ' + client.maxRolesAllowed + '</span></div>' +
       '<div class="card-body">' +
       '<div class="grid-3" style="margin-bottom:12px">' +
-      '<div class="field"><label>Nombre del Nuevo Rol Interno</label><input type="text" id="new-role-name" placeholder="Ej: Auditor de Bodega" /></div>' +
-      '<div class="field"><label>Descripci\xF3n de Permisos</label><input type="text" id="new-role-desc" placeholder="Ej: Revisi\xF3n de traslados y existencias" /></div>' +
-      '<div class="field" style="justify-content:flex-end"><button type="button" class="btn btn-primary" id="btn-create-internal-role">+ Crear Rol Interno</button></div>' +
+      '<div class="field"><label>Nombre del Rol</label><input type="text" id="new-role-name" placeholder="Ej: Jefe de Bodega / Mesero / Cajero" /></div>' +
+      '<div class="field"><label>Funciones Permitidas</label><input type="text" id="new-role-desc" placeholder="Ej: Control de entradas, salidas y traslados" /></div>' +
+      '<div class="field" style="justify-content:flex-end"><button type="button" class="btn btn-primary" id="btn-create-internal-role">+ Crear Rol</button></div>' +
       '</div>' +
-      '<div class="table-wrap"><table><thead><tr><th>Rol Interno</th><th>Alcance</th><th>Subm\xF3dulos Permitidos</th></tr></thead><tbody>' + rRows + '</tbody></table></div>' +
+      '<div class="table-wrap"><table><thead><tr><th>Rol</th><th>Descripci\xF3n</th><th>Secciones Habilitadas</th></tr></thead><tbody>' + rRows + '</tbody></table></div>' +
       '</div></div>' +
       '<div class="card">' +
-      '<div class="card-head"><div><div class="card-title">\u{1F510} Usuarios de tu Empresa (Conectados a ' + pkEsc(client.dbName) + ')</div>' +
-      '<div style="font-size:12px;color:var(--pk-muted)">Cuenta Admin generada autom\xE1ticamente + usuarios operativos asignados a tus roles internos.</div></div>' +
-      '<span class="badge badge-emerald">Cupo de Usuarios: ' + client.internalUsers.length + ' / ' + client.maxUsersAllowed + '</span></div>' +
+      '<div class="card-head"><div><div class="card-title">\u{1F510} Usuarios de tu Empresa</div>' +
+      '<div style="font-size:12px;color:var(--pk-muted)">Crea cuentas de acceso para tus empleados y as\xEDgnales su rol correspondiente.</div></div>' +
+      '<span class="badge badge-emerald">Usuarios: ' + client.internalUsers.length + ' / ' + client.maxUsersAllowed + '</span></div>' +
       '<div class="card-body">' +
       '<div class="grid-3" style="margin-bottom:12px">' +
       '<div class="field"><label>Nombre Completo</label><input type="text" id="new-user-fullname" placeholder="Ej: Camilo Vargas" /></div>' +
@@ -15818,26 +15462,18 @@ function renderPosHybridHubRuntimeJs() {
   return `
   function pkRenderPosHub() {
     var db = STATE.relDb;
-    var container = document.getElementById('ws-converged-hub-container');
-    if (!container || !db) return;
+    var stage = document.getElementById('ws-module-stage');
+    if (!stage || !db) return;
 
     var cust = pkFindById(db.customers, STATE.posCustomerId) || db.customers[0];
     if (cust) STATE.posCustomerId = cust.id;
     var contract = cust && cust.contractId ? pkFindById(db.contracts, cust.contractId) : null;
     var tariff = cust && cust.tariffId ? pkFindById(db.tariffs, cust.tariffId) : null;
-    var custVehicles = [];
-    for (var v = 0; v < db.vehicles.length; v++) {
-      if (!cust || db.vehicles[v].customerId === cust.id) custVehicles.push(db.vehicles[v]);
-    }
-    var selectedVehicle = pkFindById(db.vehicles, STATE.posVehicleId) || custVehicles[0] || null;
-    if (selectedVehicle && !STATE.posVehicleId) STATE.posVehicleId = selectedVehicle.id;
+    var selectedVehicle = pkFindById(db.vehicles, STATE.posVehicleId) || null;
 
     var pendingOrders = [];
     for (var o = 0; o < db.workOrders.length; o++) {
-      var wo = db.workOrders[o];
-      if (wo.status !== 'Facturado' && ((cust && wo.customerId === cust.id) || (selectedVehicle && wo.vehicleId === selectedVehicle.id))) {
-        pendingOrders.push(wo);
-      }
+      if (db.workOrders[o].status !== 'Facturado') pendingOrders.push(db.workOrders[o]);
     }
     var openTables = [];
     for (var dt = 0; dt < db.diningTables.length; dt++) {
@@ -15848,53 +15484,38 @@ function renderPosHybridHubRuntimeJs() {
     for (var cIdx = 0; cIdx < db.customers.length; cIdx++) {
       var cItem = db.customers[cIdx];
       custOpts += '<option value="' + pkEsc(cItem.id) + '" ' + (cust && cust.id === cItem.id ? 'selected' : '') + '>' +
-        pkEsc(cItem.docType + ' ' + cItem.nit + (cItem.dv ? '-' + cItem.dv : '') + ' \u2014 ' + cItem.name + ' (' + cItem.city + ')') + '</option>';
+        pkEsc(cItem.name + ' (' + cItem.docType + ' ' + cItem.nit + ')') + '</option>';
     }
-    var vehOpts = '<option value="">\u2014 Sin veh\xEDculo / Venta mostrador \u2014</option>';
+    var vehOpts = '<option value="">\u2014 Venta de Mostrador (Sin veh\xEDculo) \u2014</option>';
     for (var vIdx = 0; vIdx < db.vehicles.length; vIdx++) {
       var vItem = db.vehicles[vIdx];
-      var isOwner = cust && vItem.customerId === cust.id;
       vehOpts += '<option value="' + pkEsc(vItem.id) + '" ' + (selectedVehicle && selectedVehicle.id === vItem.id ? 'selected' : '') + '>' +
-        pkEsc(vItem.plate + ' \xB7 ' + vItem.brand + ' (' + (isOwner ? 'Del cliente' : vItem.customerName) + ')') + '</option>';
+        pkEsc(vItem.plate + ' \u2014 ' + vItem.brand + ' (' + vItem.customerName + ')') + '</option>';
     }
     var prodOpts = '';
     for (var pIdx = 0; pIdx < db.products.length; pIdx++) {
       var pr = db.products[pIdx];
-      prodOpts += '<option value="' + pkEsc(pr.id) + '">' + pkEsc('[' + pr.code + '] ' + pr.name + ' \u2014 Stock: ' + pr.stock + ' \u2014 ' + pkCop(pr.salePrice)) + '</option>';
+      prodOpts += '<option value="' + pkEsc(pr.id) + '">' + pkEsc(pr.name + ' [' + pr.code + '] \u2014 Stock: ' + pr.stock + ' \u2014 ' + pkCop(pr.salePrice)) + '</option>';
     }
     var workerOpts = '';
     for (var wIdx = 0; wIdx < db.workers.length; wIdx++) {
       var wk = db.workers[wIdx];
-      workerOpts += '<option value="' + pkEsc(wk.id) + '">' + pkEsc(wk.name + ' (' + wk.specialty + ' \xB7 Com. ' + wk.commissionPct + '%)') + '</option>';
+      workerOpts += '<option value="' + pkEsc(wk.id) + '">' + pkEsc(wk.name + ' (' + wk.specialty + ')') + '</option>';
     }
 
-    var alertsHtml = '';
-    if (selectedVehicle) {
-      var oilDiff = selectedVehicle.nextOilChangeKm - selectedVehicle.currentKm;
-      var oilBadge = oilDiff <= 500
-        ? '<span class="badge badge-amber">\u{1F6E2}\uFE0F Cambio Aceite urgente (en ' + oilDiff + ' km \xB7 Meta: ' + selectedVehicle.nextOilChangeKm + ' km)</span>'
-        : '<span class="badge badge-emerald">\u{1F6E2}\uFE0F Aceite OK (Pr\xF3x: ' + selectedVehicle.nextOilChangeKm + ' km)</span>';
-      alertsHtml = '<div style="margin-top:8px;padding:8px 10px;background:#f8fafc;border:1px solid var(--pk-border);border-radius:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">' +
-        '<div style="font-size:11px"><strong>\u{1F697} Activo Enlazado (FK):</strong> <code>' + pkEsc(selectedVehicle.plate) + '</code> ' + pkEsc(selectedVehicle.brand) + ' \xB7 Km actual: <strong>' + selectedVehicle.currentKm.toLocaleString('es-CO') + ' km</strong></div>' +
-        '<div style="display:flex;gap:6px;flex-wrap:wrap">' + oilBadge +
-        '<span class="badge badge-blue">\u{1F4C5} SOAT: ' + pkEsc(selectedVehicle.soatExpiry) + '</span>' +
-        '<span class="badge badge-slate">\u{1F527} Tecno: ' + pkEsc(selectedVehicle.tecnoExpiry) + '</span>' +
-        '<button type="button" class="btn btn-outline btn-sm" data-open-vehicle-360="' + pkEsc(selectedVehicle.id) + '">\u{1F441}\uFE0F Hoja de Vida Placa</button></div></div>';
-    }
-
-    var pendingBannerHtml = '';
+    var quickLoadHtml = '';
     if (pendingOrders.length > 0 || openTables.length > 0) {
-      pendingBannerHtml += '<div style="margin-top:10px;padding:10px 12px;background:#eff6ff;border:1px solid #93c5fd;border-radius:10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">' +
-        '<div style="font-size:12px;color:#1e3a8a"><strong>\u{1F517} Convergencia Autom\xE1tica Detectada:</strong> Hay \xF3rdenes de trabajo o mesas activas listas para facturar en caja:</div><div class="row-actions">';
+      quickLoadHtml = '<div style="margin-top:10px;padding:8px 12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">' +
+        '<span style="font-size:12px;font-weight:700;color:#1e3a8a">\u26A1 Traer cuenta pendiente a Caja:</span><div class="row-actions">';
       for (var po = 0; po < pendingOrders.length; po++) {
         var ord = pendingOrders[po];
-        pendingBannerHtml += '<button type="button" class="btn btn-primary btn-sm" data-pos-load-order="' + pkEsc(ord.id) + '">\u26A1 Cargar OT ' + pkEsc(ord.id + ' (' + ord.plate + ' \xB7 ' + ord.status + ')') + '</button>';
+        quickLoadHtml += '<button type="button" class="btn btn-primary btn-sm" data-pos-load-order="' + pkEsc(ord.id) + '">\u{1F527} Orden ' + pkEsc(ord.plate) + ' (' + pkCop(ord.totalEstimated) + ')</button>';
       }
       for (var ot = 0; ot < openTables.length; ot++) {
         var tbl = openTables[ot];
-        pendingBannerHtml += '<button type="button" class="btn btn-emerald btn-sm" data-pos-load-table="' + pkEsc(tbl.id) + '">\u{1F37D}\uFE0F Cargar ' + pkEsc(tbl.name) + ' (' + pkCop(tbl.total) + ')</button>';
+        quickLoadHtml += '<button type="button" class="btn btn-emerald btn-sm" data-pos-load-table="' + pkEsc(tbl.id) + '">\u{1F37D}\uFE0F ' + pkEsc(tbl.name) + ' (' + pkCop(tbl.total) + ')</button>';
       }
-      pendingBannerHtml += '</div></div>';
+      quickLoadHtml += '</div></div>';
     }
 
     var subTotal = 0; var discountTotal = 0; var taxTotal = 0;
@@ -15905,81 +15526,70 @@ function renderPosHybridHubRuntimeJs() {
       var lineGross = Number(it.price || 0) * Number(it.qty || 1);
       var lineDisc = Math.round(lineGross * (discountPct / 100));
       var lineNet = lineGross - lineDisc;
-      var lineTax = Math.round(lineNet * (Number(it.taxPct || 0) / 100));
-      subTotal += lineGross; discountTotal += lineDisc; taxTotal += lineTax;
+      subTotal += lineGross; discountTotal += lineDisc;
       cartRowsHtml += '<tr>' +
-        '<td><span class="badge ' + (it.kind === 'SERVICIO' ? 'badge-amber' : 'badge-blue') + '">' + pkEsc(it.kind || 'PRODUCTO') + '</span></td>' +
-        '<td><strong>' + pkEsc(it.name) + '</strong><div style="font-size:11px;color:var(--pk-muted)">' +
-        (it.workerName ? '\u{1F468}\u200D\u{1F527} T\xE9cnico FK: ' + pkEsc(it.workerName) : '\u{1F4E6} SKU: ' + pkEsc(it.code || 'CAT')) + '</div></td>' +
+        '<td><span class="badge ' + (it.kind === 'SERVICIO' ? 'badge-amber' : 'badge-blue') + '">' + pkEsc(it.kind === 'SERVICIO' ? 'Servicio' : 'Producto') + '</span></td>' +
+        '<td><strong>' + pkEsc(it.name) + '</strong>' + (it.workerName ? '<div style="font-size:11px;color:var(--pk-muted)">T\xE9cnico: ' + pkEsc(it.workerName) + '</div>' : '') + '</td>' +
         '<td><div class="row-actions"><button type="button" class="btn btn-outline btn-sm" data-pos-qty-delta="-1" data-pos-idx="' + i + '">-</button>' +
-        '<span style="font-weight:800;min-width:22px;text-align:center">' + it.qty + '</span>' +
+        '<strong style="min-width:24px;text-align:center">' + it.qty + '</strong>' +
         '<button type="button" class="btn btn-outline btn-sm" data-pos-qty-delta="1" data-pos-idx="' + i + '">+</button></div></td>' +
         '<td>' + pkCop(it.price) + '</td>' +
-        '<td><strong>' + pkCop(lineNet + lineTax) + '</strong></td>' +
-        '<td><button type="button" class="btn btn-outline btn-sm" data-pos-del-idx="' + i + '">\u{1F5D1}\uFE0F</button></td></tr>';
+        '<td><strong>' + pkCop(lineNet) + '</strong></td>' +
+        '<td><button type="button" class="btn btn-outline btn-sm" data-pos-del-idx="' + i + '">\u{1F5D1}\uFE0F Quitar</button></td></tr>';
     }
     if (!cartRowsHtml) {
-      cartRowsHtml = '<tr><td colspan="6" style="text-align:center;color:var(--pk-muted);padding:18px">El carrito h\xEDbrido est\xE1 vac\xEDo. Selecciona repuestos, mano de obra o carga una Orden Kanban / Mesa arriba.</td></tr>';
+      cartRowsHtml = '<tr><td colspan="6" style="text-align:center;color:var(--pk-muted);padding:16px">Agrega productos o servicios arriba para iniciar la venta.</td></tr>';
     }
     var grandTotal = subTotal - discountTotal + taxTotal;
     var cashRec = Number(STATE.posCashReceived || grandTotal);
     var changeDue = Math.max(0, cashRec - grandTotal);
 
-    container.innerHTML =
-      '<div class="card"><div class="card-head"><div>' +
-      '<div class="card-title">\u{1F6D2} 1. Datos Relacionales del Cliente, Convenio v2 y Veh\xEDculo/Activo (FKs enlazadas)</div>' +
-      '<div class="card-sub">Al cambiar de cliente se enlazan sus veh\xEDculos, su contrato/tarifa de descuento y sus \xF3rdenes pendientes en taller</div></div>' +
-      '<div class="row-actions"><button type="button" class="btn btn-outline btn-sm" data-open-customer-360="' + pkEsc(cust ? cust.id : '') + '">\u{1F441}\uFE0F Expediente 360\xB0 Cliente</button>' +
-      '<button type="button" class="btn btn-outline btn-sm" id="btn-pos-quick-new-customer">+ Nuevo Cliente DIAN</button></div></div>' +
-      '<div class="card-body">' +
-      '<div class="form-grid">' +
-      '<div class="field"><label>Cliente / Tercero DIAN (FK -> customers)</label><select id="pos-select-customer">' + custOpts + '</select></div>' +
-      '<div class="field"><label>Veh\xEDculo / Placa o Activo (FK -> vehicles)</label><select id="pos-select-vehicle">' + vehOpts + '</select></div>' +
-      '<div class="field"><label>Contrato / Convenio v2 y Tarifa Aplicada (FK -> contracts)</label>' +
-      '<input type="text" readonly value="' + pkEsc((contract ? contract.code + ' \xB7 Cupo disp: ' + pkCop(contract.availableBalance) : 'Particular Contado') + ' | ' + (tariff ? tariff.name + ' (-' + tariff.discountPct + '%)' : 'Tarifa Plena')) + '" style="background:#f8fafc;font-weight:700;color:var(--pk-primary)" /></div>' +
-      '</div>' + alertsHtml + pendingBannerHtml + '</div></div>' +
+    stage.innerHTML =
+      '<div class="card"><div class="card-head"><div class="card-title">1. Cliente de la Venta</div>' +
+      '<div class="row-actions"><button type="button" class="btn btn-primary btn-sm" data-open-new-customer-modal="1">+ Registrar Nuevo Cliente</button>' +
+      '<button type="button" class="btn btn-outline btn-sm" data-open-customer-360="' + pkEsc(cust ? cust.id : '') + '">\u{1F441}\uFE0F Ver Historial del Cliente</button></div></div>' +
+      '<div class="card-body"><div class="grid-3">' +
+      '<div class="field"><label>Seleccionar Cliente</label><select id="pos-select-customer">' + custOpts + '</select></div>' +
+      '<div class="field"><label>Veh\xEDculo / Placa (Opcional)</label><select id="pos-select-vehicle">' + vehOpts + '</select></div>' +
+      '<div class="field"><label>Tarifa / Descuento Aplicado</label><input type="text" readonly value="' + pkEsc((tariff ? tariff.name + ' (-' + tariff.discountPct + '%)' : 'Precio Normal') + (contract && contract.id !== 'cnt-particular' ? ' \xB7 Cupo: ' + pkCop(contract.availableBalance) : '')) + '" style="background:#f8fafc;font-weight:700" /></div>' +
+      '</div>' + quickLoadHtml + '</div></div>' +
 
       '<div class="grid-2">' +
-      '<div class="card"><div class="card-head"><div><div class="card-title">\u{1F4E6} 2A. Agregar Repuesto / Producto del Inventario (FK -> products)</div>' +
-      '<div class="card-sub">Descuenta stock autom\xE1ticamente y registra salida en Kardex al facturar</div></div></div>' +
-      '<div class="card-body"><div class="form-grid">' +
-      '<div class="field"><label>Lector C\xF3digo de Barras / SKU R\xE1pido</label><input type="text" id="pos-sku-input" placeholder="Ej: ACE-20W50 y presiona Enter o clic en Agregar" /></div>' +
-      '<div class="field"><label>Cat\xE1logo de Productos con Stock en Bodega</label><select id="pos-select-product">' + prodOpts + '</select></div>' +
+      '<div class="card"><div class="card-head"><div class="card-title">\u{1F4E6} 2A. Agregar Producto del Inventario</div></div>' +
+      '<div class="card-body"><div class="grid-3">' +
+      '<div class="field" style="grid-column:span 2"><label>Elegir Producto (o escribir c\xF3digo abajo)</label><select id="pos-select-product">' + prodOpts + '</select></div>' +
       '<div class="field"><label>Cantidad</label><input type="number" id="pos-product-qty" value="1" min="1" /></div>' +
-      '</div><div style="margin-top:10px;display:flex;justify-content:flex-end"><button type="button" class="btn btn-primary btn-sm" id="btn-pos-add-product">+ Agregar Producto al Carrito</button></div></div></div>' +
+      '</div><div style="margin-top:8px;display:flex;gap:8px;align-items:center">' +
+      '<input type="text" id="pos-sku-input" placeholder="Lector de c\xF3digo de barras / SKU (Opcional)" style="flex:1;padding:7px 10px;border:1px solid var(--pk-border);border-radius:8px;font-size:12px" />' +
+      '<button type="button" class="btn btn-primary btn-sm" id="btn-pos-add-product">+ Agregar Producto</button></div></div></div>' +
 
-      '<div class="card"><div class="card-head"><div><div class="card-title">\u{1F527} 2B. Agregar Mano de Obra / Servicio con T\xE9cnico (FK -> workers)</div>' +
-      '<div class="card-sub">Liquida autom\xE1ticamente comisi\xF3n para el mec\xE1nico/profesional asignado</div></div></div>' +
-      '<div class="card-body"><div class="form-grid">' +
-      '<div class="field"><label>Descripci\xF3n del Servicio / Procedimiento</label><input type="text" id="pos-service-desc" placeholder="Ej: Sincronizaci\xF3n full inyecci\xF3n / Mantenimiento" /></div>' +
-      '<div class="field"><label>Valor Mano de Obra (COP)</label><input type="number" id="pos-service-price" value="65000" /></div>' +
-      '<div class="field"><label>T\xE9cnico / Profesional Ejecutor (FK -> workers)</label><select id="pos-select-worker">' + workerOpts + '</select></div>' +
-      '</div><div style="margin-top:10px;display:flex;justify-content:flex-end"><button type="button" class="btn btn-amber btn-sm" id="btn-pos-add-service">+ Agregar Mano de Obra al Carrito</button></div></div></div>' +
+      '<div class="card"><div class="card-head"><div class="card-title">\u{1F527} 2B. Agregar Servicio / Mano de Obra</div></div>' +
+      '<div class="card-body"><div class="grid-3">' +
+      '<div class="field" style="grid-column:span 2"><label>Descripci\xF3n del Servicio</label><input type="text" id="pos-service-desc" placeholder="Ej: Mantenimiento general / Instalaci\xF3n" /></div>' +
+      '<div class="field"><label>Valor ($)</label><input type="number" id="pos-service-price" value="65000" /></div>' +
+      '</div><div style="margin-top:8px;display:flex;gap:8px;align-items:center">' +
+      '<select id="pos-select-worker" style="flex:1;padding:7px 10px;border:1px solid var(--pk-border);border-radius:8px;font-size:12px">' + workerOpts + '</select>' +
+      '<button type="button" class="btn btn-amber btn-sm" id="btn-pos-add-service">+ Agregar Servicio</button></div></div></div>' +
       '</div>' +
 
-      '<div class="card"><div class="card-head"><div><div class="card-title">\u{1F9FE} 3. Carrito Maestro-Detalle, Liquidaci\xF3n y Cierre Relacional</div>' +
-      '<div class="card-sub">Cotiza sin descontar inventario o factura ejecutando todas las llaves for\xE1neas en una sola transacci\xF3n</div></div>' +
-      '<span class="badge badge-emerald" style="font-size:13px">Total Neto: ' + pkCop(grandTotal) + '</span></div>' +
-      '<div class="card-body"><div class="table-wrap" style="margin-bottom:12px"><table><thead><tr><th>Tipo</th><th>Concepto / V\xEDnculo FK</th><th>Cant.</th><th>Vlr. Unit</th><th>Subtotal</th><th></th></tr></thead><tbody>' + cartRowsHtml + '</tbody></table></div>' +
-      '<div class="form-grid" style="background:#f8fafc;padding:12px;border-radius:10px;border:1px solid var(--pk-border)">' +
+      '<div class="card"><div class="card-head"><div class="card-title">\u{1F9FE} 3. Productos y Servicios a Cobrar</div>' +
+      '<span class="badge badge-emerald" style="font-size:14px">Total a Pagar: ' + pkCop(grandTotal) + '</span></div>' +
+      '<div class="card-body"><div class="table-wrap" style="margin-bottom:12px"><table><thead><tr><th>Tipo</th><th>Descripci\xF3n</th><th>Cantidad</th><th>Precio Unit.</th><th>Subtotal</th><th>Acci\xF3n</th></tr></thead><tbody>' + cartRowsHtml + '</tbody></table></div>' +
+      '<div class="grid-3" style="background:#f8fafc;padding:12px;border-radius:10px;border:1px solid var(--pk-border)">' +
       '<div class="field"><label>Medio de Pago</label><select id="pos-payment-method">' +
-      '<option value="Efectivo" ' + (STATE.posPaymentMethod === 'Efectivo' ? 'selected' : '') + '>\u{1F4B5} Efectivo en Caja</option>' +
+      '<option value="Efectivo" ' + (STATE.posPaymentMethod === 'Efectivo' ? 'selected' : '') + '>\u{1F4B5} Efectivo</option>' +
       '<option value="Transferencia / Nequi" ' + (STATE.posPaymentMethod === 'Transferencia / Nequi' ? 'selected' : '') + '>\u{1F4F2} Transferencia / Nequi / Daviplata</option>' +
-      '<option value="Tarjeta" ' + (STATE.posPaymentMethod === 'Tarjeta' ? 'selected' : '') + '>\u{1F4B3} Dat\xE1fono / Tarjeta</option>' +
-      '<option value="Pago Mixto" ' + (STATE.posPaymentMethod === 'Pago Mixto' ? 'selected' : '') + '>\u2696\uFE0F Pago Mixto (Efectivo + Transferencia)</option>' +
-      '<option value="Cr\xE9dito / Cartera CxC" ' + (STATE.posPaymentMethod === 'Cr\xE9dito / Cartera CxC' ? 'selected' : '') + '>\u{1F4D2} Cr\xE9dito / Enviar a Cartera CxC (Con Abono)</option></select></div>' +
-      '<div class="field"><label>Efectivo Recibido / Abono Inicial (COP)</label><input type="number" id="pos-cash-received" value="' + (STATE.posPaymentMethod === 'Cr\xE9dito / Cartera CxC' ? (STATE.posCreditInitialAbono || 0) : cashRec) + '" /></div>' +
-      '<div class="field"><label>Resumen Financiero y Vueltos / Saldo CxC</label>' +
-      '<input type="text" readonly value="' + (STATE.posPaymentMethod === 'Cr\xE9dito / Cartera CxC'
-        ? ('Saldo a Cartera CxC: ' + pkCop(Math.max(0, grandTotal - Number(STATE.posCreditInitialAbono || 0))))
-        : ('Sub: ' + pkCop(subTotal) + ' | Dto: -' + pkCop(discountTotal) + ' | Cambio: ' + pkCop(changeDue))) + '" style="font-weight:800;color:var(--pk-emerald);background:#fff" /></div>' +
+      '<option value="Tarjeta" ' + (STATE.posPaymentMethod === 'Tarjeta' ? 'selected' : '') + '>\u{1F4B3} Tarjeta / Dat\xE1fono</option>' +
+      '<option value="Cr\xE9dito / Cartera CxC" ' + (STATE.posPaymentMethod === 'Cr\xE9dito / Cartera CxC' ? 'selected' : '') + '>\u{1F4D2} Cr\xE9dito / Fiado (Pasa a Cuentas por Cobrar)</option></select></div>' +
+      '<div class="field"><label>' + (STATE.posPaymentMethod === 'Cr\xE9dito / Cartera CxC' ? 'Abono Inicial Hoy ($)' : 'Dinero Recibido ($)') + '</label><input type="number" id="pos-cash-received" value="' + (STATE.posPaymentMethod === 'Cr\xE9dito / Cartera CxC' ? (STATE.posCreditInitialAbono || 0) : cashRec) + '" /></div>' +
+      '<div class="field"><label>' + (STATE.posPaymentMethod === 'Cr\xE9dito / Cartera CxC' ? 'Saldo Pendiente por Cobrar' : 'Cambio / Devuelta a Entregar') + '</label>' +
+      '<input type="text" readonly value="' + (STATE.posPaymentMethod === 'Cr\xE9dito / Cartera CxC' ? pkCop(Math.max(0, grandTotal - Number(STATE.posCreditInitialAbono || 0))) : pkCop(changeDue)) + '" style="font-weight:800;color:var(--pk-emerald);background:#fff" /></div>' +
       '</div>' +
       '<div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">' +
       '<div class="row-actions">' +
-      '<button type="button" class="btn btn-outline btn-sm" id="btn-pos-print-quote">\u{1F5A8}\uFE0F Imprimir Cotizaci\xF3n PDF (Sin descontar Stock)</button>' +
-      '<button type="button" class="btn btn-outline btn-sm" id="btn-pos-whatsapp-quote">\u{1F4AC} Enviar Cotizaci\xF3n por WhatsApp</button>' +
-      '</div>' +
-      '<button type="button" class="btn btn-emerald" id="btn-pos-checkout-invoice">\u{1F9FE} Facturar Electr\xF3nicamente y Ejecutar Cruces FK</button>' +
+      '<button type="button" class="btn btn-outline btn-sm" id="btn-pos-print-quote">\u{1F5A8}\uFE0F Imprimir Cotizaci\xF3n (Sin descontar stock)</button>' +
+      '<button type="button" class="btn btn-outline btn-sm" id="btn-pos-whatsapp-quote">\u{1F4AC} Enviar por WhatsApp</button></div>' +
+      '<button type="button" class="btn btn-emerald" id="btn-pos-checkout-invoice">\u2705 Cobrar y Emitir Factura</button>' +
       '</div></div></div>';
   }
 `;
@@ -15990,22 +15600,80 @@ function renderRelationalHubActionsRuntimeJs() {
   return `
   function pkPrintHtmlDocument(title, htmlContent) {
     var win = window.open('', '_blank', 'width=840,height=700');
-    if (!win) { pkToast('Permite ventanas emergentes para imprimir el PDF.'); return; }
+    if (!win) { pkToast('Permite ventanas emergentes para imprimir.'); return; }
     win.document.write('<html><head><title>' + pkEsc(title) + '</title>' +
       '<style>body{font-family:Inter,Arial,sans-serif;padding:24px;color:#0f172a}table{width:100%;border-collapse:collapse;margin-top:14px}th,td{border:1px solid #cbd5e1;padding:8px;text-align:left;font-size:12px}th{background:#f1f5f9}.head{display:flex;justify-content:space-between;border-bottom:2px solid #1d4ed8;padding-bottom:12px;margin-bottom:14px}</style>' +
       '</head><body>' + htmlContent + '<script>setTimeout(function(){window.print();},350);<\\/script></body></html>');
     win.document.close();
   }
 
+  function pkCloseRelModal() {
+    var m = document.getElementById('pk-relational-modal');
+    if (m) m.classList.remove('open');
+  }
+
   function pkHandleRelationalHubClick(target) {
     var db = STATE.relDb;
     if (!db) return false;
 
-    if (target.closest('#btn-close-rel-modal')) {
-      var m = document.getElementById('pk-relational-modal'); if (m) m.classList.remove('open'); return true;
+    if (target.closest('#btn-close-rel-modal')) { pkCloseRelModal(); return true; }
+    if (target.closest('[data-open-new-customer-modal]')) { pkOpenNewCustomerModal(); return true; }
+
+    if (target.closest('#btn-modal-save-customer')) {
+      var dType = (document.getElementById('modal-cust-doctype') || {}).value || 'CC';
+      var nitVal = ((document.getElementById('modal-cust-nit') || {}).value || ('901' + String(Date.now()).slice(-6))).trim();
+      var nameVal = ((document.getElementById('modal-cust-name') || {}).value || '').trim();
+      if (!nameVal) { pkToast('Escribe el nombre del cliente.'); return true; }
+      var phoneVal = ((document.getElementById('modal-cust-phone') || {}).value || '3001234567').trim();
+      var emailVal = ((document.getElementById('modal-cust-email') || {}).value || 'cliente@correo.com').trim();
+      var addrVal = ((document.getElementById('modal-cust-address') || {}).value || 'Ciudad Principal').trim();
+      var cntId = (document.getElementById('modal-cust-contract') || {}).value || 'cnt-particular';
+      var trfId = (document.getElementById('modal-cust-tariff') || {}).value || 'trf-plena';
+      var credLim = Number((document.getElementById('modal-cust-credit') || {}).value || 2000000);
+      var newCId = 'cust-' + Date.now();
+      db.customers.unshift({ id: newCId, docType: dType, nit: nitVal, dv: dType === 'NIT' ? '4' : '', name: nameVal, businessType: dType === 'NIT' ? 'Jur\xEDdica' : 'Natural', taxRegime: dType === 'NIT' ? 'Responsable de IVA' : 'No Responsable', phone: phoneVal, email: emailVal, city: addrVal.split('\u2014')[0].trim(), address: addrVal, contractId: cntId, tariffId: trfId, creditLimit: credLim, currentDebt: 0 });
+      STATE.posCustomerId = newCId;
+      pkPersistRelationalTx('CREATE_CUSTOMER', { id: newCId, name: nameVal });
+      pkCloseRelModal(); pkRenderWorkstation(); pkToast('Cliente registrado y seleccionado: ' + nameVal);
+      return true;
     }
-    var hubBtn = target.closest('[data-ws-hub]');
-    if (hubBtn) { STATE.activeConvergedHub = hubBtn.getAttribute('data-ws-hub'); pkRenderWorkstation(); return true; }
+
+    var restockOpen = target.closest('[data-open-restock-modal]');
+    if (restockOpen) { pkOpenRestockModal(restockOpen.getAttribute('data-open-restock-modal')); return true; }
+
+    var restockConf = target.closest('[data-confirm-restock-id]');
+    if (restockConf) {
+      var prR = pkFindById(db.products, restockConf.getAttribute('data-confirm-restock-id'));
+      if (prR) {
+        var qIn = Math.max(1, Number((document.getElementById('modal-restock-qty') || {}).value || 10));
+        var cIn = Math.max(100, Number((document.getElementById('modal-restock-cost') || {}).value || prR.costPrice));
+        var sIn = Math.max(cIn, Number((document.getElementById('modal-restock-sale') || {}).value || prR.salePrice));
+        var supIn = (document.getElementById('modal-restock-sup') || {}).value || prR.supplierId;
+        var refIn = ((document.getElementById('modal-restock-ref') || {}).value || 'ENTRADA-INV').trim();
+        prR.stock = Number(prR.stock || 0) + qIn; prR.costPrice = cIn; prR.salePrice = sIn; prR.supplierId = supIn;
+        db.kardexMovements.unshift({ id: 'KDX-' + String(Date.now()).slice(-4), date: new Date().toISOString().slice(0, 16).replace('T', ' '), productId: prR.id, productName: prR.name, warehouseId: prR.warehouseId, movementType: 'ENTRADA_COMPRA', qty: qIn, unitCost: cIn, balanceAfter: prR.stock, referenceDoc: refIn, actor: 'Inventario' });
+        pkPersistRelationalTx('PURCHASE_ENTRY', { productCode: prR.code, productName: prR.name, costPrice: cIn, salePrice: sIn, stock: prR.stock });
+        pkCloseRelModal(); pkRenderWorkstation(); pkToast('Se agregaron +' + qIn + ' unidades a ' + prR.name);
+      }
+      return true;
+    }
+
+    var trfOpen = target.closest('[data-open-transfer-modal]');
+    if (trfOpen) { pkOpenTransferModal(trfOpen.getAttribute('data-open-transfer-modal')); return true; }
+
+    var trfConf = target.closest('[data-confirm-transfer-id]');
+    if (trfConf) {
+      var prT = pkFindById(db.products, trfConf.getAttribute('data-confirm-transfer-id'));
+      if (prT) {
+        var whDest = (document.getElementById('modal-transfer-wh') || {}).value || prT.warehouseId;
+        var qTrf = Math.max(1, Number((document.getElementById('modal-transfer-qty') || {}).value || 1));
+        var ntTrf = ((document.getElementById('modal-transfer-note') || {}).value || 'Traslado').trim();
+        prT.warehouseId = whDest;
+        db.kardexMovements.unshift({ id: 'KDX-' + String(Date.now()).slice(-4), date: new Date().toISOString().slice(0, 16).replace('T', ' '), productId: prT.id, productName: prT.name, warehouseId: whDest, movementType: 'TRASLADO_BODEGA', qty: qTrf, unitCost: prT.costPrice, balanceAfter: prT.stock, referenceDoc: ntTrf, actor: 'Bodega' });
+        pkCloseRelModal(); pkRenderWorkstation(); pkToast('Producto trasladado a la bodega seleccionada.');
+      }
+      return true;
+    }
 
     var c360 = target.closest('[data-open-customer-360]');
     if (c360) { pkOpenCustomer360Modal(c360.getAttribute('data-open-customer-360')); return true; }
@@ -16019,7 +15687,7 @@ function renderRelationalHubActionsRuntimeJs() {
     var goCustPos = target.closest('[data-pos-select-cust-go]');
     if (goCustPos) {
       STATE.posCustomerId = goCustPos.getAttribute('data-pos-select-cust-go');
-      STATE.posVehicleId = ''; STATE.activeConvergedHub = 'pos'; pkRenderWorkstation(); return true;
+      STATE.posVehicleId = ''; STATE.activeServiceKey = 'srv-invoicing'; STATE.activeSubmoduleKey = 'mod-pos'; pkRenderWorkstation(); return true;
     }
 
     var loadOrd = target.closest('[data-pos-load-order]');
@@ -16030,8 +15698,8 @@ function renderRelationalHubActionsRuntimeJs() {
         for (var s = 0; s < (wo.services || []).length; s++) {
           STATE.posCart.push({ kind: 'SERVICIO', refId: wo.id, code: 'OT-SRV', name: wo.services[s].description + ' (Placa ' + wo.plate + ')', qty: 1, price: Number(wo.services[s].price || 0), taxPct: 0, workerId: wo.workerId, workerName: wo.workerName });
         }
-        STATE.activeConvergedHub = 'pos'; pkRenderWorkstation();
-        pkToast('Orden Kanban ' + wo.id + ' (' + wo.plate + ') cargada al carrito de Caja POS.');
+        STATE.activeServiceKey = 'srv-invoicing'; STATE.activeSubmoduleKey = 'mod-pos'; pkRenderWorkstation();
+        pkToast('Orden ' + wo.id + ' (' + wo.plate + ') lista para cobrar en Caja.');
       }
       return true;
     }
@@ -16040,12 +15708,13 @@ function renderRelationalHubActionsRuntimeJs() {
     if (loadTbl) {
       var tbl = pkFindById(db.diningTables, loadTbl.getAttribute('data-pos-load-table'));
       if (tbl) {
+        if (!tbl.items || tbl.items.length === 0) { pkToast('Agrega primero platos o bebidas a la comanda de ' + tbl.name); return true; }
         STATE.posLinkedTableId = tbl.id; STATE.posCart = [];
         for (var ti = 0; ti < tbl.items.length; ti++) {
           STATE.posCart.push({ kind: 'PRODUCTO', refId: tbl.items[ti].productId, code: 'MESA', name: tbl.items[ti].name + ' (' + tbl.name + ')', qty: tbl.items[ti].qty, price: tbl.items[ti].price, taxPct: 8 });
         }
-        STATE.activeConvergedHub = 'pos'; pkRenderWorkstation();
-        pkToast(tbl.name + ' cargada en Caja POS para cobro.');
+        STATE.activeServiceKey = 'srv-invoicing'; STATE.activeSubmoduleKey = 'mod-pos'; pkRenderWorkstation();
+        pkToast('Cuenta de ' + tbl.name + ' cargada en Caja para facturar.');
       }
       return true;
     }
@@ -16061,17 +15730,17 @@ function renderRelationalHubActionsRuntimeJs() {
       if (!prod) prod = pkFindById(db.products, selProdId) || db.products[0];
       if (prod) {
         STATE.posCart.push({ kind: 'PRODUCTO', refId: prod.id, code: prod.code, name: prod.name, qty: qtyP, price: prod.salePrice, taxPct: prod.taxPct || 19 });
-        pkRenderWorkstation(); pkToast('Producto agregado: ' + prod.name);
+        pkRenderWorkstation(); pkToast('Agregado: ' + prod.name);
       }
       return true;
     }
 
     if (target.closest('#btn-pos-add-service')) {
-      var sDesc = ((document.getElementById('pos-service-desc') || {}).value || '').trim() || 'Mano de Obra Especializada';
+      var sDesc = ((document.getElementById('pos-service-desc') || {}).value || '').trim() || 'Mano de Obra / Servicio';
       var sPrice = Math.max(1000, Number((document.getElementById('pos-service-price') || {}).value || 65000));
       var wkObj = pkFindById(db.workers, (document.getElementById('pos-select-worker') || {}).value) || db.workers[0];
       STATE.posCart.push({ kind: 'SERVICIO', refId: 'SRV-' + Date.now(), code: 'MO', name: sDesc, qty: 1, price: sPrice, taxPct: 0, workerId: wkObj ? wkObj.id : '', workerName: wkObj ? wkObj.name : 'T\xE9cnico' });
-      pkRenderWorkstation(); pkToast('Mano de obra enlazada al t\xE9cnico ' + (wkObj ? wkObj.name : ''));
+      pkRenderWorkstation(); pkToast('Servicio agregado al carrito.');
       return true;
     }
 
@@ -16085,69 +15754,6 @@ function renderRelationalHubActionsRuntimeJs() {
     var delCart = target.closest('[data-pos-del-idx]');
     if (delCart) { STATE.posCart.splice(Number(delCart.getAttribute('data-pos-del-idx')), 1); pkRenderWorkstation(); return true; }
 
-    if (target.closest('#btn-pos-checkout-invoice')) {
-      if (STATE.posCart.length === 0) { pkToast('Agrega al menos un producto o servicio al carrito.'); return true; }
-      var cust = pkFindById(db.customers, STATE.posCustomerId) || db.customers[0];
-      var veh = pkFindById(db.vehicles, STATE.posVehicleId);
-      var contract = cust && cust.contractId ? pkFindById(db.contracts, cust.contractId) : null;
-      var tariff = cust && cust.tariffId ? pkFindById(db.tariffs, cust.tariffId) : null;
-      var discPct = tariff ? Number(tariff.discountPct || 0) : 0;
-
-      var subT = 0; var discT = 0; var taxT = 0;
-      for (var c = 0; c < STATE.posCart.length; c++) {
-        var item = STATE.posCart[c];
-        var gross = item.price * item.qty;
-        var disc = Math.round(gross * (discPct / 100));
-        var net = gross - disc;
-        var tx = Math.round(net * (Number(item.taxPct || 0) / 100));
-        subT += gross; discT += disc; taxT += tx;
-
-        if (item.kind === 'PRODUCTO') {
-          var prObj = pkFindById(db.products, item.refId);
-          if (prObj) {
-            prObj.stock = Math.max(0, Number(prObj.stock || 0) - item.qty);
-            db.kardexMovements.unshift({
-              id: 'KDX-' + String(Date.now()).slice(-4), date: new Date().toISOString().slice(0, 16).replace('T', ' '),
-              productId: prObj.id, productName: prObj.name, warehouseId: prObj.warehouseId,
-              movementType: 'SALIDA_VENTA', qty: -item.qty, unitCost: prObj.costPrice, balanceAfter: prObj.stock,
-              referenceDoc: 'POS-FACT', actor: cust ? cust.name : 'Caja'
-            });
-          }
-        } else if (item.kind === 'SERVICIO' && item.workerId) {
-          var wkTarget = pkFindById(db.workers, item.workerId);
-          if (wkTarget) wkTarget.totalDayGross = Number(wkTarget.totalDayGross || 0) + net;
-        }
-      }
-
-      var totalNet = subT - discT + taxT;
-      var payMethod = (document.getElementById('pos-payment-method') || {}).value || STATE.posPaymentMethod || 'Efectivo';
-      var cashInputVal = Number((document.getElementById('pos-cash-received') || {}).value || 0);
-      var isCredit = payMethod === 'Cr\xE9dito / Cartera CxC';
-      var paidNow = isCredit ? Math.min(totalNet, Math.max(0, cashInputVal)) : totalNet;
-      var pendingBal = isCredit ? Math.max(0, totalNet - paidNow) : 0;
-
-      if (contract) { contract.consumedAmount += totalNet; contract.availableBalance = Math.max(0, contract.budgetCeiling - contract.consumedAmount); }
-      if (cust && pendingBal > 0) cust.currentDebt = Number(cust.currentDebt || 0) + pendingBal;
-      if (STATE.posLinkedOrderId) { var linkedWo = pkFindById(db.workOrders, STATE.posLinkedOrderId); if (linkedWo) linkedWo.status = 'Facturado'; STATE.posLinkedOrderId = ''; }
-      if (STATE.posLinkedTableId) { var linkedTb = pkFindById(db.diningTables, STATE.posLinkedTableId); if (linkedTb) { linkedTb.status = 'Libre'; linkedTb.items = []; linkedTb.total = 0; linkedTb.diners = 0; } STATE.posLinkedTableId = ''; }
-
-      var invId = 'FEVP-' + (9011 + db.invoices.length);
-      var newInv = {
-        id: invId, cufe: 'CUFE-DIAN-' + Date.now(), date: new Date().toISOString().slice(0, 16).replace('T', ' '),
-        customerId: cust ? cust.id : 'cust-1', customerName: cust ? cust.name : 'Consumidor Final',
-        customerNit: cust ? cust.nit : '222222222222', contractId: contract ? contract.id : '',
-        vehicleId: veh ? veh.id : '', plate: veh ? veh.plate : 'MOSTRADOR',
-        items: STATE.posCart.slice(), subtotal: subT, discountTotal: discT, taxTotal: taxT, total: totalNet,
-        paymentMethod: payMethod, amountPaid: paidNow, pendingBalance: pendingBal,
-        status: pendingBal > 0 ? 'Pendiente CxC' : 'Pagada', glosaStatus: 'Sin Glosa',
-        abonosHistory: paidNow > 0 ? [{ id: 'RC-' + String(Date.now()).slice(-4), date: new Date().toISOString().slice(0, 10), amount: paidNow, method: payMethod, note: 'Pago inicial en Caja POS' }] : []
-      };
-      db.invoices.unshift(newInv); STATE.posCart = [];
-      pkPersistRelationalTx('CREATE_INVOICE', { invoiceId: invId, customerName: newInv.customerName, total: totalNet });
-      pkRenderWorkstation(); pkToast('Factura ' + invId + ' emitida: Stock descontado, Kardex asentado y comisiones actualizadas.');
-      return true;
-    }
-
     return pkHandleSecondaryHubActions(target, db);
   }
 `;
@@ -16157,11 +15763,47 @@ function renderRelationalHubActionsRuntimeJs() {
 function renderRelationalHubSecondaryActionsRuntimeJs() {
   return `
   function pkHandleSecondaryHubActions(target, db) {
+    if (pkHandleGastroAndInventoryActions(target, db)) return true;
+
+    if (target.closest('#btn-pos-checkout-invoice')) {
+      if (STATE.posCart.length === 0) { pkToast('Agrega al menos un producto o servicio para facturar.'); return true; }
+      var cust = pkFindById(db.customers, STATE.posCustomerId) || db.customers[0];
+      var veh = pkFindById(db.vehicles, STATE.posVehicleId);
+      var contract = cust && cust.contractId ? pkFindById(db.contracts, cust.contractId) : null;
+      var tariff = cust && cust.tariffId ? pkFindById(db.tariffs, cust.tariffId) : null;
+      var discPct = tariff ? Number(tariff.discountPct || 0) : 0;
+      var subT = 0; var discT = 0; var taxT = 0;
+      for (var c = 0; c < STATE.posCart.length; c++) {
+        var item = STATE.posCart[c]; var gross = item.price * item.qty; var disc = Math.round(gross * (discPct / 100)); var net = gross - disc;
+        subT += gross; discT += disc; taxT += Math.round(net * (Number(item.taxPct || 0) / 100));
+        if (item.kind === 'PRODUCTO') {
+          var prObj = pkFindById(db.products, item.refId);
+          if (prObj) { prObj.stock = Math.max(0, Number(prObj.stock || 0) - item.qty); db.kardexMovements.unshift({ id: 'KDX-' + String(Date.now()).slice(-4), date: new Date().toISOString().slice(0, 16).replace('T', ' '), productId: prObj.id, productName: prObj.name, warehouseId: prObj.warehouseId, movementType: 'SALIDA_VENTA', qty: -item.qty, unitCost: prObj.costPrice, balanceAfter: prObj.stock, referenceDoc: 'POS-FACT', actor: cust ? cust.name : 'Caja' }); }
+        } else if (item.kind === 'SERVICIO' && item.workerId) {
+          var wkTarget = pkFindById(db.workers, item.workerId); if (wkTarget) wkTarget.totalDayGross = Number(wkTarget.totalDayGross || 0) + net;
+        }
+      }
+      var totalNet = subT - discT + taxT;
+      var payMethod = (document.getElementById('pos-payment-method') || {}).value || STATE.posPaymentMethod || 'Efectivo';
+      var cashInputVal = Number((document.getElementById('pos-cash-received') || {}).value || 0);
+      var isCredit = payMethod.indexOf('Cr\xE9dito') !== -1;
+      var paidNow = isCredit ? Math.min(totalNet, Math.max(0, cashInputVal)) : totalNet;
+      var pendingBal = isCredit ? Math.max(0, totalNet - paidNow) : 0;
+      if (contract) { contract.consumedAmount += totalNet; contract.availableBalance = Math.max(0, contract.budgetCeiling - contract.consumedAmount); }
+      if (cust && pendingBal > 0) cust.currentDebt = Number(cust.currentDebt || 0) + pendingBal;
+      if (STATE.posLinkedOrderId) { var linkedWo = pkFindById(db.workOrders, STATE.posLinkedOrderId); if (linkedWo) linkedWo.status = 'Facturado'; STATE.posLinkedOrderId = ''; }
+      if (STATE.posLinkedTableId) { var linkedTb = pkFindById(db.diningTables, STATE.posLinkedTableId); if (linkedTb) { linkedTb.status = 'Libre'; linkedTb.items = []; linkedTb.total = 0; linkedTb.diners = 0; } STATE.posLinkedTableId = ''; }
+      var invId = 'FEVP-' + (9011 + db.invoices.length);
+      db.invoices.unshift({ id: invId, cufe: 'CUFE-' + Date.now(), date: new Date().toISOString().slice(0, 16).replace('T', ' '), customerId: cust ? cust.id : 'cust-1', customerName: cust ? cust.name : 'Consumidor Final', customerNit: cust ? cust.nit : '222222222222', contractId: contract ? contract.id : '', vehicleId: veh ? veh.id : '', plate: veh ? veh.plate : 'MOSTRADOR', items: STATE.posCart.slice(), subtotal: subT, discountTotal: discT, taxTotal: taxT, total: totalNet, paymentMethod: payMethod, amountPaid: paidNow, pendingBalance: pendingBal, status: pendingBal > 0 ? 'Pendiente CxC' : 'Pagada', glosaStatus: 'Sin Glosa', abonosHistory: paidNow > 0 ? [{ id: 'RC-' + String(Date.now()).slice(-4), date: new Date().toISOString().slice(0, 10), amount: paidNow, method: payMethod, note: 'Pago en Caja' }] : [] });
+      STATE.posCart = []; pkPersistRelationalTx('CREATE_INVOICE', { invoiceId: invId, total: totalNet }); pkRenderWorkstation(); pkToast('Factura ' + invId + ' emitida con \xE9xito.');
+      return true;
+    }
+
     if (target.closest('#btn-pos-print-quote')) {
       var custQ = pkFindById(db.customers, STATE.posCustomerId) || db.customers[0];
       var rowsQ = ''; var sumQ = 0;
       for (var q = 0; q < STATE.posCart.length; q++) { var itQ = STATE.posCart[q]; var subQ = itQ.qty * itQ.price; sumQ += subQ; rowsQ += '<tr><td>' + pkEsc(itQ.kind) + '</td><td>' + pkEsc(itQ.name) + '</td><td>' + itQ.qty + '</td><td>' + pkCop(itQ.price) + '</td><td>' + pkCop(subQ) + '</td></tr>'; }
-      pkPrintHtmlDocument('Cotizaci\xF3n Formal Proveko', '<div class="head"><div><h2>COTIZACI\xD3N / PRESUPUESTO COMERCIAL</h2><div>No descuenta inventario \xB7 Validez: 15 d\xEDas</div></div><div><strong>Cliente:</strong> ' + pkEsc(custQ ? custQ.name : '') + '<br/><strong>NIT/CC:</strong> ' + pkEsc(custQ ? custQ.nit : '') + '</div></div><table><thead><tr><th>Tipo</th><th>Concepto</th><th>Cant.</th><th>Vlr. Unit</th><th>Subtotal</th></tr></thead><tbody>' + rowsQ + '</tbody></table><h3 style="text-align:right;margin-top:16px">Total Cotizado: ' + pkCop(sumQ) + '</h3>');
+      pkPrintHtmlDocument('Cotizaci\xF3n Formal', '<div class="head"><div><h2>COTIZACI\xD3N COMERCIAL</h2></div><div><strong>Cliente:</strong> ' + pkEsc(custQ ? custQ.name : '') + '<br/><strong>NIT/CC:</strong> ' + pkEsc(custQ ? custQ.nit : '') + '</div></div><table><thead><tr><th>Tipo</th><th>Concepto</th><th>Cant.</th><th>Vlr. Unit</th><th>Subtotal</th></tr></thead><tbody>' + rowsQ + '</tbody></table><h3 style="text-align:right;margin-top:16px">Total Cotizado: ' + pkCop(sumQ) + '</h3>');
       return true;
     }
     var prInv = target.closest('[data-print-invoice]');
@@ -16170,7 +15812,7 @@ function renderRelationalHubSecondaryActionsRuntimeJs() {
       if (invP) {
         var rowsI = '';
         for (var ii = 0; ii < (invP.items || []).length; ii++) { var itI = invP.items[ii]; rowsI += '<tr><td>' + pkEsc(itI.kind) + '</td><td>' + pkEsc(itI.name) + '</td><td>' + itI.qty + '</td><td>' + pkCop(itI.price) + '</td><td>' + pkCop(itI.qty * itI.price) + '</td></tr>'; }
-        pkPrintHtmlDocument('Factura ' + invP.id, '<div class="head"><div><h2>FACTURA ELECTR\xD3NICA DE VENTA ' + pkEsc(invP.id) + '</h2><div>CUFE: ' + pkEsc(invP.cufe) + '</div></div><div><strong>Cliente:</strong> ' + pkEsc(invP.customerName) + '<br/><strong>NIT:</strong> ' + pkEsc(invP.customerNit) + '<br/><strong>Placa:</strong> ' + pkEsc(invP.plate) + '</div></div><table><thead><tr><th>Tipo</th><th>Descripci\xF3n</th><th>Cant.</th><th>Vlr. Unit</th><th>Subtotal</th></tr></thead><tbody>' + rowsI + '</tbody></table><h3 style="text-align:right;margin-top:16px">Total Factura: ' + pkCop(invP.total) + ' | Saldo CxC: ' + pkCop(invP.pendingBalance) + '</h3>');
+        pkPrintHtmlDocument('Factura ' + invP.id, '<div class="head"><div><h2>FACTURA DE VENTA ' + pkEsc(invP.id) + '</h2></div><div><strong>Cliente:</strong> ' + pkEsc(invP.customerName) + '<br/><strong>NIT:</strong> ' + pkEsc(invP.customerNit) + '</div></div><table><thead><tr><th>Tipo</th><th>Descripci\xF3n</th><th>Cant.</th><th>Vlr. Unit</th><th>Subtotal</th></tr></thead><tbody>' + rowsI + '</tbody></table><h3 style="text-align:right;margin-top:16px">Total: ' + pkCop(invP.total) + ' | Saldo Pendiente: ' + pkCop(invP.pendingBalance) + '</h3>');
       }
       return true;
     }
@@ -16178,161 +15820,87 @@ function renderRelationalHubSecondaryActionsRuntimeJs() {
       var custW = pkFindById(db.customers, STATE.posCustomerId) || db.customers[0];
       var phoneW = (custW && custW.phone ? custW.phone : '3001234567').replace(/\\D/g, '');
       var totalW = 0; for (var w = 0; w < STATE.posCart.length; w++) totalW += STATE.posCart[w].qty * STATE.posCart[w].price;
-      window.open('https://wa.me/57' + phoneW + '?text=' + encodeURIComponent('Hola ' + (custW ? custW.name : '') + ', te compartimos tu cotizaci\xF3n en Proveko por valor de ' + pkCop(totalW) + '.'), '_blank');
+      window.open('https://wa.me/57' + phoneW + '?text=' + encodeURIComponent('Hola ' + (custW ? custW.name : '') + ', tu cotizaci\xF3n es por valor de ' + pkCop(totalW) + '.'), '_blank');
       return true;
     }
     var woWa = target.closest('[data-wo-whatsapp]');
     if (woWa) {
       var ordW = pkFindById(db.workOrders, woWa.getAttribute('data-wo-whatsapp'));
-      if (ordW) window.open('https://wa.me/573104558899?text=' + encodeURIComponent('Hola ' + ordW.customerName + ', tu veh\xEDculo placa ' + ordW.plate + ' (' + ordW.vehicleBrand + ') est\xE1 en estado: ' + ordW.status + '. Total estimado: ' + pkCop(ordW.totalEstimated)), '_blank');
+      if (ordW) window.open('https://wa.me/573104558899?text=' + encodeURIComponent('Hola ' + ordW.customerName + ', tu veh\xEDculo placa ' + ordW.plate + ' est\xE1 en estado: ' + ordW.status + '. Total: ' + pkCop(ordW.totalEstimated)), '_blank');
       return true;
     }
     if (target.closest('#btn-wo-suggest-oil')) {
       var curKm = Number((document.getElementById('wo-current-km') || {}).value || 45000);
       var nextEl = document.getElementById('wo-next-oil-km'); if (nextEl) nextEl.value = String(curKm + 3000);
-      pkToast('Pr\xF3ximo cambio de aceite sugerido a los ' + (curKm + 3000).toLocaleString('es-CO') + ' km.');
-      return true;
+      pkToast('Pr\xF3ximo cambio sugerido a los ' + (curKm + 3000).toLocaleString('es-CO') + ' km.'); return true;
     }
     if (target.closest('#btn-wo-create-order')) {
       var custObj = pkFindById(db.customers, (document.getElementById('wo-customer-id') || {}).value) || db.customers[0];
       var plate = ((document.getElementById('wo-plate') || {}).value || 'NEW-001').trim().toUpperCase();
-      var brand = ((document.getElementById('wo-brand') || {}).value || 'Veh\xEDculo / Activo').trim();
+      var brand = ((document.getElementById('wo-brand') || {}).value || 'Veh\xEDculo / Equipo').trim();
       var curK = Number((document.getElementById('wo-current-km') || {}).value || 45000);
       var nxtK = Number((document.getElementById('wo-next-oil-km') || {}).value || (curK + 3000));
       var soatD = (document.getElementById('wo-soat-date') || {}).value || '2026-12-31';
       var wkObj = pkFindById(db.workers, (document.getElementById('wo-worker-id') || {}).value) || db.workers[0];
-      var sDesc = ((document.getElementById('wo-service-desc') || {}).value || 'Diagn\xF3stico y Mantenimiento General').trim();
+      var sDesc = ((document.getElementById('wo-service-desc') || {}).value || 'Mantenimiento General').trim();
       var sPrc = Number((document.getElementById('wo-service-price') || {}).value || 120000);
-
       var vehObj = null;
       for (var v = 0; v < db.vehicles.length; v++) if (db.vehicles[v].plate.toUpperCase() === plate) { vehObj = db.vehicles[v]; break; }
-      if (!vehObj) {
-        vehObj = { id: 'veh-' + Date.now(), plate: plate, brand: brand, modelYear: '2025', customerId: custObj ? custObj.id : 'cust-1', customerName: custObj ? custObj.name : 'Cliente', currentKm: curK, nextOilChangeKm: nxtK, soatExpiry: soatD, tecnoExpiry: soatD, notes: sDesc };
-        db.vehicles.unshift(vehObj);
-      } else { vehObj.currentKm = curK; vehObj.nextOilChangeKm = nxtK; }
-
+      if (!vehObj) { vehObj = { id: 'veh-' + Date.now(), plate: plate, brand: brand, modelYear: '2025', customerId: custObj ? custObj.id : 'cust-1', customerName: custObj ? custObj.name : 'Cliente', currentKm: curK, nextOilChangeKm: nxtK, soatExpiry: soatD, tecnoExpiry: soatD, notes: sDesc }; db.vehicles.unshift(vehObj); }
+      else { vehObj.currentKm = curK; vehObj.nextOilChangeKm = nxtK; }
       var newWoId = 'OT-' + (3043 + db.workOrders.length);
       db.workOrders.unshift({ id: newWoId, createdAt: new Date().toISOString().slice(0, 16).replace('T', ' '), customerId: custObj ? custObj.id : 'cust-1', customerName: custObj ? custObj.name : 'Cliente', vehicleId: vehObj.id, plate: plate, vehicleBrand: brand, currentKm: curK, nextOilKm: nxtK, workerId: wkObj ? wkObj.id : 'wk-1', workerName: wkObj ? wkObj.name : 'T\xE9cnico', status: 'Recibido', services: [{ description: sDesc, price: sPrc }], totalEstimated: sPrc });
-      pkPersistRelationalTx('CREATE_WORK_ORDER', { orderId: newWoId, plate: plate });
-      pkRenderWorkstation(); pkToast('Orden ' + newWoId + ' (' + plate + ') ingresada al Kanban y enlazada al cliente.');
-      return true;
+      pkPersistRelationalTx('CREATE_WORK_ORDER', { orderId: newWoId, plate: plate }); pkRenderWorkstation(); pkToast('Orden ' + newWoId + ' (' + plate + ') registrada.'); return true;
     }
-
     var woMove = target.closest('[data-wo-move]');
     if (woMove) {
       var ordM = pkFindById(db.workOrders, woMove.getAttribute('data-wo-move'));
       var nextStg = woMove.getAttribute('data-wo-stage');
-      if (ordM && nextStg) { ordM.status = nextStg; pkPersistRelationalTx('MOVE_WORK_ORDER', { orderId: ordM.id, stage: nextStg }); pkRenderWorkstation(); pkToast('Orden ' + ordM.id + ' avanzada a: ' + nextStg); }
+      if (ordM && nextStg) { ordM.status = nextStg; pkPersistRelationalTx('MOVE_WORK_ORDER', { orderId: ordM.id, stage: nextStg }); pkRenderWorkstation(); pkToast('Orden ' + ordM.id + ' pasada a: ' + nextStg); }
       return true;
     }
-
     var invDelta = target.closest('[data-inv-delta]');
     if (invDelta) {
       var prD = pkFindById(db.products, invDelta.getAttribute('data-inv-id'));
       var dStock = Number(invDelta.getAttribute('data-inv-delta'));
       if (prD) {
         prD.stock = Math.max(0, Number(prD.stock || 0) + dStock);
-        db.kardexMovements.unshift({ id: 'KDX-' + String(Date.now()).slice(-4), date: new Date().toISOString().slice(0, 16).replace('T', ' '), productId: prD.id, productName: prD.name, warehouseId: prD.warehouseId, movementType: dStock > 0 ? 'AJUSTE_POSITIVO' : 'AJUSTE_NEGATIVO', qty: dStock, unitCost: prD.costPrice, balanceAfter: prD.stock, referenceDoc: 'AJUSTE-RAPIDO', actor: 'Operador' });
+        db.kardexMovements.unshift({ id: 'KDX-' + String(Date.now()).slice(-4), date: new Date().toISOString().slice(0, 16).replace('T', ' '), productId: prD.id, productName: prD.name, warehouseId: prD.warehouseId, movementType: dStock > 0 ? 'ENTRADA_RAPIDA' : 'SALIDA_RAPIDA', qty: dStock, unitCost: prD.costPrice, balanceAfter: prD.stock, referenceDoc: 'AJUSTE', actor: 'Operador' });
         pkPersistRelationalTx('ADJUST_STOCK', { productId: prD.id, stock: prD.stock }); pkRenderWorkstation();
       }
       return true;
     }
-
     if (target.closest('#btn-inv-register-purchase')) {
       var pSel = (document.getElementById('inv-entry-product-id') || {}).value;
       var supId = (document.getElementById('inv-entry-supplier-id') || {}).value;
       var whId = (document.getElementById('inv-entry-warehouse-id') || {}).value;
-      var refDoc = ((document.getElementById('inv-entry-invoice-ref') || {}).value || 'ACTA-REC').trim();
+      var refDoc = ((document.getElementById('inv-entry-invoice-ref') || {}).value || 'FAC-COMPRA').trim();
       var qtyIn = Math.max(1, Number((document.getElementById('inv-entry-qty') || {}).value || 10));
       var costIn = Math.max(100, Number((document.getElementById('inv-entry-cost') || {}).value || 35000));
       var saleIn = Math.max(costIn, Number((document.getElementById('inv-entry-sale') || {}).value || 58000));
-      var lotIn = ((document.getElementById('inv-entry-lot') || {}).value || 'LOTE-2026').trim();
-
-      var targetProd = pSel !== 'NEW' ? pkFindById(db.products, pSel) : null;
-      if (!targetProd) {
-        var newSku = ((document.getElementById('inv-entry-sku') || {}).value || ('SKU-' + String(Date.now()).slice(-4))).trim().toUpperCase();
-        var newName = ((document.getElementById('inv-entry-name') || {}).value || 'Nuevo Producto Ingresado').trim();
-        targetProd = { id: 'prd-' + Date.now(), code: newSku, name: newName, category: 'Compras / Actas v2', warehouseId: whId, supplierId: supId, costPrice: costIn, salePrice: saleIn, taxPct: 19, stock: qtyIn, minStock: 4, lotCode: lotIn, expiryDate: '2028-12-31' };
-        db.products.unshift(targetProd);
-      } else {
-        targetProd.stock = Number(targetProd.stock || 0) + qtyIn; targetProd.costPrice = costIn; targetProd.salePrice = saleIn; targetProd.warehouseId = whId; targetProd.supplierId = supId; targetProd.lotCode = lotIn;
+      var targetProd = pkFindById(db.products, pSel) || db.products[0];
+      if (targetProd) {
+        targetProd.stock = Number(targetProd.stock || 0) + qtyIn; targetProd.costPrice = costIn; targetProd.salePrice = saleIn; targetProd.warehouseId = whId; targetProd.supplierId = supId;
+        db.kardexMovements.unshift({ id: 'KDX-' + String(Date.now()).slice(-4), date: new Date().toISOString().slice(0, 16).replace('T', ' '), productId: targetProd.id, productName: targetProd.name, warehouseId: whId, movementType: 'ENTRADA_COMPRA', qty: qtyIn, unitCost: costIn, balanceAfter: targetProd.stock, referenceDoc: refDoc, actor: 'Compras' });
+        pkPersistRelationalTx('PURCHASE_ENTRY', { productCode: targetProd.code, productName: targetProd.name, costPrice: costIn, salePrice: saleIn, stock: targetProd.stock });
+        pkRenderWorkstation(); pkToast('Compra ingresada: +' + qtyIn + ' und a ' + targetProd.name);
       }
-      db.kardexMovements.unshift({ id: 'KDX-' + String(Date.now()).slice(-4), date: new Date().toISOString().slice(0, 16).replace('T', ' '), productId: targetProd.id, productName: targetProd.name, warehouseId: whId, movementType: 'ENTRADA_COMPRA_ACTA', qty: qtyIn, unitCost: costIn, balanceAfter: targetProd.stock, referenceDoc: refDoc, actor: 'Recepci\xF3n Almac\xE9n' });
-      pkPersistRelationalTx('PURCHASE_ENTRY', { productCode: targetProd.code, productName: targetProd.name, costPrice: costIn, salePrice: saleIn, stock: targetProd.stock });
-      pkRenderWorkstation(); pkToast('Entrada de compra registrada: +' + qtyIn + ' und a ' + targetProd.name);
       return true;
     }
-
     var abConf = target.closest('[data-confirm-abono-inv]');
     if (abConf) {
       var invAb = pkFindById(db.invoices, abConf.getAttribute('data-confirm-abono-inv'));
       if (invAb) {
         var amt = Math.min(invAb.pendingBalance, Math.max(1000, Number((document.getElementById('modal-abono-amount') || {}).value || invAb.pendingBalance)));
         var mth = (document.getElementById('modal-abono-method') || {}).value || 'Efectivo';
-        var nt = ((document.getElementById('modal-abono-note') || {}).value || 'Abono Cartera').trim();
+        var nt = ((document.getElementById('modal-abono-note') || {}).value || 'Abono').trim();
         invAb.amountPaid = Number(invAb.amountPaid || 0) + amt; invAb.pendingBalance = Math.max(0, Number(invAb.pendingBalance || 0) - amt);
         invAb.status = invAb.pendingBalance === 0 ? 'Pagada' : 'Pendiente CxC';
         if (!invAb.abonosHistory) invAb.abonosHistory = [];
         invAb.abonosHistory.unshift({ id: 'RC-' + String(Date.now()).slice(-4), date: new Date().toISOString().slice(0, 10), amount: amt, method: mth, note: nt });
         var custAb = pkFindById(db.customers, invAb.customerId); if (custAb) custAb.currentDebt = Math.max(0, Number(custAb.currentDebt || 0) - amt);
-        pkPersistRelationalTx('REGISTER_ABONO', { invoiceId: invAb.id, amount: amt }); pkOpenAbonoModal(invAb.id); pkRenderWorkstation(); pkToast('Abono por ' + pkCop(amt) + ' aplicado a ' + invAb.id);
+        pkPersistRelationalTx('REGISTER_ABONO', { invoiceId: invAb.id, amount: amt }); pkOpenAbonoModal(invAb.id); pkRenderWorkstation(); pkToast('Abono por ' + pkCop(amt) + ' registrado.');
       }
-      return true;
-    }
-
-    var settleBtn = target.closest('[data-settle-worker]');
-    if (settleBtn) {
-      var wkS = pkFindById(db.workers, settleBtn.getAttribute('data-settle-worker'));
-      if (wkS && wkS.totalDayGross > 0) {
-        var g = Number(wkS.totalDayGross); var pay = Math.round(g * (wkS.commissionPct / 100));
-        db.settlements.unshift({ id: 'LIQ-' + String(Date.now()).slice(-4), date: new Date().toISOString().slice(0, 16).replace('T', ' '), workerId: wkS.id, workerName: wkS.name, grossLabor: g, commissionPct: wkS.commissionPct, technicianPayout: pay, companyRetention: g - pay });
-        wkS.totalDayGross = 0; pkPersistRelationalTx('SETTLE_WORKER', { workerId: wkS.id, payout: pay }); pkRenderWorkstation(); pkToast('Turno liquidado a ' + wkS.name + ' por ' + pkCop(pay));
-      }
-      return true;
-    }
-
-    if (target.closest('#btn-wk-add')) {
-      var wName = ((document.getElementById('wk-new-name') || {}).value || '').trim();
-      var wSpec = ((document.getElementById('wk-new-spec') || {}).value || 'T\xE9cnico Especialista').trim();
-      var wPct = Number((document.getElementById('wk-new-pct') || {}).value || 40);
-      if (!wName) { pkToast('Ingresa el nombre del t\xE9cnico.'); return true; }
-      db.workers.push({ id: 'wk-' + Date.now(), name: wName, docNumber: '1020' + String(Date.now()).slice(-5), specialty: wSpec, commissionPct: wPct, phone: '3000000000', totalDayGross: 0 });
-      pkPersistRelationalTx('ADD_WORKER', { name: wName }); pkRenderWorkstation(); pkToast('T\xE9cnico vinculado: ' + wName);
-      return true;
-    }
-
-    if (target.closest('#btn-exp-add')) {
-      var eDesc = ((document.getElementById('exp-new-desc') || {}).value || '').trim();
-      var eCat = (document.getElementById('exp-new-cat') || {}).value || 'Insumos Operativos';
-      var eSrc = (document.getElementById('exp-new-source') || {}).value || 'Efectivo Caja';
-      var eAmt = Math.max(1000, Number((document.getElementById('exp-new-amount') || {}).value || 25000));
-      if (!eDesc) { pkToast('Ingresa la descripci\xF3n del gasto.'); return true; }
-      db.expenses.unshift({ id: 'EGR-' + String(Date.now()).slice(-4), date: new Date().toISOString().slice(0, 16).replace('T', ' '), category: eCat, description: eDesc, amount: eAmt, paymentSource: eSrc, responsible: 'Caja' });
-      pkPersistRelationalTx('ADD_EXPENSE', { description: eDesc, amount: eAmt }); pkRenderWorkstation(); pkToast('Gasto registrado por ' + pkCop(eAmt));
-      return true;
-    }
-
-    var csvBtn = target.closest('[data-export-csv]');
-    if (csvBtn) {
-      var kind = csvBtn.getAttribute('data-export-csv');
-      if (kind === 'invoices') { var rInv = []; for (var i1 = 0; i1 < db.invoices.length; i1++) rInv.push([db.invoices[i1].id, db.invoices[i1].date, db.invoices[i1].customerName, db.invoices[i1].plate, db.invoices[i1].total, db.invoices[i1].amountPaid, db.invoices[i1].pendingBalance, db.invoices[i1].status]); pkDownloadCsvUtf8('proveko_facturas_cxc.csv', ['Factura', 'Fecha', 'Cliente', 'Placa', 'Total', 'Pagado', 'Saldo_CxC', 'Estado'], rInv); }
-      else if (kind === 'inventory') { var rPrd = []; for (var i2 = 0; i2 < db.products.length; i2++) rPrd.push([db.products[i2].code, db.products[i2].name, db.products[i2].category, db.products[i2].costPrice, db.products[i2].salePrice, db.products[i2].stock]); pkDownloadCsvUtf8('proveko_inventario_valorizado.csv', ['SKU', 'Producto', 'Categoria', 'Costo', 'Precio_Venta', 'Stock'], rPrd); }
-      else if (kind === 'expenses') { var rExp = []; for (var i3 = 0; i3 < db.expenses.length; i3++) rExp.push([db.expenses[i3].id, db.expenses[i3].date, db.expenses[i3].category, db.expenses[i3].description, db.expenses[i3].paymentSource, db.expenses[i3].amount]); pkDownloadCsvUtf8('proveko_gastos_caja.csv', ['ID', 'Fecha', 'Categoria', 'Descripcion', 'Origen', 'Monto'], rExp); }
-      else if (kind === 'settlements') { var rSt = []; for (var i4 = 0; i4 < db.settlements.length; i4++) rSt.push([db.settlements[i4].id, db.settlements[i4].date, db.settlements[i4].workerName, db.settlements[i4].grossLabor, db.settlements[i4].technicianPayout, db.settlements[i4].companyRetention]); pkDownloadCsvUtf8('proveko_liquidaciones_tecnicos.csv', ['ID', 'Fecha', 'Tecnico', 'Bruto', 'Pago_Tecnico', 'Retencion_Empresa'], rSt); }
-      pkToast('Archivo Excel CSV (UTF-8 con BOM) descargado.'); return true;
-    }
-
-    var gDemo = target.closest('[data-gastro-add-demo]');
-    if (gDemo) {
-      var tbD = pkFindById(db.diningTables, gDemo.getAttribute('data-gastro-add-demo'));
-      if (tbD) { tbD.status = 'Ocupada'; tbD.diners = 3; tbD.items.push({ productId: 'prd-3', name: 'Men\xFA Ejecutivo / Plato Fuerte', qty: 2, price: 42000 }); tbD.total = Number(tbD.total || 0) + 84000; pkPersistRelationalTx('GASTRO_ORDER', { tableId: tbD.id }); pkRenderWorkstation(); }
-      return true;
-    }
-
-    if (target.closest('#btn-pos-quick-new-customer')) {
-      var newCId = 'cust-' + Date.now();
-      db.customers.unshift({ id: newCId, docType: 'NIT', nit: '901' + String(Date.now()).slice(-6), dv: '4', name: 'Empresa Cliente Express #' + (db.customers.length + 1), businessType: 'Jur\xEDdica', taxRegime: 'Responsable de IVA (O-48)', phone: '3158899001', email: 'compras@empresa.co', city: 'Bogot\xE1 D.C.', address: 'Av. El Dorado # 68B-85', contractId: 'cnt-particular', tariffId: 'trf-plena', creditLimit: 5000000, currentDebt: 0 });
-      STATE.posCustomerId = newCId; pkPersistRelationalTx('CREATE_CUSTOMER', { id: newCId }); pkRenderWorkstation(); pkToast('Nuevo Tercero DIAN creado y seleccionado en el POS.');
       return true;
     }
     return false;
@@ -16353,6 +15921,74 @@ function renderRelationalModalsRuntimeJs() {
     if (sEl) sEl.textContent = sub;
     bEl.innerHTML = bodyHtml;
     modal.classList.add('open');
+  }
+
+  function pkOpenNewCustomerModal() {
+    var db = STATE.relDb;
+    var cntOpts = '<option value="cnt-particular">Cliente Contado / Particular</option>';
+    for (var c = 0; c < db.contracts.length; c++) {
+      cntOpts += '<option value="' + pkEsc(db.contracts[c].id) + '">' + pkEsc(db.contracts[c].code + ' \u2014 ' + db.contracts[c].entityName) + '</option>';
+    }
+    var trfOpts = '';
+    for (var t = 0; t < db.tariffs.length; t++) {
+      trfOpts += '<option value="' + pkEsc(db.tariffs[t].id) + '">' + pkEsc(db.tariffs[t].name + ' (-' + db.tariffs[t].discountPct + '%)') + '</option>';
+    }
+    pkOpenModal(
+      '\u{1F464} Registrar Nuevo Cliente',
+      'Guarda el cliente y \xFAsalo de inmediato en Facturaci\xF3n, Taller, Reservas o Cartera',
+      '<div class="form-grid" style="background:#f8fafc;padding:14px;border-radius:10px;border:1px solid var(--pk-border)">' +
+      '<div class="field"><label>Tipo de Documento</label><select id="modal-cust-doctype"><option value="CC">C\xE9dula (CC)</option><option value="NIT">NIT Empresa</option><option value="CE">C\xE9dula Extranjer\xEDa</option></select></div>' +
+      '<div class="field"><label>N\xFAmero de Documento / NIT</label><input type="text" id="modal-cust-nit" placeholder="Ej: 901452110-4 o 1020455890" /></div>' +
+      '<div class="field"><label>Nombre Completo o Raz\xF3n Social</label><input type="text" id="modal-cust-name" placeholder="Ej: Comercializadora del Norte S.A.S." /></div>' +
+      '<div class="field"><label>Tel\xE9fono / WhatsApp</label><input type="text" id="modal-cust-phone" placeholder="Ej: 315 890 1122" /></div>' +
+      '<div class="field"><label>Correo Electr\xF3nico</label><input type="email" id="modal-cust-email" placeholder="cliente@correo.com" /></div>' +
+      '<div class="field"><label>Ciudad y Direcci\xF3n</label><input type="text" id="modal-cust-address" placeholder="Ej: Medell\xEDn \u2014 Calle 10 # 43A-20" /></div>' +
+      '<div class="field"><label>Convenio / Contrato</label><select id="modal-cust-contract">' + cntOpts + '</select></div>' +
+      '<div class="field"><label>Lista de Precios / Tarifa</label><select id="modal-cust-tariff">' + trfOpts + '</select></div>' +
+      '<div class="field"><label>Cupo de Cr\xE9dito Autorizado (COP)</label><input type="number" id="modal-cust-credit" value="2000000" /></div>' +
+      '</div>' +
+      '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">' +
+      '<button type="button" class="btn btn-emerald" id="btn-modal-save-customer">\u2713 Guardar Cliente y Seleccionar</button>' +
+      '</div>'
+    );
+  }
+
+  function pkOpenRestockModal(prodId) {
+    var db = STATE.relDb;
+    var prod = pkFindById(db.products, prodId) || db.products[0];
+    if (!prod) return;
+    var supOpts = '';
+    for (var s = 0; s < db.suppliers.length; s++) supOpts += '<option value="' + pkEsc(db.suppliers[s].id) + '">' + pkEsc(db.suppliers[s].name) + '</option>';
+    pkOpenModal(
+      '\u{1F4E5} Surtir Inventario \u2014 ' + prod.name,
+      'C\xF3digo: ' + prod.code + ' \xB7 Existencia actual: ' + prod.stock + ' und \xB7 Precio venta: ' + pkCop(prod.salePrice),
+      '<div class="form-grid" style="background:#f8fafc;padding:14px;border-radius:10px;border:1px solid var(--pk-border)">' +
+      '<div class="field"><label>Cantidad que Entra (+)</label><input type="number" id="modal-restock-qty" value="12" min="1" /></div>' +
+      '<div class="field"><label>Costo Unitario de Compra (COP)</label><input type="number" id="modal-restock-cost" value="' + prod.costPrice + '" /></div>' +
+      '<div class="field"><label>Precio de Venta Actualizado (COP)</label><input type="number" id="modal-restock-sale" value="' + prod.salePrice + '" /></div>' +
+      '<div class="field"><label>Proveedor</label><select id="modal-restock-sup">' + supOpts + '</select></div>' +
+      '<div class="field"><label>Factura / Soporte</label><input type="text" id="modal-restock-ref" value="FAC-PROV-2026" /></div>' +
+      '<div class="field" style="display:flex;align-items:flex-end"><button type="button" class="btn btn-emerald" style="width:100%" data-confirm-restock-id="' + pkEsc(prod.id) + '">\u2713 Ingresar Unidades al Inventario</button></div>' +
+      '</div>'
+    );
+  }
+
+  function pkOpenTransferModal(prodId) {
+    var db = STATE.relDb;
+    var prod = pkFindById(db.products, prodId) || db.products[0];
+    if (!prod) return;
+    var whOpts = '';
+    for (var w = 0; w < db.warehouses.length; w++) whOpts += '<option value="' + pkEsc(db.warehouses[w].id) + '">' + pkEsc(db.warehouses[w].name) + '</option>';
+    pkOpenModal(
+      '\u{1F504} Trasladar Producto de Bodega \u2014 ' + prod.name,
+      'C\xF3digo: ' + prod.code + ' \xB7 Disponible: ' + prod.stock + ' und',
+      '<div class="form-grid" style="background:#f8fafc;padding:14px;border-radius:10px;border:1px solid var(--pk-border)">' +
+      '<div class="field"><label>Bodega Destino</label><select id="modal-transfer-wh">' + whOpts + '</select></div>' +
+      '<div class="field"><label>Cantidad a Trasladar</label><input type="number" id="modal-transfer-qty" value="5" min="1" max="' + prod.stock + '" /></div>' +
+      '<div class="field"><label>Observaci\xF3n / Responsable</label><input type="text" id="modal-transfer-note" value="Traslado interno autorizado" /></div>' +
+      '<div class="field" style="display:flex;align-items:flex-end"><button type="button" class="btn btn-primary" style="width:100%" data-confirm-transfer-id="' + pkEsc(prod.id) + '">\u2713 Confirmar Traslado</button></div>' +
+      '</div>'
+    );
   }
 
   function pkOpenCustomer360Modal(custId) {
@@ -16377,18 +16013,18 @@ function renderRelationalModalsRuntimeJs() {
     }
 
     pkOpenModal(
-      '\u{1F441}\uFE0F Expediente Relacional 360\xB0 \u2014 ' + cust.name,
-      cust.docType + ' ' + cust.nit + (cust.dv ? '-' + cust.dv : '') + ' \xB7 ' + cust.taxRegime + ' \xB7 ' + cust.city + ' (' + cust.address + ')',
+      '\u{1F441}\uFE0F Ficha del Cliente \u2014 ' + cust.name,
+      cust.docType + ' ' + cust.nit + (cust.dv ? '-' + cust.dv : '') + ' \xB7 Tel: ' + cust.phone + ' \xB7 ' + cust.city + ' (' + cust.address + ')',
       '<div class="kpi-row">' +
-      '<div class="kpi-box"><div class="kpi-label">Total Facturado Hist\xF3rico</div><div class="kpi-val">' + pkCop(totalHistorical) + '</div></div>' +
-      '<div class="kpi-box"><div class="kpi-label">Saldo Pendiente CxC</div><div class="kpi-val" style="color:var(--pk-amber)">' + pkCop(cust.currentDebt) + '</div></div>' +
-      '<div class="kpi-box"><div class="kpi-label">Contrato Enlazado (FK)</div><div class="kpi-val" style="font-size:13px">' + pkEsc(contract ? contract.code + ' (' + pkCop(contract.availableBalance) + ')' : 'Contado') + '</div></div>' +
-      '<div class="kpi-box"><div class="kpi-label">Tarifa Asignada (FK)</div><div class="kpi-val" style="font-size:13px;color:var(--pk-primary)">' + pkEsc(tariff ? tariff.name + ' (-' + tariff.discountPct + '%)' : 'Plena') + '</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Compras Acumuladas</div><div class="kpi-val">' + pkCop(totalHistorical) + '</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Saldo por Cobrar</div><div class="kpi-val" style="color:var(--pk-amber)">' + pkCop(cust.currentDebt) + '</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Convenio / Contrato</div><div class="kpi-val" style="font-size:13px">' + pkEsc(contract ? contract.code + ' (' + pkCop(contract.availableBalance) + ')' : 'Contado') + '</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Lista de Precios</div><div class="kpi-val" style="font-size:13px;color:var(--pk-primary)">' + pkEsc(tariff ? tariff.name + ' (-' + tariff.discountPct + '%)' : 'General') + '</div></div>' +
       '</div>' +
-      '<div style="font-size:13px;font-weight:800;margin:10px 0 6px">\u{1F697} Veh\xEDculos / Activos Registrados a Nombre del Cliente (FK -> vehicles):</div>' +
-      '<div class="table-wrap" style="margin-bottom:12px"><table><thead><tr><th>Placa</th><th>Marca / L\xEDnea</th><th>Kilometraje y Aceite</th><th>Vencimientos</th></tr></thead><tbody>' + (vehHtml || '<tr><td colspan="4">Sin veh\xEDculos asociados</td></tr>') + '</tbody></table></div>' +
-      '<div style="font-size:13px;font-weight:800;margin:10px 0 6px">\u{1F9FE} Historial de Facturas, Servicios y Cartera CxC (FK -> invoices):</div>' +
-      '<div class="table-wrap"><table><thead><tr><th>Factura</th><th>Placa</th><th>Total</th><th>Saldo CxC</th><th>Estado</th></tr></thead><tbody>' + (invHtml || '<tr><td colspan="5">Sin facturas registradas</td></tr>') + '</tbody></table></div>'
+      '<div style="font-size:13px;font-weight:800;margin:10px 0 6px">\u{1F697} Veh\xEDculos o Equipos Asociados:</div>' +
+      '<div class="table-wrap" style="margin-bottom:12px"><table><thead><tr><th>Placa</th><th>Marca / L\xEDnea</th><th>Kilometraje</th><th>SOAT</th></tr></thead><tbody>' + (vehHtml || '<tr><td colspan="4">Sin veh\xEDculos registrados</td></tr>') + '</tbody></table></div>' +
+      '<div style="font-size:13px;font-weight:800;margin:10px 0 6px">\u{1F9FE} Historial de Facturas y Cuenta por Cobrar:</div>' +
+      '<div class="table-wrap"><table><thead><tr><th>Factura</th><th>Referencia</th><th>Total</th><th>Saldo Pendiente</th><th>Estado</th></tr></thead><tbody>' + (invHtml || '<tr><td colspan="5">Sin facturas registradas</td></tr>') + '</tbody></table></div>'
     );
   }
 
@@ -16405,12 +16041,12 @@ function renderRelationalModalsRuntimeJs() {
       histHtml += '<tr><td><code>' + pkEsc(wo.id) + '</code> (' + pkEsc(wo.createdAt) + ')</td><td>' + pkEsc(wo.workerName) + '</td><td>' + pkEsc(sList.join(' + ')) + '</td><td><span class="badge badge-blue">' + pkEsc(wo.status) + '</span></td></tr>';
     }
     pkOpenModal(
-      '\u{1F697} Hoja de Vida T\xE9cnica de Placa \u2014 ' + ve.plate + ' (' + ve.brand + ')',
-      'Propietario FK: ' + ve.customerName + ' \xB7 Km Actual: ' + ve.currentKm.toLocaleString('es-CO') + ' km \xB7 Pr\xF3x. Aceite: ' + ve.nextOilChangeKm.toLocaleString('es-CO') + ' km',
+      '\u{1F697} Historial de Placa / Equipo \u2014 ' + ve.plate + ' (' + ve.brand + ')',
+      'Propietario: ' + ve.customerName + ' \xB7 Km Actual: ' + ve.currentKm.toLocaleString('es-CO') + ' km \xB7 Pr\xF3x. Aceite: ' + ve.nextOilChangeKm.toLocaleString('es-CO') + ' km',
       '<div style="padding:10px;background:#f8fafc;border-radius:10px;border:1px solid var(--pk-border);margin-bottom:12px;font-size:12px">' +
-      '<strong>Observaciones T\xE9cnicas:</strong> ' + pkEsc(ve.notes || 'Sin alertas estructurales') + ' \xB7 <strong>SOAT:</strong> ' + pkEsc(ve.soatExpiry) + ' \xB7 <strong>Tecnomec\xE1nica:</strong> ' + pkEsc(ve.tecnoExpiry) + '</div>' +
-      '<div style="font-size:13px;font-weight:800;margin-bottom:6px">\u{1F527} Historial de \xD3rdenes de Trabajo e Intervenciones en Taller:</div>' +
-      '<div class="table-wrap"><table><thead><tr><th>Orden / Fecha</th><th>T\xE9cnico Ejecutor (FK)</th><th>Procedimientos Realizados</th><th>Estado</th></tr></thead><tbody>' + (histHtml || '<tr><td colspan="4">Sin \xF3rdenes previas</td></tr>') + '</tbody></table></div>'
+      '<strong>Observaciones:</strong> ' + pkEsc(ve.notes || 'Sin novedades') + ' \xB7 <strong>SOAT:</strong> ' + pkEsc(ve.soatExpiry) + ' \xB7 <strong>Tecnomec\xE1nica:</strong> ' + pkEsc(ve.tecnoExpiry) + '</div>' +
+      '<div style="font-size:13px;font-weight:800;margin-bottom:6px">\u{1F527} Historial de Servicios en Taller:</div>' +
+      '<div class="table-wrap"><table><thead><tr><th>Orden / Fecha</th><th>T\xE9cnico</th><th>Trabajos Realizados</th><th>Estado</th></tr></thead><tbody>' + (histHtml || '<tr><td colspan="4">Sin \xF3rdenes previas</td></tr>') + '</tbody></table></div>'
     );
   }
 
@@ -16424,15 +16060,15 @@ function renderRelationalModalsRuntimeJs() {
       abRows += '<tr><td><code>' + pkEsc(abList[a].id) + '</code></td><td>' + pkEsc(abList[a].date) + '</td><td>' + pkEsc(abList[a].method) + '</td><td>' + pkEsc(abList[a].note) + '</td><td style="color:var(--pk-emerald);font-weight:800">+' + pkCop(abList[a].amount) + '</td></tr>';
     }
     pkOpenModal(
-      '\u{1F4B5} Recaudo de Cartera CxC y Abonos \u2014 Factura ' + inv.id,
-      'Cliente FK: ' + inv.customerName + ' \xB7 Total Factura: ' + pkCop(inv.total) + ' \xB7 Saldo Pendiente: ' + pkCop(inv.pendingBalance),
+      '\u{1F4B5} Registrar Abono o Pago \u2014 Factura ' + inv.id,
+      'Cliente: ' + inv.customerName + ' \xB7 Total Factura: ' + pkCop(inv.total) + ' \xB7 Saldo Pendiente: ' + pkCop(inv.pendingBalance),
       '<div class="form-grid" style="background:#f8fafc;padding:12px;border-radius:10px;border:1px solid var(--pk-border);margin-bottom:12px">' +
-      '<div class="field"><label>Valor del Abono o Pago Total (COP)</label><input type="number" id="modal-abono-amount" value="' + inv.pendingBalance + '" max="' + inv.pendingBalance + '" /></div>' +
-      '<div class="field"><label>Medio de Recaudo</label><select id="modal-abono-method"><option value="Efectivo">\u{1F4B5} Efectivo Caja</option><option value="Transferencia / Nequi">\u{1F4F2} Transferencia / Nequi</option><option value="Tarjeta">\u{1F4B3} Tarjeta</option></select></div>' +
-      '<div class="field"><label>Observaci\xF3n Recibo de Caja</label><div class="row-actions"><input type="text" id="modal-abono-note" value="Abono / Pago Cartera CxC" style="flex:1" />' +
-      '<button type="button" class="btn btn-emerald btn-sm" data-confirm-abono-inv="' + pkEsc(inv.id) + '">\u2713 Aplicar Abono</button></div></div></div>' +
-      '<div style="font-size:12px;font-weight:800;margin-bottom:6px">Historial de Recibos de Caja y Abonos Aplicados a esta Factura:</div>' +
-      '<div class="table-wrap"><table><thead><tr><th>Recibo</th><th>Fecha</th><th>Medio</th><th>Nota</th><th>Valor Abonado</th></tr></thead><tbody>' + (abRows || '<tr><td colspan="5">Sin abonos registrados a\xFAn</td></tr>') + '</tbody></table></div>'
+      '<div class="field"><label>Valor del Abono (COP)</label><input type="number" id="modal-abono-amount" value="' + inv.pendingBalance + '" max="' + inv.pendingBalance + '" /></div>' +
+      '<div class="field"><label>Medio de Pago</label><select id="modal-abono-method"><option value="Efectivo">\u{1F4B5} Efectivo</option><option value="Transferencia / Nequi">\u{1F4F2} Transferencia / Nequi</option><option value="Tarjeta">\u{1F4B3} Tarjeta</option></select></div>' +
+      '<div class="field"><label>Observaci\xF3n</label><div class="row-actions"><input type="text" id="modal-abono-note" value="Abono a factura" style="flex:1" />' +
+      '<button type="button" class="btn btn-emerald btn-sm" data-confirm-abono-inv="' + pkEsc(inv.id) + '">\u2713 Guardar Abono</button></div></div></div>' +
+      '<div style="font-size:12px;font-weight:800;margin-bottom:6px">Historial de Pagos y Abonos:</div>' +
+      '<div class="table-wrap"><table><thead><tr><th>Recibo</th><th>Fecha</th><th>Medio</th><th>Nota</th><th>Valor</th></tr></thead><tbody>' + (abRows || '<tr><td colspan="5">Sin abonos registrados a\xFAn</td></tr>') + '</tbody></table></div>'
     );
   }
 
@@ -16446,12 +16082,12 @@ function renderRelationalModalsRuntimeJs() {
       itRows += '<tr><td>' + pkEsc(it.kind) + '</td><td><strong>' + pkEsc(it.name) + '</strong></td><td>' + it.qty + '</td><td>' + pkCop(it.price) + '</td><td><strong>' + pkCop(it.qty * it.price) + '</strong></td></tr>';
     }
     pkOpenModal(
-      '\u{1F9FE} Factura Electr\xF3nica DIAN ' + inv.id + ' (' + inv.status + ')',
-      'CUFE: ' + inv.cufe + ' \xB7 Cliente: ' + inv.customerName + ' \xB7 Placa: ' + (inv.plate || 'Mostrador'),
+      '\u{1F9FE} Detalle de Factura ' + inv.id + ' (' + inv.status + ')',
+      'Cliente: ' + inv.customerName + ' \xB7 Fecha: ' + inv.date + ' \xB7 Referencia: ' + (inv.plate || 'Mostrador'),
       '<div class="table-wrap" style="margin-bottom:12px"><table><thead><tr><th>Tipo</th><th>Descripci\xF3n</th><th>Cant.</th><th>Vlr. Unit</th><th>Subtotal</th></tr></thead><tbody>' + itRows + '</tbody></table></div>' +
       '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:#f8fafc;border-radius:10px">' +
-      '<div><strong>Total Neto: ' + pkCop(inv.total) + '</strong> \xB7 Pagado: ' + pkCop(inv.amountPaid) + ' \xB7 Saldo CxC: ' + pkCop(inv.pendingBalance) + '</div>' +
-      '<button type="button" class="btn btn-primary btn-sm" data-print-invoice="' + pkEsc(inv.id) + '">\u{1F5A8}\uFE0F Imprimir PDF Formato Carta / Tirilla</button></div>'
+      '<div><strong>Total: ' + pkCop(inv.total) + '</strong> \xB7 Pagado: ' + pkCop(inv.amountPaid) + ' \xB7 Saldo Pendiente: ' + pkCop(inv.pendingBalance) + '</div>' +
+      '<button type="button" class="btn btn-primary btn-sm" data-print-invoice="' + pkEsc(inv.id) + '">\u{1F5A8}\uFE0F Imprimir Factura / Tirilla</button></div>'
     );
   }
 `;
@@ -16653,11 +16289,7 @@ function renderRelationalSeedDataRuntimeJs() {
 // apps/web-app/src/presentation/client-runtime/reports-cashbox-commissions-hub.runtime.ts
 function renderReportsCashboxCommissionsHubRuntimeJs() {
   return `
-  function pkRenderReportsAndCashboxHub() {
-    var db = STATE.relDb;
-    var container = document.getElementById('ws-converged-hub-container');
-    if (!container || !db) return;
-
+  function pkComputeCashMetrics(db) {
     var totalInvoiced = 0; var cashIn = 0; var digitalIn = 0; var totalCxc = 0; var partsProfit = 0;
     for (var i = 0; i < db.invoices.length; i++) {
       var inv = db.invoices[i];
@@ -16666,114 +16298,154 @@ function renderReportsCashboxCommissionsHubRuntimeJs() {
       var paid = Number(inv.amountPaid || 0);
       if (inv.paymentMethod === 'Efectivo' || inv.paymentMethod === 'Cr\xE9dito / Cartera CxC') cashIn += paid;
       else digitalIn += paid;
-      var items = inv.items || [];
-      for (var k = 0; k < items.length; k++) {
-        if (items[k].kind === 'PRODUCTO') {
-          var pr = pkFindById(db.products, items[k].refId);
-          var unitCost = pr ? Number(pr.costPrice || 0) : Math.round(Number(items[k].price || 0) * 0.6);
-          partsProfit += (Number(items[k].price || 0) - unitCost) * Number(items[k].qty || 1);
+      for (var k = 0; k < (inv.items || []).length; k++) {
+        var it = inv.items[k];
+        if (it.kind === 'PRODUCTO') {
+          var pr = pkFindById(db.products, it.refId);
+          var uCost = pr ? Number(pr.costPrice || 0) : Math.round(Number(it.price || 0) * 0.6);
+          partsProfit += (Number(it.price || 0) - uCost) * Number(it.qty || 1);
         }
       }
     }
-
     var cashExpenses = 0; var totalExpenses = 0;
+    for (var e = 0; e < db.expenses.length; e++) {
+      totalExpenses += Number(db.expenses[e].amount || 0);
+      if (db.expenses[e].paymentSource === 'Efectivo Caja') cashExpenses += Number(db.expenses[e].amount || 0);
+    }
+    return { totalInvoiced: totalInvoiced, cashIn: cashIn, digitalIn: digitalIn, totalCxc: totalCxc, partsProfit: partsProfit, totalExpenses: totalExpenses, netCash: cashIn - cashExpenses };
+  }
+
+  function pkRenderPettyCashHub() {
+    var db = STATE.relDb;
+    var stage = document.getElementById('ws-module-stage');
+    if (!stage || !db) return;
+    var m = pkComputeCashMetrics(db);
     var expRows = '';
     for (var e = 0; e < db.expenses.length; e++) {
       var ex = db.expenses[e];
-      totalExpenses += Number(ex.amount || 0);
-      if (ex.paymentSource === 'Efectivo Caja') cashExpenses += Number(ex.amount || 0);
-      expRows += '<tr><td><code>' + pkEsc(ex.id) + '</code></td><td>' + pkEsc(ex.date) + '</td><td><span class="badge badge-slate">' + pkEsc(ex.category) + '</span></td><td><strong>' + pkEsc(ex.description) + '</strong></td><td>' + pkEsc(ex.paymentSource) + '</td><td style="color:var(--pk-amber);font-weight:800">-' + pkCop(ex.amount) + '</td></tr>';
+      expRows += '<tr><td>' + pkEsc(ex.date) + '</td><td><span class="badge badge-slate">' + pkEsc(ex.category) + '</span></td><td><strong>' + pkEsc(ex.description) + '</strong></td><td>' + pkEsc(ex.paymentSource) + '</td><td style="color:var(--pk-amber);font-weight:800">-' + pkCop(ex.amount) + '</td><td><button type="button" class="btn btn-outline btn-sm" data-exp-delete-id="' + pkEsc(ex.id) + '">\u{1F5D1}\uFE0F</button></td></tr>';
     }
-
-    var netCashInBox = cashIn - cashExpenses;
-
-    var wkRows = '';
-    for (var w = 0; w < db.workers.length; w++) {
-      var wk = db.workers[w];
-      var gross = Number(wk.totalDayGross || 0);
-      var techPay = Math.round(gross * (Number(wk.commissionPct || 40) / 100));
-      var bizCut = gross - techPay;
-      wkRows += '<tr>' +
-        '<td><strong>' + pkEsc(wk.name) + '</strong><div style="font-size:11px;color:var(--pk-muted)">' + pkEsc(wk.specialty) + ' \xB7 \u{1F4DE} ' + pkEsc(wk.phone) + '</div></td>' +
-        '<td><span class="badge badge-blue">' + wk.commissionPct + '% T\xE9cnico / ' + (100 - wk.commissionPct) + '% Empresa</span></td>' +
-        '<td>' + pkCop(gross) + '</td>' +
-        '<td style="color:var(--pk-primary);font-weight:800">' + pkCop(techPay) + '</td>' +
-        '<td style="color:var(--pk-emerald);font-weight:800">' + pkCop(bizCut) + '</td>' +
-        '<td>' + (gross > 0
-          ? '<button type="button" class="btn btn-emerald btn-sm" data-settle-worker="' + pkEsc(wk.id) + '">\u26A1 Liquidar Turno (' + pkCop(techPay) + ')</button>'
-          : '<span class="badge badge-slate">\u2713 Turno en $0</span>') + '</td></tr>';
-    }
-
-    var stRows = '';
-    for (var s = 0; s < db.settlements.length; s++) {
-      var st = db.settlements[s];
-      stRows += '<tr><td><code>' + pkEsc(st.id) + '</code></td><td>' + pkEsc(st.date) + '</td><td><strong>' + pkEsc(st.workerName) + '</strong></td><td>' + pkCop(st.grossLabor) + '</td><td>' + st.commissionPct + '%</td><td style="color:var(--pk-primary);font-weight:800">' + pkCop(st.technicianPayout) + '</td><td style="color:var(--pk-emerald);font-weight:800">' + pkCop(st.companyRetention) + '</td></tr>';
-    }
-
-    container.innerHTML =
+    stage.innerHTML =
       '<div class="kpi-row">' +
-      '<div class="kpi-box"><div class="kpi-label">Efectivo Neto Real en Gaveta (Ingresos - Gastos)</div><div class="kpi-val" style="color:var(--pk-emerald)">' + pkCop(netCashInBox) + '</div></div>' +
-      '<div class="kpi-box"><div class="kpi-label">Ingresos Digitales (Transferencias / Tarjeta)</div><div class="kpi-val" style="color:var(--pk-primary)">' + pkCop(digitalIn) + '</div></div>' +
-      '<div class="kpi-box"><div class="kpi-label">Utilidad Neta en Repuestos + Total Facturado</div><div class="kpi-val">+' + pkCop(partsProfit) + ' / ' + pkCop(totalInvoiced) + '</div></div>' +
-      '<div class="kpi-box"><div class="kpi-label">Cartera por Cobrar CxC / Gastos Menores</div><div class="kpi-val" style="color:var(--pk-amber)">CxC: ' + pkCop(totalCxc) + ' \xB7 Gastos: -' + pkCop(totalExpenses) + '</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Efectivo Neto en Caja (Ingresos - Gastos)</div><div class="kpi-val" style="color:var(--pk-emerald)">' + pkCop(m.netCash) + '</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Transferencias y Tarjetas</div><div class="kpi-val" style="color:var(--pk-primary)">' + pkCop(m.digitalIn) + '</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Total Gastos Registrados</div><div class="kpi-val" style="color:var(--pk-amber)">-' + pkCop(m.totalExpenses) + '</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Total Facturado</div><div class="kpi-val">' + pkCop(m.totalInvoiced) + '</div></div>' +
       '</div>' +
-
-      '<div class="card"><div class="card-head"><div>' +
-      '<div class="card-title">\u{1F4E5} Exportaci\xF3n Ejecutiva a Excel CSV (UTF-8 con BOM Compatible con Excel)</div>' +
-      '<div class="card-sub">Descarga al instante las tablas relacionales enlazadas de la plataforma</div></div>' +
-      '<div class="row-actions">' +
-      '<button type="button" class="btn btn-outline btn-sm" data-export-csv="invoices">\u{1F4CA} Exportar Ventas y Facturas (.CSV)</button>' +
-      '<button type="button" class="btn btn-outline btn-sm" data-export-csv="inventory">\u{1F4E6} Exportar Inventario Valorizado (.CSV)</button>' +
-      '<button type="button" class="btn btn-outline btn-sm" data-export-csv="expenses">\u{1F4B8} Exportar Gastos Caja (.CSV)</button>' +
-      '<button type="button" class="btn btn-outline btn-sm" data-export-csv="settlements">\u{1F468}\u200D\u{1F527} Exportar Liquidaciones (.CSV)</button>' +
-      '</div></div></div>' +
-
-      '<div class="card"><div class="card-head"><div>' +
-      '<div class="card-title">\u{1F468}\u200D\u{1F527} 1. Liquidaci\xF3n de Comisiones de T\xE9cnicos / Profesionales (FK -> workers, settlements)</div>' +
-      '<div class="card-sub">Cada servicio facturado en el POS suma autom\xE1ticamente al acumulado del t\xE9cnico; liquida su turno con un clic</div></div></div>' +
-      '<div class="card-body"><div class="table-wrap" style="margin-bottom:12px"><table><thead><tr><th>T\xE9cnico / Profesional</th><th>Esquema Comisi\xF3n</th><th>Producido Bruto Hoy</th><th>Pago al T\xE9cnico</th><th>Utilidad Empresa</th><th>Acci\xF3n</th></tr></thead><tbody>' + wkRows + '</tbody></table></div>' +
-      '<div class="form-grid" style="background:#f8fafc;padding:10px;border-radius:10px;border:1px solid var(--pk-border)">' +
-      '<div class="field"><label>Nombre Nuevo T\xE9cnico / Profesional</label><input type="text" id="wk-new-name" placeholder="Ej: Jorge Iv\xE1n R\xEDos" /></div>' +
-      '<div class="field"><label>Especialidad / \xC1rea</label><input type="text" id="wk-new-spec" placeholder="Ej: Diagn\xF3stico Electr\xF3nico / Especialista" /></div>' +
-      '<div class="field"><label>% Comisi\xF3n T\xE9cnico</label><div class="row-actions"><input type="number" id="wk-new-pct" value="40" min="5" max="90" style="flex:1" />' +
-      '<button type="button" class="btn btn-primary btn-sm" id="btn-wk-add">+ Vincular T\xE9cnico</button></div></div></div>' +
-      (stRows ? '<div style="margin-top:12px"><div style="font-size:12px;font-weight:800;margin-bottom:6px">Historial de Turnos Liquidados:</div><div class="table-wrap"><table><thead><tr><th>ID</th><th>Fecha</th><th>T\xE9cnico</th><th>Bruto</th><th>%</th><th>Pagado T\xE9cnico</th><th>Retenci\xF3n Empresa</th></tr></thead><tbody>' + stRows + '</tbody></table></div></div>' : '') +
-      '</div></div>' +
-
-      '<div class="card"><div class="card-head"><div>' +
-      '<div class="card-title">\u{1F4B8} 2. Control de Gastos de Caja Menor y Egresos Operativos</div>' +
-      '<div class="card-sub">Los gastos pagados en Efectivo Caja se descuentan autom\xE1ticamente del Efectivo Neto en Gaveta</div></div></div>' +
+      '<div class="card"><div class="card-head"><div class="card-title">\u{1F4B8} Registrar Salida o Gasto de Caja</div></div>' +
       '<div class="card-body"><div class="form-grid" style="margin-bottom:12px">' +
-      '<div class="field"><label>Concepto / Descripci\xF3n del Gasto</label><input type="text" id="exp-new-desc" placeholder="Ej: Compra insumos aseo / Domicilio repuestos" /></div>' +
-      '<div class="field"><label>Categor\xEDa</label><select id="exp-new-cat"><option value="Insumos Operativos">Insumos Operativos</option><option value="Servicios P\xFAblicos">Servicios P\xFAblicos</option><option value="Transporte / Fletes">Transporte / Fletes</option><option value="Mantenimiento">Mantenimiento</option></select></div>' +
-      '<div class="field"><label>Origen del Dinero y Valor (COP)</label><div class="row-actions">' +
+      '<div class="field"><label>Concepto del Gasto *</label><input type="text" id="exp-new-desc" placeholder="Ej: Compra insumos de aseo / Domicilio" /></div>' +
+      '<div class="field"><label>Categor\xEDa</label><select id="exp-new-cat"><option value="Insumos Operativos">Insumos Operativos</option><option value="Transporte / Fletes">Transporte / Fletes</option><option value="Servicios P\xFAblicos">Servicios P\xFAblicos</option><option value="Adelanto / Vale">Adelanto / Vale</option></select></div>' +
+      '<div class="field"><label>Sale de y Valor ($)</label><div class="row-actions">' +
       '<select id="exp-new-source" style="width:140px"><option value="Efectivo Caja">Efectivo Caja</option><option value="Transferencia Bancaria">Banco / Nequi</option></select>' +
       '<input type="number" id="exp-new-amount" value="25000" style="flex:1" />' +
-      '<button type="button" class="btn btn-amber btn-sm" id="btn-exp-add">+ Registrar Gasto</button></div></div></div>' +
-      '<div class="table-wrap"><table><thead><tr><th>ID</th><th>Fecha</th><th>Categor\xEDa</th><th>Descripci\xF3n</th><th>Origen</th><th>Monto</th></tr></thead><tbody>' + expRows + '</tbody></table></div></div></div>';
+      '<button type="button" class="btn btn-amber btn-sm" id="btn-exp-add">+ Guardar Gasto</button></div></div></div>' +
+      '<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Categor\xEDa</th><th>Concepto</th><th>Origen</th><th>Valor</th><th>Acci\xF3n</th></tr></thead><tbody>' + expRows + '</tbody></table></div></div></div>';
   }
 
-  function pkRenderGastroHub() {
+  function pkRenderReportsAndCashboxHub() {
     var db = STATE.relDb;
-    var container = document.getElementById('ws-converged-hub-container');
-    if (!container || !db) return;
-    var cards = '';
+    var stage = document.getElementById('ws-module-stage');
+    if (!stage || !db) return;
+    var m = pkComputeCashMetrics(db);
+    var invRows = '';
+    for (var i = 0; i < db.invoices.length; i++) {
+      var iv = db.invoices[i];
+      invRows += '<tr><td><strong>' + pkEsc(iv.id) + '</strong></td><td>' + pkEsc(iv.date) + '</td><td>' + pkEsc(iv.customerName) + '</td><td>' + pkEsc(iv.paymentMethod) + '</td><td><strong>' + pkCop(iv.total) + '</strong></td><td><span class="badge ' + (iv.pendingBalance > 0 ? 'badge-amber' : 'badge-emerald') + '">' + pkEsc(iv.status) + '</span></td></tr>';
+    }
+    stage.innerHTML =
+      '<div class="kpi-row">' +
+      '<div class="kpi-box"><div class="kpi-label">Ventas Totales Facturadas</div><div class="kpi-val">' + pkCop(m.totalInvoiced) + '</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Ganancia en Productos</div><div class="kpi-val" style="color:var(--pk-emerald)">+' + pkCop(m.partsProfit) + '</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Efectivo Neto en Caja</div><div class="kpi-val" style="color:var(--pk-primary)">' + pkCop(m.netCash) + '</div></div>' +
+      '<div class="kpi-box"><div class="kpi-label">Cuentas por Cobrar (Cartera)</div><div class="kpi-val" style="color:var(--pk-amber)">' + pkCop(m.totalCxc) + '</div></div>' +
+      '</div>' +
+      '<div class="card"><div class="card-head"><div class="card-title">\u{1F4E5} Descargar Reportes en Excel (.CSV)</div></div>' +
+      '<div class="card-body"><div class="row-actions">' +
+      '<button type="button" class="btn btn-primary btn-sm" data-export-csv="invoices">\u{1F4CA} Descargar Reporte de Ventas y Facturas</button>' +
+      '<button type="button" class="btn btn-outline btn-sm" data-export-csv="inventory">\u{1F4E6} Descargar Inventario Valorizado</button>' +
+      '<button type="button" class="btn btn-outline btn-sm" data-export-csv="expenses">\u{1F4B8} Descargar Gastos de Caja</button>' +
+      '<button type="button" class="btn btn-outline btn-sm" data-export-csv="settlements">\u{1F477} Descargar Comisiones de T\xE9cnicos</button>' +
+      '</div></div></div>' +
+      '<div class="card"><div class="card-head"><div class="card-title">\u{1F9FE} Detalle de Ventas Recientes</div></div>' +
+      '<div class="card-body"><div class="table-wrap"><table><thead><tr><th>Factura</th><th>Fecha</th><th>Cliente</th><th>Medio de Pago</th><th>Total</th><th>Estado</th></tr></thead><tbody>' + invRows + '</tbody></table></div></div></div>';
+  }
+
+  function pkRenderGastroHub(subKey) {
+    var db = STATE.relDb;
+    var stage = document.getElementById('ws-module-stage');
+    if (!stage || !db) return;
+
+    if (subKey === 'mod-kds') {
+      var kdsCards = '';
+      for (var k = 0; k < db.diningTables.length; k++) {
+        var tk = db.diningTables[k];
+        if (!tk.items || tk.items.length === 0) continue;
+        var listK = '';
+        for (var m = 0; m < tk.items.length; m++) {
+          listK += '<div style="padding:6px 0;border-bottom:1px dashed var(--pk-border);font-size:13px"><strong>' + tk.items[m].qty + 'x ' + pkEsc(tk.items[m].name) + '</strong>' +
+            (tk.items[m].note ? '<div style="font-size:11px;color:#b45309">Nota: ' + pkEsc(tk.items[m].note) + '</div>' : '') + '</div>';
+        }
+        kdsCards += '<div class="card"><div class="card-head" style="background:#fef3c7"><div class="card-title">\u{1F468}\u200D\u{1F373} ' + pkEsc(tk.name) + ' (' + pkEsc(tk.zone) + ')</div><span class="badge badge-amber">Mesero: ' + pkEsc(tk.waiter) + '</span></div>' +
+          '<div class="card-body">' + listK + '<div style="margin-top:12px"><button type="button" class="btn btn-emerald btn-sm" style="width:100%" data-kds-ready-table="' + pkEsc(tk.id) + '">\u2705 Marcar Pedido Listo para Servir</button></div></div></div>';
+      }
+      stage.innerHTML = '<div class="grid-3">' + (kdsCards || '<div class="card"><div class="card-body">No hay comandas pendientes en cocina en este momento.</div></div>') + '</div>';
+      return;
+    }
+
+    var selTable = pkFindById(db.diningTables, STATE.activeTableId) || db.diningTables[0];
+    if (selTable) STATE.activeTableId = selTable.id;
+
+    var tableButtons = '';
     for (var i = 0; i < db.diningTables.length; i++) {
       var t = db.diningTables[i];
-      var itemsHtml = '';
-      for (var j = 0; j < t.items.length; j++) {
-        itemsHtml += '<div style="font-size:11px;display:flex;justify-content:space-between"><span>' + t.items[j].qty + 'x ' + pkEsc(t.items[j].name) + '</span><strong>' + pkCop(t.items[j].price * t.items[j].qty) + '</strong></div>';
-      }
-      cards += '<div class="card"><div class="card-head"><div><div class="card-title">\u{1F37D}\uFE0F ' + pkEsc(t.name) + ' (' + pkEsc(t.zone) + ')</div>' +
-        '<div class="card-sub">Mesero: ' + pkEsc(t.waiter) + ' \xB7 Comensales: ' + t.diners + '</div></div>' +
-        '<span class="badge ' + (t.status === 'Libre' ? 'badge-slate' : (t.status === 'Cuenta' ? 'badge-amber' : 'badge-emerald')) + '">' + pkEsc(t.status) + '</span></div>' +
-        '<div class="card-body"><div style="background:#f8fafc;padding:8px;border-radius:8px;min-height:54px;margin-bottom:8px">' + (itemsHtml || '<span style="font-size:11px;color:var(--pk-muted)">Mesa disponible sin comanda activa</span>') + '</div>' +
-        '<div style="display:flex;justify-content:space-between;align-items:center">' +
-        '<strong>Total: ' + pkCop(t.total) + '</strong>' +
-        (t.total > 0 ? '<button type="button" class="btn btn-emerald btn-sm" data-pos-load-table="' + pkEsc(t.id) + '">\u{1F6D2} Pasar Cuenta a Caja POS</button>' : '<button type="button" class="btn btn-outline btn-sm" data-gastro-add-demo="' + pkEsc(t.id) + '">+ Comanda R\xE1pida</button>') +
-        '</div></div></div>';
+      var isSel = selTable && selTable.id === t.id;
+      var isOcc = t.items && t.items.length > 0;
+      tableButtons += '<button type="button" data-select-table="' + pkEsc(t.id) + '" style="padding:12px 16px;border-radius:12px;cursor:pointer;text-align:left;min-width:165px;border:2px solid ' + (isSel ? '#023047' : (isOcc ? '#10b981' : '#cbd5e1')) + ';background:' + (isSel ? '#023047' : (isOcc ? '#ecfdf5' : '#fff')) + ';color:' + (isSel ? '#fff' : '#0f172a') + '">' +
+        '<div style="font-weight:800;font-size:14px">\u{1F37D}\uFE0F ' + pkEsc(t.name) + '</div>' +
+        '<div style="font-size:11px;opacity:0.85">' + pkEsc(t.zone) + ' \xB7 ' + (isOcc ? pkCop(t.total) : 'Libre') + '</div></button>';
     }
-    container.innerHTML = '<div class="grid-3">' + cards + '</div>';
+
+    var menuOpts = '';
+    for (var p = 0; p < db.products.length; p++) {
+      menuOpts += '<option value="' + pkEsc(db.products[p].id) + '">' + pkEsc(db.products[p].name + ' \u2014 ' + pkCop(db.products[p].salePrice)) + '</option>';
+    }
+
+    var cmdRows = '';
+    if (selTable && selTable.items) {
+      for (var c = 0; c < selTable.items.length; c++) {
+        var it = selTable.items[c];
+        cmdRows += '<tr><td><strong>' + pkEsc(it.name) + '</strong>' + (it.note ? '<div style="font-size:11px;color:var(--pk-muted)">Nota: ' + pkEsc(it.note) + '</div>' : '') + '</td>' +
+          '<td><div class="row-actions"><button type="button" class="btn btn-outline btn-sm" data-cmd-qty="-1" data-cmd-idx="' + c + '">\u2796</button><strong>' + it.qty + '</strong><button type="button" class="btn btn-outline btn-sm" data-cmd-qty="1" data-cmd-idx="' + c + '">\u2795</button></div></td>' +
+          '<td>' + pkCop(it.price) + '</td><td><strong>' + pkCop(it.price * it.qty) + '</strong></td>' +
+          '<td><button type="button" class="btn btn-outline btn-sm" data-cmd-del="' + c + '">\u{1F5D1}\uFE0F</button></td></tr>';
+      }
+    }
+    if (!cmdRows) cmdRows = '<tr><td colspan="5" style="text-align:center;color:var(--pk-muted);padding:16px">Esta mesa est\xE1 libre. Selecciona un plato o bebida arriba y haz clic en "+ Agregar a la Comanda".</td></tr>';
+
+    stage.innerHTML =
+      '<div class="card"><div class="card-head"><div class="card-title">1. Selecciona la Mesa (Haz clic en una mesa para ver o crear su comanda)</div>' +
+      '<button type="button" class="btn btn-outline btn-sm" id="btn-gastro-new-table">+ Crear Nueva Mesa</button></div>' +
+      '<div class="card-body"><div style="display:flex;gap:10px;flex-wrap:wrap">' + tableButtons + '</div></div></div>' +
+
+      (selTable ? (
+        '<div class="card"><div class="card-head" style="background:#f8fafc"><div class="card-title">\u{1F4DD} 2. Comanda de ' + pkEsc(selTable.name) + ' (' + pkEsc(selTable.zone) + ')</div>' +
+        '<span class="badge badge-emerald" style="font-size:14px">Total Mesa: ' + pkCop(selTable.total) + '</span></div>' +
+        '<div class="card-body">' +
+        '<div class="form-grid" style="background:#f1f5f9;padding:12px;border-radius:10px;margin-bottom:14px">' +
+        '<div class="field"><label>Plato / Bebida / Producto *</label><select id="cmd-product-id">' + menuOpts + '</select></div>' +
+        '<div class="field"><label>O escribir plato personalizado</label><input type="text" id="cmd-custom-name" placeholder="Ej: Churrasco 350g / Limonada Cerezada" /></div>' +
+        '<div class="field"><label>Precio ($) (Si es personalizado)</label><input type="number" id="cmd-custom-price" placeholder="Ej: 38000" /></div>' +
+        '<div class="field"><label>Cantidad</label><input type="number" id="cmd-qty-input" value="1" min="1" /></div>' +
+        '<div class="field"><label>Nota para Cocina / Barra</label><input type="text" id="cmd-note-input" placeholder="Ej: T\xE9rmino 3/4, sin cebolla, bien fr\xEDa" /></div>' +
+        '<div class="field" style="display:flex;justify-content:flex-end"><button type="button" class="btn btn-primary" style="width:100%" id="btn-cmd-add-item">+ Agregar a la Comanda</button></div>' +
+        '</div>' +
+        '<div class="table-wrap" style="margin-bottom:12px"><table><thead><tr><th>Plato / Bebida</th><th>Cantidad</th><th>Precio Unit.</th><th>Subtotal</th><th>Quitar</th></tr></thead><tbody>' + cmdRows + '</tbody></table></div>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">' +
+        '<button type="button" class="btn btn-amber" id="btn-cmd-send-kitchen">\u{1F468}\u200D\u{1F373} Enviar Comanda a Cocina / Barra</button>' +
+        '<button type="button" class="btn btn-emerald" data-pos-load-table="' + pkEsc(selTable.id) + '">\u{1F4B5} Pasar Cuenta de ' + pkEsc(selTable.name) + ' a Caja para Cobrar</button>' +
+        '</div></div></div>'
+      ) : '');
   }
 `;
 }
@@ -16784,63 +16456,47 @@ function renderSuperAdminAndShellRuntimeJs() {
   function pkRenderSuperAdmin() {
     var kpiEl = document.getElementById('sa-kpi-row');
     if (kpiEl) {
-      var pgList = (STATE.pgDatabases && STATE.pgDatabases.length > 0)
-        ? STATE.pgDatabases
-        : ['proveko_control_db', 'proveko_groups_db'];
+      var pgList = (STATE.pgDatabases && STATE.pgDatabases.length > 0) ? STATE.pgDatabases : ['proveko_control_db', 'proveko_groups_db'];
       kpiEl.innerHTML =
-        '<div class="kpi-box"><div class="kpi-label">BDs Sistema (Core + Grupos)</div><div class="kpi-val" style="font-size:13px">proveko_control_db \xB7 proveko_groups_db</div></div>' +
-        '<div class="kpi-box"><div class="kpi-label">Total BDs PostgreSQL en proveko_db</div><div class="kpi-val">' + pgList.length + ' BDs (' + pkEsc(pgList.join(', ')) + ')</div></div>' +
-        '<div class="kpi-box"><div class="kpi-label">Empresas Clientes (BD Propia)</div><div class="kpi-val" style="color:var(--pk-emerald)">' + STATE.clients.length + ' BDs Clientes</div></div>' +
-        '<div class="kpi-box"><div class="kpi-label">Modo Demo P\xFAblico</div><div class="kpi-val" style="font-size:13px;color:var(--pk-primary)">100% localStorage (Sin BD)</div></div>';
+        '<div class="kpi-box"><div class="kpi-label">Bases del Sistema</div><div class="kpi-val" style="font-size:13px">proveko_control_db \xB7 proveko_groups_db</div></div>' +
+        '<div class="kpi-box"><div class="kpi-label">Total Bases Activas</div><div class="kpi-val">' + pgList.length + ' (' + pkEsc(pgList.join(', ')) + ')</div></div>' +
+        '<div class="kpi-box"><div class="kpi-label">Empresas Clientes</div><div class="kpi-val" style="color:var(--pk-emerald)">' + STATE.clients.length + ' Empresas</div></div>' +
+        '<div class="kpi-box"><div class="kpi-label">Solicitudes de M\xF3dulos</div><div class="kpi-val" style="font-size:13px;color:var(--pk-primary)">' + STATE.featureRequests.length + ' Solicitudes</div></div>';
     }
-
     var gridEl = document.getElementById('sa-tenants-grid');
     if (gridEl) {
       var gHtml = '';
       if (STATE.clients.length === 0) {
         gHtml = '<div class="card"><div class="card-body" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">' +
-          '<div><strong>A\xFAn no hay empresas clientes registradas en PostgreSQL.</strong><div style="font-size:12px;color:var(--pk-muted)">Las bases del sistema (<code>proveko_control_db</code> y <code>proveko_groups_db</code>) ya est\xE1n activas en <code>proveko_db</code>. El modo Demo opera en <code>localStorage</code>. Crea un cliente para aprovisionar su BD PostgreSQL aislada (<code>db_&lt;cliente&gt;</code>).</div></div>' +
-          '<button type="button" class="btn btn-emerald btn-sm" id="btn-sa-empty-new-client">+ Crear Primer Cliente y su BD PostgreSQL</button></div></div>';
+          '<div><strong>A\xFAn no hay empresas registradas.</strong><div style="font-size:12px;color:var(--pk-muted)">Registra la primera empresa cliente para habilitar su cuenta administrativa.</div></div>' +
+          '<button type="button" class="btn btn-emerald btn-sm" id="btn-sa-empty-new-client">+ Registrar Primera Empresa</button></div></div>';
       }
       for (var i = 0; i < STATE.clients.length; i++) {
         var t = STATE.clients[i];
         gHtml += '<div class="card"><div class="card-head">' +
-          '<div><div style="display:flex;align-items:center;gap:8px">' +
-          '<strong style="font-size:15px">' + pkEsc(t.companyName) + '</strong>' +
-          '<span class="badge badge-blue">NIT: ' + pkEsc(t.nit) + '</span>' +
-          '<span class="badge badge-emerald">BD PostgreSQL: ' + pkEsc(t.dbName) + ' (' + pkEsc(t.dbHost + ':' + t.dbPort) + ')</span></div>' +
-          '<div style="font-size:12px;color:var(--pk-muted);margin-top:4px">Cuenta Admin generada: <code>' + pkEsc(t.adminUsername) + '</code> \xB7 Clave: <code>' + pkEsc(t.adminPasswordHint) + '</code></div></div>' +
-          '<div class="row-actions">' +
-          '<button type="button" class="btn btn-outline btn-sm" data-sa-regen="' + pkEsc(t.tenantId) + '">\u{1F511} Regenerar Clave Admin</button>' +
-          '<button type="button" class="btn btn-primary btn-sm" data-sa-open="' + pkEsc(t.tenantId) + '">\u{1F3E2} Abrir Plataforma</button></div></div>' +
+          '<div><div style="display:flex;align-items:center;gap:8px"><strong style="font-size:15px">' + pkEsc(t.companyName) + '</strong>' +
+          '<span class="badge badge-blue">NIT: ' + pkEsc(t.nit) + '</span><span class="badge badge-emerald">Base: ' + pkEsc(t.dbName) + '</span></div>' +
+          '<div style="font-size:12px;color:var(--pk-muted);margin-top:4px">Usuario Admin: <code>' + pkEsc(t.adminUsername) + '</code> \xB7 Clave: <code>' + pkEsc(t.adminPasswordHint) + '</code></div></div>' +
+          '<div class="row-actions"><button type="button" class="btn btn-outline btn-sm" data-sa-regen="' + pkEsc(t.tenantId) + '">\u{1F511} Nueva Clave</button>' +
+          '<button type="button" class="btn btn-primary btn-sm" data-sa-open="' + pkEsc(t.tenantId) + '">\u{1F3E2} Abrir Empresa</button></div></div>' +
           '<div class="card-body"><div class="grid-2">' +
           '<div style="background:#f8fafc;border:1px solid var(--pk-border);border-radius:10px;padding:10px;display:flex;justify-content:space-between;align-items:center">' +
-          '<div><div style="font-size:11px;color:var(--pk-muted);font-weight:700">CUOTA M\xC1XIMA DE ROLES INTERNOS</div>' +
-          '<div style="font-size:14px;font-weight:800">Usados: ' + t.internalRoles.length + ' / M\xE1ximo permitido: ' + t.maxRolesAllowed + '</div></div>' +
-          '<div class="row-actions"><button type="button" class="btn btn-outline btn-sm" data-sa-quota-role="-1" data-sa-tenant="' + pkEsc(t.tenantId) + '">-1</button>' +
-          '<button type="button" class="btn btn-outline btn-sm" data-sa-quota-role="1" data-sa-tenant="' + pkEsc(t.tenantId) + '">+1</button></div></div>' +
+          '<div><div style="font-size:11px;color:var(--pk-muted);font-weight:700">CUPO DE ROLES</div><div style="font-size:14px;font-weight:800">Usados: ' + t.internalRoles.length + ' / M\xE1x: ' + t.maxRolesAllowed + '</div></div>' +
+          '<div class="row-actions"><button type="button" class="btn btn-outline btn-sm" data-sa-quota-role="-1" data-sa-tenant="' + pkEsc(t.tenantId) + '">-1</button><button type="button" class="btn btn-outline btn-sm" data-sa-quota-role="1" data-sa-tenant="' + pkEsc(t.tenantId) + '">+1</button></div></div>' +
           '<div style="background:#f8fafc;border:1px solid var(--pk-border);border-radius:10px;padding:10px;display:flex;justify-content:space-between;align-items:center">' +
-          '<div><div style="font-size:11px;color:var(--pk-muted);font-weight:700">CUOTA M\xC1XIMA DE USUARIOS DEL CLIENTE</div>' +
-          '<div style="font-size:14px;font-weight:800">Usados: ' + t.internalUsers.length + ' / M\xE1ximo permitido: ' + t.maxUsersAllowed + '</div></div>' +
-          '<div class="row-actions"><button type="button" class="btn btn-outline btn-sm" data-sa-quota-user="-1" data-sa-tenant="' + pkEsc(t.tenantId) + '">-1</button>' +
-          '<button type="button" class="btn btn-outline btn-sm" data-sa-quota-user="1" data-sa-tenant="' + pkEsc(t.tenantId) + '">+1</button></div></div>' +
+          '<div><div style="font-size:11px;color:var(--pk-muted);font-weight:700">CUPO DE USUARIOS</div><div style="font-size:14px;font-weight:800">Usados: ' + t.internalUsers.length + ' / M\xE1x: ' + t.maxUsersAllowed + '</div></div>' +
+          '<div class="row-actions"><button type="button" class="btn btn-outline btn-sm" data-sa-quota-user="-1" data-sa-tenant="' + pkEsc(t.tenantId) + '">-1</button><button type="button" class="btn btn-outline btn-sm" data-sa-quota-user="1" data-sa-tenant="' + pkEsc(t.tenantId) + '">+1</button></div></div>' +
           '</div></div></div>';
       }
       gridEl.innerHTML = gHtml;
     }
-
-    var reqCount = document.getElementById('sa-requests-count');
-    if (reqCount) reqCount.textContent = STATE.featureRequests.length + ' solicitudes';
+    var reqCount = document.getElementById('sa-requests-count'); if (reqCount) reqCount.textContent = STATE.featureRequests.length + ' solicitudes';
     var reqBody = document.getElementById('sa-feature-requests-body');
     if (reqBody) {
-      if (STATE.featureRequests.length === 0) {
-        reqBody.innerHTML = '<div style="font-size:12px;color:var(--pk-muted)">No hay solicitudes pendientes en la pesta\xF1a "Necesito otra funcionalidad".</div>';
-      } else {
+      if (STATE.featureRequests.length === 0) reqBody.innerHTML = '<div style="font-size:12px;color:var(--pk-muted)">No hay solicitudes pendientes.</div>';
+      else {
         var rHtml = '<table><thead><tr><th>Empresa</th><th>Tipo</th><th>Solicitud</th><th>Estado</th></tr></thead><tbody>';
-        for (var r = 0; r < STATE.featureRequests.length; r++) {
-          var rq = STATE.featureRequests[r];
-          rHtml += '<tr><td><strong>' + pkEsc(rq.companyName) + '</strong></td><td>' + pkEsc(rq.tier) + '</td><td>' + pkEsc(rq.label) + '</td><td><span class="badge badge-emerald">Activada</span></td></tr>';
-        }
+        for (var r = 0; r < STATE.featureRequests.length; r++) rHtml += '<tr><td><strong>' + pkEsc(STATE.featureRequests[r].companyName) + '</strong></td><td>' + pkEsc(STATE.featureRequests[r].tier) + '</td><td>' + pkEsc(STATE.featureRequests[r].label) + '</td><td><span class="badge badge-emerald">Activada</span></td></tr>';
         reqBody.innerHTML = rHtml + '</tbody></table>';
       }
     }
@@ -16851,109 +16507,78 @@ function renderSuperAdminAndShellRuntimeJs() {
     var pubNav = document.getElementById('public-nav-tabs');
     var sessBar = document.getElementById('authenticated-session-bar');
     var topCtx = document.getElementById('top-context-label');
-
-    var sShow = document.getElementById('surface-showcase');
-    var sAuth = document.getElementById('surface-auth');
-    var sSa = document.getElementById('surface-superadmin');
-    var sWs = document.getElementById('surface-workstation');
-    if (sShow) sShow.classList.remove('active');
-    if (sAuth) sAuth.classList.remove('active');
-    if (sSa) sSa.classList.remove('active');
-    if (sWs) sWs.classList.remove('active');
+    var sShow = document.getElementById('surface-showcase'); var sAuth = document.getElementById('surface-auth'); var sSa = document.getElementById('surface-superadmin'); var sWs = document.getElementById('surface-workstation');
+    if (sShow) sShow.classList.remove('active'); if (sAuth) sAuth.classList.remove('active'); if (sSa) sSa.classList.remove('active'); if (sWs) sWs.classList.remove('active');
 
     if (STATE.session) {
-      if (pubNav) pubNav.style.display = 'none';
-      if (sessBar) sessBar.style.display = 'flex';
-      var rBadge = document.getElementById('session-role-badge');
-      var dBadge = document.getElementById('session-db-badge');
-      var uLabel = document.getElementById('session-user-label');
+      if (pubNav) pubNav.style.display = 'none'; if (sessBar) sessBar.style.display = 'flex';
+      var rBadge = document.getElementById('session-role-badge'); var dBadge = document.getElementById('session-db-badge'); var uLabel = document.getElementById('session-user-label');
       if (STATE.session.role === 'superadmin' || STATE.session.role === 'desarrollador' || STATE.session.role === 'auxiliar') {
-        if (rBadge) rBadge.textContent = 'Rol Global: ' + STATE.session.role.toUpperCase();
-        if (dBadge) dBadge.textContent = 'BDs: proveko_control_db + proveko_groups_db';
-        if (uLabel) uLabel.textContent = STATE.session.username;
-        if (topCtx) topCtx.textContent = '| Consola Global (' + STATE.session.role + ')';
-        if (sSa) sSa.classList.add('active');
-        pkRenderSuperAdmin();
+        if (rBadge) rBadge.textContent = 'Perfil: ' + STATE.session.role.toUpperCase(); if (dBadge) dBadge.textContent = 'Administraci\xF3n Central'; if (uLabel) uLabel.textContent = STATE.session.username; if (topCtx) topCtx.textContent = '| Administraci\xF3n Central';
+        if (sSa) sSa.classList.add('active'); pkRenderSuperAdmin();
       } else {
         var cl = pkGetActiveClient();
-        if (rBadge) rBadge.textContent = 'Rol: cliente (' + (STATE.session.internalRoleName || 'Admin') + ')';
-        if (dBadge) dBadge.textContent = 'BD Propia: ' + (cl ? cl.dbName : '');
-        if (uLabel) uLabel.textContent = (cl ? cl.companyName : '') + ' \u2014 ' + STATE.session.username;
-        if (topCtx) topCtx.textContent = '| ' + (cl ? cl.companyName : 'Plataforma Cliente');
-        if (sWs) sWs.classList.add('active');
-        if (cl && cl.dbName) pkHydrateClientRelationalWorkspace(cl.dbName);
-        pkRenderWorkstation();
+        if (rBadge) rBadge.textContent = STATE.session.internalRoleName || 'Administrador'; if (dBadge) dBadge.textContent = cl ? cl.companyName : 'Mi Empresa'; if (uLabel) uLabel.textContent = STATE.session.username; if (topCtx) topCtx.textContent = '| ' + (cl ? cl.companyName : 'Mi Empresa');
+        if (sWs) sWs.classList.add('active'); if (cl && cl.dbName) pkHydrateClientRelationalWorkspace(cl.dbName); pkRenderWorkstation();
       }
       return;
     }
 
-    if (pubNav) pubNav.style.display = 'flex';
-    if (sessBar) sessBar.style.display = 'none';
-    var tShow = document.getElementById('tab-nav-showcase');
-    var tAuth = document.getElementById('tab-nav-auth');
-    var tDemo = document.getElementById('tab-nav-demo');
+    if (pubNav) pubNav.style.display = 'flex'; if (sessBar) sessBar.style.display = 'none';
+    var tShow = document.getElementById('tab-nav-showcase'); var tAuth = document.getElementById('tab-nav-auth'); var tDemo = document.getElementById('tab-nav-demo');
     if (tShow) tShow.className = 'pk-tab-btn ' + (STATE.publicTab === 'showcase' ? 'active' : '');
     if (tAuth) tAuth.className = 'pk-tab-btn ' + (STATE.publicTab === 'auth' ? 'active' : '');
     if (tDemo) tDemo.className = 'pk-tab-btn ' + (STATE.publicTab === 'demo' ? 'active' : '');
 
-    if (STATE.publicTab === 'showcase') {
-      if (topCtx) topCtx.textContent = '| Muestra de la Plataforma';
-      if (sShow) sShow.classList.add('active');
-      pkRenderShowcase();
-    } else if (STATE.publicTab === 'auth') {
-      if (topCtx) topCtx.textContent = STATE.authMode === 'register' ? '| Registra tu Negocio' : '| Iniciar Sesi\xF3n';
-      if (sAuth) sAuth.classList.add('active');
-      var pLogin = document.getElementById('auth-pane-login');
-      var pReg = document.getElementById('auth-pane-register');
-      var bLogin = document.getElementById('btn-auth-mode-login');
-      var bReg = document.getElementById('btn-auth-mode-register');
-      if (pLogin) pLogin.style.display = STATE.authMode === 'login' ? 'block' : 'none';
-      if (pReg) pReg.style.display = STATE.authMode === 'register' ? 'block' : 'none';
-      if (bLogin) bLogin.className = 'btn ' + (STATE.authMode === 'login' ? 'btn-primary' : 'btn-outline');
-      if (bReg) bReg.className = 'btn ' + (STATE.authMode === 'register' ? 'btn-primary' : 'btn-outline');
+    if (STATE.publicTab === 'showcase') { if (topCtx) topCtx.textContent = '| Soluciones para tu Empresa'; if (sShow) sShow.classList.add('active'); pkRenderShowcase(); }
+    else if (STATE.publicTab === 'auth') {
+      if (topCtx) topCtx.textContent = STATE.authMode === 'register' ? '| Registra tu Negocio' : '| Iniciar Sesi\xF3n'; if (sAuth) sAuth.classList.add('active');
+      var pLogin = document.getElementById('auth-pane-login'); var pReg = document.getElementById('auth-pane-register'); var bLogin = document.getElementById('btn-auth-mode-login'); var bReg = document.getElementById('btn-auth-mode-register');
+      if (pLogin) pLogin.style.display = STATE.authMode === 'login' ? 'block' : 'none'; if (pReg) pReg.style.display = STATE.authMode === 'register' ? 'block' : 'none';
+      if (bLogin) bLogin.className = 'btn ' + (STATE.authMode === 'login' ? 'btn-primary' : 'btn-outline'); if (bReg) bReg.className = 'btn ' + (STATE.authMode === 'register' ? 'btn-primary' : 'btn-outline');
       pkRenderRegistrationWizard();
-    } else if (STATE.publicTab === 'demo') {
-      STATE.activeTenantId = 'tnt-demo';
-      if (topCtx) topCtx.textContent = '| Demo Interactiva (Datos en localStorage)';
-      if (sWs) sWs.classList.add('active');
-      pkRenderWorkstation();
-    }
+    } else if (STATE.publicTab === 'demo') { STATE.activeTenantId = 'tnt-demo'; if (topCtx) topCtx.textContent = '| Plataforma en Vivo'; if (sWs) sWs.classList.add('active'); pkRenderWorkstation(); }
   }
 
   function pkHandleSuperAdminAction(target) {
+    if (target.closest('#btn-create-internal-role')) {
+      var clR = pkGetActiveClient(); if (clR.internalRoles.length >= clR.maxRolesAllowed) { pkToast('Cupo m\xE1ximo de roles alcanzado.'); return true; }
+      var rName = ((document.getElementById('new-role-name') || {}).value || '').trim(); if (!rName) { pkToast('Ingresa el nombre del rol.'); return true; }
+      clR.internalRoles.push({ roleId: 'rol-' + Date.now(), name: rName, description: ((document.getElementById('new-role-desc') || {}).value || 'Rol operativo').trim(), allowedSubmodules: clR.activeSubmodules.slice(0, 4) });
+      if (pkIsDemoMode()) pkSaveDemoToLocalStorage(); pkRenderWorkstation(); pkToast('Rol creado: ' + rName); return true;
+    }
+    if (target.closest('#btn-create-internal-user')) {
+      var clU = pkGetActiveClient(); if (clU.internalUsers.length >= clU.maxUsersAllowed) { pkToast('Cupo m\xE1ximo de usuarios alcanzado.'); return true; }
+      var uFull = ((document.getElementById('new-user-fullname') || {}).value || '').trim(); var uName = ((document.getElementById('new-user-username') || {}).value || '').trim();
+      if (!uFull || !uName) { pkToast('Completa nombre y usuario.'); return true; }
+      clU.internalUsers.push({ userId: 'u-' + Date.now(), username: uName, fullName: uFull, email: uName + '@empresa.co', internalRoleId: 'rol-operador', internalRoleName: 'Usuario Operativo', passwordHint: 'Usr#2026!', isClientAdmin: false });
+      if (pkIsDemoMode()) pkSaveDemoToLocalStorage(); pkRenderWorkstation(); pkToast('Usuario creado: ' + uName); return true;
+    }
+    var reqBtn = target.closest('[data-req-key]');
+    if (reqBtn) {
+      var clF = pkGetActiveClient(); var rTier = reqBtn.getAttribute('data-req-tier'); var rKey = reqBtn.getAttribute('data-req-key'); var rLbl = reqBtn.getAttribute('data-req-label');
+      if (rTier === 'SUBMODULO' && clF.activeSubmodules.indexOf(rKey) === -1) clF.activeSubmodules.push(rKey);
+      if (rTier === 'FUNCIONALIDAD' && clF.activeFeatures.indexOf(rKey) === -1) clF.activeFeatures.push(rKey);
+      STATE.featureRequests.push({ companyName: clF.companyName, tier: rTier, key: rKey, label: rLbl });
+      if (pkIsDemoMode()) pkSaveDemoToLocalStorage(); pkRenderWorkstation(); pkToast('M\xF3dulo activado: ' + rLbl); return true;
+    }
     if (typeof pkHandleDeveloperCatalogAction === 'function' && pkHandleDeveloperCatalogAction(target)) return true;
     var qRoleBtn = target.closest('[data-sa-quota-role]');
     if (qRoleBtn) {
-      var tidR = qRoleBtn.getAttribute('data-sa-tenant');
-      var deltaR = Number(qRoleBtn.getAttribute('data-sa-quota-role'));
-      for (var qr = 0; qr < STATE.clients.length; qr++) {
-        if (STATE.clients[qr].tenantId === tidR) STATE.clients[qr].maxRolesAllowed = Math.max(1, STATE.clients[qr].maxRolesAllowed + deltaR);
-      }
+      var tidR = qRoleBtn.getAttribute('data-sa-tenant'); var deltaR = Number(qRoleBtn.getAttribute('data-sa-quota-role'));
+      for (var qr = 0; qr < STATE.clients.length; qr++) if (STATE.clients[qr].tenantId === tidR) STATE.clients[qr].maxRolesAllowed = Math.max(1, STATE.clients[qr].maxRolesAllowed + deltaR);
       pkRenderSuperAdmin(); return true;
     }
     var qUserBtn = target.closest('[data-sa-quota-user]');
     if (qUserBtn) {
-      var tidU = qUserBtn.getAttribute('data-sa-tenant');
-      var deltaU = Number(qUserBtn.getAttribute('data-sa-quota-user'));
-      for (var qu = 0; qu < STATE.clients.length; qu++) {
-        if (STATE.clients[qu].tenantId === tidU) STATE.clients[qu].maxUsersAllowed = Math.max(1, STATE.clients[qu].maxUsersAllowed + deltaU);
-      }
+      var tidU = qUserBtn.getAttribute('data-sa-tenant'); var deltaU = Number(qUserBtn.getAttribute('data-sa-quota-user'));
+      for (var qu = 0; qu < STATE.clients.length; qu++) if (STATE.clients[qu].tenantId === tidU) STATE.clients[qu].maxUsersAllowed = Math.max(1, STATE.clients[qu].maxUsersAllowed + deltaU);
       pkRenderSuperAdmin(); return true;
     }
     var saOpen = target.closest('[data-sa-open]');
-    if (saOpen) {
-      STATE.activeTenantId = saOpen.getAttribute('data-sa-open');
-      STATE.session = { role: 'cliente', username: 'superadmin->cliente', tenantId: STATE.activeTenantId, internalRoleName: 'SuperAdmin Auditando BD' };
-      pkUpdateShellNavigation(); return true;
-    }
+    if (saOpen) { STATE.activeTenantId = saOpen.getAttribute('data-sa-open'); STATE.session = { role: 'cliente', username: 'admin', tenantId: STATE.activeTenantId, internalRoleName: 'Administrador General' }; pkUpdateShellNavigation(); return true; }
     var saRegen = target.closest('[data-sa-regen]');
-    if (saRegen) {
-      var tidG = saRegen.getAttribute('data-sa-regen');
-      for (var g = 0; g < STATE.clients.length; g++) {
-        if (STATE.clients[g].tenantId === tidG) STATE.clients[g].adminPasswordHint = 'PkReset#' + String(Date.now()).slice(-4) + '!';
-      }
-      pkRenderSuperAdmin(); pkToast('Credencial Admin regenerada.'); return true;
-    }
+    if (saRegen) { var tidG = saRegen.getAttribute('data-sa-regen'); for (var g = 0; g < STATE.clients.length; g++) if (STATE.clients[g].tenantId === tidG) STATE.clients[g].adminPasswordHint = 'PkReset#' + String(Date.now()).slice(-4) + '!'; pkRenderSuperAdmin(); pkToast('Nueva clave generada.'); return true; }
     return false;
   }
 `;
@@ -16962,91 +16587,126 @@ function renderSuperAdminAndShellRuntimeJs() {
 // apps/web-app/src/presentation/client-runtime/workshop-kanban-hub.runtime.ts
 function renderWorkshopKanbanHubRuntimeJs() {
   return `
-  function pkRenderKanbanHub() {
+  function pkRenderKanbanHub(subKey) {
     var db = STATE.relDb;
-    var container = document.getElementById('ws-converged-hub-container');
-    if (!container || !db) return;
+    var stage = document.getElementById('ws-module-stage');
+    if (!stage || !db) return;
+
+    if (subKey === 'mod-vehicles-assets') {
+      var vRows = '';
+      for (var v = 0; v < db.vehicles.length; v++) {
+        var ve = db.vehicles[v];
+        var oilDiff = ve.nextOilChangeKm - ve.currentKm;
+        vRows += '<tr>' +
+          '<td><span class="badge badge-blue" style="font-size:12px">\u{1F697} ' + pkEsc(ve.plate) + '</span></td>' +
+          '<td><strong>' + pkEsc(ve.brand) + '</strong> (' + pkEsc(ve.modelYear) + ')</td>' +
+          '<td><strong>' + pkEsc(ve.customerName) + '</strong></td>' +
+          '<td>Actual: <strong>' + ve.currentKm.toLocaleString('es-CO') + ' km</strong> \xB7 Pr\xF3x. Aceite: ' + ve.nextOilChangeKm.toLocaleString('es-CO') + ' km ' +
+          (oilDiff <= 500 ? '<span class="badge badge-amber">\u26A0\uFE0F Cambio Pronto</span>' : '') + '</td>' +
+          '<td>SOAT: ' + pkEsc(ve.soatExpiry) + '</td>' +
+          '<td><div class="row-actions">' +
+          '<button type="button" class="btn btn-primary btn-sm" data-open-vehicle-360="' + pkEsc(ve.id) + '">\u{1F441}\uFE0F Historial</button>' +
+          '<button type="button" class="btn btn-outline btn-sm" data-veh-delete-id="' + pkEsc(ve.id) + '">\u{1F5D1}\uFE0F</button></div></td></tr>';
+      }
+      stage.innerHTML =
+        '<div class="card"><div class="card-head"><div class="card-title">\u{1F697} Veh\xEDculos y Equipos Registrados (' + db.vehicles.length + ')</div></div>' +
+        '<div class="card-body"><div class="table-wrap"><table><thead><tr>' +
+        '<th>Placa</th><th>Marca y L\xEDnea</th><th>Propietario</th><th>Kilometraje / Aceite</th><th>Vencimiento SOAT</th><th>Acciones</th>' +
+        '</tr></thead><tbody>' + vRows + '</tbody></table></div></div></div>';
+      return;
+    }
+
+    if (subKey === 'mod-worker-commissions') {
+      var wkRows = '';
+      for (var w = 0; w < db.workers.length; w++) {
+        var wk = db.workers[w];
+        var gross = Number(wk.totalDayGross || 0);
+        var techPay = Math.round(gross * (Number(wk.commissionPct || 40) / 100));
+        wkRows += '<tr>' +
+          '<td><strong>' + pkEsc(wk.name) + '</strong><div style="font-size:11px;color:var(--pk-muted)">' + pkEsc(wk.specialty) + '</div></td>' +
+          '<td><span class="badge badge-blue">' + wk.commissionPct + '% T\xE9cnico</span></td>' +
+          '<td>' + pkCop(gross) + '</td>' +
+          '<td style="color:var(--pk-primary);font-weight:800">' + pkCop(techPay) + '</td>' +
+          '<td style="color:var(--pk-emerald);font-weight:800">' + pkCop(gross - techPay) + '</td>' +
+          '<td>' + (gross > 0
+            ? '<button type="button" class="btn btn-emerald btn-sm" data-settle-worker="' + pkEsc(wk.id) + '">\u26A1 Liquidar Turno (' + pkCop(techPay) + ')</button>'
+            : '<span class="badge badge-slate">\u2713 Al d\xEDa ($0)</span>') + '</td></tr>';
+      }
+      stage.innerHTML =
+        '<div class="card"><div class="card-head"><div class="card-title">\u{1F477} Comisiones de T\xE9cnicos en el Turno</div></div>' +
+        '<div class="card-body"><div class="form-grid" style="background:#f8fafc;padding:12px;border-radius:10px;border:1px solid var(--pk-border);margin-bottom:12px">' +
+        '<div class="field"><label>Nombre del T\xE9cnico</label><input type="text" id="wk-new-name" placeholder="Ej: Jorge Iv\xE1n R\xEDos" /></div>' +
+        '<div class="field"><label>Especialidad</label><input type="text" id="wk-new-spec" placeholder="Ej: Mec\xE1nica General / Electr\xF3nica" /></div>' +
+        '<div class="field"><label>% Comisi\xF3n para el T\xE9cnico</label><div class="row-actions"><input type="number" id="wk-new-pct" value="40" min="5" max="90" style="flex:1" />' +
+        '<button type="button" class="btn btn-primary btn-sm" id="btn-wk-add">+ Agregar T\xE9cnico</button></div></div></div>' +
+        '<div class="table-wrap"><table><thead><tr><th>T\xE9cnico</th><th>Porcentaje</th><th>Producido Hoy</th><th>Pago al T\xE9cnico</th><th>Utilidad Empresa</th><th>Acci\xF3n</th></tr></thead><tbody>' + wkRows + '</tbody></table></div></div></div>';
+      return;
+    }
 
     var stages = ['Recibido', 'En Diagn\xF3stico', 'Esperando Repuesto', 'En Reparaci\xF3n', 'Listo para Entrega'];
     var stageBadges = ['badge-slate', 'badge-blue', 'badge-amber', 'badge-blue', 'badge-emerald'];
-
     var custOpts = '';
     for (var c = 0; c < db.customers.length; c++) {
-      var cu = db.customers[c];
-      custOpts += '<option value="' + pkEsc(cu.id) + '">' + pkEsc(cu.name + ' (' + cu.docType + ' ' + cu.nit + ')') + '</option>';
+      custOpts += '<option value="' + pkEsc(db.customers[c].id) + '">' + pkEsc(db.customers[c].name) + '</option>';
     }
     var workerOpts = '';
-    for (var w = 0; w < db.workers.length; w++) {
-      var wk = db.workers[w];
-      workerOpts += '<option value="' + pkEsc(wk.id) + '">' + pkEsc(wk.name + ' \u2014 ' + wk.specialty) + '</option>';
+    for (var wkIdx = 0; wkIdx < db.workers.length; wkIdx++) {
+      workerOpts += '<option value="' + pkEsc(db.workers[wkIdx].id) + '">' + pkEsc(db.workers[wkIdx].name + ' \u2014 ' + db.workers[wkIdx].specialty) + '</option>';
     }
 
     var columnsHtml = '';
     for (var s = 0; s < stages.length; s++) {
-      var stg = stages[s];
-      var cardsHtml = '';
-      var count = 0;
+      var stg = stages[s]; var cardsHtml = ''; var count = 0;
       for (var o = 0; o < db.workOrders.length; o++) {
         var wo = db.workOrders[o];
         if (wo.status !== stg) continue;
         count++;
         var svcsSummary = '';
         for (var k = 0; k < (wo.services || []).length; k++) {
-          svcsSummary += '<div style="font-size:11px;color:var(--pk-text)">\u2022 ' + pkEsc(wo.services[k].description) + ' (<strong>' + pkCop(wo.services[k].price) + '</strong>)</div>';
+          svcsSummary += '<div style="font-size:11px">\u2022 ' + pkEsc(wo.services[k].description) + '</div>';
         }
         var nextStage = s < stages.length - 1 ? stages[s + 1] : null;
         var prevStage = s > 0 ? stages[s - 1] : null;
 
-        cardsHtml += '<div style="background:#fff;border:1px solid var(--pk-border);border-radius:10px;padding:10px;margin-bottom:8px;box-shadow:0 1px 3px rgba(15,23,42,.05)">' +
+        cardsHtml += '<div style="background:#fff;border:1px solid var(--pk-border);border-radius:10px;padding:10px;margin-bottom:8px">' +
           '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
           '<span class="badge ' + stageBadges[s] + '">\u{1F697} ' + pkEsc(wo.plate) + '</span>' +
-          '<span style="font-size:11px;font-weight:800;color:var(--pk-muted)">' + pkEsc(wo.id) + '</span></div>' +
-          '<div style="font-size:12px;font-weight:800">' + pkEsc(wo.vehicleBrand) + '</div>' +
-          '<div style="font-size:11px;color:var(--pk-muted);margin-bottom:6px">\u{1F464} FK Cliente: <strong>' + pkEsc(wo.customerName) + '</strong><br/>\u{1F468}\u200D\u{1F527} FK T\xE9cnico: <strong>' + pkEsc(wo.workerName) + '</strong><br/>\u{1F6E3}\uFE0F Km: ' + Number(wo.currentKm || 0).toLocaleString('es-CO') + ' (Pr\xF3x Aceite: ' + Number(wo.nextOilKm || 0).toLocaleString('es-CO') + ')</div>' +
-          '<div style="background:#f8fafc;padding:6px;border-radius:6px;margin-bottom:6px">' + svcsSummary + '</div>' +
-          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
-          '<span style="font-size:11px;color:var(--pk-muted)">Total Estimado:</span>' +
           '<strong style="font-size:12px;color:var(--pk-emerald)">' + pkCop(wo.totalEstimated) + '</strong></div>' +
-          '<div class="row-actions" style="justify-content:space-between">' +
+          '<div style="font-size:12px;font-weight:800">' + pkEsc(wo.vehicleBrand) + '</div>' +
+          '<div style="font-size:11px;color:var(--pk-muted);margin-bottom:6px">\u{1F464} ' + pkEsc(wo.customerName) + '<br/>\u{1F477} ' + pkEsc(wo.workerName) + '</div>' +
+          '<div style="background:#f8fafc;padding:6px;border-radius:6px;margin-bottom:6px">' + svcsSummary + '</div>' +
+          '<div class="row-actions" style="justify-content:space-between;margin-bottom:6px">' +
           (prevStage ? '<button type="button" class="btn btn-outline btn-sm" style="padding:3px 7px;font-size:10px" data-wo-move="' + pkEsc(wo.id) + '" data-wo-stage="' + pkEsc(prevStage) + '">&larr;</button>' : '<span></span>') +
-          (nextStage ? '<button type="button" class="btn btn-primary btn-sm" style="padding:3px 8px;font-size:10px" data-wo-move="' + pkEsc(wo.id) + '" data-wo-stage="' + pkEsc(nextStage) + '">Avanzar: ' + pkEsc(nextStage) + ' &rarr;</button>' : '') +
+          (nextStage ? '<button type="button" class="btn btn-primary btn-sm" style="padding:3px 8px;font-size:10px" data-wo-move="' + pkEsc(wo.id) + '" data-wo-stage="' + pkEsc(nextStage) + '">Pasar a ' + pkEsc(nextStage) + ' &rarr;</button>' : '') +
           '</div>' +
-          '<div class="row-actions" style="margin-top:6px;border-top:1px dashed var(--pk-border);padding-top:6px">' +
-          '<button type="button" class="btn btn-emerald btn-sm" style="width:100%;justify-content:center" data-pos-load-order="' + pkEsc(wo.id) + '">\u{1F6D2} Pasar a Caja POS y Facturar</button>' +
-          '<button type="button" class="btn btn-outline btn-sm" style="width:100%;justify-content:center" data-wo-whatsapp="' + pkEsc(wo.id) + '">\u{1F4AC} Avisar por WhatsApp</button>' +
+          '<div class="row-actions" style="border-top:1px dashed var(--pk-border);padding-top:6px">' +
+          '<button type="button" class="btn btn-emerald btn-sm" style="flex:1;justify-content:center" data-pos-load-order="' + pkEsc(wo.id) + '">\u{1F4B5} Facturar</button>' +
+          '<button type="button" class="btn btn-outline btn-sm" data-wo-whatsapp="' + pkEsc(wo.id) + '">\u{1F4AC}</button>' +
           '</div></div>';
       }
-      if (!cardsHtml) {
-        cardsHtml = '<div style="font-size:11px;color:var(--pk-muted);text-align:center;padding:18px 6px;border:1px dashed var(--pk-border);border-radius:8px">Sin \xF3rdenes en esta etapa</div>';
-      }
-      columnsHtml += '<div style="background:#f8fafc;border:1px solid var(--pk-border);border-radius:12px;padding:10px;min-width:215px;flex:1">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
-        '<strong style="font-size:12px">' + pkEsc(stg) + '</strong>' +
-        '<span class="badge ' + stageBadges[s] + '">' + count + '</span></div>' +
+      if (!cardsHtml) cardsHtml = '<div style="font-size:11px;color:var(--pk-muted);text-align:center;padding:16px 6px;border:1px dashed var(--pk-border);border-radius:8px">Sin \xF3rdenes</div>';
+      columnsHtml += '<div style="background:#f8fafc;border:1px solid var(--pk-border);border-radius:12px;padding:10px;min-width:205px;flex:1">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><strong style="font-size:12px">' + pkEsc(stg) + '</strong><span class="badge ' + stageBadges[s] + '">' + count + '</span></div>' +
         cardsHtml + '</div>';
     }
 
-    container.innerHTML =
-      '<div class="card"><div class="card-head"><div>' +
-      '<div class="card-title">\u{1F527} 1. Recepci\xF3n T\xE9cnica de Veh\xEDculo / Activo y Creaci\xF3n de Orden de Trabajo (FK -> customers, vehicles, workers)</div>' +
-      '<div class="card-sub">Registra o actualiza autom\xE1ticamente la placa en la tabla de veh\xEDculos, sugiere cambio de aceite (+3.000 km) y crea tarjeta en el Kanban</div></div></div>' +
+    stage.innerHTML =
+      '<div class="card"><div class="card-head"><div class="card-title">\u2795 Recibir Veh\xEDculo / Crear Orden de Trabajo</div>' +
+      '<button type="button" class="btn btn-outline btn-sm" data-open-new-customer-modal="1">+ Nuevo Cliente</button></div>' +
       '<div class="card-body"><div class="form-grid">' +
-      '<div class="field"><label>Propietario / Cliente (FK -> customers)</label><select id="wo-customer-id">' + custOpts + '</select></div>' +
-      '<div class="field"><label>Placa / Serial del Activo</label><input type="text" id="wo-plate" placeholder="Ej: KLM-901" style="text-transform:uppercase;font-weight:800" /></div>' +
-      '<div class="field"><label>Marca / L\xEDnea / Modelo</label><input type="text" id="wo-brand" placeholder="Ej: Mazda CX-30 Grand Touring 2024" /></div>' +
+      '<div class="field"><label>Cliente Propietario</label><select id="wo-customer-id">' + custOpts + '</select></div>' +
+      '<div class="field"><label>Placa / Serial *</label><input type="text" id="wo-plate" placeholder="Ej: KLM-901" style="text-transform:uppercase;font-weight:800" /></div>' +
+      '<div class="field"><label>Veh\xEDculo / Marca y L\xEDnea</label><input type="text" id="wo-brand" placeholder="Ej: Mazda CX-30 / Yamaha NMAX" /></div>' +
       '<div class="field"><label>Kilometraje Actual</label><div class="row-actions"><input type="number" id="wo-current-km" value="45000" style="flex:1" />' +
-      '<button type="button" class="btn btn-outline btn-sm" id="btn-wo-suggest-oil">\u{1F6E2}\uFE0F +3.000 km</button></div></div>' +
-      '<div class="field"><label>Pr\xF3x. Cambio Aceite (Km)</label><input type="number" id="wo-next-oil-km" value="48000" /></div>' +
-      '<div class="field"><label>Vencimiento SOAT / Tecno</label><input type="date" id="wo-soat-date" value="2026-12-31" /></div>' +
-      '<div class="field"><label>T\xE9cnico / Mec\xE1nico Asignado (FK -> workers)</label><select id="wo-worker-id">' + workerOpts + '</select></div>' +
-      '<div class="field"><label>Trabajo / Diagn\xF3stico Solicitado</label><input type="text" id="wo-service-desc" placeholder="Ej: Cambio kit embrague + revisi\xF3n frenos" /></div>' +
-      '<div class="field"><label>Valor Mano de Obra Estimado (COP)</label><input type="number" id="wo-service-price" value="120000" /></div>' +
-      '</div><div style="margin-top:10px;display:flex;justify-content:flex-end">' +
-      '<button type="button" class="btn btn-primary" id="btn-wo-create-order">+ Ingresar Veh\xEDculo/Activo al Tablero Kanban</button></div></div></div>' +
+      '<button type="button" class="btn btn-outline btn-sm" id="btn-wo-suggest-oil">+3.000 km</button></div></div>' +
+      '<div class="field"><label>Pr\xF3ximo Cambio Aceite (Km)</label><input type="number" id="wo-next-oil-km" value="48000" /></div>' +
+      '<div class="field"><label>T\xE9cnico Asignado</label><select id="wo-worker-id">' + workerOpts + '</select></div>' +
+      '<div class="field" style="grid-column:span 2"><label>Trabajo o Servicio a Realizar *</label><input type="text" id="wo-service-desc" placeholder="Ej: Cambio de aceite y revisi\xF3n de frenos" /></div>' +
+      '<div class="field"><label>Valor Mano de Obra ($)</label><div class="row-actions"><input type="number" id="wo-service-price" value="85000" style="flex:1" />' +
+      '<button type="button" class="btn btn-primary btn-sm" id="btn-wo-create-order">+ Ingresar Orden</button></div></div>' +
+      '</div></div></div>' +
 
-      '<div class="card"><div class="card-head"><div>' +
-      '<div class="card-title">\u{1F4CB} 2. Tablero Kanban de Taller y Operaciones en Vivo (5 Etapas Interactivas)</div>' +
-      '<div class="card-sub">Mueve \xF3rdenes entre etapas, notifica al cliente por WhatsApp o env\xEDa la orden con un clic a Caja POS para facturarla</div></div></div>' +
+      '<div class="card"><div class="card-head"><div class="card-title">\u{1F4CB} Tablero de \xD3rdenes en Vivo</div></div>' +
       '<div class="card-body"><div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:6px">' + columnsHtml + '</div></div></div>';
   }
 `;
@@ -17076,16 +16736,6 @@ ${renderSuperAdminAndShellRuntimeJs()}
     STATE.publicTab = 'auth'; STATE.authMode = 'register'; pkUpdateShellNavigation();
   }
 
-  function pkMapServiceToConvergedHub(svcKey) {
-    if (svcKey === 'srv-invoicing') return 'pos';
-    if (svcKey === 'srv-workshop' || svcKey === 'srv-appointments') return 'kanban';
-    if (svcKey === 'srv-inventory' || svcKey === 'srv-procurement') return 'inventory';
-    if (svcKey === 'srv-crm' || svcKey === 'srv-treasury') return 'look360';
-    if (svcKey === 'srv-reports' || svcKey === 'srv-finance' || svcKey === 'srv-hr-payroll') return 'reports';
-    if (svcKey === 'srv-gastro') return 'gastro';
-    return 'submodules';
-  }
-
   document.addEventListener('click', function(ev) {
     var target = ev.target;
     if (!target || !target.closest) return;
@@ -17099,117 +16749,127 @@ ${renderSuperAdminAndShellRuntimeJs()}
     if (target.closest('#btn-auth-mode-login')) { STATE.authMode = 'login'; pkUpdateShellNavigation(); return; }
     if (target.closest('#btn-logout-session')) { STATE.session = null; STATE.publicTab = 'showcase'; pkUpdateShellNavigation(); pkToast('Sesi\xF3n cerrada.'); return; }
 
-    var shPreset = target.closest('[data-showcase-preset]');
-    if (shPreset) { pkGoRegister(shPreset.getAttribute('data-showcase-preset')); return; }
-
+    var shPreset = target.closest('[data-showcase-preset]'); if (shPreset) { pkGoRegister(shPreset.getAttribute('data-showcase-preset')); return; }
     var bTypeBtn = target.closest('[data-select-btype]');
-    if (bTypeBtn) {
-      STATE.selectedBusinessTypeId = bTypeBtn.getAttribute('data-select-btype');
-      STATE.extraServiceKeys = {}; STATE.extraSubmoduleKeys = {}; pkRenderRegistrationWizard(); return;
-    }
+    if (bTypeBtn) { STATE.selectedBusinessTypeId = bTypeBtn.getAttribute('data-select-btype'); STATE.extraServiceKeys = {}; STATE.extraSubmoduleKeys = {}; pkRenderRegistrationWizard(); return; }
 
     if (target.closest('#btn-submit-login')) {
       var uVal = ((document.getElementById('login-username') || {}).value || '').trim().toLowerCase();
       if (!uVal) { pkToast('Ingresa tu usuario o correo.'); return; }
-      if (uVal.indexOf('superadmin') !== -1) { STATE.session = { role: 'superadmin', username: uVal }; }
-      else if (uVal.indexOf('dev') !== -1 || uVal.indexOf('desarrollador') !== -1) { STATE.session = { role: 'desarrollador', username: uVal }; }
-      else if (uVal.indexOf('aux') !== -1) { STATE.session = { role: 'auxiliar', username: uVal }; }
+      if (uVal.indexOf('superadmin') !== -1) STATE.session = { role: 'superadmin', username: uVal };
+      else if (uVal.indexOf('dev') !== -1 || uVal.indexOf('desarrollador') !== -1) STATE.session = { role: 'desarrollador', username: uVal };
+      else if (uVal.indexOf('aux') !== -1) STATE.session = { role: 'auxiliar', username: uVal };
       else {
         var matchedClient = STATE.clients[STATE.clients.length - 1] || STATE.clients[0];
         for (var i = 0; i < STATE.clients.length; i++) if (STATE.clients[i].adminUsername.toLowerCase() === uVal) matchedClient = STATE.clients[i];
-        if (!matchedClient) { pkToast('No hay un cliente registrado con ese usuario. Registra primero tu empresa.'); return; }
+        if (!matchedClient) { pkToast('No hay una empresa registrada con ese usuario.'); return; }
         STATE.activeTenantId = matchedClient.tenantId;
         STATE.session = { role: 'cliente', username: uVal, tenantId: matchedClient.tenantId, internalRoleName: 'Administrador General' };
       }
-      pkUpdateShellNavigation(); pkToast('Bienvenido a Proveko (' + STATE.session.role + ').'); return;
+      pkUpdateShellNavigation(); pkToast('Bienvenido a Proveko.'); return;
     }
 
     if (target.closest('#btn-open-standby-checkout') || target.closest('#btn-sa-new-client') || target.closest('#btn-sa-empty-new-client')) {
       var cName = ((document.getElementById('reg-company-name') || {}).value || '').trim() || 'Nueva Empresa Cliente S.A.S.';
       var plan = pkComputeRegistrationPlan();
-      document.getElementById('pay-modal-company').value = cName;
-      document.getElementById('pay-modal-amount').value = pkCop(plan.totalUsd) + '/mes';
-      document.getElementById('payment-step-checkout').style.display = 'block';
-      document.getElementById('payment-step-credentials').style.display = 'none';
-      document.getElementById('standby-payment-modal').classList.add('open');
-      return;
+      document.getElementById('pay-modal-company').value = cName; document.getElementById('pay-modal-amount').value = pkCop(plan.totalUsd) + '/mes';
+      document.getElementById('payment-step-checkout').style.display = 'block'; document.getElementById('payment-step-credentials').style.display = 'none';
+      document.getElementById('standby-payment-modal').classList.add('open'); return;
     }
     if (target.closest('#btn-close-payment-modal')) { document.getElementById('standby-payment-modal').classList.remove('open'); return; }
     if (target.closest('#btn-confirm-standby-payment')) { pkConfirmStandbyCheckout(); return; }
     if (target.closest('#btn-enter-with-generated-creds') && STATE.lastGeneratedClient) {
-      var gc = STATE.lastGeneratedClient;
-      document.getElementById('standby-payment-modal').classList.remove('open');
-      STATE.activeTenantId = gc.tenantId;
-      STATE.session = { role: 'cliente', username: gc.adminUsername, tenantId: gc.tenantId, internalRoleName: 'Administrador General (Cuenta Admin)' };
+      var gc = STATE.lastGeneratedClient; document.getElementById('standby-payment-modal').classList.remove('open');
+      STATE.activeTenantId = gc.tenantId; STATE.session = { role: 'cliente', username: gc.adminUsername, tenantId: gc.tenantId, internalRoleName: 'Administrador General' };
       pkUpdateShellNavigation(); return;
     }
 
-    var lookTab = target.closest('[data-look360-tab]');
-    if (lookTab) { STATE.look360Tab = lookTab.getAttribute('data-look360-tab'); pkRenderWorkstation(); return; }
     if (pkHandleRelationalHubClick(target)) return;
 
-    var wsSvc = target.closest('[data-ws-service]');
-    if (wsSvc) {
-      var sKey = wsSvc.getAttribute('data-ws-service');
-      STATE.activeWorkstationPane = 'module'; STATE.activeServiceKey = sKey; STATE.activeSubmoduleKey = '';
-      STATE.activeConvergedHub = pkMapServiceToConvergedHub(sKey); pkRenderWorkstation(); return;
+    var db = STATE.relDb;
+    if (db) {
+      var settleBtn = target.closest('[data-settle-worker]');
+      if (settleBtn) {
+        var wkS = pkFindById(db.workers, settleBtn.getAttribute('data-settle-worker'));
+        if (wkS && wkS.totalDayGross > 0) {
+          var g = Number(wkS.totalDayGross); var pay = Math.round(g * (wkS.commissionPct / 100));
+          db.settlements.unshift({ id: 'LIQ-' + String(Date.now()).slice(-4), date: new Date().toISOString().slice(0, 16).replace('T', ' '), workerId: wkS.id, workerName: wkS.name, grossLabor: g, commissionPct: wkS.commissionPct, technicianPayout: pay, companyRetention: g - pay });
+          wkS.totalDayGross = 0; pkPersistRelationalTx('SETTLE_WORKER', { workerId: wkS.id, payout: pay }); pkRenderWorkstation(); pkToast('Liquidado ' + wkS.name + ' por ' + pkCop(pay));
+        }
+        return;
+      }
+      if (target.closest('#btn-wk-add')) {
+        var wName = ((document.getElementById('wk-new-name') || {}).value || '').trim(); if (!wName) { pkToast('Ingresa el nombre del t\xE9cnico.'); return; }
+        db.workers.push({ id: 'wk-' + Date.now(), name: wName, docNumber: '1020' + String(Date.now()).slice(-5), specialty: ((document.getElementById('wk-new-spec') || {}).value || 'T\xE9cnico').trim(), commissionPct: Number((document.getElementById('wk-new-pct') || {}).value || 40), phone: '3000000000', totalDayGross: 0 });
+        pkRenderWorkstation(); pkToast('T\xE9cnico agregado: ' + wName); return;
+      }
+      if (target.closest('#btn-exp-add')) {
+        var eDesc = ((document.getElementById('exp-new-desc') || {}).value || '').trim(); if (!eDesc) { pkToast('Ingresa el concepto del gasto.'); return; }
+        var eAmt = Math.max(1000, Number((document.getElementById('exp-new-amount') || {}).value || 25000));
+        db.expenses.unshift({ id: 'EGR-' + String(Date.now()).slice(-4), date: new Date().toISOString().slice(0, 16).replace('T', ' '), category: (document.getElementById('exp-new-cat') || {}).value || 'Gastos Operativos', description: eDesc, amount: eAmt, paymentSource: (document.getElementById('exp-new-source') || {}).value || 'Efectivo Caja', responsible: 'Caja' });
+        pkPersistRelationalTx('ADD_EXPENSE', { description: eDesc, amount: eAmt }); pkRenderWorkstation(); pkToast('Gasto registrado por ' + pkCop(eAmt)); return;
+      }
+      if (target.closest('#btn-cnt-add')) {
+        var cCode = ((document.getElementById('cnt-new-code') || {}).value || ('CNV-' + String(Date.now()).slice(-3))).trim();
+        var cEnt = ((document.getElementById('cnt-new-entity') || {}).value || 'Empresa Convenio').trim();
+        var cCeil = Math.max(100000, Number((document.getElementById('cnt-new-ceiling') || {}).value || 15000000));
+        db.contracts.unshift({ id: 'cnt-' + Date.now(), code: cCode, entityName: cEnt, tariffName: (document.getElementById('cnt-new-tariff') || {}).value || 'Tarifa Preferencial (-15%)', budgetCeiling: cCeil, consumedAmount: 0, availableBalance: cCeil, status: 'Activo' });
+        pkRenderWorkstation(); pkToast('Convenio creado: ' + cCode); return;
+      }
+      if (target.closest('#btn-sup-add')) {
+        var sName = ((document.getElementById('sup-new-name') || {}).value || '').trim(); if (!sName) { pkToast('Escribe la raz\xF3n social del proveedor.'); return; }
+        db.suppliers.unshift({ id: 'sup-' + Date.now(), nit: ((document.getElementById('sup-new-nit') || {}).value || '900123456-1').trim(), name: sName, city: ((document.getElementById('sup-new-city') || {}).value || 'Bogot\xE1').trim(), phone: ((document.getElementById('sup-new-phone') || {}).value || '3100000000').trim() });
+        pkRenderWorkstation(); pkToast('Proveedor guardado: ' + sName); return;
+      }
+      var delCust = target.closest('[data-cust-delete-id]'); if (delCust) { var cid = delCust.getAttribute('data-cust-delete-id'); for (var dc = 0; dc < db.customers.length; dc++) if (db.customers[dc].id === cid) { db.customers.splice(dc, 1); break; } pkRenderWorkstation(); return; }
+      var delVeh = target.closest('[data-veh-delete-id]'); if (delVeh) { var vid = delVeh.getAttribute('data-veh-delete-id'); for (var dv = 0; dv < db.vehicles.length; dv++) if (db.vehicles[dv].id === vid) { db.vehicles.splice(dv, 1); break; } pkRenderWorkstation(); return; }
+      var delExp = target.closest('[data-exp-delete-id]'); if (delExp) { var eid = delExp.getAttribute('data-exp-delete-id'); for (var de = 0; de < db.expenses.length; de++) if (db.expenses[de].id === eid) { db.expenses.splice(de, 1); break; } pkRenderWorkstation(); return; }
+      var delSup = target.closest('[data-sup-delete-id]'); if (delSup) { var sid = delSup.getAttribute('data-sup-delete-id'); for (var ds = 0; ds < db.suppliers.length; ds++) if (db.suppliers[ds].id === sid) { db.suppliers.splice(ds, 1); break; } pkRenderWorkstation(); return; }
+      var csvBtn = target.closest('[data-export-csv]');
+      if (csvBtn) {
+        var kind = csvBtn.getAttribute('data-export-csv');
+        if (kind === 'invoices') { var rInv = []; for (var i1 = 0; i1 < db.invoices.length; i1++) rInv.push([db.invoices[i1].id, db.invoices[i1].date, db.invoices[i1].customerName, db.invoices[i1].total, db.invoices[i1].amountPaid, db.invoices[i1].pendingBalance, db.invoices[i1].status]); pkDownloadCsvUtf8('facturas_y_cartera.csv', ['Factura', 'Fecha', 'Cliente', 'Total', 'Pagado', 'Saldo', 'Estado'], rInv); }
+        else if (kind === 'inventory') { var rPrd = []; for (var i2 = 0; i2 < db.products.length; i2++) rPrd.push([db.products[i2].code, db.products[i2].name, db.products[i2].category, db.products[i2].costPrice, db.products[i2].salePrice, db.products[i2].stock]); pkDownloadCsvUtf8('inventario_productos.csv', ['Codigo', 'Producto', 'Categoria', 'Costo', 'Precio_Venta', 'Existencia'], rPrd); }
+        else if (kind === 'expenses') { var rExp = []; for (var i3 = 0; i3 < db.expenses.length; i3++) rExp.push([db.expenses[i3].id, db.expenses[i3].date, db.expenses[i3].category, db.expenses[i3].description, db.expenses[i3].paymentSource, db.expenses[i3].amount]); pkDownloadCsvUtf8('gastos_caja.csv', ['ID', 'Fecha', 'Categoria', 'Concepto', 'Medio', 'Valor'], rExp); }
+        pkToast('Archivo Excel CSV descargado.'); return;
+      }
     }
+
+    var stdDel = target.closest('[data-std-del-idx]');
+    if (stdDel) { var listStd = STATE.submoduleRows[STATE.activeSubmoduleKey]; if (listStd) { listStd.splice(Number(stdDel.getAttribute('data-std-del-idx')), 1); pkRenderWorkstation(); pkToast('Registro eliminado.'); } return; }
+
+    var wsSvc = target.closest('[data-ws-service]');
+    if (wsSvc) { STATE.activeWorkstationPane = 'module'; STATE.activeServiceKey = wsSvc.getAttribute('data-ws-service'); STATE.activeSubmoduleKey = ''; pkRenderWorkstation(); return; }
     var wsSub = target.closest('[data-ws-submodule]');
-    if (wsSub) { STATE.activeSubmoduleKey = wsSub.getAttribute('data-ws-submodule'); STATE.activeConvergedHub = 'submodules'; pkRenderWorkstation(); return; }
+    if (wsSub) { STATE.activeSubmoduleKey = wsSub.getAttribute('data-ws-submodule'); pkRenderWorkstation(); return; }
     if (target.closest('#btn-nav-internal-rbac')) { STATE.activeWorkstationPane = 'rbac'; pkRenderWorkstation(); return; }
     if (target.closest('#btn-nav-need-feature')) { STATE.activeWorkstationPane = 'need-feature'; pkRenderWorkstation(); return; }
-    if (target.closest('#btn-ws-clear-filter')) { STATE.v2FilterText = ''; var fIn = document.getElementById('ws-v2-filter-input'); if (fIn) fIn.value = ''; pkRenderWorkstation(); return; }
 
     if (target.closest('#btn-ws-save-record')) {
-      var inputs = document.querySelectorAll('[data-ws-field]');
-      var recId = 'REG-' + String(Date.now()).slice(-4);
+      var inputs = document.querySelectorAll('[data-ws-field]'); var recId = 'REG-' + String(Date.now()).slice(-4);
       var row = [recId]; for (var f = 0; f < inputs.length; f++) row.push(inputs[f].value || 'Registrado');
       if (!STATE.submoduleRows[STATE.activeSubmoduleKey]) STATE.submoduleRows[STATE.activeSubmoduleKey] = [];
       STATE.submoduleRows[STATE.activeSubmoduleKey].unshift(row);
-      if (pkIsDemoMode()) {
-        pkSaveDemoToLocalStorage(); pkRenderWorkstation(); pkToast('Registro guardado en localStorage (Modo Demo).');
-      } else {
-        var clRec = pkGetActiveClient();
-        fetch('/api/v1/control/client-db/record', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dbName: clRec.dbName, submoduleKey: STATE.activeSubmoduleKey, recordId: recId, cells: row }) }).catch(function() {});
-        pkRenderWorkstation(); pkToast('Registro persistido en BD PostgreSQL: ' + clRec.dbName);
-      }
-      return;
+      if (pkIsDemoMode()) pkSaveDemoToLocalStorage();
+      else { var clRec = pkGetActiveClient(); fetch('/api/v1/control/client-db/record', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dbName: clRec.dbName, submoduleKey: STATE.activeSubmoduleKey, recordId: recId, cells: row }) }).catch(function() {}); }
+      pkRenderWorkstation(); pkToast('Registro guardado correctamente.'); return;
     }
 
-    if (target.closest('#btn-create-internal-role')) {
-      var clR = pkGetActiveClient();
-      if (clR.internalRoles.length >= clR.maxRolesAllowed) { pkToast('Has alcanzado el l\xEDmite m\xE1ximo de roles (' + clR.maxRolesAllowed + ').'); return; }
-      var rName = ((document.getElementById('new-role-name') || {}).value || '').trim();
-      var rDesc = ((document.getElementById('new-role-desc') || {}).value || '').trim() || 'Rol personalizado';
-      if (!rName) { pkToast('Ingresa el nombre del rol.'); return; }
-      clR.internalRoles.push({ roleId: 'rol-' + Date.now(), name: rName, description: rDesc, allowedSubmodules: clR.activeSubmodules.slice(0, 3) });
-      if (pkIsDemoMode()) pkSaveDemoToLocalStorage(); pkRenderWorkstation(); pkToast('Rol interno creado en ' + clR.dbName); return;
-    }
-
-    if (target.closest('#btn-create-internal-user')) {
-      var clU = pkGetActiveClient();
-      if (clU.internalUsers.length >= clU.maxUsersAllowed) { pkToast('Has alcanzado el l\xEDmite m\xE1ximo de usuarios (' + clU.maxUsersAllowed + ').'); return; }
-      var uFull = ((document.getElementById('new-user-fullname') || {}).value || '').trim();
-      var uName = ((document.getElementById('new-user-username') || {}).value || '').trim();
-      if (!uFull || !uName) { pkToast('Completa nombre y usuario.'); return; }
-      clU.internalUsers.push({ userId: 'u-' + Date.now(), username: uName, fullName: uFull, email: uName + '@empresa.co', internalRoleId: 'rol-operador', internalRoleName: 'Rol Asignado', passwordHint: 'Usr#2026!', isClientAdmin: false });
-      if (pkIsDemoMode()) pkSaveDemoToLocalStorage(); pkRenderWorkstation(); pkToast('Usuario creado en ' + clU.dbName); return;
-    }
-
-    var reqBtn = target.closest('[data-req-key]');
-    if (reqBtn) {
-      var clF = pkGetActiveClient();
-      var rTier = reqBtn.getAttribute('data-req-tier'); var rKey = reqBtn.getAttribute('data-req-key'); var rLbl = reqBtn.getAttribute('data-req-label');
-      if (rTier === 'SUBMODULO' && clF.activeSubmodules.indexOf(rKey) === -1) clF.activeSubmodules.push(rKey);
-      if (rTier === 'FUNCIONALIDAD' && clF.activeFeatures.indexOf(rKey) === -1) clF.activeFeatures.push(rKey);
-      STATE.featureRequests.push({ companyName: clF.companyName, tier: rTier, key: rKey, label: rLbl });
-      if (pkIsDemoMode()) pkSaveDemoToLocalStorage(); pkRenderWorkstation(); pkToast('Activado: ' + rLbl); return;
-    }
     if (pkHandleSuperAdminAction(target)) return;
   });
 
   document.addEventListener('change', function(ev) {
     var t = ev.target; if (!t) return;
+    if (t.id === 'ws-role-view-selector') {
+      STATE.roleViewFilter = t.value;
+      if (t.value === 'MESERO') { STATE.activeServiceKey = 'srv-gastro'; STATE.activeSubmoduleKey = 'mod-tables'; }
+      else if (t.value === 'COCINA') { STATE.activeServiceKey = 'srv-gastro'; STATE.activeSubmoduleKey = 'mod-kds'; }
+      else if (t.value === 'CAJERO') { STATE.activeServiceKey = 'srv-invoicing'; STATE.activeSubmoduleKey = 'mod-pos'; }
+      else if (t.value === 'BODEGA') { STATE.activeServiceKey = 'srv-inventory'; STATE.activeSubmoduleKey = 'mod-stock'; }
+      else if (t.value === 'TECNICO') { STATE.activeServiceKey = 'srv-workshop'; STATE.activeSubmoduleKey = 'mod-work-orders-kanban'; }
+      else if (t.value === 'RECEPCION') { STATE.activeServiceKey = 'srv-hospitality'; STATE.activeSubmoduleKey = 'mod-rooms'; }
+      pkRenderWorkstation(); return;
+    }
     if (t.id === 'pos-select-customer') { STATE.posCustomerId = t.value; STATE.posVehicleId = ''; pkRenderWorkstation(); return; }
     if (t.id === 'pos-select-vehicle') { STATE.posVehicleId = t.value; pkRenderWorkstation(); return; }
     if (t.id === 'pos-payment-method') { STATE.posPaymentMethod = t.value; pkRenderWorkstation(); return; }
@@ -17224,7 +16884,7 @@ ${renderSuperAdminAndShellRuntimeJs()}
     if (t.id === 'inv-search-input') { STATE.invSearchText = t.value || ''; pkRenderWorkstation(); return; }
     if (t.id === 'look360-search-input') { STATE.look360Search = t.value || ''; pkRenderWorkstation(); return; }
     if (t.id === 'pos-cash-received') {
-      if (STATE.posPaymentMethod === 'Cr\xE9dito / Cartera CxC') STATE.posCreditInitialAbono = Number(t.value || 0);
+      if (STATE.posPaymentMethod.indexOf('Cr\xE9dito') !== -1) STATE.posCreditInitialAbono = Number(t.value || 0);
       else STATE.posCashReceived = Number(t.value || 0);
     }
   });
@@ -17236,108 +16896,98 @@ ${renderSuperAdminAndShellRuntimeJs()}
 // apps/web-app/src/presentation/components/landing-layer.component.ts
 function renderLandingLayerHtml() {
   return `
-  <!-- APARTADO 1: P\xC1GINA DE MUESTRA DE LA PLATAFORMA -->
+  <!-- APARTADO 1: PORTADA COMERCIAL -->
   <section class="surface active" id="surface-showcase">
     <div class="hero-banner">
       <div>
-        <span class="hero-badge">PLATAFORMA EMPRESARIAL CON BASE DE DATOS AISLADA POR CLIENTE</span>
-        <h1 class="hero-title">Un solo sistema integrado para facturar, controlar bodegas, traslados, b\xE1scula, comandas y cupos.</h1>
+        <span class="hero-badge">SISTEMA DE VENTAS, INVENTARIO Y CONTROL DE NEGOCIOS</span>
+        <h1 class="hero-title">Administra tu negocio de forma f\xE1cil: Facturaci\xF3n, Inventario, Comandas, Taller y Caja en un solo lugar.</h1>
         <p class="hero-sub">
-          En <strong>Proveko</strong> cada empresa opera sobre su propia base de datos PostgreSQL independiente.
-          Elige tu tipo de negocio con todos los m\xF3dulos b\xE1sicos incluidos y agrega subm\xF3dulos adicionales solo cuando los necesites.
+          Selecciona el tipo de negocio que tienes y empieza a vender y controlar tus cuentas hoy mismo.
         </p>
         <div class="row-actions" style="margin-top:16px">
-          <button type="button" class="btn btn-primary" id="btn-hero-go-register">\u{1F680} Registra tu Negocio</button>
-          <button type="button" class="btn btn-hero-outline" id="btn-hero-go-demo">\u{1F9EA} Probar Demo Interactiva</button>
+          <button type="button" class="btn btn-primary" id="btn-hero-go-register">\u{1F680} Crear Cuenta para mi Negocio</button>
+          <button type="button" class="btn btn-hero-outline" id="btn-hero-go-demo">\u{1F5A5}\uFE0F Ver Demostraci\xF3n en Vivo</button>
           <button type="button" class="btn btn-hero-outline" id="btn-hero-go-login">\u{1F510} Iniciar Sesi\xF3n</button>
         </div>
       </div>
       <div class="quote-card">
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:#93c5fd;font-weight:700">Arquitectura Empresarial</div>
-        <div style="font-size:18px;font-weight:800;margin:8px 0">M\xF3dulos Principales + Subm\xF3dulos + Funcionalidades</div>
-        <div style="font-size:12px;color:#cbd5e1;line-height:1.5;margin-bottom:14px">
-          \u2022 <strong>Base de Datos Propia:</strong> Aislamiento real por cliente.<br/>
-          \u2022 <strong>Planes por Giro de Negocio:</strong> Todo lo b\xE1sico incluido desde el primer d\xEDa.<br/>
-          \u2022 <strong>Roles y Usuarios Internos:</strong> Cuenta Admin generada al instante.
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:#fde68a;font-weight:800">Listo para usar</div>
+        <div style="font-size:18px;font-weight:800;margin:6px 0">Todo lo que tu empresa necesita</div>
+        <div style="font-size:12px;color:#cbd5e1;line-height:1.6;margin-bottom:12px">
+          \u2022 Punto de Venta, Cotizaciones y Facturaci\xF3n.<br/>
+          \u2022 Control de Inventario, Bodegas y Proveedores.<br/>
+          \u2022 Mesas, Comandas, Taller, Clientes y Cuadre de Caja.
         </div>
         <button type="button" class="btn btn-emerald" style="width:100%" id="btn-card-go-register">
-          Comenzar Registro de mi Negocio &rarr;
+          Empezar Ahora &rarr;
         </button>
       </div>
     </div>
 
-    <div class="card" style="margin-bottom:16px">
+    <div class="card" style="margin-bottom:14px">
       <div class="card-head">
-        <div>
-          <div class="card-title">M\xF3dulos Principales y Subm\xF3dulos de la Plataforma</div>
-          <div style="font-size:12px;color:var(--pk-muted)">Cada M\xF3dulo Principal integra sus propios Subm\xF3dulos por pesta\xF1as y Funcionalidades especializadas</div>
-        </div>
-        <button type="button" class="btn btn-primary btn-sm" id="btn-showcase-mid-register">Registra tu Negocio</button>
-      </div>
-      <div class="card-body">
-        <div class="center-selector-grid" id="showcase-services-grid"></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-head">
-        <div>
-          <div class="card-title">Planes Base por Tipo de Negocio</div>
-          <div style="font-size:12px;color:var(--pk-muted)">Al seleccionar tu tipo de negocio ya vienen activados todos los m\xF3dulos b\xE1sicos para operar completo</div>
-        </div>
+        <div class="card-title">Planes seg\xFAn tu Tipo de Negocio</div>
+        <button type="button" class="btn btn-primary btn-sm" id="btn-showcase-mid-register">Elegir Plan</button>
       </div>
       <div class="card-body">
         <div class="center-selector-grid" id="showcase-presets-grid"></div>
       </div>
     </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">M\xF3dulos Disponibles</div>
+      </div>
+      <div class="card-body">
+        <div class="center-selector-grid" id="showcase-services-grid"></div>
+      </div>
+    </div>
   </section>
 
-  <!-- MODAL DE VENTANA DE PAGOS (MICROSERVICIO MS-PAYMENTS EN STANDBY) + ENTREGA DE CUENTA ADMIN -->
+  <!-- VENTANA DE ACTIVACI\xD3N DE CUENTA -->
   <div class="modal-backdrop" id="standby-payment-modal">
     <div class="modal-box">
       <div class="modal-head">
         <div>
-          <span class="badge badge-amber">MICROSERVICIO DE PAGOS (MS-PAYMENTS) \xB7 MODO STANDBY</span>
-          <h3 style="margin:6px 0 0;font-size:17px">Confirmaci\xF3n de Suscripci\xF3n y Creaci\xF3n de Base de Datos</h3>
+          <span class="badge badge-emerald">ACTIVACI\xD3N INMEDIATA</span>
+          <h3 style="margin:6px 0 0;font-size:17px">Confirmar Suscripci\xF3n y Activar Cuenta</h3>
         </div>
         <button type="button" class="btn btn-hero-outline btn-sm" id="btn-close-payment-modal">\u2715</button>
       </div>
       <div class="modal-body" id="payment-step-checkout">
-        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px;margin-bottom:14px;font-size:12px;color:#92400e">
-          <strong>Pasarela en Standby:</strong> El microservicio de cobro procesar\xE1 tu registro en modo pre-autorizado para crear de inmediato tu Base de Datos aislada en PostgreSQL y generar tu cuenta <strong>admin</strong>.
-        </div>
         <div class="grid-2" style="margin-bottom:12px">
           <div class="field">
-            <label>Empresa a Registrar</label>
+            <label>Nombre del Negocio</label>
             <input type="text" id="pay-modal-company" readonly />
           </div>
           <div class="field">
-            <label>Total Mensual (Plan Base + Adicionales)</label>
+            <label>Valor Mensual</label>
             <input type="text" id="pay-modal-amount" readonly />
           </div>
         </div>
         <div class="field" style="margin-bottom:14px">
-          <label>M\xE9todo de Pago (Pasarela Standby)</label>
+          <label>Medio de Pago</label>
           <select id="pay-modal-method">
-            <option value="PSE_EMPRESARIAL">Transferencia PSE Empresarial (Standby)</option>
-            <option value="TARJETA_CORPORATIVA">Tarjeta de Cr\xE9dito Corporativa (Standby)</option>
-            <option value="FACTURACION_CONTRATO">Orden de Compra Corporativa (Standby)</option>
+            <option value="PSE_EMPRESARIAL">PSE / Transferencia Bancaria</option>
+            <option value="TARJETA_CORPORATIVA">Tarjeta D\xE9bito o Cr\xE9dito</option>
+            <option value="FACTURACION_CONTRATO">Facturaci\xF3n Empresarial</option>
           </select>
         </div>
         <button type="button" class="btn btn-emerald" style="width:100%;padding:12px" id="btn-confirm-standby-payment">
-          \u2705 Confirmar Pago en Standby, Crear Base de Datos y Generar Cuenta Admin
+          \u2705 Activar mi Cuenta y Entrar al Sistema
         </button>
       </div>
 
       <div class="modal-body" id="payment-step-credentials" style="display:none">
-        <div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:10px;padding:14px;margin-bottom:14px">
-          <div style="font-weight:800;color:#065f46;font-size:15px;margin-bottom:4px">\u{1F389} \xA1Negocio Registrado y Base de Datos Creada en PostgreSQL!</div>
-          <div style="font-size:12px;color:#047857">Guarda las credenciales de tu cuenta <strong>admin</strong> generada autom\xE1ticamente:</div>
+        <div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:10px;padding:12px;margin-bottom:12px">
+          <div style="font-weight:800;color:#065f46;font-size:15px">\u{1F389} \xA1Tu cuenta est\xE1 lista!</div>
+          <div style="font-size:12px;color:#047857">Datos de acceso de administrador:</div>
         </div>
         <div class="cred-box" id="generated-credentials-box"></div>
-        <div class="row-actions" style="margin-top:16px;justify-content:flex-end">
+        <div class="row-actions" style="margin-top:14px;justify-content:flex-end">
           <button type="button" class="btn btn-primary" id="btn-enter-with-generated-creds">
-            \u{1F680} Entrar Ahora a la Plataforma de mi Empresa
+            \u{1F680} Entrar a mi Sistema
           </button>
         </div>
       </div>
@@ -17348,107 +16998,83 @@ function renderLandingLayerHtml() {
 // apps/web-app/src/presentation/components/login-and-superadmin.component.ts
 function renderLoginAndSuperAdminHtml() {
   return `
-  <!-- APARTADO 2: INICIAR SESI\xD3N O REGISTRA TU NEGOCIO -->
+  <!-- APARTADO 2: INICIAR SESI\xD3N O CREAR CUENTA -->
   <section class="surface" id="surface-auth">
-    <div style="display:flex;justify-content:center;gap:10px;margin-bottom:18px">
+    <div style="display:flex;justify-content:center;gap:10px;margin-bottom:16px">
       <button type="button" class="btn btn-primary" id="btn-auth-mode-login">\u{1F510} Iniciar Sesi\xF3n</button>
-      <button type="button" class="btn btn-outline" id="btn-auth-mode-register">\u{1F680} Registra tu Negocio (Paso a Paso)</button>
+      <button type="button" class="btn btn-outline" id="btn-auth-mode-register">\u{1F680} Crear Cuenta para mi Negocio</button>
     </div>
 
-    <!-- MODO 2A: FORMULARIO DE LOGIN PROFESIONAL (CERO SELECTORES EDUCATIVOS) -->
-    <div id="auth-pane-login" style="max-width:480px;margin:0 auto">
+    <!-- LOGIN LIMPIO -->
+    <div id="auth-pane-login" style="max-width:420px;margin:0 auto">
       <div class="card">
         <div class="card-head">
-          <div>
-            <span class="badge badge-blue">ACCESO SEGURO MULTI-BASE</span>
-            <h2 style="margin:6px 0 0;font-size:18px">Iniciar Sesi\xF3n en Proveko</h2>
-          </div>
+          <h2 style="margin:0;font-size:17px">Iniciar Sesi\xF3n</h2>
         </div>
         <div class="card-body">
-          <p style="font-size:12px;color:var(--pk-muted);margin:0 0 14px">
-            Ingresa con tu usuario o correo corporativo. El sistema identifica autom\xE1ticamente tu rol
-            (<strong>superadmin</strong>, <strong>desarrollador</strong>, <strong>auxiliar</strong> o <strong>cliente</strong>)
-            y conecta con la base de datos aislada de tu empresa.
-          </p>
           <div class="field" style="margin-bottom:12px">
-            <label>Usuario o Correo Electr\xF3nico</label>
-            <input type="text" id="login-username" placeholder="Ej: admin@tuempresa.com o superadmin@proveko.com" />
+            <label>Usuario o Correo</label>
+            <input type="text" id="login-username" placeholder="Ingresa tu usuario" />
           </div>
-          <div class="field" style="margin-bottom:16px">
+          <div class="field" style="margin-bottom:14px">
             <label>Contrase\xF1a</label>
-            <input type="password" id="login-password" placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" />
+            <input type="password" id="login-password" placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" />
           </div>
           <button type="button" class="btn btn-primary" style="width:100%;padding:11px" id="btn-submit-login">
-            Ingresar a la Plataforma
+            Entrar
           </button>
-          <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--pk-border);display:flex;justify-content:space-between;align-items:center;font-size:12px">
-            <span style="color:var(--pk-muted)">\xBFA\xFAn no tienes cuenta empresarial?</span>
-            <button type="button" class="btn btn-outline btn-sm" id="btn-login-switch-to-register">Registra tu Negocio &rarr;</button>
+          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--pk-border);display:flex;justify-content:space-between;align-items:center;font-size:12px">
+            <span style="color:var(--pk-muted)">\xBFNuevo en Proveko?</span>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-login-switch-to-register">Crear Cuenta &rarr;</button>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- MODO 2B: ASISTENTE "REGISTRA TU NEGOCIO" (3 PASOS + PAGO AL FINAL) -->
+    <!-- REGISTRO DE NEGOCIO EN 3 PASOS SIMPLES -->
     <div id="auth-pane-register" style="display:none">
-      <div class="card" style="margin-bottom:16px">
+      <div class="card">
         <div class="card-head">
           <div>
-            <span class="badge badge-emerald">ALTA DE EMPRESA Y BASE DE DATOS PROPIA</span>
-            <h2 style="margin:4px 0 0;font-size:18px">Registra tu Negocio en 3 Pasos</h2>
+            <h2 style="margin:0;font-size:18px">Activa el Sistema para tu Negocio</h2>
           </div>
           <div style="text-align:right">
-            <div style="font-size:11px;color:var(--pk-muted)">Total Mensual Estimado (Pesos Colombianos)</div>
-            <div style="font-size:24px;font-weight:800;color:var(--pk-primary)" id="reg-quote-total">$149.000 COP/mes</div>
-            <div style="font-size:11px;color:var(--pk-muted)" id="reg-quote-breakdown">Plan Base Incluido</div>
+            <div style="font-size:11px;color:var(--pk-muted)">Valor Mensual</div>
+            <div style="font-size:22px;font-weight:800;color:var(--pk-primary)" id="reg-quote-total">$169.000 COP/mes</div>
+            <div style="font-size:11px;color:var(--pk-muted)" id="reg-quote-breakdown">Plan Base</div>
           </div>
         </div>
         <div class="card-body">
-          <!-- PASO 1: TIPO DE NEGOCIO -->
-          <div style="margin-bottom:20px">
-            <div style="font-weight:800;font-size:14px;margin-bottom:4px">
-              Paso 1. Selecciona tu Tipo de Negocio (Habilita todos los m\xF3dulos b\xE1sicos de tu operaci\xF3n)
-            </div>
-            <div style="font-size:12px;color:var(--pk-muted);margin-bottom:10px">
-              El plan base de tu tipo de negocio ya incluye todos los M\xF3dulos Principales y Subm\xF3dulos esenciales para operar sin cobros ocultos.
-            </div>
+          <div style="margin-bottom:16px">
+            <div style="font-weight:800;font-size:14px;margin-bottom:8px">1. \xBFQu\xE9 tipo de negocio tienes?</div>
             <div class="preset-row" id="reg-business-types-row"></div>
-            <div id="reg-included-summary" style="background:#f8fafc;border:1px solid var(--pk-border);border-radius:10px;padding:12px;font-size:12px"></div>
+            <div id="reg-included-summary" style="background:#f8fafc;border:1px solid var(--pk-border);border-radius:10px;padding:10px;font-size:12px"></div>
           </div>
 
-          <!-- PASO 2: \xBFQUIERES AGREGAR M\xD3DULOS PRINCIPALES O SUBM\xD3DULOS ADICIONALES? -->
-          <div style="margin-bottom:20px">
-            <div style="font-weight:800;font-size:14px;margin-bottom:4px">
-              Paso 2. \xBFQuieres agregar M\xF3dulos Principales o Subm\xF3dulos adicionales? (Opcional)
-            </div>
-            <div style="font-size:12px;color:var(--pk-muted);margin-bottom:10px">
-              Solo si necesitas capacidades fuera de tu giro base, selecciona aqu\xED M\xF3dulos Principales o Subm\xF3dulos adicionales (las funcionalidades internas vienen gobernadas por el sistema).
-            </div>
+          <div style="margin-bottom:16px">
+            <div style="font-weight:800;font-size:14px;margin-bottom:8px">2. M\xF3dulos incluidos y adicionales (Opcional)</div>
             <div class="center-selector-grid" id="reg-addons-grid"></div>
           </div>
 
-          <!-- PASO 3: DATOS DE LA EMPRESA Y PAGO FINAL -->
-          <div style="background:#f8fafc;border:1px solid var(--pk-border);border-radius:12px;padding:16px">
-            <div style="font-weight:800;font-size:14px;margin-bottom:10px">
-              Paso 3. Datos de tu Empresa y Pago de Activaci\xF3n
-            </div>
+          <div style="background:#f8fafc;border:1px solid var(--pk-border);border-radius:12px;padding:14px">
+            <div style="font-weight:800;font-size:14px;margin-bottom:10px">3. Datos de tu Negocio</div>
             <div class="grid-3">
               <div class="field">
-                <label>Raz\xF3n Social o Nombre del Negocio</label>
-                <input type="text" id="reg-company-name" placeholder="Ej: Comercializadora del Norte S.A.S." />
+                <label>Nombre del Negocio o Empresa</label>
+                <input type="text" id="reg-company-name" placeholder="Ej: Ferreter\xEDa y Repuestos El Sol" />
               </div>
               <div class="field">
-                <label>NIT / Identificaci\xF3n Fiscal</label>
+                <label>NIT o C\xE9dula</label>
                 <input type="text" id="reg-company-nit" placeholder="Ej: 901.552.310-8" />
               </div>
               <div class="field">
-                <label>Correo del Administrador</label>
-                <input type="email" id="reg-company-email" placeholder="gerencia@tuempresa.com" />
+                <label>Correo Electr\xF3nico</label>
+                <input type="email" id="reg-company-email" placeholder="contacto@tunegocio.com" />
               </div>
             </div>
-            <div class="row-actions" style="margin-top:14px;justify-content:flex-end">
+            <div class="row-actions" style="margin-top:12px;justify-content:flex-end">
               <button type="button" class="btn btn-emerald" id="btn-open-standby-checkout">
-                \u{1F4B3} Ir al Pago y Crear Base de Datos de mi Empresa &rarr;
+                \u2705 Continuar y Activar mi Cuenta &rarr;
               </button>
             </div>
           </div>
@@ -17457,37 +17083,33 @@ function renderLoginAndSuperAdminHtml() {
     </div>
   </section>
 
-  <!-- CONSOLA GLOBAL PARA ROLES DE PLATAFORMA: SUPERADMIN, DESARROLLADOR Y AUXILIAR -->
+  <!-- PANEL INTERNO DE ADMINISTRACI\xD3N (SOLO VISIBLE PARA SUPERADMIN / DESARROLLADOR) -->
   <section class="surface" id="surface-superadmin">
-    <div class="card" style="margin-bottom:16px">
+    <div class="card" style="margin-bottom:14px">
       <div class="card-head">
         <div>
-          <span class="badge badge-blue" id="staff-console-badge">ROL GLOBAL: SUPERADMIN</span>
-          <h2 style="margin:4px 0 0;font-size:18px" id="staff-console-title">Control Maestro de Clientes, Bases de Datos y Cuotas de Roles/Usuarios</h2>
+          <span class="badge badge-blue" id="staff-console-badge">ADMINISTRACI\xD3N GLOBAL</span>
+          <h2 style="margin:4px 0 0;font-size:18px" id="staff-console-title">Empresas Registradas y Control de Accesos</h2>
         </div>
-        <button type="button" class="btn btn-primary btn-sm" id="btn-sa-new-client">+ Crear Nuevo Cliente y su Base de Datos</button>
+        <button type="button" class="btn btn-primary btn-sm" id="btn-sa-new-client">+ Registrar Nueva Empresa</button>
       </div>
       <div class="card-body">
         <div class="kpi-row" id="sa-kpi-row"></div>
-        <div id="sa-tenants-grid" style="display:grid;gap:14px"></div>
+        <div id="sa-tenants-grid" style="display:grid;gap:12px"></div>
       </div>
     </div>
 
-    <div class="card" style="margin-bottom:16px">
+    <div class="card" style="margin-bottom:14px">
       <div class="card-head">
-        <div>
-          <span class="badge badge-emerald">BASE DE DATOS DEDICADA: proveko_groups_db</span>
-          <div class="card-title" style="margin-top:4px">\u{1F9E9} Grupos de Clientes (Bares, Comercio, Agro...) y Cat\xE1logo Din\xE1mico para Desarrolladores</div>
-          <div style="font-size:12px;color:var(--pk-muted)">Guarda en BD qu\xE9 M\xF3dulos Principales, Subm\xF3dulos y Funcionalidades tiene cada grupo b\xE1sico y permite a los desarrolladores crear nuevas funcionalidades y asociarlas a cualquier grupo.</div>
-        </div>
+        <div class="card-title">Configuraci\xF3n de Planes por Tipo de Negocio y M\xF3dulos</div>
       </div>
       <div class="card-body" id="sa-groups-catalog-panel"></div>
     </div>
 
     <div class="card">
       <div class="card-head">
-        <div class="card-title">Solicitudes de Clientes \u2014 Pesta\xF1a "Necesito otra funcionalidad"</div>
-        <span class="badge badge-amber" id="sa-requests-count">0 solicitudes</span>
+        <div class="card-title">Solicitudes de Ampliaci\xF3n de M\xF3dulos</div>
+        <span class="badge badge-amber" id="sa-requests-count">0</span>
       </div>
       <div class="card-body" id="sa-feature-requests-body"></div>
     </div>
@@ -17498,115 +17120,84 @@ function renderLoginAndSuperAdminHtml() {
 function renderWorkstationLayerHtml() {
   return `
   <section class="surface" id="surface-workstation">
-    <!-- BANNER EXCLUSIVO CUANDO SE NAVEGA EN EL APARTADO 3: DEMO -->
-    <div id="demo-mode-banner" style="display:none;background:linear-gradient(90deg,#023047,#1d4ed8);color:#fff;padding:10px 16px;border-radius:12px;margin-bottom:14px;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+    <!-- AVISO CORTO EN MODO DEMO -->
+    <div id="demo-mode-banner" style="display:none;background:#023047;color:#fff;padding:8px 14px;border-radius:10px;margin-bottom:12px;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
       <div style="font-size:12px">
-        <strong>\u{1F9EA} DEMO INTERACTIVA RELACIONAL (FactuPOS + Version2):</strong> Todas las tablas est\xE1n enlazadas con <strong>Foreign Keys (FK)</strong> en vivo: si creas un cliente, producto, orden Kanban o factura, impacta autom\xE1ticamente el Stock, Kardex, Cartera CxC, Comisiones de T\xE9cnicos y Arqueo de Caja.
+        <strong>Modo de Prueba Activo:</strong> Puedes facturar, crear productos, tomar comandas, recibir veh\xEDculos y registrar clientes o abonos libremente.
       </div>
       <button type="button" class="btn btn-emerald btn-sm" id="btn-demo-go-register">
-        \u{1F680} Registra tu Negocio y obt\xE9n tu propia Base de Datos PostgreSQL &rarr;
+        Crear Cuenta para mi Negocio &rarr;
       </button>
     </div>
 
     <div class="ws-layout">
-      <!-- BARRA LATERAL: M\xD3DULOS PRINCIPALES + ROLES/USUARIOS + "NECESITO OTRA FUNCIONALIDAD" -->
+      <!-- MEN\xDA LATERAL DE ICONOS Y T\xCDTULOS CORTOS -->
       <aside class="ws-sidebar">
-        <div class="ws-nav-head" id="ws-tenant-sidebar-head">M\xD3DULOS PRINCIPALES</div>
+        <div class="ws-nav-head">MEN\xDA PRINCIPAL</div>
         <div class="ws-nav-list" id="ws-principal-modules-nav"></div>
-        <div style="border-top:1px solid var(--pk-border);margin:8px 0;padding-top:8px">
-          <div class="ws-nav-head">ADMINISTRACI\xD3N DE EMPRESA</div>
+
+        <div style="border-top:1px solid rgba(255,255,255,0.12);margin:10px 0;padding-top:8px">
+          <div class="ws-nav-head">CONFIGURACI\xD3N</div>
           <div class="ws-nav-list" id="ws-company-admin-nav">
             <button type="button" class="ws-nav-btn" id="btn-nav-internal-rbac">
-              <div class="ws-nav-title">\u{1F465} Roles y Usuarios Internos</div>
-              <div class="ws-nav-sub" id="ws-rbac-quota-sub">Cuenta Admin y permisos en tu BD</div>
+              <span class="ws-nav-icon">\u2699\uFE0F</span>
+              <span class="ws-nav-title">Usuarios y Roles</span>
             </button>
             <button type="button" class="ws-nav-btn" id="btn-nav-need-feature">
-              <div class="ws-nav-title">\u2728 Necesito otra funcionalidad</div>
-              <div class="ws-nav-sub">Solicitar o ampliar m\xF3dulos y funciones</div>
+              <span class="ws-nav-icon">\u2795</span>
+              <span class="ws-nav-title">Activar M\xF3dulos</span>
             </button>
           </div>
         </div>
       </aside>
 
-      <!-- \xC1REA CENTRAL DE OPERACI\xD3N CONVERGENTE -->
+      <!-- \xC1REA PRINCIPAL -->
       <div class="ws-main">
-        <!-- VISTA 1: OPERACI\xD3N RELACIONAL CONVERGENTE (FACTUPOS + VERSION2) -->
+        <!-- VISTA DE M\xD3DULOS Y SECCIONES -->
         <div id="ws-pane-module-operation">
-          <!-- BARRA SUPERIOR DE CENTROS DE CONVERGENCIA RELACIONAL -->
-          <div class="card" style="margin-bottom:14px;border:2px solid #cbd5e1">
-            <div class="card-head" style="background:linear-gradient(90deg,#0f172a,#1e293b);color:#fff;border-radius:12px 12px 0 0">
-              <div>
-                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                  <span id="ws-active-service-icon" style="font-size:20px">\u{1F6D2}</span>
-                  <h2 style="margin:0;font-size:17px;color:#fff" id="ws-active-service-title">Centro Operativo Relacional</h2>
-                  <span class="badge badge-emerald" id="ws-active-db-badge">BD Relacional Activa</span>
-                </div>
-                <div style="font-size:12px;color:#cbd5e1;margin-top:3px" id="ws-active-service-sub"></div>
+          <!-- BARRA SUPERIOR DEL M\xD3DULO + PESTA\xD1AS DE SECCIONES -->
+          <div class="ws-top-subbar">
+            <div class="ws-top-subbar-head">
+              <div style="display:flex;align-items:center;gap:10px">
+                <span id="ws-active-service-icon" style="font-size:22px">\u{1F9FE}</span>
+                <h2 style="margin:0;font-size:18px;font-weight:800;color:#023047" id="ws-active-service-title">Facturar y Punto de Venta</h2>
               </div>
-              <div id="ws-active-features-pills" style="display:flex;gap:6px;flex-wrap:wrap"></div>
-            </div>
-
-            <!-- SELECTOR R\xC1PIDO DE FLUJOS CONVERGENTES (ENLAZADOS POR FOREIGN KEYS) -->
-            <div style="padding:10px 14px;background:#f1f5f9;border-bottom:1px solid var(--pk-border);display:flex;gap:6px;flex-wrap:wrap;align-items:center" id="ws-converged-hub-bar">
-              <span style="font-size:11px;font-weight:800;color:#023047;text-transform:uppercase;margin-right:4px">\u{1F517} Flujos Integrados (FK):</span>
-              <button type="button" class="btn btn-sm" data-hub-mode="pos" id="hub-btn-pos">\u{1F6D2} 1. POS H\xEDbrido, Facturaci\xF3n y Cotizaciones</button>
-              <button type="button" class="btn btn-sm" data-hub-mode="kanban" id="hub-btn-kanban">\u{1F6E0}\uFE0F 2. Recepci\xF3n, Veh\xEDculos y Kanban en Vivo</button>
-              <button type="button" class="btn btn-sm" data-hub-mode="inventory" id="hub-btn-inventory">\u{1F4E6} 3. Inventario Valorizado, Compras y Actas v2</button>
-              <button type="button" class="btn btn-sm" data-hub-mode="look360" id="hub-btn-look360">\u{1F50D} 4. Consultas 360\xB0, Clientes, Contratos y Cartera CxC</button>
-              <button type="button" class="btn btn-sm" data-hub-mode="reports" id="hub-btn-reports">\u{1F4CA} 5. Arqueo Caja, Gastos, Comisiones y CSV</button>
-              <button type="button" class="btn btn-sm" data-hub-mode="gastro" id="hub-btn-gastro">\u{1F37D}\uFE0F 6. Mesas, KDS y Cuenta a Caja</button>
-              <button type="button" class="btn btn-sm" data-hub-mode="submodules" id="hub-btn-submodules">\u{1F4D1} 7. Subm\xF3dulos Espec\xEDficos</button>
-            </div>
-
-            <!-- CONTENEDOR PRINCIPAL DEL MOTOR CONVERGENTE -->
-            <div class="card-body" id="ws-converged-hub-container"></div>
-
-            <!-- SECCI\xD3N DE SUBM\xD3DULOS ESPEC\xCDFICOS (CUANDO SE ELIGE MODO SUBM\xD3DULOS) -->
-            <div id="ws-legacy-submodule-wrapper" style="display:none;border-top:1px solid var(--pk-border)">
-              <div style="padding:10px 18px;background:#f8fafc;border-bottom:1px solid var(--pk-border);display:flex;gap:8px;flex-wrap:wrap" id="ws-submodule-tabs"></div>
-              <div class="card-body">
-                <div style="margin-bottom:12px;font-size:12px;color:var(--pk-muted)" id="ws-submodule-summary"></div>
-                <div id="ws-specialized-widget-slot" style="margin-bottom:16px"></div>
-                <div style="background:#f8fafc;border:1px solid var(--pk-border);border-radius:12px;padding:14px;margin-bottom:16px">
-                  <div class="grid-3" id="ws-submodule-form-fields"></div>
-                  <div class="row-actions" style="margin-top:12px;justify-content:flex-end">
-                    <button type="button" class="btn btn-primary" id="btn-ws-save-record">Guardar Registro</button>
-                  </div>
-                </div>
-                <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;padding:10px 12px;background:#f1f5f9;border:1px solid var(--pk-border);border-radius:10px">
-                  <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:240px">
-                    <span style="font-size:12px;font-weight:800;color:var(--pk-text)">\u{1F50D} Filtro R\xE1pido (v2):</span>
-                    <input type="text" id="ws-v2-filter-input" placeholder="Buscar por NIT, cliente, c\xF3digo, bodega, placa o estado..." style="flex:1;padding:7px 10px;border:1px solid var(--pk-border);border-radius:7px;font-size:12px;background:#fff" />
-                  </div>
-                  <div class="row-actions">
-                    <span class="badge badge-blue" id="ws-v2-count-badge">0 registros</span>
-                    <button type="button" class="btn btn-outline btn-sm" id="btn-ws-clear-filter">Limpiar Filtro</button>
-                  </div>
-                </div>
-                <div class="table-wrap">
-                  <table>
-                    <thead id="ws-submodule-thead"></thead>
-                    <tbody id="ws-submodule-tbody"></tbody>
-                  </table>
-                </div>
+              <div class="row-actions">
+                <select id="ws-role-view-selector" style="padding:6px 10px;border-radius:8px;border:1px solid var(--pk-border);font-size:12px;font-weight:700;background:#f8fafc;color:#023047" title="Filtrar vista seg\xFAn el rol del trabajador">
+                  <option value="ALL">\u{1F464} Vista: Administrador (Todas las secciones)</option>
+                  <option value="CAJERO">\u{1F4B5} Vista: Cajero / Facturador</option>
+                  <option value="MESERO">\u{1F37D}\uFE0F Vista: Mesero / Sal\xF3n</option>
+                  <option value="COCINA">\u{1F468}\u200D\u{1F373} Vista: Cocina / Barra</option>
+                  <option value="BODEGA">\u{1F4E6} Vista: Bodega / Almac\xE9n</option>
+                  <option value="TECNICO">\u{1F527} Vista: T\xE9cnico / Recepci\xF3n</option>
+                </select>
+                <button type="button" class="btn btn-primary btn-sm" data-open-new-customer-modal="1">+ Nuevo Cliente</button>
               </div>
             </div>
+            <!-- PESTA\xD1AS SUPERIORES PARA NAVEGAR ENTRE LAS SECCIONES DEL M\xD3DULO -->
+            <div class="ws-subtabs-row" id="ws-submodule-tabs"></div>
           </div>
+
+          <!-- CONTENEDOR \xDANICO DONDE SE RENDERIZA LA SECCI\xD3N ACTIVA -->
+          <div id="ws-module-stage" style="margin-top:12px"></div>
         </div>
 
-        <!-- VISTA 2: ROLES Y USUARIOS INTERNOS EN LA BD DEL CLIENTE -->
+        <!-- VISTA DE USUARIOS Y ROLES -->
         <div id="ws-pane-internal-rbac" style="display:none"></div>
 
-        <!-- VISTA 3: PESTA\xD1A "NECESITO OTRA FUNCIONALIDAD" -->
+        <!-- VISTA DE ACTIVAR M\xD3DULOS ADICIONALES -->
         <div id="ws-pane-need-feature" style="display:none"></div>
       </div>
     </div>
 
-    <!-- MODAL RELACIONAL UNIVERSAL (EXPEDIENTE 360\xB0 CLIENTE, HOJA DE VIDA VEH\xCDCULO, ABONOS CXC, VISOR FACTURA) -->
+    <!-- DIALOG / MODAL EMERGENTE (NUEVO CLIENTE, SURTIR PRODUCTO, ABONAR, HISTORIAL, FACTURA) -->
     <div class="modal-backdrop" id="pk-relational-modal">
-      <div class="modal-box" style="max-width:860px;width:95%">
-        <div class="card-head" style="background:#023047;color:#fff;border-radius:12px 12px 0 0">
-          <div class="card-title" style="color:#fff" id="pk-rel-modal-title">Expediente Relacional</div>
+      <div class="modal-box" style="max-width:760px;width:95%">
+        <div class="card-head" style="background:#023047;color:#fff;border-radius:12px 12px 0 0;padding:12px 16px">
+          <div>
+            <div class="card-title" style="color:#fff;font-size:15px" id="pk-rel-modal-title">Ventana</div>
+            <div style="font-size:11px;color:#cbd5e1" id="pk-rel-modal-sub"></div>
+          </div>
           <button type="button" class="btn btn-outline btn-sm" style="background:#fff;color:#023047" id="btn-close-rel-modal">\u2715 Cerrar</button>
         </div>
         <div class="card-body" id="pk-rel-modal-body" style="max-height:78vh;overflow-y:auto"></div>
@@ -17778,7 +17369,7 @@ function renderLayoutShellStylesCss() {
       --pk-text: #0f172a;
       --pk-muted: #475569;
       --pk-border: #cbd5e1;
-      --pk-primary: #1d4ed8;
+      --pk-primary: #023047;
       --pk-primary-hover: #1e40af;
       --pk-emerald: #059669;
     }
@@ -17793,11 +17384,11 @@ function renderLayoutShellStylesCss() {
     .pk-topbar {
       background: #ffffff;
       border-bottom: 1px solid var(--pk-border);
-      padding: 10px 20px;
+      padding: 8px 18px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 14px;
+      gap: 12px;
       flex-wrap: wrap;
       position: sticky;
       top: 0;
@@ -17805,59 +17396,74 @@ function renderLayoutShellStylesCss() {
     }
     .pk-brand { display: flex; align-items: center; gap: 10px; }
     .pk-logo {
-      width: 36px; height: 36px; border-radius: 10px;
-      background: linear-gradient(135deg, #1e3a8a, #2563eb);
-      color: #fff; font-weight: 800; font-size: 15px;
+      width: 34px; height: 34px; border-radius: 9px;
+      background: #ffb703;
+      color: #023047; font-weight: 900; font-size: 14px;
       display: flex; align-items: center; justify-content: center;
     }
-    .pk-title { font-weight: 800; font-size: 16px; letter-spacing: -0.02em; }
+    .pk-title { font-weight: 800; font-size: 15px; letter-spacing: -0.02em; color: #023047; }
     .pk-subtitle { font-size: 11px; color: var(--pk-muted); }
     .pk-surface-tabs {
-      display: flex; gap: 6px; background: #f1f5f9; padding: 4px;
-      border-radius: 10px; border: 1px solid var(--pk-border);
+      display: flex; gap: 4px; background: #f1f5f9; padding: 3px;
+      border-radius: 9px; border: 1px solid var(--pk-border);
     }
     .pk-tab-btn {
-      border: 0; background: transparent; padding: 7px 13px; border-radius: 7px;
+      border: 0; background: transparent; padding: 6px 12px; border-radius: 7px;
       font-size: 12px; font-weight: 700; color: var(--pk-muted); cursor: pointer;
     }
     .pk-tab-btn.active {
-      background: #fff; color: var(--pk-primary);
-      box-shadow: 0 1px 3px rgba(15,23,42,0.1);
+      background: #023047; color: #fff;
+      box-shadow: 0 1px 3px rgba(15,23,42,0.12);
     }
-    .pk-context-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .surface { display: none; padding: 20px; max-width: 1440px; width: 100%; margin: 0 auto; }
+    .pk-context-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .surface { display: none; padding: 14px 18px; max-width: 1480px; width: 100%; margin: 0 auto; }
     .surface.active { display: block; }
     .hero-banner {
-      background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
-      color: #fff; border-radius: 16px; padding: 26px;
-      display: grid; grid-template-columns: 1.5fr 1fr; gap: 22px; margin-bottom: 20px;
+      background: linear-gradient(135deg, #023047 0%, #1e3a8a 100%);
+      color: #fff; border-radius: 16px; padding: 24px;
+      display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; margin-bottom: 18px;
     }
     .hero-badge {
-      display: inline-block; background: rgba(59,130,246,0.25); border: 1px solid rgba(147,197,253,0.4);
-      color: #bfdbfe; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; margin-bottom: 10px;
+      display: inline-block; background: rgba(255,183,3,0.2); border: 1px solid rgba(255,183,3,0.45);
+      color: #fde68a; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; margin-bottom: 10px;
     }
-    .hero-title { font-size: 25px; font-weight: 800; margin: 0 0 8px; line-height: 1.25; }
+    .hero-title { font-size: 24px; font-weight: 800; margin: 0 0 8px; line-height: 1.25; }
     .hero-sub { font-size: 13px; color: #cbd5e1; margin: 0; line-height: 1.5; }
     .quote-card {
       background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18);
-      border-radius: 14px; padding: 18px; display: flex; flex-direction: column; justify-content: space-between;
+      border-radius: 14px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between;
     }
-    .ws-layout { display: grid; grid-template-columns: 280px 1fr; gap: 18px; align-items: start; }
+    .ws-layout { display: grid; grid-template-columns: 210px 1fr; gap: 14px; align-items: start; }
     .ws-sidebar {
-      background: #fff; border: 1px solid var(--pk-border); border-radius: 14px;
-      padding: 12px; position: sticky; top: 74px;
+      background: #023047; color: #fff; border-radius: 14px;
+      padding: 12px 10px; position: sticky; top: 64px;
+      box-shadow: 0 10px 25px -5px rgba(2,48,71,0.25);
     }
-    .ws-nav-head { font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--pk-muted); padding: 6px 8px; }
-    .ws-nav-list { display: flex; flex-direction: column; gap: 5px; }
+    .ws-nav-head { font-size: 10px; font-weight: 800; text-transform: uppercase; color: #94a3b8; padding: 4px 8px; letter-spacing: 0.05em; }
+    .ws-nav-list { display: flex; flex-direction: column; gap: 4px; }
     .ws-nav-btn {
-      text-align: left; border: 1px solid transparent; background: transparent;
-      padding: 10px 12px; border-radius: 10px; cursor: pointer; transition: 0.15s;
+      text-align: left; border: 0; background: transparent; color: #e2e8f0;
+      padding: 9px 11px; border-radius: 10px; cursor: pointer; transition: 0.15s;
+      display: flex; align-items: center; gap: 9px; width: 100%;
     }
-    .ws-nav-btn:hover { background: #f8fafc; border-color: var(--pk-border); }
-    .ws-nav-btn.active { background: #eff6ff; border-color: #93c5fd; color: var(--pk-primary); }
-    .ws-nav-title { font-size: 13px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
-    .ws-nav-sub { font-size: 11px; color: var(--pk-muted); margin-top: 2px; }
-    .ws-main { display: flex; flex-direction: column; gap: 16px; }
+    .ws-nav-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+    .ws-nav-btn.active { background: #ffb703; color: #023047; font-weight: 800; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+    .ws-nav-icon { font-size: 18px; line-height: 1; flex-shrink: 0; }
+    .ws-nav-title { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ws-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+    .ws-top-subbar {
+      background: #fff; border: 1px solid var(--pk-border); border-radius: 12px;
+      padding: 10px 14px; display: flex; flex-direction: column; gap: 10px;
+    }
+    .ws-top-subbar-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .ws-subtabs-row { display: flex; gap: 6px; flex-wrap: wrap; padding-top: 8px; border-top: 1px solid #e2e8f0; }
+    .ws-subtab-pill {
+      border: 1px solid #cbd5e1; background: #f8fafc; color: #334155;
+      padding: 7px 13px; border-radius: 9px; font-size: 12px; font-weight: 700;
+      cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: 0.15s;
+    }
+    .ws-subtab-pill:hover { background: #e2e8f0; }
+    .ws-subtab-pill.active { background: #023047; color: #fff; border-color: #023047; }
   `;
 }
 
