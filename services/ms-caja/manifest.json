@@ -1,0 +1,32 @@
+{
+  "serviceKey": "ms-caja",
+  "displayName": "Caja y Tesorería",
+  "icon": "💵",
+  "apiPrefix": "/api/v1/caja",
+  "category": "Finanzas",
+  "summary": "Cuadre diario de efectivo, pagos digitales, comprobantes de gasto y arqueo imprimible.",
+  "modules": [
+    {
+      "moduleKey": "arqueo_gastos",
+      "displayName": "Cuadre de Caja y Gastos",
+      "tabIcon": "💰",
+      "defaultActive": true,
+      "summary": "Efectivo neto en caja, ingresos digitales y salidas operativas."
+    },
+    {
+      "moduleKey": "bancos_tesoreria",
+      "displayName": "Cuentas y Conciliación",
+      "tabIcon": "🏦",
+      "defaultActive": true,
+      "summary": "Movimientos de cuentas bancarias y billeteras digitales."
+    }
+  ],
+  "features": [
+    {
+      "featureKey": "impresion_egreso",
+      "displayName": "Generar comprobante impreso de egreso de caja",
+      "dependsOnModule": "arqueo_gastos",
+      "defaultActive": true
+    }
+  ]
+}

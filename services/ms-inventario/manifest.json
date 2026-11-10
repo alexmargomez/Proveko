@@ -1,0 +1,46 @@
+{
+  "serviceKey": "ms-inventario",
+  "displayName": "Inventario y Bodegas",
+  "icon": "📦",
+  "apiPrefix": "/api/v1/inventario",
+  "category": "Logística",
+  "summary": "Control de existencias, múltiples bodegas, traslados, solicitudes de insumos y Kardex valorizado.",
+  "modules": [
+    {
+      "moduleKey": "productos_stock",
+      "displayName": "Productos y Existencias",
+      "tabIcon": "📦",
+      "defaultActive": true,
+      "summary": "Alta de productos, ajuste rápido de stock, surtido y margen de ganancia."
+    },
+    {
+      "moduleKey": "bodegas_traslados",
+      "displayName": "Bodegas y Traslados",
+      "tabIcon": "🏭",
+      "defaultActive": true,
+      "summary": "Administración de bodegas y traslados entre sedes."
+    },
+    {
+      "moduleKey": "kardex_lotes",
+      "displayName": "Kardex y Lotes",
+      "tabIcon": "📋",
+      "defaultActive": true,
+      "summary": "Trazabilidad de entradas, salidas, lotes y fechas de vencimiento."
+    },
+    {
+      "moduleKey": "solicitudes_insumos",
+      "displayName": "Solicitudes de Insumos",
+      "tabIcon": "📥",
+      "defaultActive": true,
+      "summary": "Requisiciones internas de materiales e insumos."
+    }
+  ],
+  "features": [
+    {
+      "featureKey": "alerta_stock_minimo",
+      "displayName": "Alertas visuales de productos por agotarse",
+      "dependsOnModule": "productos_stock",
+      "defaultActive": true
+    }
+  ]
+}

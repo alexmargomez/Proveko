@@ -1,0 +1,18 @@
+{
+  "serviceKey": "ms-contabilidad",
+  "displayName": "Contabilidad PUC",
+  "icon": "📘",
+  "apiPrefix": "/api/v1/contabilidad",
+  "category": "Finanzas",
+  "summary": "Plan Único de Cuentas (PUC), comprobantes contables y asientos con cuentas seleccionables.",
+  "modules": [
+    {
+      "moduleKey": "comprobantes_puc",
+      "displayName": "Asientos y Plan PUC",
+      "tabIcon": "📘",
+      "defaultActive": true,
+      "summary": "Registro de comprobantes contables sobre cuentas PUC normalizadas."
+    }
+  ],
+  "features": []
+}

@@ -1,0 +1,46 @@
+{
+  "serviceKey": "ms-clientes",
+  "displayName": "Clientes y Terceros",
+  "icon": "👥",
+  "apiPrefix": "/api/v1/clientes",
+  "category": "Comercial",
+  "summary": "Directorio maestro normalizado de clientes, convenios, placas, conductores, transportistas y cartera.",
+  "modules": [
+    {
+      "moduleKey": "directorio_clientes",
+      "displayName": "Directorio de Clientes",
+      "tabIcon": "👤",
+      "defaultActive": true,
+      "summary": "Registro y consulta de personas y empresas."
+    },
+    {
+      "moduleKey": "cartera_cxc",
+      "displayName": "Cuentas por Cobrar (Cartera)",
+      "tabIcon": "💳",
+      "defaultActive": true,
+      "summary": "Control de saldos pendientes y registro de abonos."
+    },
+    {
+      "moduleKey": "contratos_convenios",
+      "displayName": "Contratos y Tarifarios",
+      "tabIcon": "🤝",
+      "defaultActive": true,
+      "summary": "Convenios empresariales, topes y descuentos automáticos."
+    },
+    {
+      "moduleKey": "flota_terceros",
+      "displayName": "Conductores y Transportistas",
+      "tabIcon": "🚛",
+      "defaultActive": true,
+      "summary": "Catálogo normalizado de conductores, licencias y empresas transportadoras."
+    }
+  ],
+  "features": [
+    {
+      "featureKey": "cupo_credito_control",
+      "displayName": "Controlar cupo máximo de crédito por cliente",
+      "dependsOnModule": "cartera_cxc",
+      "defaultActive": true
+    }
+  ]
+}

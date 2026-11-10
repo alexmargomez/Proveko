@@ -1,0 +1,39 @@
+{
+  "serviceKey": "ms-taller",
+  "displayName": "Taller y Órdenes de Servicio",
+  "icon": "🔧",
+  "apiPrefix": "/api/v1/taller",
+  "category": "Automotriz",
+  "summary": "Recepción de vehículos por placa, tablero de órdenes en vivo, hoja de vida y comisiones de técnicos.",
+  "modules": [
+    {
+      "moduleKey": "tablero_ordenes",
+      "displayName": "Órdenes de Trabajo",
+      "tabIcon": "📋",
+      "defaultActive": true,
+      "summary": "Ingreso de vehículo, avance por etapas y paso a Caja para facturar."
+    },
+    {
+      "moduleKey": "hoja_vida_vehiculos",
+      "displayName": "Vehículos y Placas",
+      "tabIcon": "🚗",
+      "defaultActive": true,
+      "summary": "Historial técnico, kilometraje, próximo cambio de aceite y SOAT."
+    },
+    {
+      "moduleKey": "comisiones_tecnicos",
+      "displayName": "Liquidación de Técnicos",
+      "tabIcon": "👷",
+      "defaultActive": true,
+      "summary": "Cálculo y pago de porcentaje de mano de obra por especialista."
+    }
+  ],
+  "features": [
+    {
+      "featureKey": "alerta_cambio_aceite",
+      "displayName": "Sugerencia automática de próximo kilometraje de aceite",
+      "dependsOnModule": "tablero_ordenes",
+      "defaultActive": true
+    }
+  ]
+}

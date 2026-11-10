@@ -1,5 +1,0 @@
-packages:
-  - "libs/*"
-  - "apps/*"
-  - "apps/control-plane/*"
-  - "apps/srv-*/*"

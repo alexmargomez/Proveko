@@ -1,0 +1,32 @@
+{
+  "serviceKey": "ms-hoteleria",
+  "displayName": "Hotelería y Alojamiento",
+  "icon": "🏨",
+  "apiPrefix": "/api/v1/hoteleria",
+  "category": "Hospitalidad",
+  "summary": "Control de habitaciones, Check-In de huéspedes, consumos a la habitación, impresión de cuenta y Check-Out.",
+  "modules": [
+    {
+      "moduleKey": "recepcion_habitaciones",
+      "displayName": "Habitaciones y Check-In",
+      "tabIcon": "🛏️",
+      "defaultActive": true,
+      "summary": "Estado en vivo de habitaciones, Check-In, consumos extra y Check-Out a Caja."
+    },
+    {
+      "moduleKey": "tarifas_temporadas",
+      "displayName": "Tarifas Hoteleras",
+      "tabIcon": "📅",
+      "defaultActive": true,
+      "summary": "Configuración de tipos de acomodación y tarifas por noche."
+    }
+  ],
+  "features": [
+    {
+      "featureKey": "cargos_habitacion",
+      "displayName": "Cargar consumos de restaurante/minibar a la habitación",
+      "dependsOnModule": "recepcion_habitaciones",
+      "defaultActive": true
+    }
+  ]
+}

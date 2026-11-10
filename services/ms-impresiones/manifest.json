@@ -1,0 +1,18 @@
+{
+  "serviceKey": "ms-impresiones",
+  "displayName": "Impresiones y Membretes",
+  "icon": "🖨️",
+  "apiPrefix": "/api/v1/impresiones",
+  "category": "Transversal",
+  "summary": "Configuración de logo, membrete empresarial, pie de garantía y formatos Carta / Tirilla 80mm para todo el sistema.",
+  "modules": [
+    {
+      "moduleKey": "config_membretes",
+      "displayName": "Membrete y Formatos PDF/POS",
+      "tabIcon": "🖨️",
+      "defaultActive": true,
+      "summary": "Personaliza el encabezado oficial, NIT, resolución y formato de impresión."
+    }
+  ],
+  "features": []
+}

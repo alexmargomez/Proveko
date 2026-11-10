@@ -1,10 +1,9 @@
-node_modules/
-dist/*
-!dist/cluster-node-runner.mjs
-build/
+**/node_modules/
+core/frontend-shell/dist/
+bin/
+proveko
+proveko-bin
 coverage/
-.turbo/
-.next/
 .vscode/
 .idea/
 *.log
