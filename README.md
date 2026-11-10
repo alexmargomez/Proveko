@@ -18,9 +18,9 @@ Plataforma SaaS empresarial multi-industria construida con **Go 1.22+ (`go-chi/c
 
 ---
 
-## 2. Guía Rápida para Desarrolladores Humanos (Sin depender de IA)
+## 2. Guía de Desarrollo
 
-### A. Corregir o editar una pantalla o endpoint existente
+### A. Estructura de cada microservicio
 Cada microservicio vive en un solo lugar predecible:
 - **Backend Go (`chi` + `gRPC`):** `services/ms-<nombre>/backend/service.go`
 - **Frontend React + TypeScript:** `services/ms-<nombre>/frontend/<Nombre>View.tsx`
