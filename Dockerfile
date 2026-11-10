@@ -1,36 +1,29 @@
-# ==============================================================================
-# PROVEKO — Multi-Stage Dockerfile para Cluster de Microservicios en ALpanel
-# ==============================================================================
-FROM node:22-alpine AS builder
+FROM node:22-alpine AS ui-builder
+WORKDIR /src
+COPY ui-sdk ./ui-sdk
+COPY services ./services
+COPY core/frontend-shell ./core/frontend-shell
+WORKDIR /src/core/frontend-shell
+RUN npm install --no-audit --no-fund && npm run build
+
+FROM golang:1.22-alpine AS go-builder
+WORKDIR /src
+COPY go.work go.mod ./
+COPY proto ./proto
+COPY pkg ./pkg
+COPY core ./core
+COPY services ./services
+COPY cmd ./cmd
+COPY tools ./tools
+COPY --from=ui-builder /src/core/embed_dist ./core/embed_dist
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /bin/proveko ./cmd/cluster-runner
+
+# Imagen final sin Node.js: únicamente Alpine y el binario estático Go con la UI embebida.
+FROM alpine:3.20 AS runner
+RUN apk add --no-cache ca-certificates tzdata postgresql-client
 WORKDIR /app
+COPY --from=go-builder /bin/proveko /bin/proveko
+COPY core/migrations /app/core/migrations
 
-COPY package.json package-lock.json tsconfig.base.json tsconfig.json ./
-COPY libs ./libs
-COPY apps ./apps
-
-RUN find apps libs -name "package.json" -exec sed -i 's/"workspace:\*"/"*"/g' {} + && \
-    (npm ci --no-audit --no-fund || npm install --no-audit --no-fund)
-
-# Empaqueta el ejecutor multi-rol (api-gateway, core-service, ms-host-runner, frontend)
-RUN npx esbuild apps/api-gateway/src/cluster-node-runner.ts \
-  --bundle \
-  --platform=node \
-  --target=node22 \
-  --format=esm \
-  --banner:js="import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" \
-  --outfile=dist/cluster-node-runner.mjs
-
-FROM node:22-alpine AS runner
-WORKDIR /app
-
-RUN apk add --no-cache postgresql-client
-
-ENV NODE_ENV=production
-ENV PROVEKO_MIGRATIONS_DIR=/app/libs/tenant-db-resolver/migrations
-
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/dist/cluster-node-runner.mjs ./dist/cluster-node-runner.mjs
-COPY --from=builder /app/libs/tenant-db-resolver/migrations ./libs/tenant-db-resolver/migrations
-
-CMD ["node", "dist/cluster-node-runner.mjs"]
-
+EXPOSE 4000 5173
+ENTRYPOINT ["/bin/proveko"]

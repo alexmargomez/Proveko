@@ -1,0 +1,64 @@
+{
+  "serviceKey": "ms-facturacion",
+  "displayName": "Facturación y Punto de Venta",
+  "icon": "🧾",
+  "apiPrefix": "/api/v1/facturacion",
+  "category": "Comercial",
+  "summary": "Ventas rápidas en mostrador, cotizaciones, facturación electrónica y formatos especializados.",
+  "modules": [
+    {
+      "moduleKey": "pos_mostrador",
+      "displayName": "Facturar / Punto de Venta",
+      "tabIcon": "🛒",
+      "defaultActive": true,
+      "summary": "Caja rápida de 2 columnas con productos, servicios y facturas emitidas."
+    },
+    {
+      "moduleKey": "cotizaciones",
+      "displayName": "Cotizaciones Comerciales",
+      "tabIcon": "📄",
+      "defaultActive": true,
+      "summary": "Generación e impresión de cotizaciones y envío por WhatsApp."
+    },
+    {
+      "moduleKey": "facturas_taller",
+      "displayName": "Apartado Facturas de Taller",
+      "tabIcon": "🔧",
+      "defaultActive": true,
+      "summary": "Habilita selección de Placa, Vehículo, Kilometraje y Orden de Servicio dentro de Facturación."
+    },
+    {
+      "moduleKey": "facturacion_dian",
+      "displayName": "Facturación Electrónica DIAN",
+      "tabIcon": "⚡",
+      "defaultActive": true,
+      "summary": "Numeración autorizada, cálculo CUFE y estado de transmisión DIAN."
+    }
+  ],
+  "features": [
+    {
+      "featureKey": "descuento_linea",
+      "displayName": "Permitir descuentos por tarifa/convenio",
+      "dependsOnModule": "",
+      "defaultActive": true
+    },
+    {
+      "featureKey": "pagos_mixtos_cxc",
+      "displayName": "Permitir venta a crédito (Cartera CxC) y abonos",
+      "dependsOnModule": "",
+      "defaultActive": true
+    },
+    {
+      "featureKey": "asignar_mecanico",
+      "displayName": "Seleccionar mecánico en factura para liquidar comisión",
+      "dependsOnModule": "facturas_taller",
+      "defaultActive": true
+    },
+    {
+      "featureKey": "factura_taller_pdf",
+      "displayName": "Imprimir PDF con estructura automotriz (Placa, Km y Mecánico)",
+      "dependsOnModule": "facturas_taller",
+      "defaultActive": true
+    }
+  ]
+}

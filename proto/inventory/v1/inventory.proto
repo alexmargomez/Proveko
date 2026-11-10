@@ -1,0 +1,23 @@
+syntax = "proto3";
+package proveko.inventory.v1;
+option go_package = "github.com/alexmargomez/proveko/proto/inventory/v1;inventoryv1";
+
+service InventoryService {
+  rpc DeductStock(DeductStockRequest) returns (DeductStockResponse);
+}
+
+message StockDeltaItem {
+  string product_id = 1;
+  double quantity = 2;
+  string reference_doc = 3;
+  string actor = 4;
+}
+
+message DeductStockRequest {
+  repeated StockDeltaItem items = 1;
+}
+
+message DeductStockResponse {
+  bool ok = 1;
+  int32 processed_count = 2;
+}

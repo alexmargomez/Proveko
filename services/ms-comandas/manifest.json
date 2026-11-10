@@ -1,0 +1,32 @@
+{
+  "serviceKey": "ms-comandas",
+  "displayName": "Mesas y Comandas",
+  "icon": "🍽️",
+  "apiPrefix": "/api/v1/comandas",
+  "category": "Gastronomía",
+  "summary": "Atención de mesas para meseros, envío a cocina/barra, precuenta impresa y cobro directo en caja.",
+  "modules": [
+    {
+      "moduleKey": "mapa_mesas",
+      "displayName": "Mapa de Mesas y Pedidos",
+      "tabIcon": "🍽️",
+      "defaultActive": true,
+      "summary": "Selección rápida de mesa, platos del catálogo y precuenta."
+    },
+    {
+      "moduleKey": "monitor_cocina",
+      "displayName": "Pantalla Cocina y Barra",
+      "tabIcon": "👨‍🍳",
+      "defaultActive": true,
+      "summary": "Pedidos pendientes de preparación por orden de llegada."
+    }
+  ],
+  "features": [
+    {
+      "featureKey": "notas_preparacion",
+      "displayName": "Notas rápidas de término y preparación para cocina",
+      "dependsOnModule": "mapa_mesas",
+      "defaultActive": true
+    }
+  ]
+}

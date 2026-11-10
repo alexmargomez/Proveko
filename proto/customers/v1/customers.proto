@@ -1,0 +1,21 @@
+syntax = "proto3";
+package proveko.customers.v1;
+option go_package = "github.com/alexmargomez/proveko/proto/customers/v1;customersv1";
+
+service CustomerService {
+  rpc ApplyAccountReceivableDelta(ReceivableDeltaRequest) returns (ReceivableDeltaResponse);
+}
+
+message ReceivableDeltaRequest {
+  string customer_id = 1;
+  string contract_id = 2;
+  double debt_delta = 3;
+  double contract_consumed_delta = 4;
+}
+
+message ReceivableDeltaResponse {
+  bool ok = 1;
+  string customer_name = 2;
+  string customer_nit = 3;
+  double updated_debt = 4;
+}

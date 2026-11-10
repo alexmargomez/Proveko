@@ -1,0 +1,16 @@
+syntax = "proto3";
+package proveko.gastro.v1;
+option go_package = "github.com/alexmargomez/proveko/proto/gastro/v1;gastrov1";
+
+service GastroService {
+  rpc ClearInvoicedTable(ClearTableEvent) returns (ClearTableResponse);
+}
+
+message ClearTableEvent {
+  string table_id = 1;
+  string invoice_number = 2;
+}
+
+message ClearTableResponse {
+  bool ok = 1;
+}

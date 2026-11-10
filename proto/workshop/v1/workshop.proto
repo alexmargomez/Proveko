@@ -1,0 +1,19 @@
+syntax = "proto3";
+package proveko.workshop.v1;
+option go_package = "github.com/alexmargomez/proveko/proto/workshop/v1;workshopv1";
+
+service WorkshopService {
+  rpc RegisterInvoicedOrderAndCommission(WorkshopInvoiceEvent) returns (WorkshopInvoiceResponse);
+}
+
+message WorkshopInvoiceEvent {
+  string work_order_id = 1;
+  string mechanic_id = 2;
+  double labor_gross = 3;
+  string invoice_number = 4;
+}
+
+message WorkshopInvoiceResponse {
+  bool ok = 1;
+  string mechanic_name = 2;
+}

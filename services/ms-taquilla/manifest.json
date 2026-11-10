@@ -1,0 +1,18 @@
+{
+  "serviceKey": "ms-taquilla",
+  "displayName": "Taquilla y Entradas",
+  "icon": "🎟️",
+  "apiPrefix": "/api/v1/taquilla",
+  "category": "Eventos y Acceso",
+  "summary": "Emisión de boletas/entradas con código consecutivo automático e impresión de tiquete.",
+  "modules": [
+    {
+      "moduleKey": "venta_boletas",
+      "displayName": "Emisión de Tiquetes",
+      "tabIcon": "🎟️",
+      "defaultActive": true,
+      "summary": "Taquilla rápida con consecutivo QR automático."
+    }
+  ],
+  "features": []
+}

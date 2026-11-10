@@ -1,0 +1,25 @@
+{
+  "serviceKey": "ms-compras",
+  "displayName": "Compras y Proveedores",
+  "icon": "🚚",
+  "apiPrefix": "/api/v1/compras",
+  "category": "Abastecimiento",
+  "summary": "Directorio de proveedores, órdenes de compra y entradas de mercancía a bodega.",
+  "modules": [
+    {
+      "moduleKey": "directorio_proveedores",
+      "displayName": "Proveedores",
+      "tabIcon": "🏢",
+      "defaultActive": true,
+      "summary": "Gestión de proveedores nacionales e importadores."
+    },
+    {
+      "moduleKey": "ordenes_compra",
+      "displayName": "Órdenes y Entradas de Compra",
+      "tabIcon": "📦",
+      "defaultActive": true,
+      "summary": "Órdenes a proveedor e ingreso directo al stock."
+    }
+  ],
+  "features": []
+}

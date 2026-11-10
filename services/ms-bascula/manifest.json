@@ -1,0 +1,32 @@
+{
+  "serviceKey": "ms-bascula",
+  "displayName": "Báscula y Transporte de Carga",
+  "icon": "⚖️",
+  "apiPrefix": "/api/v1/bascula",
+  "category": "Logística Pesada",
+  "summary": "Pesaje camionero con tiquete automático, destare Bruto/Tara/Neto, conductores, transportistas y cargas.",
+  "modules": [
+    {
+      "moduleKey": "pesaje_camionero",
+      "displayName": "Pesaje y Tiquetes de Báscula",
+      "tabIcon": "⚖️",
+      "defaultActive": true,
+      "summary": "Cálculo automático de peso neto vinculando placa, conductor, transportista y carga."
+    },
+    {
+      "moduleKey": "rutas_manifiestos",
+      "displayName": "Cargas y Manifiestos",
+      "tabIcon": "🛣️",
+      "defaultActive": true,
+      "summary": "Catálogo de rutas, tipos de carga y manifiestos despachados."
+    }
+  ],
+  "features": [
+    {
+      "featureKey": "tiquete_doble_firma",
+      "displayName": "Incluir firmas de conductor y operador en tiquete impreso",
+      "dependsOnModule": "pesaje_camionero",
+      "defaultActive": true
+    }
+  ]
+}

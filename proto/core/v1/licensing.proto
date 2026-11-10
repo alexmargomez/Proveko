@@ -1,0 +1,20 @@
+syntax = "proto3";
+package proveko.core.v1;
+option go_package = "github.com/alexmargomez/proveko/proto/core/v1;corev1";
+
+service LicensingService {
+  rpc ResolveTenantContext(ResolveTenantRequest) returns (TenantLicenseContext);
+}
+
+message ResolveTenantRequest {
+  string tenant_id = 1;
+}
+
+message TenantLicenseContext {
+  string tenant_id = 1;
+  string company_name = 2;
+  string db_name = 3;
+  repeated string active_services = 4;
+  repeated string active_modules = 5;
+  repeated string active_features = 6;
+}

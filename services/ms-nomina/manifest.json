@@ -1,0 +1,18 @@
+{
+  "serviceKey": "ms-nomina",
+  "displayName": "Personal y Nómina",
+  "icon": "👔",
+  "apiPrefix": "/api/v1/nomina",
+  "category": "Talento Humano",
+  "summary": "Empleados, cargos, turnos y desprendibles de pago de nómina.",
+  "modules": [
+    {
+      "moduleKey": "liquidacion_nomina",
+      "displayName": "Empleados y Pagos",
+      "tabIcon": "📑",
+      "defaultActive": true,
+      "summary": "Liquidación salarial e impresión de colilla de pago."
+    }
+  ],
+  "features": []
+}

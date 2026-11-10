@@ -1,0 +1,42 @@
+syntax = "proto3";
+package proveko.printing.v1;
+option go_package = "github.com/alexmargomez/proveko/proto/printing/v1;printingv1";
+
+service PrintService {
+  rpc RenderDocument(RenderDocumentRequest) returns (RenderDocumentResponse);
+}
+
+message PrintLineItem {
+  string code = 1;
+  string description = 2;
+  double quantity = 3;
+  double unit_price = 4;
+  double tax_pct = 5;
+  double subtotal = 6;
+}
+
+message RenderDocumentRequest {
+  string document_type = 1;     // FACTURA, COTIZACION, CUENTA_HOTEL, COMANDA, ORDEN_TALLER, TIQUETE_BASCULA, RECIBO_CAJA, REPORTE_TABLA
+  string layout_variant = 2;    // estandar, factura_taller, tirilla_80mm, carta_membrete
+  string document_number = 3;
+  string issue_date = 4;
+  string customer_name = 5;
+  string customer_nit = 6;
+  string customer_phone = 7;
+  string customer_address = 8;
+  string payment_method = 9;
+  map<string, string> extra_fields = 10; // Placa, Vehiculo, Km, Mecanico, Habitacion, PesoBruto, PesoTara, PesoNeto, Conductor...
+  repeated PrintLineItem items = 11;
+  double subtotal = 12;
+  double discount_total = 13;
+  double tax_total = 14;
+  double grand_total = 15;
+  double pending_balance = 16;
+  string notes = 17;
+}
+
+message RenderDocumentResponse {
+  string title = 1;
+  string format = 2;
+  string html_printable = 3;
+}

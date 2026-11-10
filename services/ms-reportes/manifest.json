@@ -1,0 +1,18 @@
+{
+  "serviceKey": "ms-reportes",
+  "displayName": "Reportes y Exportación",
+  "icon": "📊",
+  "apiPrefix": "/api/v1/reportes",
+  "category": "Gerencia",
+  "summary": "Indicadores consolidados de ventas, ganancias, cartera, inventario y descarga en Excel (.CSV) o PDF.",
+  "modules": [
+    {
+      "moduleKey": "centro_reportes",
+      "displayName": "Balance y Descargas Excel",
+      "tabIcon": "📈",
+      "defaultActive": true,
+      "summary": "Resumen ejecutivo, exportación CSV e impresión gerencial."
+    }
+  ],
+  "features": []
+}
