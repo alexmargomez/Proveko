@@ -155,7 +155,7 @@ func main() {
 		panic(err)
 	}
 
-	// Escucha simultáneamente en FRONTEND_PORT y BACKEND_PORT para compatibilidad directa con Nginx de ALpanel.
+	// Expone simultáneamente FRONTEND_PORT y BACKEND_PORT cuando difieren para soportar proxies inversos perimetrales.
 	if cfg.FrontendPort > 0 && cfg.FrontendPort != cfg.BackendPort {
 		go func() {
 			fAddr := fmt.Sprintf(":%d", cfg.FrontendPort)
