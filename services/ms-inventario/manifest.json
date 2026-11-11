@@ -3,6 +3,7 @@
   "displayName": "Inventario y Bodegas",
   "icon": "📦",
   "apiPrefix": "/api/v1/inventario",
+  "uiBundlePath": "/api/v1/inventario/ui.js",
   "category": "Logística",
   "summary": "Control de existencias, múltiples bodegas, traslados, solicitudes de insumos y Kardex valorizado.",
   "modules": [
@@ -11,7 +12,7 @@
       "displayName": "Productos y Existencias",
       "tabIcon": "📦",
       "defaultActive": true,
-      "summary": "Alta de productos, ajuste rápido de stock, surtido y margen de ganancia."
+      "summary": "Alta de productos, ajuste rápido de stock, surtido y margen."
     },
     {
       "moduleKey": "bodegas_traslados",
@@ -25,7 +26,7 @@
       "displayName": "Kardex y Lotes",
       "tabIcon": "📋",
       "defaultActive": true,
-      "summary": "Trazabilidad de entradas, salidas, lotes y fechas de vencimiento."
+      "summary": "Trazabilidad de entradas, salidas, lotes y vencimientos."
     },
     {
       "moduleKey": "solicitudes_insumos",
@@ -40,7 +41,46 @@
       "featureKey": "alerta_stock_minimo",
       "displayName": "Alertas visuales de productos por agotarse",
       "dependsOnModule": "productos_stock",
+      "defaultActive": true,
+      "dependsOnSubmodule": "catalogo_maestro_sku"
+    },
+    {
+      "featureKey": "traslado_parcial_bodega",
+      "displayName": "Permitir traslados parciales de unidades entre bodegas",
+      "dependsOnModule": "bodegas_traslados",
+      "dependsOnSubmodule": "traslados_entre_sedes",
       "defaultActive": true
+    }
+  ],
+  "bundleHash": "0d7a4d4dcc83",
+  "submodules": [
+    {
+      "submoduleKey": "catalogo_maestro_sku",
+      "displayName": "Catálogo Maestro y Costo Promedio",
+      "dependsOnModule": "productos_stock",
+      "defaultActive": true,
+      "summary": "Control de SKUs, precios autorizados y márgenes."
+    },
+    {
+      "submoduleKey": "traslados_entre_sedes",
+      "displayName": "Traslados Totales y Parciales entre Bodegas",
+      "dependsOnModule": "bodegas_traslados",
+      "defaultActive": true,
+      "summary": "Transferencias valorizadas con doble registro en Kardex."
+    },
+    {
+      "submoduleKey": "auditoria_kardex",
+      "displayName": "Movimientos Valorizados y Lotes",
+      "dependsOnModule": "kardex_lotes",
+      "defaultActive": true,
+      "summary": "Auditoría cronológica de entradas, salidas y traslados."
+    },
+    {
+      "submoduleKey": "despacho_requisiciones",
+      "displayName": "Aprobación de Requisiciones Internas",
+      "dependsOnModule": "solicitudes_insumos",
+      "defaultActive": true,
+      "summary": "Control de consumo interno por área solicitante."
     }
   ]
 }

@@ -3,8 +3,9 @@
   "displayName": "Compras y Proveedores",
   "icon": "🚚",
   "apiPrefix": "/api/v1/compras",
+  "uiBundlePath": "/api/v1/compras/ui.js",
   "category": "Abastecimiento",
-  "summary": "Directorio de proveedores, órdenes de compra y entradas de mercancía a bodega.",
+  "summary": "Directorio de proveedores, órdenes de compra y recepción de mercancía.",
   "modules": [
     {
       "moduleKey": "directorio_proveedores",
@@ -18,8 +19,33 @@
       "displayName": "Órdenes y Entradas de Compra",
       "tabIcon": "📦",
       "defaultActive": true,
-      "summary": "Órdenes a proveedor e ingreso directo al stock."
+      "summary": "Órdenes de compra a proveedor e ingreso valorizado a bodega."
     }
   ],
-  "features": []
+  "features": [
+    {
+      "featureKey": "recalculo_costo_promedio",
+      "displayName": "Actualizar costo promedio ponderado al recibir mercancía",
+      "dependsOnModule": "ordenes_compra",
+      "dependsOnSubmodule": "recepcion_mercancia_oc",
+      "defaultActive": true
+    }
+  ],
+  "bundleHash": "04d76fcb5b3b",
+  "submodules": [
+    {
+      "submoduleKey": "homologacion_proveedores",
+      "displayName": "Ficha Comercial y Tributaria de Proveedores",
+      "dependsOnModule": "directorio_proveedores",
+      "defaultActive": true,
+      "summary": "Directorio de fabricantes, distribuidores e importadores."
+    },
+    {
+      "submoduleKey": "recepcion_mercancia_oc",
+      "displayName": "Emisión de Orden e Ingreso Valorizado a Bodega",
+      "dependsOnModule": "ordenes_compra",
+      "defaultActive": true,
+      "summary": "Abastecimiento con recálculo automático de costo promedio."
+    }
+  ]
 }

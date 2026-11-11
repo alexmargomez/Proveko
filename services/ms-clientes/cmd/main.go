@@ -1,53 +1,60 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"log"
-	"net"
-	"net/http"
+	"time"
 
-	"github.com/alexmargomez/proveko/pkg/config"
-	"github.com/alexmargomez/proveko/pkg/grpcx"
-	"github.com/alexmargomez/proveko/pkg/httpx"
-	"github.com/alexmargomez/proveko/pkg/tenantdb"
-	"github.com/alexmargomez/proveko/services/ms-clientes/backend"
-	"github.com/alexmargomez/proveko/services/ms-clientes/migrations"
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	msclientes "ms-clientes"
+	"ms-clientes/backend"
+	"ms-clientes/internal/platform/config"
+	"ms-clientes/internal/platform/dbpool"
+	"ms-clientes/internal/platform/gateway"
+	"ms-clientes/internal/platform/httpx"
+	"ms-clientes/internal/platform/security"
 )
 
 func main() {
-	cfg := config.Load()
-	db := tenantdb.NewManager(cfg)
-	db.RegisterServiceMigration("ms-clientes", migrations.SchemaSQL)
-
-	svc := backend.NewService(db, cfg.ClusterSecret)
-
-	if grpcPort := config.EnvOr("GRPC_PORT", ""); grpcPort != "" {
-		go func() {
-			lis, err := net.Listen("tcp", ":"+grpcPort)
-			if err != nil {
-				log.Fatalf("ms-clientes grpc listen error: %v", err)
-			}
-			grpcSrv := grpcx.NewServer(cfg.ClusterSecret)
-			svc.RegisterGRPC(grpcSrv)
-			log.Printf("ms-clientes gRPC listening on :%s", grpcPort)
-			if err := grpcSrv.Serve(lis); err != nil {
-				log.Fatalf("ms-clientes grpc serve error: %v", err)
-			}
-		}()
+	cfg, err := config.LoadService("ms-clientes", 4102)
+	if err != nil {
+		log.Fatalf("[ms-clientes] invalid configuration: %v", err)
 	}
 
-	root := chi.NewRouter()
-	root.Use(middleware.Recoverer)
-	root.Use(httpx.CORS)
-	root.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
-		httpx.JSON(w, http.StatusOK, map[string]any{"ok": true, "service": "ms-clientes"})
-	})
-	root.Mount("/api/v1/clientes", svc.Router())
+	gwClient := gateway.NewClient(cfg.GatewayURL, cfg.S2SSharedKey)
+	if cfg.CorePublicHex == "" && gwClient != nil {
+		for i := 0; i < 6; i++ {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			pubHex, fetchErr := gwClient.FetchVerifierPublicKey(ctx)
+			cancel()
+			if fetchErr == nil && pubHex != "" {
+				cfg.CorePublicHex = pubHex
+				break
+			}
+			time.Sleep(400 * time.Millisecond)
+		}
+	}
 
-	port := config.EnvOr("PORT", "4101")
-	log.Printf("ms-clientes HTTP listening on :%s", port)
-	if err := http.ListenAndServe(":"+port, root); err != nil {
-		log.Fatal(err)
+	pubKey, err := security.LoadVerifierPublicKey(cfg.CorePublicHex, cfg.DevEd25519Seed, cfg.IsProduction())
+	if err != nil {
+		log.Fatalf("[ms-clientes] failed to load verifier public key: %v", err)
+	}
+
+	replay := security.NewReplayGuard(16384)
+	dbMgr := dbpool.NewManager(cfg.CommonConfig, false)
+	svc := backend.NewService(cfg, pubKey, replay, dbMgr)
+
+	if gwClient != nil {
+		gwClient.RegisterWithRetry(msclientes.ManifestJSON, cfg.ServicePublicURL)
+	}
+
+	httpAddr := fmt.Sprintf(":%d", cfg.HTTPPort)
+	httpSrv := httpx.NewServer(httpAddr, svc.Handler())
+	log.Printf("[ms-clientes] HTTP server listening on %s", httpAddr)
+
+	if err := httpx.ListenAndServeGraceful(httpSrv, func() {
+		dbMgr.Close()
+	}); err != nil {
+		log.Fatalf("[ms-clientes] server terminated with error: %v", err)
 	}
 }

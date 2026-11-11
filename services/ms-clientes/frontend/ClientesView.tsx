@@ -1,1105 +1,1357 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  useProveko,
+  usePlatform,
+  ModuleGate,
   FeatureGate,
   PkAutoCodeInput,
-  PkEntitySelect,
-  PkEntityDialog,
+  PkSelect,
+  PkModal,
+  PkConfirmModal,
   PkPrintButton,
   PkKpiRow,
-  downloadCsvUtf8,
+  useAsyncAction,
   formatCop,
-  Customer,
-  Contract,
-  Tariff,
-  Vehicle,
-  Driver,
-  Carrier,
-  Invoice,
-  PrintDocumentPayload,
-} from '@proveko/ui-sdk';
+  downloadCsvUtf8,
+} from '@platform/ui-sdk';
+
+interface Customer {
+  id: string;
+  code: string;
+  name: string;
+  nit: string;
+  phone: string;
+  email: string;
+  address: string;
+  contractId: string;
+  contractCode: string;
+  tariffId: string;
+  tariffName: string;
+  creditLimit: number;
+  currentDebt: number;
+}
+
+interface Tariff {
+  id: string;
+  code: string;
+  name: string;
+  discountPct: number;
+}
+
+interface Contract {
+  id: string;
+  code: string;
+  name: string;
+  entityNit: string;
+  tariffId: string;
+  tariffName: string;
+  budgetCeiling: number;
+  consumedAmount: number;
+  availableBalance: number;
+}
+
+interface AbonoRecord {
+  id: string;
+  date: string;
+  amount: number;
+  method: string;
+  note: string;
+}
+
+interface Receivable {
+  invoiceId: string;
+  invoiceNumber: string;
+  issueDate: string;
+  customerId: string;
+  customerName: string;
+  customerNit: string;
+  invoiceTotal: number;
+  pendingBalance: number;
+  abonos: AbonoRecord[];
+}
 
 interface ClientesAllResponse {
   ok: boolean;
   nextCustomerCode: string;
   nextContractCode: string;
-  nextDriverCode: string;
-  nextCarrierCode: string;
+  nextTariffCode: string;
   customers: Customer[];
   contracts: Contract[];
   tariffs: Tariff[];
-  vehicles: Vehicle[];
-  drivers: Driver[];
-  carriers: Carrier[];
-  pendingInvoices: Invoice[];
+  pendingInvoices: Receivable[];
 }
+
+interface CreatedCustomerResponse {
+  ok: boolean;
+  customer: Customer;
+}
+
+interface CreatedTariffResponse {
+  ok: boolean;
+  tariff: Tariff;
+}
+
+interface CreatedContractResponse {
+  ok: boolean;
+  contract: Contract;
+}
+
+const VALID_MODULES = ['directorio_clientes', 'cartera_cxc', 'contratos_convenios'] as const;
 
 export const ClientesView: React.FC = () => {
   const {
     activeModuleKey,
+    hasService,
+    hasModule,
+    hasFeature,
     apiGet,
     apiPost,
     apiDelete,
+    navigateTo,
     toast,
-    sendToPosCheckout,
-    openQuickDialog,
-    dialogVersion,
-  } = useProveko();
+  } = usePlatform();
+
+  const { busy, run } = useAsyncAction();
 
   const [data, setData] = useState<ClientesAllResponse>({
     ok: true,
-    nextCustomerCode: 'CLI-1006',
-    nextContractCode: 'CNV-206',
-    nextDriverCode: 'COND-306',
-    nextCarrierCode: 'TRN-406',
+    nextCustomerCode: 'CLI-104',
+    nextContractCode: 'CNV-203',
+    nextTariffCode: 'TRF-104',
     customers: [],
     contracts: [],
     tariffs: [],
-    vehicles: [],
-    drivers: [],
-    carriers: [],
     pendingInvoices: [],
   });
 
-  const [docType, setDocType] = useState('NIT');
-  const [nit, setNit] = useState('');
-  const [dv, setDv] = useState('');
   const [custName, setCustName] = useState('');
-  const [taxRegime, setTaxRegime] = useState('Responsable de IVA');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-  const [city, setCity] = useState('Bogotá D.C.');
-  const [address, setAddress] = useState('');
-  const [contractId, setContractId] = useState('');
-  const [tariffId, setTariffId] = useState('');
-  const [creditLimit, setCreditLimit] = useState('0');
-  const [searchCustomer, setSearchCustomer] = useState('');
+  const [custNit, setCustNit] = useState('');
+  const [custPhone, setCustPhone] = useState('');
+  const [custEmail, setCustEmail] = useState('');
+  const [custAddress, setCustAddress] = useState('');
+  const [custContractId, setCustContractId] = useState('');
+  const [custTariffId, setCustTariffId] = useState('');
+  const [custCreditLimit, setCustCreditLimit] = useState('0');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const [abonoInvoice, setAbonoInvoice] = useState<Invoice | null>(null);
+  const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
+
+  const [abonoTarget, setAbonoTarget] = useState<Receivable | null>(null);
   const [abonoAmount, setAbonoAmount] = useState('');
   const [abonoMethod, setAbonoMethod] = useState('Transferencia Bancaria');
   const [abonoNote, setAbonoNote] = useState('');
 
-  const [entityName, setEntityName] = useState('');
+  const [contractName, setContractName] = useState('');
+  const [contractNit, setContractNit] = useState('');
   const [contractTariffId, setContractTariffId] = useState('');
-  const [budgetCeiling, setBudgetCeiling] = useState('10000000');
+  const [contractCeiling, setContractCeiling] = useState('15000000');
 
-  const [driverName, setDriverName] = useState('');
-  const [driverDoc, setDriverDoc] = useState('');
-  const [driverLicense, setDriverLicense] = useState('C3 Carga Pesada');
-  const [driverPhone, setDriverPhone] = useState('');
-  const [driverVehicleId, setDriverVehicleId] = useState('');
+  const [tariffName, setTariffName] = useState('');
+  const [tariffDiscount, setTariffDiscount] = useState('5');
 
-  const [carrierNit, setCarrierNit] = useState('');
-  const [carrierName, setCarrierName] = useState('');
-  const [carrierVehicleType, setCarrierVehicleType] = useState('Tractocamión 3S3');
-  const [carrierRoute, setCarrierRoute] = useState('Ruta Nacional');
-  const [carrierPhone, setCarrierPhone] = useState('');
+  const [showContractModal, setShowContractModal] = useState(false);
+  const [modalContractName, setModalContractName] = useState('');
+  const [modalContractNit, setModalContractNit] = useState('');
+  const [modalContractTariffId, setModalContractTariffId] = useState('');
+  const [modalContractCeiling, setModalContractCeiling] = useState('15000000');
 
-  const loadAll = useCallback(async () => {
+  const [showTariffModal, setShowTariffModal] = useState(false);
+  const [modalTariffName, setModalTariffName] = useState('');
+  const [modalTariffDiscount, setModalTariffDiscount] = useState('5');
+
+  const reload = useCallback(async () => {
     try {
       const res = await apiGet<ClientesAllResponse>('/api/v1/clientes/all');
-      setData(res);
-      if (!contractId && res.contracts.length > 0) setContractId(res.contracts[0].id);
-      if (!tariffId && res.tariffs.length > 0) setTariffId(res.tariffs[0].id);
-      if (!contractTariffId && res.tariffs.length > 0) setContractTariffId(res.tariffs[0].id);
-      if (!driverVehicleId && res.vehicles.length > 0) setDriverVehicleId(res.vehicles[0].id);
+      const tariffs = Array.isArray(res.tariffs) ? res.tariffs : [];
+      const contracts = Array.isArray(res.contracts) ? res.contracts : [];
+      const customers = Array.isArray(res.customers) ? res.customers : [];
+      const pendingInvoices = Array.isArray(res.pendingInvoices) ? res.pendingInvoices : [];
+
+      setData({
+        ok: true,
+        nextCustomerCode: res.nextCustomerCode || 'CLI-104',
+        nextContractCode: res.nextContractCode || 'CNV-203',
+        nextTariffCode: res.nextTariffCode || 'TRF-104',
+        customers,
+        contracts,
+        tariffs,
+        pendingInvoices,
+      });
+
+      if (tariffs.length > 0) {
+        setCustTariffId((prev) => prev || tariffs[0].id);
+        setContractTariffId((prev) => prev || tariffs[0].id);
+        setModalContractTariffId((prev) => prev || tariffs[0].id);
+      }
     } catch {
+      return;
     }
-  }, [apiGet, contractId, tariffId, contractTariffId, driverVehicleId]);
+  }, [apiGet]);
 
   useEffect(() => {
-    void loadAll();
-  }, [loadAll, dialogVersion]);
+    void reload();
+  }, [reload]);
+
+  const effectiveModule = useMemo(() => {
+    if (VALID_MODULES.includes(activeModuleKey as (typeof VALID_MODULES)[number]) && hasModule(activeModuleKey)) {
+      return activeModuleKey;
+    }
+    return VALID_MODULES.find((m) => hasModule(m)) || 'directorio_clientes';
+  }, [activeModuleKey, hasModule]);
+
+  const handleSelectCustomerContract = (selectedId: string) => {
+    setCustContractId(selectedId);
+    if (selectedId) {
+      const found = data.contracts.find((c) => c.id === selectedId);
+      if (found && found.tariffId) {
+        setCustTariffId(found.tariffId);
+      }
+    }
+  };
 
   const handleCreateCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
-    await apiPost('/api/v1/clientes/customers', {
-      docType,
-      nit,
-      dv,
-      name: custName,
-      taxRegime,
-      phone,
-      email,
-      city,
-      address,
-      contractId,
-      tariffId,
-      creditLimit: Number(creditLimit || 0),
+    await run(async () => {
+      const limit = hasFeature('cartera_cxc', 'cupo_credito_control') ? Number(custCreditLimit || 0) : 0;
+      await apiPost<CreatedCustomerResponse>('/api/v1/clientes/customers', {
+        name: custName.trim(),
+        nit: custNit.trim(),
+        phone: custPhone.trim(),
+        email: custEmail.trim(),
+        address: custAddress.trim(),
+        contractId: custContractId,
+        tariffId: custTariffId,
+        creditLimit: Number.isFinite(limit) && limit > 0 ? limit : 0,
+      });
+      toast('Cliente registrado en el directorio maestro');
+      setCustName('');
+      setCustNit('');
+      setCustPhone('');
+      setCustEmail('');
+      setCustAddress('');
+      setCustCreditLimit('0');
+      await reload();
     });
-    toast('Cliente registrado en el directorio maestro');
-    setNit('');
-    setDv('');
-    setCustName('');
-    setPhone('');
-    setEmail('');
-    setAddress('');
-    setCreditLimit('0');
-    await loadAll();
   };
 
-  const handleDeleteCustomer = async (id: string) => {
-    await apiDelete(`/api/v1/clientes/customers/${id}`);
-    toast('Cliente eliminado');
-    await loadAll();
+  const handleConfirmDeleteCustomer = async () => {
+    if (!customerToDelete) return;
+    const target = customerToDelete;
+    await run(async () => {
+      await apiDelete<{ ok: boolean }>(`/api/v1/clientes/customers/${encodeURIComponent(target.id)}`);
+      toast(`Cliente ${target.code} eliminado del directorio`);
+      setCustomerToDelete(null);
+      await reload();
+    });
   };
 
-  const openAbonoModal = (inv: Invoice) => {
-    setAbonoInvoice(inv);
+  const handleBillCustomer = (c: Customer) => {
+    if (!hasService('ms-facturacion')) {
+      toast('El servicio de Facturación y Punto de Venta no está activo en la suscripción');
+      return;
+    }
+    navigateTo('ms-facturacion', 'pos_mostrador', {
+      customerId: c.id,
+      customerName: c.name,
+    });
+  };
+
+  const openAbonoModal = (inv: Receivable) => {
+    setAbonoTarget(inv);
     setAbonoAmount(String(inv.pendingBalance));
     setAbonoMethod('Transferencia Bancaria');
     setAbonoNote('');
   };
 
-  const handleConfirmAbono = async (e: React.FormEvent) => {
+  const handleSubmitAbono = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!abonoInvoice) return;
-    await apiPost(`/api/v1/clientes/receivables/${abonoInvoice.id}/abono`, {
-      amount: Number(abonoAmount || 0),
-      method: abonoMethod,
-      note: abonoNote,
+    if (!abonoTarget) return;
+    const target = abonoTarget;
+    await run(async () => {
+      await apiPost(`/api/v1/clientes/receivables/${encodeURIComponent(target.invoiceId)}/abono`, {
+        amount: Number(abonoAmount || 0),
+        method: abonoMethod,
+        note: abonoNote.trim(),
+      });
+      toast(`Abono registrado sobre factura ${target.invoiceNumber}`);
+      setAbonoTarget(null);
+      await reload();
     });
-    toast(`Abono registrado a la factura ${abonoInvoice.id}`);
-    setAbonoInvoice(null);
-    await loadAll();
   };
 
-  const handleCreateContract = async (e: React.FormEvent) => {
+  const handleCreateContractInline = async (e: React.FormEvent) => {
     e.preventDefault();
-    await apiPost('/api/v1/clientes/contracts', {
-      entityName,
-      tariffId: contractTariffId,
-      budgetCeiling: Number(budgetCeiling || 0),
+    await run(async () => {
+      await apiPost<CreatedContractResponse>('/api/v1/clientes/contracts', {
+        name: contractName.trim(),
+        entityNit: contractNit.trim(),
+        tariffId: contractTariffId,
+        budgetCeiling: Number(contractCeiling || 0),
+      });
+      toast('Convenio comercial registrado');
+      setContractName('');
+      setContractNit('');
+      await reload();
     });
-    toast('Convenio corporativo registrado');
-    setEntityName('');
-    await loadAll();
   };
 
-  const handleCreateDriver = async (e: React.FormEvent) => {
+  const handleCreateTariffInline = async (e: React.FormEvent) => {
     e.preventDefault();
-    await apiPost('/api/v1/clientes/drivers', {
-      name: driverName,
-      docNumber: driverDoc,
-      licenseCategory: driverLicense,
-      phone: driverPhone,
-      vehicleId: driverVehicleId,
+    await run(async () => {
+      await apiPost<CreatedTariffResponse>('/api/v1/clientes/tariffs', {
+        name: tariffName.trim(),
+        discountPct: Number(tariffDiscount || 0),
+      });
+      toast('Tarifa comercial registrada');
+      setTariffName('');
+      setTariffDiscount('5');
+      await reload();
     });
-    toast('Conductor registrado');
-    setDriverName('');
-    setDriverDoc('');
-    setDriverPhone('');
-    await loadAll();
   };
 
-  const handleCreateCarrier = async (e: React.FormEvent) => {
+  const handleCreateContractFromModal = async (e: React.FormEvent) => {
     e.preventDefault();
-    await apiPost('/api/v1/clientes/carriers', {
-      nit: carrierNit,
-      name: carrierName,
-      vehicleType: carrierVehicleType,
-      routeZone: carrierRoute,
-      phone: carrierPhone,
+    await run(async () => {
+      const res = await apiPost<CreatedContractResponse>('/api/v1/clientes/contracts', {
+        name: modalContractName.trim(),
+        entityNit: modalContractNit.trim(),
+        tariffId: modalContractTariffId,
+        budgetCeiling: Number(modalContractCeiling || 0),
+      });
+      toast(`Convenio ${res.contract.code} creado y seleccionado`);
+      setModalContractName('');
+      setModalContractNit('');
+      setShowContractModal(false);
+      await reload();
+      setCustContractId(res.contract.id);
+      if (res.contract.tariffId) {
+        setCustTariffId(res.contract.tariffId);
+      }
     });
-    toast('Empresa transportadora registrada');
-    setCarrierNit('');
-    setCarrierName('');
-    setCarrierPhone('');
-    await loadAll();
   };
 
-  const handleDeleteVehicle = async (id: string) => {
-    await apiDelete(`/api/v1/clientes/vehicles/${id}`);
-    toast('Vehículo retirado del catálogo');
-    await loadAll();
+  const handleCreateTariffFromModal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await run(async () => {
+      const res = await apiPost<CreatedTariffResponse>('/api/v1/clientes/tariffs', {
+        name: modalTariffName.trim(),
+        discountPct: Number(modalTariffDiscount || 0),
+      });
+      toast(`Tarifa ${res.tariff.code} creada y seleccionada`);
+      setModalTariffName('');
+      setModalTariffDiscount('5');
+      setShowTariffModal(false);
+      await reload();
+      setCustTariffId(res.tariff.id);
+      setContractTariffId(res.tariff.id);
+      setModalContractTariffId(res.tariff.id);
+    });
   };
 
-  const buildCustomerCardPayload = (c: Customer): PrintDocumentPayload => {
-    const cnt = data.contracts.find((ct) => ct.id === c.contractId);
-    const trf = data.tariffs.find((t) => t.id === c.tariffId);
+  const filteredCustomers = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return data.customers;
+    return data.customers.filter(
+      (c) =>
+        c.code.toLowerCase().includes(q) ||
+        c.name.toLowerCase().includes(q) ||
+        c.nit.toLowerCase().includes(q) ||
+        c.contractCode.toLowerCase().includes(q)
+    );
+  }, [data.customers, searchQuery]);
+
+  const totalCustomersDebt = useMemo(
+    () => data.customers.reduce((acc, c) => acc + c.currentDebt, 0),
+    [data.customers]
+  );
+
+  const totalCreditLimit = useMemo(
+    () => data.customers.reduce((acc, c) => acc + c.creditLimit, 0),
+    [data.customers]
+  );
+
+  const totalPendingReceivables = useMemo(
+    () => data.pendingInvoices.reduce((acc, inv) => acc + inv.pendingBalance, 0),
+    [data.pendingInvoices]
+  );
+
+  const totalAbonosActive = useMemo(
+    () =>
+      data.pendingInvoices.reduce(
+        (acc, inv) => acc + Math.max(0, inv.invoiceTotal - inv.pendingBalance),
+        0
+      ),
+    [data.pendingInvoices]
+  );
+
+  const totalBudgetCeiling = useMemo(
+    () => data.contracts.reduce((acc, c) => acc + c.budgetCeiling, 0),
+    [data.contracts]
+  );
+
+  const totalAvailableContractBalance = useMemo(
+    () => data.contracts.reduce((acc, c) => acc + c.availableBalance, 0),
+    [data.contracts]
+  );
+
+  const exportCustomersCsv = () => {
+    downloadCsvUtf8(
+      'directorio_clientes.csv',
+      [
+        'Código',
+        'Razón Social / Nombre',
+        'NIT / Documento',
+        'Teléfono',
+        'Correo',
+        'Dirección',
+        'Convenio',
+        'Tarifa',
+        'Cupo Crédito',
+        'Saldo Cartera',
+      ],
+      filteredCustomers.map((c) => [
+        c.code,
+        c.name,
+        c.nit,
+        c.phone,
+        c.email,
+        c.address,
+        c.contractCode || 'Particular',
+        c.tariffName || 'Plena',
+        c.creditLimit,
+        c.currentDebt,
+      ])
+    );
+  };
+
+  const exportReceivablesCsv = () => {
+    downloadCsvUtf8(
+      'cartera_cuentas_por_cobrar.csv',
+      [
+        'Factura',
+        'Fecha Emisión',
+        'Cliente',
+        'NIT',
+        'Total Factura',
+        'Total Abonado',
+        'Saldo Pendiente',
+        'Cantidad Abonos',
+      ],
+      data.pendingInvoices.map((inv) => [
+        inv.invoiceNumber,
+        inv.issueDate,
+        inv.customerName,
+        inv.customerNit,
+        inv.invoiceTotal,
+        Math.max(0, inv.invoiceTotal - inv.pendingBalance),
+        inv.pendingBalance,
+        (inv.abonos || []).length,
+      ])
+    );
+  };
+
+  const exportContractsCsv = () => {
+    downloadCsvUtf8(
+      'convenios_comerciales.csv',
+      ['Código', 'Convenio', 'NIT Entidad', 'Tarifa', 'Tope Presupuestal', 'Consumido', 'Saldo Disponible'],
+      data.contracts.map((c) => [
+        c.code,
+        c.name,
+        c.entityNit,
+        c.tariffName || 'General',
+        c.budgetCeiling,
+        c.consumedAmount,
+        c.availableBalance,
+      ])
+    );
+  };
+
+  const buildCustomerPrintPayload = (c: Customer): Record<string, unknown> => ({
+    document_type: 'FICHA COMERCIAL DE CLIENTE / TERCERO',
+    document_number: c.code,
+    customer_name: c.name,
+    customer_nit: c.nit,
+    customer_phone: c.phone,
+    customer_address: c.address,
+    extra_fields: {
+      Código: c.code,
+      Convenio: c.contractCode || 'Particular',
+      Tarifa: c.tariffName || 'General',
+      'Cupo Autorizado': formatCop(c.creditLimit),
+      Correo: c.email || 'No registrado',
+    },
+    items: [
+      {
+        code: c.code,
+        description: `Estado actual de cartera del cliente ${c.name}`,
+        quantity: 1,
+        unit_price: c.currentDebt,
+        tax_pct: 0,
+        subtotal: c.currentDebt,
+      },
+    ],
+    subtotal: c.currentDebt,
+    grand_total: c.currentDebt,
+    pending_balance: c.currentDebt,
+    notes: `Cupo disponible estimado: ${formatCop(Math.max(0, c.creditLimit - c.currentDebt))}`,
+  });
+
+  const buildReceivablePrintPayload = (inv: Receivable): Record<string, unknown> => {
+    const abonado = Math.max(0, inv.invoiceTotal - inv.pendingBalance);
+    const historySummary =
+      (inv.abonos || [])
+        .map((a) => `${a.id} (${a.date}): ${formatCop(a.amount)} [${a.method}]`)
+        .join(' | ') || 'Sin abonos previos registrados.';
+
     return {
-      document_type: 'FICHA OFICIAL DE CLIENTE / TERCERO',
-      document_number: c.code,
-      customer_name: c.name,
-      customer_nit: c.dv ? `${c.nit}-${c.dv}` : c.nit,
-      customer_phone: c.phone,
-      customer_address: `${c.address} — ${c.city}`,
+      document_type: 'ESTADO DE CUENTA Y RELACIÓN DE ABONOS',
+      document_number: inv.invoiceNumber,
+      issue_date: inv.issueDate,
+      customer_name: inv.customerName,
+      customer_nit: inv.customerNit,
       extra_fields: {
-        'Código Maestro': c.code,
-        'Tipo Documento': c.docType,
-        'Régimen Tributario': c.taxRegime,
-        Convenio: cnt?.entityName || 'Particular',
-        Tarifa: trf?.name || 'Plena',
-        'Cupo Crédito': formatCop(c.creditLimit),
+        'Total Facturado': formatCop(inv.invoiceTotal),
+        'Total Abonado': formatCop(abonado),
+        'Abonos Aplicados': String((inv.abonos || []).length),
       },
       items: [
         {
-          code: c.code,
-          description: `Saldo actual en Cartera CxC (${c.name})`,
+          code: inv.invoiceNumber,
+          description: `Factura ${inv.invoiceNumber} emitida el ${inv.issueDate}`,
           quantity: 1,
-          unit_price: c.currentDebt,
+          unit_price: inv.invoiceTotal,
           tax_pct: 0,
-          subtotal: c.currentDebt,
+          subtotal: inv.invoiceTotal,
         },
       ],
-      subtotal: c.currentDebt,
-      grand_total: c.currentDebt,
-      pending_balance: c.currentDebt,
-      notes: `Correo electrónico registrado: ${c.email || 'No reportado'}`,
+      subtotal: inv.invoiceTotal,
+      discount_total: abonado,
+      grand_total: inv.pendingBalance,
+      pending_balance: inv.pendingBalance,
+      notes: historySummary,
     };
   };
 
-  const totalPortfolioDebt = data.pendingInvoices.reduce((acc, inv) => acc + inv.pendingBalance, 0);
-  const filteredCustomers = searchCustomer.trim()
-    ? data.customers.filter(
-        (c) =>
-          c.name.toLowerCase().includes(searchCustomer.toLowerCase()) ||
-          c.nit.toLowerCase().includes(searchCustomer.toLowerCase()) ||
-          c.code.toLowerCase().includes(searchCustomer.toLowerCase())
-      )
-    : data.customers;
-
-  if (activeModuleKey === 'cartera_cxc') {
-    const globalStatementPayload: PrintDocumentPayload = {
-      document_type: 'ESTADO GENERAL DE CARTERA POR COBRAR (CXC)',
+  const globalPortfolioPrintPayload: Record<string, unknown> = useMemo(
+    () => ({
+      document_type: 'ESTADO CONSOLIDADO DE CUENTAS POR COBRAR (CXC)',
       document_number: `CXC-${new Date().toISOString().slice(0, 10)}`,
-      customer_name: 'Consolidado Cartera Clientes',
+      customer_name: 'Consolidado General de Cartera',
       items: data.pendingInvoices.map((inv) => ({
-        code: inv.id,
-        description: `${inv.customerName} (${inv.date}) — Pagado: ${formatCop(inv.amountPaid)}`,
+        code: inv.invoiceNumber,
+        description: `${inv.customerName} (${inv.customerNit}) — Emisión ${inv.issueDate}`,
         quantity: 1,
         unit_price: inv.pendingBalance,
         tax_pct: 0,
         subtotal: inv.pendingBalance,
       })),
-      subtotal: totalPortfolioDebt,
-      grand_total: totalPortfolioDebt,
-      pending_balance: totalPortfolioDebt,
-      notes: 'Relación oficial de facturas con saldo pendiente de recaudo.',
-    };
-
-    return (
-      <div>
-        <PkKpiRow
-          items={[
-            { label: 'Total Cartera por Cobrar', value: formatCop(totalPortfolioDebt), color: 'var(--pk-amber)' },
-            { label: 'Facturas con Saldo Pendiente', value: String(data.pendingInvoices.length) },
-            {
-              label: 'Clientes con Cupo Asignado',
-              value: String(data.customers.filter((c) => c.creditLimit > 0).length),
-              color: 'var(--pk-primary)',
-            },
-          ]}
-        />
-
-        <div className="pk-card">
-          <div className="pk-card-head">
-            <div className="pk-card-title">💳 Facturas Pendientes de Cobro y Recibos de Caja</div>
-            <div className="pk-row-actions">
-              <PkPrintButton label="🖨️ Estado de Cuenta General" payload={globalStatementPayload} variant="primary" />
-            </div>
-          </div>
-          <div className="pk-card-body">
-            <div className="pk-table-wrap">
-              <table className="pk-table">
-                <thead>
-                  <tr>
-                    <th>Factura</th>
-                    <th>Fecha</th>
-                    <th>Cliente / NIT</th>
-                    <th>Total Factura</th>
-                    <th>Abonado</th>
-                    <th>Saldo Pendiente</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.pendingInvoices.map((inv) => {
-                    const invStatement: PrintDocumentPayload = {
-                      document_type: 'ESTADO DE CUENTA Y EXTRACTO DE ABONOS',
-                      document_number: inv.id,
-                      issue_date: inv.date,
-                      customer_name: inv.customerName,
-                      customer_nit: inv.customerNit,
-                      payment_method: inv.paymentMethod,
-                      extra_fields: {
-                        'Total Original': formatCop(inv.total),
-                        'Total Abonado': formatCop(inv.amountPaid),
-                        'Abonos Registrados': String((inv.abonosHistory || []).length),
-                      },
-                      items: inv.items.map((it) => ({
-                        code: it.code,
-                        description: it.name,
-                        quantity: it.qty,
-                        unit_price: it.price,
-                        tax_pct: it.taxPct,
-                        subtotal: it.qty * it.price,
-                      })),
-                      subtotal: inv.subtotal,
-                      discount_total: inv.discountTotal,
-                      tax_total: inv.taxTotal,
-                      grand_total: inv.total,
-                      pending_balance: inv.pendingBalance,
-                      notes:
-                        (inv.abonosHistory || [])
-                          .map((a) => `${a.id} (${a.date}): ${formatCop(a.amount)} [${a.method}]`)
-                          .join(' | ') || 'Sin abonos previos.',
-                    };
-
-                    return (
-                      <tr key={inv.id}>
-                        <td>
-                          <strong>{inv.id}</strong>
-                        </td>
-                        <td>{inv.date}</td>
-                        <td>
-                          <strong>{inv.customerName}</strong>
-                          <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>{inv.customerNit}</div>
-                        </td>
-                        <td>{formatCop(inv.total)}</td>
-                        <td style={{ color: 'var(--pk-emerald)', fontWeight: 700 }}>{formatCop(inv.amountPaid)}</td>
-                        <td>
-                          <span className="pk-badge pk-badge-amber">{formatCop(inv.pendingBalance)}</span>
-                        </td>
-                        <td>
-                          <div className="pk-row-actions">
-                            <button
-                              type="button"
-                              className="pk-btn pk-btn-emerald pk-btn-sm"
-                              onClick={() => openAbonoModal(inv)}
-                            >
-                              💵 Registrar Abono
-                            </button>
-                            <PkPrintButton label="🖨️ Estado de Cuenta" payload={invStatement} />
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {data.pendingInvoices.length === 0 && (
-                    <tr>
-                      <td colSpan={7} style={{ textAlign: 'center', color: 'var(--pk-muted)' }}>
-                        Excelente: no existen facturas vencidas o con saldo pendiente por cobrar.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <PkEntityDialog
-          open={Boolean(abonoInvoice)}
-          title={`💵 Registrar Abono a Factura ${abonoInvoice?.id || ''}`}
-          onClose={() => setAbonoInvoice(null)}
-        >
-          {abonoInvoice && (
-            <form onSubmit={handleConfirmAbono} className="pk-form-grid">
-              <div className="pk-field" style={{ gridColumn: '1 / -1' }}>
-                <label>Cliente y Saldo Actual</label>
-                <input
-                  readOnly
-                  value={`${abonoInvoice.customerName} — Saldo Pendiente: ${formatCop(abonoInvoice.pendingBalance)}`}
-                  style={{ background: '#f8fafc', fontWeight: 700 }}
-                />
-              </div>
-              <div className="pk-field">
-                <label>Valor a Abonar ($) *</label>
-                <input
-                  required
-                  type="number"
-                  min={1}
-                  max={abonoInvoice.pendingBalance}
-                  value={abonoAmount}
-                  onChange={(e) => setAbonoAmount(e.target.value)}
-                />
-              </div>
-              <div className="pk-field">
-                <label>Medio de Pago</label>
-                <select value={abonoMethod} onChange={(e) => setAbonoMethod(e.target.value)}>
-                  <option value="Transferencia Bancaria">Transferencia Bancaria / PSE</option>
-                  <option value="Efectivo en Caja">Efectivo en Caja</option>
-                  <option value="Nequi / Daviplata">Nequi / Daviplata</option>
-                  <option value="Tarjeta Débito / Crédito">Tarjeta Débito / Crédito</option>
-                </select>
-              </div>
-              <div className="pk-field" style={{ gridColumn: '1 / -1' }}>
-                <label>Comprobante / Observación</label>
-                <input
-                  value={abonoNote}
-                  onChange={(e) => setAbonoNote(e.target.value)}
-                  placeholder="Ej: Consignación Bancolombia #849201"
-                />
-              </div>
-              <div className="pk-row-actions" style={{ gridColumn: '1 / -1', justifyContent: 'flex-end' }}>
-                <button type="submit" className="pk-btn pk-btn-emerald">
-                  💾 Confirmar Recibo de Caja
-                </button>
-              </div>
-            </form>
-          )}
-        </PkEntityDialog>
-      </div>
-    );
-  }
-
-  if (activeModuleKey === 'contratos_convenios') {
-    const totalAvailable = data.contracts.reduce((acc, c) => acc + c.availableBalance, 0);
-    return (
-      <div>
-        <PkKpiRow
-          items={[
-            { label: 'Convenios Registrados', value: String(data.contracts.length) },
-            { label: 'Tarifarios Oficiales', value: String(data.tariffs.length) },
-            { label: 'Cupo Convenios Disponible', value: formatCop(totalAvailable), color: 'var(--pk-emerald)' },
-          ]}
-        />
-
-        <div className="pk-card">
-          <div className="pk-card-head">
-            <div className="pk-card-title">🤝 Crear Nuevo Convenio / Contrato Corporativo</div>
-          </div>
-          <div className="pk-card-body">
-            <form onSubmit={handleCreateContract} className="pk-form-grid">
-              <PkAutoCodeInput label="Código Convenio" value={data.nextContractCode} />
-              <div className="pk-field">
-                <label>Empresa o Entidad Contratante *</label>
-                <input
-                  required
-                  value={entityName}
-                  onChange={(e) => setEntityName(e.target.value)}
-                  placeholder="Ej: Cooperativa Santandereana de Transportes"
-                />
-              </div>
-              <PkEntitySelect
-                label="Tarifa Aplicable"
-                items={data.tariffs}
-                value={contractTariffId}
-                onChange={setContractTariffId}
-                getValue={(t) => t.id}
-                getLabel={(t) => `${t.name} (-${t.discountPct}%)`}
-              />
-              <div className="pk-field">
-                <label>Tope Presupuestal ($) *</label>
-                <input
-                  required
-                  type="number"
-                  min={0}
-                  value={budgetCeiling}
-                  onChange={(e) => setBudgetCeiling(e.target.value)}
-                />
-              </div>
-              <div className="pk-field">
-                <button type="submit" className="pk-btn pk-btn-primary">
-                  ➕ Guardar Convenio
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-
-        <div className="pk-card">
-          <div className="pk-card-head">
-            <div className="pk-card-title">📋 Convenios y Tarifarios Vigentes</div>
-          </div>
-          <div className="pk-card-body">
-            <div className="pk-table-wrap">
-              <table className="pk-table">
-                <thead>
-                  <tr>
-                    <th>Código</th>
-                    <th>Entidad / Convenio</th>
-                    <th>Tarifa Asociada</th>
-                    <th>Tope Contratado</th>
-                    <th>Consumido</th>
-                    <th>Saldo Disponible</th>
-                    <th>Estado</th>
-                    <th>Imprimir</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.contracts.map((cnt) => (
-                    <tr key={cnt.id}>
-                      <td>
-                        <strong>{cnt.code}</strong>
-                      </td>
-                      <td>{cnt.entityName}</td>
-                      <td>
-                        <span className="pk-badge pk-badge-blue">{cnt.tariffName}</span>
-                      </td>
-                      <td>{formatCop(cnt.budgetCeiling)}</td>
-                      <td>{formatCop(cnt.consumedAmount)}</td>
-                      <td style={{ fontWeight: 800, color: 'var(--pk-emerald)' }}>{formatCop(cnt.availableBalance)}</td>
-                      <td>
-                        <span className="pk-badge pk-badge-emerald">{cnt.status}</span>
-                      </td>
-                      <td>
-                        <PkPrintButton
-                          label="🖨️ Certificado"
-                          payload={{
-                            document_type: 'CERTIFICADO DE CONVENIO COMERCIAL',
-                            document_number: cnt.code,
-                            customer_name: cnt.entityName,
-                            extra_fields: {
-                              Tarifa: cnt.tariffName,
-                              Estado: cnt.status,
-                              'Tope Presupuestal': formatCop(cnt.budgetCeiling),
-                            },
-                            items: [
-                              {
-                                code: cnt.code,
-                                description: `Ejecución acumulada convenio ${cnt.entityName}`,
-                                quantity: 1,
-                                unit_price: cnt.consumedAmount,
-                                subtotal: cnt.consumedAmount,
-                              },
-                            ],
-                            subtotal: cnt.consumedAmount,
-                            grand_total: cnt.consumedAmount,
-                            notes: `Saldo disponible para facturación: ${formatCop(cnt.availableBalance)}`,
-                          }}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (activeModuleKey === 'flota_terceros') {
-    return (
-      <div>
-        <PkKpiRow
-          items={[
-            { label: 'Conductores Activos', value: String(data.drivers.length) },
-            { label: 'Empresas Transportadoras', value: String(data.carriers.length) },
-            { label: 'Vehículos / Placas Registrados', value: String(data.vehicles.length) },
-          ]}
-        />
-
-        <div className="pk-grid-2">
-          <div className="pk-card">
-            <div className="pk-card-head">
-              <div className="pk-card-title">🧑‍✈️ Catálogo Normalizado de Conductores</div>
-            </div>
-            <div className="pk-card-body">
-              <form onSubmit={handleCreateDriver} className="pk-form-grid" style={{ marginBottom: 14 }}>
-                <PkAutoCodeInput label="Código Conductor" value={data.nextDriverCode} />
-                <div className="pk-field">
-                  <label>Nombre Completo *</label>
-                  <input
-                    required
-                    value={driverName}
-                    onChange={(e) => setDriverName(e.target.value)}
-                    placeholder="Ej: Hernando Gómez"
-                  />
-                </div>
-                <div className="pk-field">
-                  <label>Cédula *</label>
-                  <input
-                    required
-                    value={driverDoc}
-                    onChange={(e) => setDriverDoc(e.target.value)}
-                    placeholder="79451230"
-                  />
-                </div>
-                <div className="pk-field">
-                  <label>Categoría Licencia</label>
-                  <select value={driverLicense} onChange={(e) => setDriverLicense(e.target.value)}>
-                    <option value="C3 Carga Pesada">C3 Carga Pesada</option>
-                    <option value="C2 Camión Rígido">C2 Camión Rígido</option>
-                    <option value="C1 Público Liviano">C1 Público Liviano</option>
-                    <option value="B2 Particular">B2 Particular</option>
-                  </select>
-                </div>
-                <div className="pk-field">
-                  <label>Celular</label>
-                  <input value={driverPhone} onChange={(e) => setDriverPhone(e.target.value)} placeholder="311..." />
-                </div>
-                <PkEntitySelect
-                  label="Vehículo Asignado"
-                  items={data.vehicles}
-                  value={driverVehicleId}
-                  onChange={setDriverVehicleId}
-                  getValue={(v) => v.id}
-                  getLabel={(v) => `${v.plate} — ${v.brand}`}
-                  onCreateNew={() => openQuickDialog('nueva-placa')}
-                  createLabel="+ Nueva Placa"
-                />
-                <div className="pk-field" style={{ gridColumn: '1 / -1' }}>
-                  <button type="submit" className="pk-btn pk-btn-primary">
-                    💾 Guardar Conductor
-                  </button>
-                </div>
-              </form>
-
-              <div className="pk-table-wrap">
-                <table className="pk-table">
-                  <thead>
-                    <tr>
-                      <th>Código</th>
-                      <th>Conductor</th>
-                      <th>Licencia</th>
-                      <th>Placa</th>
-                      <th>Ficha</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.drivers.map((drv) => (
-                      <tr key={drv.id}>
-                        <td>
-                          <strong>{drv.code}</strong>
-                        </td>
-                        <td>
-                          {drv.name}
-                          <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>CC {drv.docNumber}</div>
-                        </td>
-                        <td>{drv.licenseCategory}</td>
-                        <td>
-                          <span className="pk-badge pk-badge-slate">{drv.assignedPlate || '—'}</span>
-                        </td>
-                        <td>
-                          <PkPrintButton
-                            label="🖨️ Carnet"
-                            payload={{
-                              document_type: 'FICHA DE CONDUCTOR HABILITADO',
-                              document_number: drv.code,
-                              customer_name: drv.name,
-                              customer_nit: drv.docNumber,
-                              customer_phone: drv.phone,
-                              extra_fields: {
-                                Licencia: drv.licenseCategory,
-                                'Placa Asignada': drv.assignedPlate || 'Sin asignar',
-                                Estado: drv.status,
-                              },
-                              items: [
-                                {
-                                  code: drv.code,
-                                  description: `Registro oficial de conductor ${drv.name}`,
-                                  quantity: 1,
-                                  unit_price: 0,
-                                  subtotal: 0,
-                                },
-                              ],
-                              grand_total: 0,
-                            }}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-
-          <div className="pk-card">
-            <div className="pk-card-head">
-              <div className="pk-card-title">🚛 Empresas Transportadoras</div>
-            </div>
-            <div className="pk-card-body">
-              <form onSubmit={handleCreateCarrier} className="pk-form-grid" style={{ marginBottom: 14 }}>
-                <PkAutoCodeInput label="Código Transportista" value={data.nextCarrierCode} />
-                <div className="pk-field">
-                  <label>NIT *</label>
-                  <input
-                    required
-                    value={carrierNit}
-                    onChange={(e) => setCarrierNit(e.target.value)}
-                    placeholder="900441122-3"
-                  />
-                </div>
-                <div className="pk-field">
-                  <label>Razón Social *</label>
-                  <input
-                    required
-                    value={carrierName}
-                    onChange={(e) => setCarrierName(e.target.value)}
-                    placeholder="Logística Nacional S.A.S."
-                  />
-                </div>
-                <div className="pk-field">
-                  <label>Tipo de Flota</label>
-                  <input value={carrierVehicleType} onChange={(e) => setCarrierVehicleType(e.target.value)} />
-                </div>
-                <div className="pk-field">
-                  <label>Ruta / Cobertura</label>
-                  <input value={carrierRoute} onChange={(e) => setCarrierRoute(e.target.value)} />
-                </div>
-                <div className="pk-field">
-                  <label>Teléfono Despachos</label>
-                  <input value={carrierPhone} onChange={(e) => setCarrierPhone(e.target.value)} />
-                </div>
-                <div className="pk-field" style={{ gridColumn: '1 / -1' }}>
-                  <button type="submit" className="pk-btn pk-btn-primary">
-                    💾 Guardar Transportadora
-                  </button>
-                </div>
-              </form>
-
-              <div className="pk-table-wrap">
-                <table className="pk-table">
-                  <thead>
-                    <tr>
-                      <th>Código</th>
-                      <th>Empresa / NIT</th>
-                      <th>Flota / Ruta</th>
-                      <th>Ficha</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.carriers.map((car) => (
-                      <tr key={car.id}>
-                        <td>
-                          <strong>{car.code}</strong>
-                        </td>
-                        <td>
-                          {car.name}
-                          <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>NIT {car.nit}</div>
-                        </td>
-                        <td>
-                          {car.vehicleType}
-                          <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>{car.routeZone}</div>
-                        </td>
-                        <td>
-                          <PkPrintButton
-                            label="🖨️ Ficha"
-                            payload={{
-                              document_type: 'REGISTRO DE EMPRESA TRANSPORTADORA',
-                              document_number: car.code,
-                              customer_name: car.name,
-                              customer_nit: car.nit,
-                              customer_phone: car.phone,
-                              extra_fields: {
-                                'Tipo Flota': car.vehicleType,
-                                'Zona / Ruta': car.routeZone,
-                              },
-                              items: [
-                                {
-                                  code: car.code,
-                                  description: `Transportadora aliada ${car.name}`,
-                                  quantity: 1,
-                                  unit_price: 0,
-                                  subtotal: 0,
-                                },
-                              ],
-                              grand_total: 0,
-                            }}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="pk-card">
-          <div className="pk-card-head">
-            <div className="pk-card-title">🚗 Placas y Vehículos Vinculados a Clientes</div>
-            <button
-              type="button"
-              className="pk-btn pk-btn-outline pk-btn-sm"
-              onClick={() => openQuickDialog('nueva-placa')}
-            >
-              ➕ Registrar Nueva Placa
-            </button>
-          </div>
-          <div className="pk-card-body">
-            <div className="pk-table-wrap">
-              <table className="pk-table">
-                <thead>
-                  <tr>
-                    <th>Placa</th>
-                    <th>Marca / Línea</th>
-                    <th>Modelo</th>
-                    <th>Propietario</th>
-                    <th>Kilometraje</th>
-                    <th>SOAT</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.vehicles.map((v) => (
-                    <tr key={v.id}>
-                      <td>
-                        <span className="pk-badge pk-badge-blue">{v.plate}</span>
-                      </td>
-                      <td>{v.brand}</td>
-                      <td>{v.modelYear}</td>
-                      <td>{v.customerName || '—'}</td>
-                      <td>{v.currentKm.toLocaleString('es-CO')} km</td>
-                      <td>{v.soatExpiry || '—'}</td>
-                      <td>
-                        <button
-                          type="button"
-                          className="pk-btn pk-btn-danger pk-btn-sm"
-                          onClick={() => void handleDeleteVehicle(v.id)}
-                        >
-                          🗑️ Eliminar
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+      subtotal: totalPendingReceivables,
+      grand_total: totalPendingReceivables,
+      pending_balance: totalPendingReceivables,
+      notes: 'Relación oficial de obligaciones comerciales pendientes de recaudo.',
+    }),
+    [data.pendingInvoices, totalPendingReceivables]
+  );
 
   return (
     <div>
-      <PkKpiRow
-        items={[
-          { label: 'Clientes Registrados', value: String(data.customers.length) },
-          {
-            label: 'Cartera Acumulada Clientes',
-            value: formatCop(data.customers.reduce((acc, c) => acc + c.currentDebt, 0)),
-            color: 'var(--pk-amber)',
-          },
-          { label: 'Convenios Activos', value: String(data.contracts.length), color: 'var(--pk-primary)' },
-          { label: 'Vehículos Asociados', value: String(data.vehicles.length) },
-        ]}
-      />
+      {effectiveModule === 'directorio_clientes' && (
+        <ModuleGate module="directorio_clientes">
+          <PkKpiRow
+            items={[
+              { label: 'Clientes en Directorio', value: String(data.customers.length) },
+              {
+                label: 'Clientes con Convenio',
+                value: String(data.customers.filter((c) => Boolean(c.contractId)).length),
+                color: 'var(--pk-primary)',
+              },
+              {
+                label: 'Cartera Acumulada',
+                value: formatCop(totalCustomersDebt),
+                color: 'var(--pk-amber)',
+              },
+              {
+                label: 'Cupo Total Autorizado',
+                value: formatCop(totalCreditLimit),
+                color: 'var(--pk-emerald)',
+              },
+            ]}
+          />
 
-      <div className="pk-card">
-        <div className="pk-card-head">
-          <div className="pk-card-title">👤 Registrar Cliente / Empresa en Directorio Maestro</div>
-        </div>
-        <div className="pk-card-body">
-          <form onSubmit={handleCreateCustomer} className="pk-form-grid">
-            <PkAutoCodeInput label="Código Cliente" value={data.nextCustomerCode} />
-
-            <div className="pk-field">
-              <label>Tipo Documento</label>
-              <select value={docType} onChange={(e) => setDocType(e.target.value)}>
-                <option value="NIT">NIT Empresarial</option>
-                <option value="CC">Cédula de Ciudadanía</option>
-                <option value="CE">Cédula de Extranjería</option>
-                <option value="PP">Pasaporte</option>
-              </select>
+          <div className="pk-card">
+            <div className="pk-card-head">
+              <div className="pk-card-title">👤 Registrar Cliente o Tercero Comercial</div>
             </div>
+            <div className="pk-card-body">
+              <form onSubmit={(e) => void handleCreateCustomer(e)} className="pk-form-grid">
+                <PkAutoCodeInput label="Código Cliente" value={data.nextCustomerCode} />
 
-            <div className="pk-field">
-              <label>Número NIT / Cédula *</label>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <input
-                  required
-                  value={nit}
-                  onChange={(e) => setNit(e.target.value)}
-                  placeholder="900812345"
-                  style={{ flex: 1 }}
+                <div className="pk-field">
+                  <label htmlFor="pk-cust-name">Razón Social o Nombre *</label>
+                  <input
+                    id="pk-cust-name"
+                    required
+                    value={custName}
+                    onChange={(e) => setCustName(e.target.value)}
+                    placeholder="Ej: Comercializadora del Oriente S.A.S."
+                  />
+                </div>
+
+                <div className="pk-field">
+                  <label htmlFor="pk-cust-nit">NIT o Documento *</label>
+                  <input
+                    id="pk-cust-nit"
+                    required
+                    value={custNit}
+                    onChange={(e) => setCustNit(e.target.value)}
+                    placeholder="900.512.340-8"
+                  />
+                </div>
+
+                <div className="pk-field">
+                  <label htmlFor="pk-cust-phone">Teléfono</label>
+                  <input
+                    id="pk-cust-phone"
+                    value={custPhone}
+                    onChange={(e) => setCustPhone(e.target.value)}
+                    placeholder="6017402200"
+                  />
+                </div>
+
+                <div className="pk-field">
+                  <label htmlFor="pk-cust-email">Correo Electrónico</label>
+                  <input
+                    id="pk-cust-email"
+                    type="email"
+                    value={custEmail}
+                    onChange={(e) => setCustEmail(e.target.value)}
+                    placeholder="tesoreria@empresa.co"
+                  />
+                </div>
+
+                <div className="pk-field">
+                  <label htmlFor="pk-cust-address">Dirección Comercial</label>
+                  <input
+                    id="pk-cust-address"
+                    value={custAddress}
+                    onChange={(e) => setCustAddress(e.target.value)}
+                    placeholder="Calle 72 # 10-34 Of. 502"
+                  />
+                </div>
+
+                <PkSelect
+                  label="Convenio Comercial"
+                  items={data.contracts}
+                  value={custContractId}
+                  onChange={handleSelectCustomerContract}
+                  getValue={(c) => c.id}
+                  getLabel={(c) => `${c.code} — ${c.name}`}
+                  emptyLabel="Particular (Sin convenio)"
+                  onCreateNew={hasModule('contratos_convenios') ? () => setShowContractModal(true) : undefined}
+                  createLabel="+ Nuevo Convenio"
+                  searchable
                 />
+
+                <PkSelect
+                  label="Tarifa Comercial"
+                  items={data.tariffs}
+                  value={custTariffId}
+                  onChange={setCustTariffId}
+                  getValue={(t) => t.id}
+                  getLabel={(t) => `${t.code} — ${t.name} (-${t.discountPct}%)`}
+                  emptyLabel="Tarifa estándar (0%)"
+                  onCreateNew={hasModule('contratos_convenios') ? () => setShowTariffModal(true) : undefined}
+                  createLabel="+ Nueva Tarifa"
+                />
+
+                <FeatureGate module="cartera_cxc" feature="cupo_credito_control">
+                  <div className="pk-field">
+                    <label htmlFor="pk-cust-limit">Cupo de Crédito Autorizado ($)</label>
+                    <input
+                      id="pk-cust-limit"
+                      type="number"
+                      min={0}
+                      step="1000"
+                      value={custCreditLimit}
+                      onChange={(e) => setCustCreditLimit(e.target.value)}
+                    />
+                  </div>
+                </FeatureGate>
+
+                <div className="pk-field">
+                  <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
+                    {busy ? 'Guardando...' : '➕ Registrar Cliente'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div className="pk-card">
+            <div className="pk-card-head">
+              <div className="pk-card-title">📋 Directorio Maestro de Clientes</div>
+              <div className="pk-row-actions">
                 <input
-                  value={dv}
-                  onChange={(e) => setDv(e.target.value)}
-                  placeholder="DV"
-                  style={{ width: 54 }}
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Filtrar por código, nombre o NIT..."
+                  aria-label="Filtrar clientes"
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: 8,
+                    border: '1px solid var(--pk-border)',
+                    fontSize: 12.5,
+                    minWidth: 230,
+                  }}
+                />
+                <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={exportCustomersCsv}>
+                  📥 Exportar CSV
+                </button>
+              </div>
+            </div>
+            <div className="pk-card-body">
+              <div className="pk-table-wrap">
+                <table className="pk-table">
+                  <thead>
+                    <tr>
+                      <th>Código</th>
+                      <th>Cliente / NIT</th>
+                      <th>Contacto</th>
+                      <th>Convenio / Tarifa</th>
+                      <FeatureGate module="cartera_cxc" feature="cupo_credito_control">
+                        <th className="num">Cupo Crédito</th>
+                      </FeatureGate>
+                      <th className="num">Saldo Cartera</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredCustomers.map((c) => (
+                      <tr key={c.id}>
+                        <td>
+                          <strong>{c.code}</strong>
+                        </td>
+                        <td>
+                          <strong>{c.name}</strong>
+                          <div style={{ fontSize: 11.5, color: 'var(--pk-muted)' }}>NIT {c.nit}</div>
+                        </td>
+                        <td>
+                          <div>{c.phone || '—'}</div>
+                          <div style={{ fontSize: 11.5, color: 'var(--pk-muted)' }}>{c.email || c.address || '—'}</div>
+                        </td>
+                        <td>
+                          {c.contractCode ? (
+                            <span className="pk-badge pk-badge-blue">{c.contractCode}</span>
+                          ) : (
+                            <span className="pk-badge pk-badge-slate">Particular</span>
+                          )}
+                          <div style={{ fontSize: 11, color: 'var(--pk-muted)', marginTop: 3 }}>
+                            {c.tariffName || 'Tarifa estándar'}
+                          </div>
+                        </td>
+                        <FeatureGate module="cartera_cxc" feature="cupo_credito_control">
+                          <td className="num">{formatCop(c.creditLimit)}</td>
+                        </FeatureGate>
+                        <td className="num">
+                          <span className={`pk-badge ${c.currentDebt > 0 ? 'pk-badge-amber' : 'pk-badge-emerald'}`}>
+                            {formatCop(c.currentDebt)}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="pk-row-actions">
+                            {hasService('ms-facturacion') && (
+                              <button
+                                type="button"
+                                className="pk-btn pk-btn-primary pk-btn-sm"
+                                onClick={() => handleBillCustomer(c)}
+                              >
+                                🛒 Facturar
+                              </button>
+                            )}
+                            <PkPrintButton label="🖨️ Ficha" payload={buildCustomerPrintPayload(c)} />
+                            <button
+                              type="button"
+                              className="pk-btn pk-btn-danger pk-btn-sm"
+                              disabled={busy}
+                              onClick={() => setCustomerToDelete(c)}
+                            >
+                              Eliminar
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredCustomers.length === 0 && (
+                      <tr>
+                        <td colSpan={7} style={{ textAlign: 'center', color: 'var(--pk-muted)' }}>
+                          No se encontraron clientes para el criterio consultado.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </ModuleGate>
+      )}
+
+      {effectiveModule === 'cartera_cxc' && (
+        <ModuleGate module="cartera_cxc">
+          <PkKpiRow
+            items={[
+              {
+                label: 'Total Cartera por Cobrar',
+                value: formatCop(totalPendingReceivables),
+                color: 'var(--pk-amber)',
+              },
+              {
+                label: 'Facturas con Saldo Pendiente',
+                value: String(data.pendingInvoices.length),
+              },
+              {
+                label: 'Abonos Aplicados en Cartera Activa',
+                value: formatCop(totalAbonosActive),
+                color: 'var(--pk-emerald)',
+              },
+              {
+                label: 'Clientes con Cupo Asignado',
+                value: String(data.customers.filter((c) => c.creditLimit > 0).length),
+                color: 'var(--pk-primary)',
+              },
+            ]}
+          />
+
+          <div className="pk-card">
+            <div className="pk-card-head">
+              <div className="pk-card-title">💳 Facturas Pendientes de Recaudo y Abonos</div>
+              <div className="pk-row-actions">
+                <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={exportReceivablesCsv}>
+                  📥 Exportar Cartera CSV
+                </button>
+                <PkPrintButton
+                  label="🖨️ Estado de Cuenta General"
+                  payload={globalPortfolioPrintPayload}
+                  variant="primary"
                 />
               </div>
             </div>
+            <div className="pk-card-body">
+              <div className="pk-table-wrap">
+                <table className="pk-table">
+                  <thead>
+                    <tr>
+                      <th>Factura</th>
+                      <th>Emisión</th>
+                      <th>Cliente / NIT</th>
+                      <th className="num">Total Factura</th>
+                      <th className="num">Abonado</th>
+                      <th className="num">Saldo Pendiente</th>
+                      <th>Abonos</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.pendingInvoices.map((inv) => {
+                      const paid = Math.max(0, inv.invoiceTotal - inv.pendingBalance);
+                      const abonosCount = (inv.abonos || []).length;
+                      return (
+                        <tr key={inv.invoiceId}>
+                          <td>
+                            <strong>{inv.invoiceNumber}</strong>
+                          </td>
+                          <td>{inv.issueDate}</td>
+                          <td>
+                            <strong>{inv.customerName}</strong>
+                            <div style={{ fontSize: 11.5, color: 'var(--pk-muted)' }}>{inv.customerNit}</div>
+                          </td>
+                          <td className="num">{formatCop(inv.invoiceTotal)}</td>
+                          <td className="num" style={{ color: 'var(--pk-emerald)', fontWeight: 700 }}>
+                            {formatCop(paid)}
+                          </td>
+                          <td className="num">
+                            <span className="pk-badge pk-badge-amber">{formatCop(inv.pendingBalance)}</span>
+                          </td>
+                          <td>
+                            <span className="pk-badge pk-badge-slate">{abonosCount} registro(s)</span>
+                          </td>
+                          <td>
+                            <div className="pk-row-actions">
+                              <button
+                                type="button"
+                                className="pk-btn pk-btn-emerald pk-btn-sm"
+                                disabled={busy}
+                                onClick={() => openAbonoModal(inv)}
+                              >
+                                💵 Registrar Abono
+                              </button>
+                              <PkPrintButton
+                                label="🖨️ Estado de Cuenta"
+                                payload={buildReceivablePrintPayload(inv)}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {data.pendingInvoices.length === 0 && (
+                      <tr>
+                        <td colSpan={8} style={{ textAlign: 'center', color: 'var(--pk-muted)' }}>
+                          No existen facturas con saldo pendiente de cobro en este momento.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </ModuleGate>
+      )}
+
+      {effectiveModule === 'contratos_convenios' && (
+        <ModuleGate module="contratos_convenios">
+          <PkKpiRow
+            items={[
+              { label: 'Convenios Registrados', value: String(data.contracts.length) },
+              {
+                label: 'Tarifarios Oficiales',
+                value: String(data.tariffs.length),
+                color: 'var(--pk-primary)',
+              },
+              {
+                label: 'Presupuesto Total Contratado',
+                value: formatCop(totalBudgetCeiling),
+              },
+              {
+                label: 'Saldo Convenios Disponible',
+                value: formatCop(totalAvailableContractBalance),
+                color: 'var(--pk-emerald)',
+              },
+            ]}
+          />
+
+          <div className="pk-grid-2">
+            <div className="pk-card">
+              <div className="pk-card-head">
+                <div className="pk-card-title">🤝 Nuevo Convenio o Contrato Comercial</div>
+              </div>
+              <div className="pk-card-body">
+                <form onSubmit={(e) => void handleCreateContractInline(e)} className="pk-form-grid">
+                  <PkAutoCodeInput label="Código Convenio" value={data.nextContractCode} />
+                  <div className="pk-field">
+                    <label htmlFor="pk-cnt-name">Nombre del Convenio / Entidad *</label>
+                    <input
+                      id="pk-cnt-name"
+                      required
+                      value={contractName}
+                      onChange={(e) => setContractName(e.target.value)}
+                      placeholder="Ej: Acuerdo Suministro Industrial del Norte"
+                    />
+                  </div>
+                  <div className="pk-field">
+                    <label htmlFor="pk-cnt-nit">NIT Entidad Contratante</label>
+                    <input
+                      id="pk-cnt-nit"
+                      value={contractNit}
+                      onChange={(e) => setContractNit(e.target.value)}
+                      placeholder="890.211.409-3"
+                    />
+                  </div>
+                  <PkSelect
+                    label="Tarifa Asociada"
+                    items={data.tariffs}
+                    value={contractTariffId}
+                    onChange={setContractTariffId}
+                    getValue={(t) => t.id}
+                    getLabel={(t) => `${t.code} — ${t.name} (-${t.discountPct}%)`}
+                    emptyLabel="Sin tarifa especial"
+                    onCreateNew={() => setShowTariffModal(true)}
+                    createLabel="+ Nueva Tarifa"
+                  />
+                  <div className="pk-field">
+                    <label htmlFor="pk-cnt-ceiling">Tope Presupuestal ($) *</label>
+                    <input
+                      id="pk-cnt-ceiling"
+                      required
+                      type="number"
+                      min={0}
+                      step="1000"
+                      value={contractCeiling}
+                      onChange={(e) => setContractCeiling(e.target.value)}
+                    />
+                  </div>
+                  <div className="pk-field">
+                    <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
+                      {busy ? 'Guardando...' : '➕ Guardar Convenio'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            <div className="pk-card">
+              <div className="pk-card-head">
+                <div className="pk-card-title">🏷️ Catálogo de Tarifas y Descuentos</div>
+              </div>
+              <div className="pk-card-body">
+                <form
+                  onSubmit={(e) => void handleCreateTariffInline(e)}
+                  className="pk-form-grid"
+                  style={{ marginBottom: 14 }}
+                >
+                  <PkAutoCodeInput label="Código Tarifa" value={data.nextTariffCode} />
+                  <div className="pk-field">
+                    <label htmlFor="pk-trf-name">Nombre de la Tarifa *</label>
+                    <input
+                      id="pk-trf-name"
+                      required
+                      value={tariffName}
+                      onChange={(e) => setTariffName(e.target.value)}
+                      placeholder="Ej: Aliado Corporativo Oro"
+                    />
+                  </div>
+                  <div className="pk-field">
+                    <label htmlFor="pk-trf-discount">Descuento Comercial (%) *</label>
+                    <input
+                      id="pk-trf-discount"
+                      required
+                      type="number"
+                      min={0}
+                      max={100}
+                      step="0.01"
+                      value={tariffDiscount}
+                      onChange={(e) => setTariffDiscount(e.target.value)}
+                    />
+                  </div>
+                  <div className="pk-field">
+                    <button type="submit" className="pk-btn pk-btn-emerald" disabled={busy}>
+                      {busy ? 'Guardando...' : '➕ Guardar Tarifa'}
+                    </button>
+                  </div>
+                </form>
+
+                <div className="pk-table-wrap">
+                  <table className="pk-table">
+                    <thead>
+                      <tr>
+                        <th>Código</th>
+                        <th>Tarifa</th>
+                        <th className="num">Descuento</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.tariffs.map((t) => (
+                        <tr key={t.id}>
+                          <td>
+                            <strong>{t.code}</strong>
+                          </td>
+                          <td>{t.name}</td>
+                          <td className="num">
+                            <span className="pk-badge pk-badge-blue">{t.discountPct}%</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="pk-card">
+            <div className="pk-card-head">
+              <div className="pk-card-title">📊 Convenios Vigentes y Control Presupuestal</div>
+              <div className="pk-row-actions">
+                <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={exportContractsCsv}>
+                  📥 Exportar Convenios CSV
+                </button>
+              </div>
+            </div>
+            <div className="pk-card-body">
+              <div className="pk-table-wrap">
+                <table className="pk-table">
+                  <thead>
+                    <tr>
+                      <th>Código</th>
+                      <th>Convenio / Entidad</th>
+                      <th>Tarifa Aplicable</th>
+                      <th className="num">Tope Contratado</th>
+                      <th className="num">Consumido</th>
+                      <th className="num">Saldo Disponible</th>
+                      <th>Certificado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.contracts.map((cnt) => (
+                      <tr key={cnt.id}>
+                        <td>
+                          <strong>{cnt.code}</strong>
+                        </td>
+                        <td>
+                          <strong>{cnt.name}</strong>
+                          {cnt.entityNit && (
+                            <div style={{ fontSize: 11.5, color: 'var(--pk-muted)' }}>NIT {cnt.entityNit}</div>
+                          )}
+                        </td>
+                        <td>
+                          <span className="pk-badge pk-badge-blue">{cnt.tariffName || 'General'}</span>
+                        </td>
+                        <td className="num">{formatCop(cnt.budgetCeiling)}</td>
+                        <td className="num">{formatCop(cnt.consumedAmount)}</td>
+                        <td className="num" style={{ fontWeight: 800, color: 'var(--pk-emerald)' }}>
+                          {formatCop(cnt.availableBalance)}
+                        </td>
+                        <td>
+                          <PkPrintButton
+                            label="🖨️ Certificado"
+                            payload={{
+                              document_type: 'CERTIFICADO DE EJECUCIÓN DE CONVENIO COMERCIAL',
+                              document_number: cnt.code,
+                              customer_name: cnt.name,
+                              customer_nit: cnt.entityNit,
+                              extra_fields: {
+                                Código: cnt.code,
+                                Tarifa: cnt.tariffName || 'General',
+                                'Tope Presupuestal': formatCop(cnt.budgetCeiling),
+                                'Saldo Disponible': formatCop(cnt.availableBalance),
+                              },
+                              items: [
+                                {
+                                  code: cnt.code,
+                                  description: `Consumo acumulado convenio ${cnt.name}`,
+                                  quantity: 1,
+                                  unit_price: cnt.consumedAmount,
+                                  tax_pct: 0,
+                                  subtotal: cnt.consumedAmount,
+                                },
+                              ],
+                              subtotal: cnt.consumedAmount,
+                              grand_total: cnt.consumedAmount,
+                              notes: `Saldo presupuestal disponible para nuevas órdenes: ${formatCop(cnt.availableBalance)}`,
+                            }}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                    {data.contracts.length === 0 && (
+                      <tr>
+                        <td colSpan={7} style={{ textAlign: 'center', color: 'var(--pk-muted)' }}>
+                          No hay convenios comerciales registrados.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </ModuleGate>
+      )}
+
+      <PkModal
+        open={showContractModal}
+        title="🤝 Crear Nuevo Convenio Comercial"
+        onClose={() => setShowContractModal(false)}
+      >
+        <form onSubmit={(e) => void handleCreateContractFromModal(e)} className="pk-form-grid">
+          <PkAutoCodeInput label="Código Convenio" value={data.nextContractCode} />
+          <div className="pk-field">
+            <label htmlFor="pk-modal-cnt-name">Nombre del Convenio *</label>
+            <input
+              id="pk-modal-cnt-name"
+              required
+              value={modalContractName}
+              onChange={(e) => setModalContractName(e.target.value)}
+              placeholder="Ej: Convenio Corporativo Empresarial"
+            />
+          </div>
+          <div className="pk-field">
+            <label htmlFor="pk-modal-cnt-nit">NIT Entidad</label>
+            <input
+              id="pk-modal-cnt-nit"
+              value={modalContractNit}
+              onChange={(e) => setModalContractNit(e.target.value)}
+              placeholder="900.410.220-1"
+            />
+          </div>
+          <PkSelect
+            label="Tarifa Aplicable"
+            items={data.tariffs}
+            value={modalContractTariffId}
+            onChange={setModalContractTariffId}
+            getValue={(t) => t.id}
+            getLabel={(t) => `${t.code} — ${t.name} (-${t.discountPct}%)`}
+            emptyLabel="Sin tarifa especial"
+          />
+          <div className="pk-field">
+            <label htmlFor="pk-modal-cnt-ceiling">Tope Presupuestal ($) *</label>
+            <input
+              id="pk-modal-cnt-ceiling"
+              required
+              type="number"
+              min={0}
+              step="1000"
+              value={modalContractCeiling}
+              onChange={(e) => setModalContractCeiling(e.target.value)}
+            />
+          </div>
+          <div className="pk-row-actions" style={{ gridColumn: '1 / -1', justifyContent: 'flex-end' }}>
+            <button
+              type="button"
+              className="pk-btn pk-btn-outline"
+              onClick={() => setShowContractModal(false)}
+              disabled={busy}
+            >
+              Cancelar
+            </button>
+            <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
+              {busy ? 'Guardando...' : 'Guardar Convenio'}
+            </button>
+          </div>
+        </form>
+      </PkModal>
+
+      <PkModal
+        open={showTariffModal}
+        title="🏷️ Crear Nueva Tarifa Comercial"
+        onClose={() => setShowTariffModal(false)}
+        maxWidth={500}
+      >
+        <form onSubmit={(e) => void handleCreateTariffFromModal(e)} className="pk-form-grid">
+          <PkAutoCodeInput label="Código Tarifa" value={data.nextTariffCode} />
+          <div className="pk-field">
+            <label htmlFor="pk-modal-trf-name">Nombre de la Tarifa *</label>
+            <input
+              id="pk-modal-trf-name"
+              required
+              value={modalTariffName}
+              onChange={(e) => setModalTariffName(e.target.value)}
+              placeholder="Ej: Descuento Institucional"
+            />
+          </div>
+          <div className="pk-field">
+            <label htmlFor="pk-modal-trf-disc">Porcentaje de Descuento (%) *</label>
+            <input
+              id="pk-modal-trf-disc"
+              required
+              type="number"
+              min={0}
+              max={100}
+              step="0.01"
+              value={modalTariffDiscount}
+              onChange={(e) => setModalTariffDiscount(e.target.value)}
+            />
+          </div>
+          <div className="pk-row-actions" style={{ gridColumn: '1 / -1', justifyContent: 'flex-end' }}>
+            <button
+              type="button"
+              className="pk-btn pk-btn-outline"
+              onClick={() => setShowTariffModal(false)}
+              disabled={busy}
+            >
+              Cancelar
+            </button>
+            <button type="submit" className="pk-btn pk-btn-emerald" disabled={busy}>
+              {busy ? 'Guardando...' : 'Guardar Tarifa'}
+            </button>
+          </div>
+        </form>
+      </PkModal>
+
+      <PkModal
+        open={Boolean(abonoTarget)}
+        title={`💵 Registrar Abono — Factura ${abonoTarget?.invoiceNumber || ''}`}
+        onClose={() => setAbonoTarget(null)}
+      >
+        {abonoTarget && (
+          <form onSubmit={(e) => void handleSubmitAbono(e)} className="pk-form-grid">
+            <div className="pk-field" style={{ gridColumn: '1 / -1' }}>
+              <label>Resumen de la Obligación</label>
+              <input
+                readOnly
+                value={`${abonoTarget.customerName} — Saldo Pendiente: ${formatCop(abonoTarget.pendingBalance)}`}
+                style={{ background: '#f8fafc', fontWeight: 700 }}
+              />
+            </div>
+
+            {(abonoTarget.abonos || []).length > 0 && (
+              <div style={{ gridColumn: '1 / -1', fontSize: 12, color: 'var(--pk-muted)' }}>
+                <strong>Abonos previos:</strong>{' '}
+                {abonoTarget.abonos.map((a) => `${a.id}: ${formatCop(a.amount)} (${a.date})`).join(' · ')}
+              </div>
+            )}
 
             <div className="pk-field">
-              <label>Nombre Completo o Razón Social *</label>
+              <label htmlFor="pk-abono-amount">Valor del Abono ($) *</label>
               <input
+                id="pk-abono-amount"
                 required
-                value={custName}
-                onChange={(e) => setCustName(e.target.value)}
-                placeholder="Ej: Transportes del Oriente S.A.S."
+                type="number"
+                min={0.01}
+                max={abonoTarget.pendingBalance}
+                step="any"
+                value={abonoAmount}
+                onChange={(e) => setAbonoAmount(e.target.value)}
               />
             </div>
 
             <div className="pk-field">
-              <label>Régimen Tributario</label>
-              <select value={taxRegime} onChange={(e) => setTaxRegime(e.target.value)}>
-                <option value="Responsable de IVA">Responsable de IVA</option>
-                <option value="No Responsable">No Responsable de IVA</option>
-                <option value="Régimen Simple RST">Régimen Simple (RST)</option>
-                <option value="Gran Contribuyente">Gran Contribuyente</option>
+              <label htmlFor="pk-abono-method">Medio de Pago</label>
+              <select
+                id="pk-abono-method"
+                value={abonoMethod}
+                onChange={(e) => setAbonoMethod(e.target.value)}
+              >
+                <option value="Transferencia Bancaria">Transferencia Bancaria / PSE</option>
+                <option value="Efectivo en Caja">Efectivo en Caja</option>
+                <option value="Billetera Digital">Billetera Digital Corporativa</option>
+                <option value="Tarjeta Empresarial">Tarjeta Empresarial</option>
               </select>
             </div>
 
-            <div className="pk-field">
-              <label>Teléfono / WhatsApp</label>
-              <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="310 450 9988" />
+            <div className="pk-field" style={{ gridColumn: '1 / -1' }}>
+              <label htmlFor="pk-abono-note">Referencia / Observación</label>
+              <input
+                id="pk-abono-note"
+                value={abonoNote}
+                onChange={(e) => setAbonoNote(e.target.value)}
+                placeholder="Ej: Comprobante transferencia ACH #482910"
+              />
             </div>
 
-            <div className="pk-field">
-              <label>Correo Electrónico</label>
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="cliente@empresa.co" />
-            </div>
-
-            <div className="pk-field">
-              <label>Ciudad</label>
-              <input value={city} onChange={(e) => setCity(e.target.value)} />
-            </div>
-
-            <div className="pk-field">
-              <label>Dirección</label>
-              <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Calle / Carrera #" />
-            </div>
-
-            <PkEntitySelect
-              label="Contrato / Convenio"
-              items={data.contracts}
-              value={contractId}
-              onChange={(val) => {
-                setContractId(val);
-                const found = data.contracts.find((ct) => ct.id === val);
-                if (found?.tariffId) setTariffId(found.tariffId);
-              }}
-              getValue={(c) => c.id}
-              getLabel={(c) => `${c.code} — ${c.entityName}`}
-            />
-
-            <PkEntitySelect
-              label="Tarifa Asignada"
-              items={data.tariffs}
-              value={tariffId}
-              onChange={setTariffId}
-              getValue={(t) => t.id}
-              getLabel={(t) => `${t.name} (-${t.discountPct}%)`}
-            />
-
-            <FeatureGate module="cartera_cxc" feature="cupo_credito_control">
-              <div className="pk-field">
-                <label>Cupo Máximo de Crédito ($)</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={creditLimit}
-                  onChange={(e) => setCreditLimit(e.target.value)}
-                />
-              </div>
-            </FeatureGate>
-
-            <div className="pk-field">
-              <button type="submit" className="pk-btn pk-btn-primary">
-                💾 Guardar Cliente
+            <div className="pk-row-actions" style={{ gridColumn: '1 / -1', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="pk-btn pk-btn-outline"
+                onClick={() => setAbonoTarget(null)}
+                disabled={busy}
+              >
+                Cancelar
+              </button>
+              <button type="submit" className="pk-btn pk-btn-emerald" disabled={busy}>
+                {busy ? 'Registrando...' : '💾 Confirmar Abono'}
               </button>
             </div>
           </form>
-        </div>
-      </div>
+        )}
+      </PkModal>
 
-      <div className="pk-card">
-        <div className="pk-card-head">
-          <div className="pk-card-title">📋 Directorio Maestro de Clientes</div>
-          <div className="pk-row-actions">
-            <input
-              value={searchCustomer}
-              onChange={(e) => setSearchCustomer(e.target.value)}
-              placeholder="🔎 Buscar por nombre, NIT o código..."
-              style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--pk-border)', fontSize: 12.5 }}
-            />
-            <button
-              type="button"
-              className="pk-btn pk-btn-outline pk-btn-sm"
-              onClick={() =>
-                downloadCsvUtf8(
-                  'directorio_clientes_proveko.csv',
-                  ['Codigo', 'TipoDoc', 'NIT', 'Nombre', 'Telefono', 'Ciudad', 'CupoCredito', 'DeudaActual'],
-                  data.customers.map((c) => [
-                    c.code,
-                    c.docType,
-                    c.dv ? `${c.nit}-${c.dv}` : c.nit,
-                    c.name,
-                    c.phone,
-                    c.city,
-                    c.creditLimit,
-                    c.currentDebt,
-                  ])
-                )
-              }
-            >
-              📥 Exportar Excel (.CSV)
-            </button>
-          </div>
-        </div>
-        <div className="pk-card-body">
-          <div className="pk-table-wrap">
-            <table className="pk-table">
-              <thead>
-                <tr>
-                  <th>Código</th>
-                  <th>Cliente / Razón Social</th>
-                  <th>Documento</th>
-                  <th>Ciudad / Contacto</th>
-                  <th>Convenio / Tarifa</th>
-                  <th>Deuda / Cupo</th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredCustomers.map((c) => {
-                  const cnt = data.contracts.find((ct) => ct.id === c.contractId);
-                  const trf = data.tariffs.find((t) => t.id === c.tariffId);
-                  return (
-                    <tr key={c.id}>
-                      <td>
-                        <strong>{c.code}</strong>
-                      </td>
-                      <td>
-                        <strong>{c.name}</strong>
-                        <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>{c.taxRegime}</div>
-                      </td>
-                      <td>
-                        {c.docType} {c.nit}
-                        {c.dv ? `-${c.dv}` : ''}
-                      </td>
-                      <td>
-                        {c.city}
-                        <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>{c.phone}</div>
-                      </td>
-                      <td>
-                        <div>{cnt?.entityName || 'Particular'}</div>
-                        <span className="pk-badge pk-badge-blue">{trf?.name || 'Tarifa Plena'}</span>
-                      </td>
-                      <td>
-                        <div style={{ fontWeight: 700, color: c.currentDebt > 0 ? 'var(--pk-amber)' : 'var(--pk-emerald)' }}>
-                          Deuda: {formatCop(c.currentDebt)}
-                        </div>
-                        <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>Cupo: {formatCop(c.creditLimit)}</div>
-                      </td>
-                      <td>
-                        <div className="pk-row-actions">
-                          <PkPrintButton label="🖨️ Ficha" payload={buildCustomerCardPayload(c)} />
-                          <button
-                            type="button"
-                            className="pk-btn pk-btn-emerald pk-btn-sm"
-                            onClick={() => sendToPosCheckout({ customerId: c.id, items: [] })}
-                          >
-                            🛒 Facturar
-                          </button>
-                          <button
-                            type="button"
-                            className="pk-btn pk-btn-danger pk-btn-sm"
-                            onClick={() => void handleDeleteCustomer(c.id)}
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+      <PkConfirmModal
+        open={Boolean(customerToDelete)}
+        title="Eliminar Cliente del Directorio"
+        message={
+          customerToDelete
+            ? `¿Confirmas eliminar al tercero ${customerToDelete.name} (${customerToDelete.code})? Solo se permite eliminar clientes sin obligaciones activas en cartera.`
+            : ''
+        }
+        confirmLabel="Eliminar Cliente"
+        onConfirm={() => void handleConfirmDeleteCustomer()}
+        onCancel={() => setCustomerToDelete(null)}
+        busy={busy}
+      />
     </div>
   );
 };
+
+export default ClientesView;

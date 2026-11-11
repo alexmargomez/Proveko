@@ -3,8 +3,9 @@
   "displayName": "Clientes y Terceros",
   "icon": "👥",
   "apiPrefix": "/api/v1/clientes",
+  "uiBundlePath": "/api/v1/clientes/ui.js",
   "category": "Comercial",
-  "summary": "Directorio maestro normalizado de clientes, convenios, placas, conductores, transportistas y cartera.",
+  "summary": "Directorio maestro de clientes, contratos comerciales, tarifarios y cuentas por cobrar.",
   "modules": [
     {
       "moduleKey": "directorio_clientes",
@@ -26,13 +27,6 @@
       "tabIcon": "🤝",
       "defaultActive": true,
       "summary": "Convenios empresariales, topes y descuentos automáticos."
-    },
-    {
-      "moduleKey": "flota_terceros",
-      "displayName": "Conductores y Transportistas",
-      "tabIcon": "🚛",
-      "defaultActive": true,
-      "summary": "Catálogo normalizado de conductores, licencias y empresas transportadoras."
     }
   ],
   "features": [
@@ -40,7 +34,39 @@
       "featureKey": "cupo_credito_control",
       "displayName": "Controlar cupo máximo de crédito por cliente",
       "dependsOnModule": "cartera_cxc",
+      "defaultActive": true,
+      "dependsOnSubmodule": "recaudo_abonos_cxc"
+    },
+    {
+      "featureKey": "descuento_automatico_convenio",
+      "displayName": "Aplicar descuento pactado automáticamente al facturar",
+      "dependsOnModule": "contratos_convenios",
+      "dependsOnSubmodule": "tarifarios_corporativos",
       "defaultActive": true
+    }
+  ],
+  "bundleHash": "c99c24af1799",
+  "submodules": [
+    {
+      "submoduleKey": "ficha_terceros",
+      "displayName": "Ficha Tributaria y Datos de Contacto",
+      "dependsOnModule": "directorio_clientes",
+      "defaultActive": true,
+      "summary": "Administración de personas naturales y jurídicas."
+    },
+    {
+      "submoduleKey": "recaudo_abonos_cxc",
+      "displayName": "Estado de Cuenta y Recaudo de Abonos",
+      "dependsOnModule": "cartera_cxc",
+      "defaultActive": true,
+      "summary": "Seguimiento de saldos vencidos y aplicación de pagos."
+    },
+    {
+      "submoduleKey": "tarifarios_corporativos",
+      "displayName": "Acuerdos de Descuento y Cupos",
+      "dependsOnModule": "contratos_convenios",
+      "defaultActive": true,
+      "summary": "Gestión de convenios institucionales con descuento pactado."
     }
   ]
 }

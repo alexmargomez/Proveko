@@ -1,16 +1,39 @@
 import React from 'react';
 import {
-  useProveko,
+  usePlatform,
   ModuleGate,
   FeatureGate,
-  PkEntitySelect,
-  Vehicle,
-  Worker,
-} from '@proveko/ui-sdk';
+  PkSelect,
+} from '@platform/ui-sdk';
+
+export interface VehicleOption {
+  id: string;
+  plate: string;
+  brand: string;
+  vehicleType?: string;
+  modelYear?: string;
+  customerId: string;
+  customerName: string;
+  currentKm: number;
+  nextOilKm?: number;
+  nextOilChangeKm?: number;
+  soatExpiry?: string;
+}
+
+export interface WorkerOption {
+  id: string;
+  code: string;
+  name: string;
+  docNumber: string;
+  specialty: string;
+  commissionPct: number;
+  phone: string;
+  totalDayGross: number;
+}
 
 export interface FacturasTallerBoxProps {
-  vehicles: Vehicle[];
-  workers: Worker[];
+  vehicles: VehicleOption[];
+  workers: WorkerOption[];
   vehicleId: string;
   onVehicleChange: (vehicleId: string) => void;
   currentKm: string;
@@ -21,6 +44,7 @@ export interface FacturasTallerBoxProps {
   onMechanicChange: (mechanicId: string) => void;
   workOrderId: string;
   onWorkOrderIdChange: (orderId: string) => void;
+  onOpenNewVehicleModal?: () => void;
 }
 
 export const FacturasTallerBox: React.FC<FacturasTallerBoxProps> = ({
@@ -36,26 +60,24 @@ export const FacturasTallerBox: React.FC<FacturasTallerBoxProps> = ({
   onMechanicChange,
   workOrderId,
   onWorkOrderIdChange,
+  onOpenNewVehicleModal,
 }) => {
-  const { openQuickDialog, hasFeature } = useProveko();
+  const { hasFeature, hasService } = usePlatform();
+  const canManageWorkshop = hasService('ms-taller');
 
-  const vehicleOptions: Vehicle[] = [
+  const vehicleOptions: VehicleOption[] = [
     {
       id: '',
       plate: '',
       brand: '— Venta Mostrador (Sin Placa) —',
-      modelYear: '',
       customerId: '',
       customerName: '',
       currentKm: 0,
-      nextOilChangeKm: 0,
-      soatExpiry: '',
-      notes: '',
     },
     ...vehicles,
   ];
 
-  const workerOptions: Worker[] = [
+  const workerOptions: WorkerOption[] = [
     {
       id: '',
       code: '',
@@ -101,15 +123,20 @@ export const FacturasTallerBox: React.FC<FacturasTallerBoxProps> = ({
         </div>
 
         <div className="pk-form-grid">
-          <PkEntitySelect
+          <PkSelect
             label="Placa / Vehículo"
             items={vehicleOptions}
             value={vehicleId}
             onChange={onVehicleChange}
             getValue={(v) => v.id}
-            getLabel={(v) => (v.id ? `${v.plate} — ${v.brand} (${v.customerName || 'Taller'})` : v.brand)}
-            onCreateNew={() => openQuickDialog('nueva-placa')}
+            getLabel={(v) =>
+              v.id
+                ? `${v.plate} — ${v.brand} (${v.customerName || 'Taller'})`
+                : v.brand
+            }
+            onCreateNew={canManageWorkshop ? onOpenNewVehicleModal : undefined}
             createLabel="+ Nueva Placa"
+            searchable
           />
 
           <div className="pk-field">
@@ -118,7 +145,7 @@ export const FacturasTallerBox: React.FC<FacturasTallerBoxProps> = ({
               type="text"
               value={currentKm}
               onChange={(e) => onCurrentKmChange(e.target.value)}
-              placeholder="Ej: 64.200 km"
+              placeholder="Ej: 68.400 km"
             />
           </div>
 
@@ -128,7 +155,7 @@ export const FacturasTallerBox: React.FC<FacturasTallerBoxProps> = ({
               type="text"
               value={nextOilKm}
               onChange={(e) => onNextOilKmChange(e.target.value)}
-              placeholder="Ej: 69.200 km"
+              placeholder="Ej: 73.400 km"
             />
           </div>
 
@@ -138,12 +165,12 @@ export const FacturasTallerBox: React.FC<FacturasTallerBoxProps> = ({
               type="text"
               value={workOrderId}
               onChange={(e) => onWorkOrderIdChange(e.target.value)}
-              placeholder="Ej: OT-3041"
+              placeholder="Ej: OT-705"
             />
           </div>
 
           <FeatureGate module="facturas_taller" feature="asignar_mecanico">
-            <PkEntitySelect
+            <PkSelect
               label="Mecánico / Técnico (Comisión)"
               items={workerOptions}
               value={mechanicId}
