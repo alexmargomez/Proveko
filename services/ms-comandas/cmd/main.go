@@ -1,51 +1,60 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
-	"net"
-	"net/http"
+	"time"
 
-	"github.com/alexmargomez/proveko/pkg/config"
-	"github.com/alexmargomez/proveko/pkg/grpcx"
-	"github.com/alexmargomez/proveko/pkg/httpx"
-	"github.com/alexmargomez/proveko/pkg/tenantdb"
-	"github.com/alexmargomez/proveko/services/ms-comandas/backend"
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	mscomandas "ms-comandas"
+	"ms-comandas/backend"
+	"ms-comandas/internal/platform/config"
+	"ms-comandas/internal/platform/dbpool"
+	"ms-comandas/internal/platform/gateway"
+	"ms-comandas/internal/platform/httpx"
+	"ms-comandas/internal/platform/security"
 )
 
 func main() {
-	cfg := config.Load()
-	db := tenantdb.NewManager(cfg)
-	svc := backend.NewService(db, cfg.ClusterSecret)
-
-	if grpcPort := config.EnvOr("GRPC_PORT", ""); grpcPort != "" {
-		lis, err := net.Listen("tcp", ":"+grpcPort)
-		if err != nil {
-			log.Fatalf("[ms-comandas] error iniciando listener gRPC: %v", err)
-		}
-		grpcSrv := grpcx.NewServer(cfg.ClusterSecret)
-		svc.RegisterGRPC(grpcSrv)
-		go func() {
-			log.Printf("[ms-comandas] servidor gRPC escuchando en :%s", grpcPort)
-			if err := grpcSrv.Serve(lis); err != nil {
-				log.Printf("[ms-comandas] gRPC finalizado: %v", err)
-			}
-		}()
+	cfg, err := config.LoadService("ms-comandas", 4105)
+	if err != nil {
+		log.Fatalf("[ms-comandas] invalid configuration: %v", err)
 	}
 
-	root := chi.NewRouter()
-	root.Use(middleware.Recoverer)
-	root.Use(httpx.CORS)
-	root.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
-		httpx.JSON(w, http.StatusOK, map[string]any{"ok": true, "service": "ms-comandas"})
-	})
-	root.Mount("/api/v1/comandas", svc.Router())
+	gwClient := gateway.NewClient(cfg.GatewayURL, cfg.S2SSharedKey)
+	if cfg.CorePublicHex == "" && gwClient != nil {
+		for i := 0; i < 6; i++ {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			pubHex, fetchErr := gwClient.FetchVerifierPublicKey(ctx)
+			cancel()
+			if fetchErr == nil && pubHex != "" {
+				cfg.CorePublicHex = pubHex
+				break
+			}
+			time.Sleep(400 * time.Millisecond)
+		}
+	}
 
-	addr := fmt.Sprintf(":%d", cfg.BackendPort)
-	log.Printf("[ms-comandas] escuchando en %s", addr)
-	if err := http.ListenAndServe(addr, root); err != nil {
-		log.Fatal(err)
+	pubKey, err := security.LoadVerifierPublicKey(cfg.CorePublicHex, cfg.DevEd25519Seed, cfg.IsProduction())
+	if err != nil {
+		log.Fatalf("[ms-comandas] failed to load verifier public key: %v", err)
+	}
+
+	replay := security.NewReplayGuard(16384)
+	dbMgr := dbpool.NewManager(cfg.CommonConfig, false)
+	svc := backend.NewService(cfg, pubKey, replay, dbMgr)
+
+	if gwClient != nil {
+		gwClient.RegisterWithRetry(mscomandas.ManifestJSON, cfg.ServicePublicURL)
+	}
+
+	httpAddr := fmt.Sprintf(":%d", cfg.HTTPPort)
+	httpSrv := httpx.NewServer(httpAddr, svc.Handler())
+	log.Printf("[ms-comandas] HTTP server listening on %s", httpAddr)
+
+	if err := httpx.ListenAndServeGraceful(httpSrv, func() {
+		dbMgr.Close()
+	}); err != nil {
+		log.Fatalf("[ms-comandas] server terminated with error: %v", err)
 	}
 }

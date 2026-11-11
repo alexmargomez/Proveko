@@ -1,41 +1,80 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  useProveko,
+  usePlatform,
   ModuleGate,
   PkAutoCodeInput,
-  PkEntitySelect,
+  PkSelect,
+  PkModal,
+  PkConfirmModal,
   PkPrintButton,
   PkKpiRow,
-  Customer,
-  Worker,
-  PrintDocumentPayload,
-} from '@proveko/ui-sdk';
+  useAsyncAction,
+  downloadCsvUtf8,
+} from '@platform/ui-sdk';
 
-interface AppointmentRecord {
+interface ProfResource {
   id: string;
+  code: string;
+  name: string;
+  specialty: string;
+  phone: string;
+  active: boolean;
   createdAt: string;
-  moduleKey: string;
-  fields: Record<string, string>;
+}
+
+interface Appointment {
+  id: string;
+  code: string;
+  resourceId: string;
+  resourceName: string;
+  resourceSpecialty: string;
+  customerId: string;
+  customerName: string;
+  customerNit: string;
+  customerPhone: string;
+  dateTime: string;
+  serviceName: string;
+  notes: string;
+  status: string;
+  createdAt: string;
+}
+
+interface ExternalCustomerItem {
+  id: string;
+  name: string;
+  nit: string;
+  phone?: string;
 }
 
 interface AgendaAllResponse {
   ok: boolean;
   nextCode: string;
-  customers: Customer[];
-  workers: Worker[];
-  appointments: AppointmentRecord[];
+  nextResourceCode: string;
+  resources: ProfResource[];
+  appointments: Appointment[];
+}
+
+interface ClientesAllResponse {
+  ok?: boolean;
+  customers?: ExternalCustomerItem[];
 }
 
 export const AgendaView: React.FC = () => {
-  const { apiGet, apiPost, apiDelete, toast, openQuickDialog, dialogVersion } = useProveko();
+  const { hasService, apiGet, apiPost, apiDelete, toast } = usePlatform();
+  const { busy, run } = useAsyncAction();
 
-  const [nextCode, setNextCode] = useState('CIT-606');
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [workers, setWorkers] = useState<Worker[]>([]);
-  const [appointments, setAppointments] = useState<AppointmentRecord[]>([]);
+  const [nextCode, setNextCode] = useState('CIT-602');
+  const [nextResourceCode, setNextResourceCode] = useState('RES-103');
+  const [resources, setResources] = useState<ProfResource[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [customers, setCustomers] = useState<ExternalCustomerItem[]>([]);
 
+  const [resourceId, setResourceId] = useState('');
+  const [useManualClient, setUseManualClient] = useState(false);
   const [customerId, setCustomerId] = useState('');
-  const [workerId, setWorkerId] = useState('');
+  const [manualCustomerName, setManualCustomerName] = useState('');
+  const [manualCustomerNit, setManualCustomerNit] = useState('');
+  const [manualCustomerPhone, setManualCustomerPhone] = useState('');
   const [dateTime, setDateTime] = useState(() => {
     const d = new Date(Date.now() + 3600 * 1000);
     return d.toISOString().slice(0, 16);
@@ -43,83 +82,182 @@ export const AgendaView: React.FC = () => {
   const [serviceName, setServiceName] = useState('');
   const [notes, setNotes] = useState('');
 
+  const [resourceModalOpen, setResourceModalOpen] = useState(false);
+  const [resName, setResName] = useState('');
+  const [resSpecialty, setResSpecialty] = useState('Consultoría Especializada');
+  const [resPhone, setResPhone] = useState('');
+
+  const [cancelTarget, setCancelTarget] = useState<Appointment | null>(null);
+
+  const clientesEnabled = hasService('ms-clientes');
+
   const reload = useCallback(async () => {
     try {
       const data = await apiGet<AgendaAllResponse>('/api/v1/agenda/all');
-      const custList = data.customers || [];
-      const wkList = data.workers || [];
-
-      setNextCode(data.nextCode || 'CIT-606');
-      setCustomers(custList);
-      setWorkers(wkList);
+      const resList = data.resources || [];
+      setNextCode(data.nextCode || 'CIT-602');
+      setNextResourceCode(data.nextResourceCode || 'RES-103');
+      setResources(resList);
       setAppointments(data.appointments || []);
-
-      setCustomerId((prev) => (prev && custList.some((c) => c.id === prev) ? prev : custList[0]?.id || ''));
-      setWorkerId((prev) => (prev && wkList.some((w) => w.id === prev) ? prev : wkList[0]?.id || ''));
+      setResourceId((prev) => (prev && resList.some((r) => r.id === prev) ? prev : resList[0]?.id || ''));
     } catch {
+      // Handled by platform session layer
     }
-  }, [apiGet]);
+
+    if (clientesEnabled) {
+      try {
+        const cliData = await apiGet<ClientesAllResponse>('/api/v1/clientes/all');
+        const cliList = cliData.customers || [];
+        setCustomers(cliList);
+        setCustomerId((prev) => (prev && cliList.some((c) => c.id === prev) ? prev : cliList[0]?.id || ''));
+      } catch {
+        setCustomers([]);
+      }
+    } else {
+      setCustomers([]);
+    }
+  }, [apiGet, clientesEnabled]);
 
   useEffect(() => {
     void reload();
-  }, [reload, dialogVersion]);
+  }, [reload]);
 
-  const handleSchedule = async (e: React.FormEvent) => {
+  const showClientDirectory = clientesEnabled && customers.length > 0 && !useManualClient;
+
+  const handleCreateResource = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customerId || !dateTime || !serviceName.trim()) {
-      toast('Selecciona cliente, fecha/hora y el motivo o servicio de la cita.');
+    if (!resName.trim()) {
+      toast('Ingresa el nombre del profesional o recurso.');
       return;
     }
-    await apiPost('/api/v1/agenda/appointments', {
-      customerId,
-      workerId,
-      dateTime,
-      serviceName,
-      notes,
+    void run(async () => {
+      const resp = await apiPost<{ ok: boolean; resource: ProfResource }>('/api/v1/agenda/resources', {
+        name: resName.trim(),
+        specialty: resSpecialty.trim() || 'Especialista General',
+        phone: resPhone.trim(),
+      });
+      toast('Profesional o recurso agregado a la agenda.');
+      setResName('');
+      setResPhone('');
+      setResourceModalOpen(false);
+      await reload();
+      if (resp?.resource?.id) {
+        setResourceId(resp.resource.id);
+      }
     });
-    toast('Cita agendada correctamente');
-    setServiceName('');
-    setNotes('');
-    await reload();
   };
 
-  const handleCancel = async (id: string) => {
-    await apiDelete(`/api/v1/agenda/appointments/${id}`);
-    toast(`Cita ${id} cancelada`);
-    await reload();
+  const handleSchedule = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resourceId || !dateTime || !serviceName.trim()) {
+      toast('Selecciona el profesional/recurso, la fecha/hora y el motivo de la cita.');
+      return;
+    }
+
+    let resolvedCustomerId = '';
+    let resolvedCustomerName = manualCustomerName.trim();
+    let resolvedCustomerNit = manualCustomerNit.trim();
+    let resolvedCustomerPhone = manualCustomerPhone.trim();
+
+    if (showClientDirectory) {
+      const found = customers.find((c) => c.id === customerId);
+      if (!found) {
+        toast('Selecciona un cliente del directorio o activa el ingreso directo.');
+        return;
+      }
+      resolvedCustomerId = found.id;
+      resolvedCustomerName = found.name;
+      resolvedCustomerNit = found.nit;
+      resolvedCustomerPhone = found.phone || '';
+    } else if (!resolvedCustomerName) {
+      toast('Ingresa el nombre completo del cliente o paciente.');
+      return;
+    }
+
+    void run(async () => {
+      await apiPost('/api/v1/agenda/appointments', {
+        resourceId,
+        customerId: resolvedCustomerId,
+        customerName: resolvedCustomerName,
+        customerNit: resolvedCustomerNit,
+        customerPhone: resolvedCustomerPhone,
+        dateTime,
+        serviceName: serviceName.trim(),
+        notes: notes.trim(),
+      });
+      toast('Cita programada correctamente.');
+      setServiceName('');
+      setNotes('');
+      if (!showClientDirectory) {
+        setManualCustomerName('');
+        setManualCustomerNit('');
+        setManualCustomerPhone('');
+      }
+      await reload();
+    });
   };
 
-  const buildAppointmentReceipt = (apt: AppointmentRecord): PrintDocumentPayload => ({
-    document_type: 'COMPROBANTE DE CITA / RESERVA',
+  const handleConfirmCancel = () => {
+    if (!cancelTarget) return;
+    const target = cancelTarget;
+    void run(async () => {
+      await apiDelete(`/api/v1/agenda/appointments/${encodeURIComponent(target.id)}`);
+      toast(`Cita ${target.code} cancelada y horario liberado.`);
+      setCancelTarget(null);
+      await reload();
+    });
+  };
+
+  const handleExportCsv = () => {
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadCsvUtf8(
+      `agenda_citas_${stamp}.csv`,
+      ['Codigo', 'Fecha Hora', 'Cliente', 'Documento', 'Telefono', 'Profesional', 'Especialidad', 'Servicio', 'Estado'],
+      appointments.map((a) => [
+        a.code,
+        a.dateTime,
+        a.customerName,
+        a.customerNit,
+        a.customerPhone,
+        a.resourceName,
+        a.resourceSpecialty,
+        a.serviceName,
+        a.status,
+      ])
+    );
+    toast('Agenda exportada en formato CSV.');
+  };
+
+  const buildAppointmentReceipt = (apt: Appointment): Record<string, unknown> => ({
+    document_type: 'COMPROBANTE DE CITA Y RESERVA',
     layout_variant: 'media_carta',
-    document_number: apt.id,
+    document_number: apt.code,
     issue_date: apt.createdAt,
-    customer_name: apt.fields?.customerName || 'Cliente',
-    customer_nit: apt.fields?.customerNit || '',
-    customer_phone: apt.fields?.customerPhone || '',
+    customer_name: apt.customerName,
+    customer_nit: apt.customerNit,
+    customer_phone: apt.customerPhone,
     extra_fields: {
-      'Fecha y Hora Programada': apt.fields?.dateTime || '',
-      'Profesional / Especialista': apt.fields?.workerName || 'Por Asignar',
-      Especialidad: apt.fields?.workerSpecialty || 'General',
-      Estado: apt.fields?.status || 'Programada',
+      'Fecha y Hora Programada': apt.dateTime,
+      'Profesional / Recurso': apt.resourceName,
+      Especialidad: apt.resourceSpecialty,
+      Estado: apt.status,
     },
     items: [
       {
-        code: apt.id,
-        description: `${apt.fields?.serviceName || 'Servicio Programado'}${
-          apt.fields?.notes ? ` — Obs: ${apt.fields.notes}` : ''
-        }`,
+        code: apt.code,
+        description: `${apt.serviceName}${apt.notes ? ` — Observaciones: ${apt.notes}` : ''}`,
         quantity: 1,
         unit_price: 0,
+        tax_pct: 0,
         subtotal: 0,
       },
     ],
     grand_total: 0,
-    notes: 'Por favor presentarse 10 minutos antes de la hora programada.',
+    notes: 'Por favor presentarse 10 minutos antes de la hora asignada.',
   });
 
   const todayPrefix = new Date().toISOString().slice(0, 10);
-  const todayCount = appointments.filter((a) => (a.fields?.dateTime || '').startsWith(todayPrefix)).length;
+  const todayCount = appointments.filter((a) => a.dateTime.startsWith(todayPrefix)).length;
 
   return (
     <ModuleGate module="calendario_citas">
@@ -127,37 +265,92 @@ export const AgendaView: React.FC = () => {
         items={[
           { label: 'Citas Activas', value: String(appointments.length), color: 'var(--pk-primary)' },
           { label: 'Citas para Hoy', value: String(todayCount), color: 'var(--pk-emerald)' },
-          { label: 'Especialistas Disponibles', value: String(workers.length), color: 'var(--pk-amber)' },
-          { label: 'Clientes Registrados', value: String(customers.length), color: '#0f172a' },
+          { label: 'Profesionales / Recursos', value: String(resources.length), color: 'var(--pk-amber)' },
+          { label: 'Próximo Consecutivo', value: nextCode, color: '#0f172a' },
         ]}
       />
 
       <div className="pk-card">
         <div className="pk-card-head">
-          <div className="pk-card-title">📅 Programar Nueva Cita o Reserva</div>
+          <div className="pk-card-title">📅 Programar Cita o Reserva</div>
+          <div className="pk-row-actions">
+            {clientesEnabled && customers.length > 0 && (
+              <button
+                type="button"
+                className="pk-btn pk-btn-outline pk-btn-sm"
+                onClick={() => setUseManualClient((v) => !v)}
+              >
+                {useManualClient ? '👥 Elegir del Directorio' : '✍️ Ingreso Directo Paciente/Cliente'}
+              </button>
+            )}
+            <button
+              type="button"
+              className="pk-btn pk-btn-outline pk-btn-sm"
+              onClick={() => setResourceModalOpen(true)}
+            >
+              + Nuevo Profesional / Recurso
+            </button>
+            <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={handleExportCsv}>
+              📥 Exportar CSV
+            </button>
+          </div>
         </div>
         <div className="pk-card-body">
           <form onSubmit={handleSchedule} className="pk-form-grid">
             <PkAutoCodeInput label="Código Cita" value={nextCode} />
-            <PkEntitySelect
-              label="Cliente / Paciente *"
-              items={customers}
-              value={customerId}
-              onChange={setCustomerId}
-              getValue={(c) => c.id}
-              getLabel={(c) => `${c.name} (${c.nit})`}
-              onCreateNew={() => openQuickDialog('nuevo-cliente', () => void reload())}
-              createLabel="+ Nuevo Cliente"
+
+            <PkSelect
+              label="Profesional / Recurso *"
+              items={resources}
+              value={resourceId}
+              onChange={setResourceId}
+              getValue={(r) => r.id}
+              getLabel={(r) => `${r.code} — ${r.name} (${r.specialty})`}
+              onCreateNew={() => setResourceModalOpen(true)}
+              createLabel="+ Nuevo Profesional / Recurso"
               searchable
             />
-            <PkEntitySelect
-              label="Profesional / Especialista *"
-              items={workers}
-              value={workerId}
-              onChange={setWorkerId}
-              getValue={(w) => w.id}
-              getLabel={(w) => `${w.name} — ${w.specialty}`}
-            />
+
+            {showClientDirectory ? (
+              <PkSelect
+                label="Cliente / Paciente *"
+                items={customers}
+                value={customerId}
+                onChange={setCustomerId}
+                getValue={(c) => c.id}
+                getLabel={(c) => `${c.name} (${c.nit})`}
+                searchable
+              />
+            ) : (
+              <>
+                <div className="pk-field">
+                  <label>Nombre Cliente / Paciente *</label>
+                  <input
+                    required
+                    value={manualCustomerName}
+                    onChange={(e) => setManualCustomerName(e.target.value)}
+                    placeholder="Ej: Mariana López Giraldo"
+                  />
+                </div>
+                <div className="pk-field">
+                  <label>Documento / NIT</label>
+                  <input
+                    value={manualCustomerNit}
+                    onChange={(e) => setManualCustomerNit(e.target.value)}
+                    placeholder="Ej: 1020778410"
+                  />
+                </div>
+                <div className="pk-field">
+                  <label>Teléfono Contacto</label>
+                  <input
+                    value={manualCustomerPhone}
+                    onChange={(e) => setManualCustomerPhone(e.target.value)}
+                    placeholder="Ej: 3154409980"
+                  />
+                </div>
+              </>
+            )}
+
             <div className="pk-field">
               <label>Fecha y Hora *</label>
               <input
@@ -167,26 +360,29 @@ export const AgendaView: React.FC = () => {
                 onChange={(e) => setDateTime(e.target.value)}
               />
             </div>
+
             <div className="pk-field">
               <label>Motivo / Servicio Solicitado *</label>
               <input
                 required
                 value={serviceName}
                 onChange={(e) => setServiceName(e.target.value)}
-                placeholder="Ej: Valoración inicial / Diagnóstico especializado"
+                placeholder="Ej: Valoración especializada"
               />
             </div>
+
             <div className="pk-field">
               <label>Observaciones</label>
               <input
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Notas opcionales o preparación previa"
+                placeholder="Preparación previa o indicaciones"
               />
             </div>
+
             <div className="pk-field">
-              <button type="submit" className="pk-btn pk-btn-primary">
-                🕒 Agendar Cita
+              <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
+                {busy ? 'Agendando...' : '🕒 Agendar Cita'}
               </button>
             </div>
           </form>
@@ -203,11 +399,11 @@ export const AgendaView: React.FC = () => {
               <thead>
                 <tr>
                   <th>Código</th>
-                  <th>Fecha / Hora Cita</th>
-                  <th>Cliente</th>
+                  <th>Fecha y Hora</th>
+                  <th>Cliente / Paciente</th>
                   <th>Teléfono</th>
-                  <th>Profesional / Especialista</th>
-                  <th>Motivo / Servicio</th>
+                  <th>Profesional / Recurso</th>
+                  <th>Servicio / Motivo</th>
                   <th>Estado</th>
                   <th>Acciones</th>
                 </tr>
@@ -223,28 +419,37 @@ export const AgendaView: React.FC = () => {
                   appointments.map((apt) => (
                     <tr key={apt.id}>
                       <td>
-                        <span className="pk-badge pk-badge-blue">{apt.id}</span>
+                        <span className="pk-badge pk-badge-blue">{apt.code}</span>
                       </td>
-                      <td style={{ fontWeight: 800 }}>{apt.fields?.dateTime}</td>
-                      <td style={{ fontWeight: 700 }}>{apt.fields?.customerName}</td>
-                      <td>{apt.fields?.customerPhone || '—'}</td>
-                      <td>{apt.fields?.workerName}</td>
+                      <td style={{ fontWeight: 800 }}>{apt.dateTime}</td>
                       <td>
-                        <div>{apt.fields?.serviceName}</div>
-                        {apt.fields?.notes && (
-                          <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>{apt.fields.notes}</div>
+                        <div style={{ fontWeight: 700 }}>{apt.customerName}</div>
+                        {apt.customerNit && (
+                          <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>{apt.customerNit}</div>
+                        )}
+                      </td>
+                      <td>{apt.customerPhone || '—'}</td>
+                      <td>
+                        <div style={{ fontWeight: 700 }}>{apt.resourceName}</div>
+                        <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>{apt.resourceSpecialty}</div>
+                      </td>
+                      <td>
+                        <div>{apt.serviceName}</div>
+                        {apt.notes && (
+                          <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>{apt.notes}</div>
                         )}
                       </td>
                       <td>
-                        <span className="pk-badge pk-badge-emerald">{apt.fields?.status || 'Programada'}</span>
+                        <span className="pk-badge pk-badge-emerald">{apt.status}</span>
                       </td>
                       <td>
                         <div className="pk-row-actions">
-                          <PkPrintButton label="🖨️ Comprobante Cita" payload={buildAppointmentReceipt(apt)} />
+                          <PkPrintButton label="🖨️ Comprobante" payload={buildAppointmentReceipt(apt)} />
                           <button
                             type="button"
                             className="pk-btn pk-btn-danger pk-btn-sm"
-                            onClick={() => void handleCancel(apt.id)}
+                            onClick={() => setCancelTarget(apt)}
+                            disabled={busy}
                           >
                             ✕ Cancelar
                           </button>
@@ -258,6 +463,62 @@ export const AgendaView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <PkModal
+        open={resourceModalOpen}
+        title="👨‍⚕️ Nuevo Profesional / Recurso de Agenda"
+        onClose={() => setResourceModalOpen(false)}
+      >
+        <form onSubmit={handleCreateResource} className="pk-form-grid">
+          <PkAutoCodeInput label="Código Recurso" value={nextResourceCode} />
+          <div className="pk-field">
+            <label>Nombre Profesional / Sala / Recurso *</label>
+            <input
+              required
+              value={resName}
+              onChange={(e) => setResName(e.target.value)}
+              placeholder="Ej: Dr. Alejandro Vega / Consultorio 2"
+            />
+          </div>
+          <div className="pk-field">
+            <label>Especialidad / Área</label>
+            <input
+              value={resSpecialty}
+              onChange={(e) => setResSpecialty(e.target.value)}
+              placeholder="Ej: Odontología / Asesoría Técnica"
+            />
+          </div>
+          <div className="pk-field">
+            <label>Teléfono Directo</label>
+            <input
+              value={resPhone}
+              onChange={(e) => setResPhone(e.target.value)}
+              placeholder="Ej: 3115508899"
+            />
+          </div>
+          <div className="pk-field">
+            <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
+              {busy ? 'Guardando...' : '💾 Guardar Recurso'}
+            </button>
+          </div>
+        </form>
+      </PkModal>
+
+      <PkConfirmModal
+        open={Boolean(cancelTarget)}
+        title="Cancelar Cita Programada"
+        message={
+          cancelTarget
+            ? `¿Deseas cancelar la cita ${cancelTarget.code} de ${cancelTarget.customerName} programada para el ${cancelTarget.dateTime} con ${cancelTarget.resourceName}?`
+            : ''
+        }
+        confirmLabel="Confirmar Cancelación"
+        onConfirm={handleConfirmCancel}
+        onCancel={() => setCancelTarget(null)}
+        busy={busy}
+      />
     </ModuleGate>
   );
 };
+
+export default AgendaView;

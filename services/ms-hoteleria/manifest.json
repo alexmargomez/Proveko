@@ -3,6 +3,7 @@
   "displayName": "Hotelería y Alojamiento",
   "icon": "🏨",
   "apiPrefix": "/api/v1/hoteleria",
+  "uiBundlePath": "/api/v1/hoteleria/ui.js",
   "category": "Hospitalidad",
   "summary": "Control de habitaciones, Check-In de huéspedes, consumos a la habitación, impresión de cuenta y Check-Out.",
   "modules": [
@@ -26,7 +27,25 @@
       "featureKey": "cargos_habitacion",
       "displayName": "Cargar consumos de restaurante/minibar a la habitación",
       "dependsOnModule": "recepcion_habitaciones",
-      "defaultActive": true
+      "defaultActive": true,
+      "dependsOnSubmodule": "ocupacion_huespedes"
+    }
+  ],
+  "bundleHash": "5d2e4e8be83b",
+  "submodules": [
+    {
+      "submoduleKey": "ocupacion_huespedes",
+      "displayName": "Registro Check-In, Consumos y Check-Out",
+      "dependsOnModule": "recepcion_habitaciones",
+      "defaultActive": true,
+      "summary": "Gestión integral de estadías y liquidación de hospedaje."
+    },
+    {
+      "submoduleKey": "planes_alojamiento",
+      "displayName": "Acomodaciones y Tarifas por Temporada",
+      "dependsOnModule": "tarifas_temporadas",
+      "defaultActive": true,
+      "summary": "Definición de precios según tipo de habitación."
     }
   ]
 }
