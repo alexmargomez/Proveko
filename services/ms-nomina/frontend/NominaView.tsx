@@ -1,39 +1,63 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  useProveko,
+  usePlatform,
   ModuleGate,
   PkAutoCodeInput,
-  PkEntitySelect,
-  PkEntityDialog,
+  PkSelect,
+  PkModal,
   PkPrintButton,
   PkKpiRow,
-  Worker,
-  PrintDocumentPayload,
+  useAsyncAction,
   formatCop,
-} from '@proveko/ui-sdk';
+  downloadCsvUtf8,
+} from '@platform/ui-sdk';
 
-interface PayrollRecord {
+interface Employee {
   id: string;
+  code: string;
+  name: string;
+  docNumber: string;
+  position: string;
+  baseSalary: number;
+  phone: string;
+  active: boolean;
   createdAt: string;
-  moduleKey: string;
-  fields: Record<string, string>;
+}
+
+interface PayrollSettlement {
+  id: string;
+  code: string;
+  employeeId: string;
+  employeeCode: string;
+  employeeName: string;
+  employeeDoc: string;
+  employeePosition: string;
+  period: string;
+  baseSalary: number;
+  bonuses: number;
+  deductions: number;
+  netPay: number;
+  createdAt: string;
 }
 
 interface NominaAllResponse {
   ok: boolean;
   nextCode: string;
-  workers: Worker[];
-  payrolls: PayrollRecord[];
+  nextEmployeeCode: string;
+  employees: Employee[];
+  payrolls: PayrollSettlement[];
 }
 
 export const NominaView: React.FC = () => {
-  const { apiGet, apiPost, toast, dialogVersion } = useProveko();
+  const { apiGet, apiPost, toast } = usePlatform();
+  const { busy, run } = useAsyncAction();
 
-  const [nextCode, setNextCode] = useState('NOM-306');
-  const [workers, setWorkers] = useState<Worker[]>([]);
-  const [payrolls, setPayrolls] = useState<PayrollRecord[]>([]);
+  const [nextCode, setNextCode] = useState('NOM-301');
+  const [nextEmployeeCode, setNextEmployeeCode] = useState('EMP-101');
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [payrolls, setPayrolls] = useState<PayrollSettlement[]>([]);
 
-  const [workerId, setWorkerId] = useState('');
+  const [employeeId, setEmployeeId] = useState('');
   const [period, setPeriod] = useState(() => {
     const now = new Date();
     const ym = now.toISOString().slice(0, 7);
@@ -44,43 +68,107 @@ export const NominaView: React.FC = () => {
   const [bonuses, setBonuses] = useState('162000');
   const [deductions, setDeductions] = useState('113880');
 
-  const [workerModalOpen, setWorkerModalOpen] = useState(false);
+  const [empModalOpen, setEmpModalOpen] = useState(false);
   const [empName, setEmpName] = useState('');
   const [empDoc, setEmpDoc] = useState('');
-  const [empSpecialty, setEmpSpecialty] = useState('Asesor Comercial / Operativo');
+  const [empPosition, setEmpPosition] = useState('Asesor Comercial / Operativo');
+  const [empSalary, setEmpSalary] = useState('1423500');
   const [empPhone, setEmpPhone] = useState('');
+
+  const applySalaryDefaults = (monthlyBase: number) => {
+    const halfSalary = monthlyBase > 0 ? Math.round(monthlyBase / 2) : 1423500;
+    setBaseSalary(String(halfSalary));
+    setDeductions(String(Math.round(halfSalary * 0.08)));
+  };
 
   const reload = useCallback(async () => {
     try {
       const data = await apiGet<NominaAllResponse>('/api/v1/nomina/all');
-      const wkList = data.workers || [];
-      setNextCode(data.nextCode || 'NOM-306');
-      setWorkers(wkList);
+      const empList = data.employees || [];
+      setNextCode(data.nextCode || 'NOM-301');
+      setNextEmployeeCode(data.nextEmployeeCode || 'EMP-101');
+      setEmployees(empList);
       setPayrolls(data.payrolls || []);
-      setWorkerId((prev) => (prev && wkList.some((w) => w.id === prev) ? prev : wkList[0]?.id || ''));
-    } catch {
+      setEmployeeId((prev) => {
+        if (prev && empList.some((e) => e.id === prev)) {
+          return prev;
+        }
+        const first = empList[0];
+        if (first) {
+          applySalaryDefaults(first.baseSalary);
+          return first.id;
+        }
+        return '';
+      });
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'No fue posible cargar la información de nómina');
     }
-  }, [apiGet]);
+  }, [apiGet, toast]);
 
   useEffect(() => {
     void reload();
-  }, [reload, dialogVersion]);
+  }, [reload]);
+
+  const handleSelectEmployee = (newId: string) => {
+    setEmployeeId(newId);
+    const found = employees.find((e) => e.id === newId);
+    if (found && found.baseSalary > 0) {
+      applySalaryDefaults(found.baseSalary);
+    }
+  };
 
   const handleBaseSalaryChange = (val: string) => {
     setBaseSalary(val);
     const numericBase = Number(val || 0);
-    if (numericBase > 0) {
+    if (Number.isFinite(numericBase) && numericBase > 0) {
       setDeductions(String(Math.round(numericBase * 0.08)));
     }
   };
 
-  const handleCreatePayroll = async (e: React.FormEvent) => {
+  const handleCreateEmployee = (e: React.FormEvent) => {
+    e.preventDefault();
+    const numSalary = Number(empSalary || 0);
+    if (!empName.trim() || !empDoc.trim() || !Number.isFinite(numSalary) || numSalary < 0) {
+      toast('Completa el nombre, documento de identidad y salario contractual válido.');
+      return;
+    }
+    void run(async () => {
+      try {
+        const res = await apiPost<{ ok: boolean; employee: Employee }>('/api/v1/nomina/employees', {
+          name: empName.trim(),
+          docNumber: empDoc.trim(),
+          position: empPosition.trim(),
+          baseSalary: numSalary,
+          phone: empPhone.trim(),
+        });
+        toast(`Colaborador ${res.employee.code} registrado en nómina`);
+        setEmpName('');
+        setEmpDoc('');
+        setEmpPhone('');
+        setEmpModalOpen(false);
+        await reload();
+        if (res.employee?.id) {
+          setEmployeeId(res.employee.id);
+          applySalaryDefaults(res.employee.baseSalary);
+        }
+      } catch (err) {
+        toast(err instanceof Error ? err.message : 'No fue posible registrar el colaborador');
+      }
+    });
+  };
+
+  const handleCreatePayroll = (e: React.FormEvent) => {
     e.preventDefault();
     const numBase = Number(baseSalary || 0);
     const numBonuses = Number(bonuses || 0);
     const numDeductions = Number(deductions || 0);
-    if (!workerId || !period.trim() || numBase <= 0) {
-      toast('Selecciona colaborador, periodo y un salario base mayor a cero.');
+
+    if (!employeeId || !period.trim() || !Number.isFinite(numBase) || numBase <= 0) {
+      toast('Selecciona un colaborador, periodo y un salario base mayor a cero.');
+      return;
+    }
+    if (!Number.isFinite(numBonuses) || numBonuses < 0 || !Number.isFinite(numDeductions) || numDeductions < 0) {
+      toast('Las bonificaciones y deducciones no pueden ser negativas.');
       return;
     }
     if (numBase + numBonuses - numDeductions < 0) {
@@ -88,125 +176,139 @@ export const NominaView: React.FC = () => {
       return;
     }
 
-    await apiPost('/api/v1/nomina/payrolls', {
-      workerId,
-      period,
-      baseSalary: numBase,
-      bonuses: numBonuses,
-      deductions: numDeductions,
+    void run(async () => {
+      try {
+        await apiPost('/api/v1/nomina/payrolls', {
+          employeeId,
+          period: period.trim(),
+          baseSalary: numBase,
+          bonuses: numBonuses,
+          deductions: numDeductions,
+        });
+        toast('Liquidación de nómina generada exitosamente');
+        await reload();
+      } catch (err) {
+        toast(err instanceof Error ? err.message : 'Error liquidando periodo salarial');
+      }
     });
-    toast('Liquidación de nómina generada correctamente');
-    await reload();
   };
 
-  const handleCreateWorker = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!empName.trim() || !empDoc.trim()) {
-      toast('Ingresa nombre completo y documento del colaborador.');
-      return;
-    }
-    const res = await apiPost<{ worker: Worker }>('/api/v1/nomina/workers', {
-      name: empName,
-      docNumber: empDoc,
-      specialty: empSpecialty,
-      phone: empPhone,
-    });
-    toast('Empleado registrado en nómina');
-    setEmpName('');
-    setEmpDoc('');
-    setEmpPhone('');
-    setWorkerModalOpen(false);
-    await reload();
-    if (res?.worker?.id) {
-      setWorkerId(res.worker.id);
-    }
-  };
-
-  const buildPayslipPayload = (pay: PayrollRecord): PrintDocumentPayload => {
-    const base = Number(pay.fields?.baseSalary || 0);
-    const bon = Number(pay.fields?.bonuses || 0);
-    const ded = Number(pay.fields?.deductions || 0);
-    const net = Number(pay.fields?.netPay || base + bon - ded);
-
-    return {
-      document_type: 'COMPROBANTE / COLILLA DE PAGO DE NÓMINA',
-      layout_variant: 'carta_membrete',
-      document_number: pay.id,
-      issue_date: pay.createdAt,
-      customer_name: pay.fields?.workerName || 'Colaborador',
-      customer_nit: pay.fields?.workerDoc || '',
-      payment_method: 'Dispersión Nómina / Transferencia',
-      extra_fields: {
-        'Código Empleado': pay.fields?.workerCode || '—',
-        'Cargo / Especialidad': pay.fields?.workerSpecialty || 'Colaborador',
-        'Periodo Liquidado': pay.fields?.period || '',
-      },
-      items: [
-        {
-          code: 'DEV-01',
-          description: 'Salario Básico Ordinario del Periodo',
-          quantity: 1,
-          unit_price: base,
-          subtotal: base,
-        },
-        {
-          code: 'DEV-02',
-          description: 'Auxilio de Transporte, Horas Extra y Bonificaciones',
-          quantity: 1,
-          unit_price: bon,
-          subtotal: bon,
-        },
-        {
-          code: 'DED-01',
-          description: 'Deducciones Seguridad Social (Salud 4% + Pensión 4%) y Retenciones',
-          quantity: 1,
-          unit_price: -ded,
-          subtotal: -ded,
-        },
+  const handleExportCsv = () => {
+    downloadCsvUtf8(
+      'nomina_liquidaciones.csv',
+      [
+        'Colilla',
+        'Fecha',
+        'Código Empleado',
+        'Colaborador',
+        'Documento',
+        'Cargo',
+        'Periodo',
+        'Salario Base',
+        'Bonificaciones',
+        'Deducciones',
+        'Neto Pagado',
       ],
-      subtotal: base + bon,
-      discount_total: ded,
-      grand_total: net,
-      notes: 'Constancia de liquidación salarial y aportes de ley. Firma del colaborador en señal de conformidad.',
-    };
+      payrolls.map((p) => [
+        p.code,
+        p.createdAt,
+        p.employeeCode,
+        p.employeeName,
+        p.employeeDoc,
+        p.employeePosition,
+        p.period,
+        p.baseSalary,
+        p.bonuses,
+        p.deductions,
+        p.netPay,
+      ]),
+    );
   };
+
+  const buildPayslipPayload = (pay: PayrollSettlement): Record<string, unknown> => ({
+    document_type: 'COMPROBANTE / DESPRENDIBLE DE PAGO DE NÓMINA',
+    layout_variant: 'carta_membrete',
+    document_number: pay.code,
+    issue_date: pay.createdAt,
+    customer_name: pay.employeeName,
+    customer_nit: pay.employeeDoc,
+    payment_method: 'Dispersión Salarial / Transferencia Bancaria',
+    extra_fields: {
+      'Código Colaborador': pay.employeeCode,
+      'Cargo Contractual': pay.employeePosition,
+      'Periodo Liquidado': pay.period,
+    },
+    items: [
+      {
+        code: 'DEV-01',
+        description: 'Salario Básico Ordinario del Periodo',
+        quantity: 1,
+        unit_price: pay.baseSalary,
+        subtotal: pay.baseSalary,
+      },
+      {
+        code: 'DEV-02',
+        description: 'Auxilio de Transporte, Horas Extra y Bonificaciones',
+        quantity: 1,
+        unit_price: pay.bonuses,
+        subtotal: pay.bonuses,
+      },
+      {
+        code: 'DED-01',
+        description: 'Deducciones de Ley (Salud 4% + Pensión 4%) y Retenciones',
+        quantity: 1,
+        unit_price: -pay.deductions,
+        subtotal: -pay.deductions,
+      },
+    ],
+    subtotal: pay.baseSalary + pay.bonuses,
+    discount_total: pay.deductions,
+    grand_total: pay.netPay,
+    notes: 'Constancia de liquidación salarial y aportes de seguridad social. Firma del colaborador en señal de conformidad.',
+  });
 
   const previewNet = Number(baseSalary || 0) + Number(bonuses || 0) - Number(deductions || 0);
-  const totalPayrollDisbursed = payrolls.reduce(
-    (acc, p) => acc + Number(p.fields?.netPay || 0),
-    0
-  );
+  const totalDisbursed = payrolls.reduce((acc, p) => acc + Number(p.netPay || 0), 0);
 
   return (
     <ModuleGate module="liquidacion_nomina">
       <PkKpiRow
         items={[
-          { label: 'Colaboradores Activos', value: String(workers.length), color: 'var(--pk-primary)' },
+          { label: 'Colaboradores Activos', value: String(employees.length), color: 'var(--pk-primary)' },
           { label: 'Colillas Emitidas', value: String(payrolls.length), color: 'var(--pk-emerald)' },
-          { label: 'Total Nómina Pagada', value: formatCop(totalPayrollDisbursed), color: '#0f172a' },
-          { label: 'Neto Simulación Actual', value: formatCop(previewNet), color: 'var(--pk-amber)' },
+          { label: 'Total Nómina Dispersada', value: formatCop(totalDisbursed), color: '#0f172a' },
+          {
+            label: 'Neto Simulación Actual',
+            value: formatCop(previewNet),
+            color: previewNet >= 0 ? 'var(--pk-amber)' : 'var(--pk-rose)',
+          },
         ]}
       />
 
       <div className="pk-card">
         <div className="pk-card-head">
-          <div className="pk-card-title">👔 Liquidación Salarial y Emisión de Colilla</div>
-          <span className="pk-badge pk-badge-emerald">Neto a Pagar: {formatCop(previewNet)}</span>
+          <div className="pk-card-title">👔 Liquidación Salarial por Periodo y Emisión de Desprendible</div>
+          <span className={`pk-badge ${previewNet >= 0 ? 'pk-badge-emerald' : 'pk-badge-amber'}`}>
+            Neto a Pagar: {formatCop(previewNet)}
+          </span>
         </div>
         <div className="pk-card-body">
           <form onSubmit={handleCreatePayroll} className="pk-form-grid">
             <PkAutoCodeInput label="Consecutivo Colilla" value={nextCode} />
-            <PkEntitySelect
-              label="Empleado / Colaborador *"
-              items={workers}
-              value={workerId}
-              onChange={setWorkerId}
-              getValue={(w) => w.id}
-              getLabel={(w) => `${w.code} — ${w.name} (${w.docNumber})`}
-              onCreateNew={() => setWorkerModalOpen(true)}
-              createLabel="+ Nuevo Empleado"
+
+            <PkSelect
+              label="Colaborador *"
+              items={employees}
+              value={employeeId}
+              onChange={handleSelectEmployee}
+              getValue={(emp) => emp.id}
+              getLabel={(emp) => `${emp.code} — ${emp.name} (${emp.docNumber})`}
+              emptyLabel="-- Seleccionar colaborador --"
+              onCreateNew={() => setEmpModalOpen(true)}
+              createLabel="+ Nuevo Colaborador"
               searchable
             />
+
             <div className="pk-field">
               <label>Periodo de Liquidación *</label>
               <input
@@ -216,6 +318,7 @@ export const NominaView: React.FC = () => {
                 placeholder="Ej: 2026-11 — Q1 (1 al 15)"
               />
             </div>
+
             <div className="pk-field">
               <label>Salario Base Periodo ($) *</label>
               <input
@@ -227,6 +330,7 @@ export const NominaView: React.FC = () => {
                 onChange={(e) => handleBaseSalaryChange(e.target.value)}
               />
             </div>
+
             <div className="pk-field">
               <label>Bonificaciones / Auxilios ($)</label>
               <input
@@ -237,6 +341,7 @@ export const NominaView: React.FC = () => {
                 onChange={(e) => setBonuses(e.target.value)}
               />
             </div>
+
             <div className="pk-field">
               <label>Deducciones Salud / Pensión ($)</label>
               <input
@@ -247,8 +352,9 @@ export const NominaView: React.FC = () => {
                 onChange={(e) => setDeductions(e.target.value)}
               />
             </div>
-            <div className="pk-field">
-              <button type="submit" className="pk-btn pk-btn-primary">
+
+            <div className="pk-field" style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
                 📑 Liquidar Nómina
               </button>
             </div>
@@ -258,7 +364,10 @@ export const NominaView: React.FC = () => {
 
       <div className="pk-card">
         <div className="pk-card-head">
-          <div className="pk-card-title">📋 Historial de Colillas y Desprendibles ({payrolls.length})</div>
+          <div className="pk-card-title">📋 Historial de Liquidaciones y Desprendibles ({payrolls.length})</div>
+          <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={handleExportCsv}>
+            📥 Exportar CSV
+          </button>
         </div>
         <div className="pk-card-body">
           <div className="pk-table-wrap">
@@ -287,28 +396,26 @@ export const NominaView: React.FC = () => {
                   payrolls.map((pay) => (
                     <tr key={pay.id}>
                       <td>
-                        <span className="pk-badge pk-badge-blue">{pay.id}</span>
+                        <span className="pk-badge pk-badge-blue">{pay.code}</span>
                       </td>
                       <td>{pay.createdAt}</td>
                       <td>
-                        <div style={{ fontWeight: 700 }}>{pay.fields?.workerName}</div>
+                        <div style={{ fontWeight: 700 }}>{pay.employeeName}</div>
                         <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>
-                          CC {pay.fields?.workerDoc} — {pay.fields?.workerSpecialty}
+                          {pay.employeeCode} · CC {pay.employeeDoc} — {pay.employeePosition}
                         </div>
                       </td>
-                      <td>{pay.fields?.period}</td>
-                      <td>{formatCop(Number(pay.fields?.baseSalary || 0))}</td>
+                      <td>{pay.period}</td>
+                      <td>{formatCop(pay.baseSalary)}</td>
                       <td style={{ color: 'var(--pk-emerald)', fontWeight: 700 }}>
-                        +{formatCop(Number(pay.fields?.bonuses || 0))}
+                        +{formatCop(pay.bonuses)}
                       </td>
                       <td style={{ color: 'var(--pk-rose)', fontWeight: 700 }}>
-                        -{formatCop(Number(pay.fields?.deductions || 0))}
+                        -{formatCop(pay.deductions)}
                       </td>
-                      <td style={{ fontWeight: 800, color: '#0f172a' }}>
-                        {formatCop(Number(pay.fields?.netPay || 0))}
-                      </td>
+                      <td style={{ fontWeight: 800, color: '#0f172a' }}>{formatCop(pay.netPay)}</td>
                       <td>
-                        <PkPrintButton label="🖨️ Colilla de Pago" payload={buildPayslipPayload(pay)} />
+                        <PkPrintButton label="🖨️ Desprendible" payload={buildPayslipPayload(pay)} />
                       </td>
                     </tr>
                   ))
@@ -319,13 +426,54 @@ export const NominaView: React.FC = () => {
         </div>
       </div>
 
-      <PkEntityDialog
-        open={workerModalOpen}
-        title="➕ Registrar Nuevo Empleado / Colaborador"
-        onClose={() => setWorkerModalOpen(false)}
+      <div className="pk-card">
+        <div className="pk-card-head">
+          <div className="pk-card-title">👥 Planta de Colaboradores ({employees.length})</div>
+          <button
+            type="button"
+            className="pk-btn pk-btn-outline pk-btn-sm"
+            onClick={() => setEmpModalOpen(true)}
+          >
+            + Nuevo Colaborador
+          </button>
+        </div>
+        <div className="pk-card-body">
+          <div className="pk-table-wrap">
+            <table className="pk-table">
+              <thead>
+                <tr>
+                  <th>Código</th>
+                  <th>Nombre Completo</th>
+                  <th>Documento</th>
+                  <th>Cargo Contractual</th>
+                  <th>Salario Mensual</th>
+                  <th>Teléfono</th>
+                </tr>
+              </thead>
+              <tbody>
+                {employees.map((emp) => (
+                  <tr key={emp.id}>
+                    <td><span className="pk-badge pk-badge-slate">{emp.code}</span></td>
+                    <td style={{ fontWeight: 700 }}>{emp.name}</td>
+                    <td>{emp.docNumber}</td>
+                    <td>{emp.position}</td>
+                    <td>{formatCop(emp.baseSalary)}</td>
+                    <td>{emp.phone || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <PkModal
+        open={empModalOpen}
+        title="Registrar Nuevo Colaborador en Nómina"
+        onClose={() => setEmpModalOpen(false)}
       >
-        <form onSubmit={handleCreateWorker} className="pk-form-grid">
-          <PkAutoCodeInput label="Código Empleado" value="EMP-AUTO" />
+        <form onSubmit={handleCreateEmployee} className="pk-form-grid">
+          <PkAutoCodeInput label="Código Empleado" value={nextEmployeeCode} />
           <div className="pk-field">
             <label>Nombre Completo *</label>
             <input
@@ -345,28 +493,42 @@ export const NominaView: React.FC = () => {
             />
           </div>
           <div className="pk-field">
-            <label>Cargo / Área</label>
+            <label>Cargo / Área *</label>
             <input
-              value={empSpecialty}
-              onChange={(e) => setEmpSpecialty(e.target.value)}
-              placeholder="Ej: Auxiliar Contable / Cajero"
+              required
+              value={empPosition}
+              onChange={(e) => setEmpPosition(e.target.value)}
+              placeholder="Ej: Analista Contable / Cajero"
             />
           </div>
           <div className="pk-field">
-            <label>Celular</label>
+            <label>Salario Mensual Contractual ($) *</label>
+            <input
+              required
+              type="number"
+              min="0"
+              step="any"
+              value={empSalary}
+              onChange={(e) => setEmpSalary(e.target.value)}
+            />
+          </div>
+          <div className="pk-field">
+            <label>Teléfono Contacto</label>
             <input
               value={empPhone}
               onChange={(e) => setEmpPhone(e.target.value)}
               placeholder="310..."
             />
           </div>
-          <div className="pk-field">
-            <button type="submit" className="pk-btn pk-btn-primary">
-              💾 Guardar Empleado
+          <div className="pk-field" style={{ display: 'flex', alignItems: 'flex-end' }}>
+            <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
+              Guardar Colaborador
             </button>
           </div>
         </form>
-      </PkEntityDialog>
+      </PkModal>
     </ModuleGate>
   );
 };
+
+export default NominaView;

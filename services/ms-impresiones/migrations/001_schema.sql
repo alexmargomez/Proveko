@@ -1,5 +1,10 @@
 CREATE SCHEMA IF NOT EXISTS printing;
 
+CREATE TABLE IF NOT EXISTS printing.idempotency_keys (
+    idem_key   TEXT PRIMARY KEY,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS printing.branding_configs (
     id              TEXT PRIMARY KEY DEFAULT 'primary',
     company_name    TEXT NOT NULL,

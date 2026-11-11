@@ -3,8 +3,9 @@
   "displayName": "Contabilidad PUC",
   "icon": "📘",
   "apiPrefix": "/api/v1/contabilidad",
+  "uiBundlePath": "/api/v1/contabilidad/ui.js",
   "category": "Finanzas",
-  "summary": "Plan Único de Cuentas (PUC), comprobantes contables y asientos con cuentas seleccionables.",
+  "summary": "Plan Único de Cuentas (PUC), comprobantes contables de partida doble y balance por subcuenta.",
   "modules": [
     {
       "moduleKey": "comprobantes_puc",
@@ -14,5 +15,23 @@
       "summary": "Registro de comprobantes contables sobre cuentas PUC normalizadas."
     }
   ],
-  "features": []
+  "features": [
+    {
+      "featureKey": "validacion_partida_doble",
+      "displayName": "Exigir cuadre exacto débito/crédito antes de asentar comprobante",
+      "dependsOnModule": "comprobantes_puc",
+      "dependsOnSubmodule": "libro_diario_puc",
+      "defaultActive": true
+    }
+  ],
+  "bundleHash": "6212625bdc53",
+  "submodules": [
+    {
+      "submoduleKey": "libro_diario_puc",
+      "displayName": "Catálogo PUC y Asientos de Partida Doble",
+      "dependsOnModule": "comprobantes_puc",
+      "defaultActive": true,
+      "summary": "Validación cuadrada de débitos y créditos contables."
+    }
+  ]
 }

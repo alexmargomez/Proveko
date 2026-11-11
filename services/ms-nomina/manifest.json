@@ -3,8 +3,9 @@
   "displayName": "Personal y Nómina",
   "icon": "👔",
   "apiPrefix": "/api/v1/nomina",
+  "uiBundlePath": "/api/v1/nomina/ui.js",
   "category": "Talento Humano",
-  "summary": "Empleados, cargos, turnos y desprendibles de pago de nómina.",
+  "summary": "Empleados, contratos laborales, liquidación salarial por periodo y desprendibles de pago.",
   "modules": [
     {
       "moduleKey": "liquidacion_nomina",
@@ -14,5 +15,23 @@
       "summary": "Liquidación salarial e impresión de colilla de pago."
     }
   ],
-  "features": []
+  "features": [
+    {
+      "featureKey": "colilla_pago_corporativa",
+      "displayName": "Generar comprobante individual de pago de nómina",
+      "dependsOnModule": "liquidacion_nomina",
+      "dependsOnSubmodule": "nomina_desprendibles",
+      "defaultActive": true
+    }
+  ],
+  "bundleHash": "74da002d1ed4",
+  "submodules": [
+    {
+      "submoduleKey": "nomina_desprendibles",
+      "displayName": "Contratos Laborales, Devengados y Desprendibles",
+      "dependsOnModule": "liquidacion_nomina",
+      "defaultActive": true,
+      "summary": "Liquidación periódica de salarios, auxilios y deducciones."
+    }
+  ]
 }

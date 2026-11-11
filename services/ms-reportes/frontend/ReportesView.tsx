@@ -1,19 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  useProveko,
+  usePlatform,
   ModuleGate,
+  PkAutoCodeInput,
+  PkModal,
   PkPrintButton,
   PkKpiRow,
-  Invoice,
-  Expense,
-  Product,
-  PrintDocumentPayload,
+  useAsyncAction,
   downloadCsvUtf8,
   formatCop,
-} from '@proveko/ui-sdk';
+} from '@platform/ui-sdk';
 
-interface ExecutiveReportResponse {
-  ok: boolean;
+interface ExecutiveSnapshot {
+  id: string;
+  code: string;
   totalSales: number;
   totalCollected: number;
   totalPendingReceivables: number;
@@ -22,19 +22,100 @@ interface ExecutiveReportResponse {
   inventoryCostValue: number;
   inventorySaleValue: number;
   lowStockCount: number;
-  customersCount?: number;
-  workOrdersCount?: number;
-  scaleTicketsCount?: number;
-  invoices: Invoice[];
-  expenses: Expense[];
-  products: Product[];
+  customersCount: number;
+  notes: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+interface ExecutiveApiResponse {
+  ok: boolean;
+  nextCode?: string;
+  nextSnapshotCode?: string;
+  totalSales: number;
+  totalCollected: number;
+  totalPendingReceivables: number;
+  totalExpenses: number;
+  netOperatingProfit: number;
+  inventoryCostValue: number;
+  inventorySaleValue: number;
+  lowStockCount: number;
+  customersCount: number;
+  snapshots?: ExecutiveSnapshot[];
+}
+
+interface RemoteInvoice {
+  id: string;
+  code?: string;
+  date?: string;
+  createdAt?: string;
+  customerName: string;
+  customerNit?: string;
+  paymentMethod?: string;
+  subtotal?: number;
+  taxTotal?: number;
+  total: number;
+  amountPaid: number;
+  pendingBalance: number;
+  status?: string;
+}
+
+interface RemoteExpense {
+  id: string;
+  code?: string;
+  date?: string;
+  createdAt?: string;
+  category: string;
+  description: string;
+  paymentSource?: string;
+  responsible?: string;
+  amount: number;
+}
+
+interface RemoteProduct {
+  id: string;
+  code: string;
+  name: string;
+  category: string;
+  stock: number;
+  minStock: number;
+  costPrice: number;
+  salePrice: number;
+  lotCode?: string;
+}
+
+interface RemoteCustomer {
+  id: string;
+  name: string;
+  nit: string;
+  balance?: number;
+}
+
+interface ConsolidatedState {
+  totalSales: number;
+  totalCollected: number;
+  totalPendingReceivables: number;
+  totalExpenses: number;
+  netOperatingProfit: number;
+  inventoryCostValue: number;
+  inventorySaleValue: number;
+  lowStockCount: number;
+  customersCount: number;
+  invoices: RemoteInvoice[];
+  expenses: RemoteExpense[];
+  products: RemoteProduct[];
 }
 
 export const ReportesView: React.FC = () => {
-  const { apiGet, toast, dialogVersion } = useProveko();
+  const { apiGet, apiPost, toast, hasService } = usePlatform();
+  const { busy, run } = useAsyncAction();
 
-  const [report, setReport] = useState<ExecutiveReportResponse>({
-    ok: true,
+  const [nextSnapshotCode, setNextSnapshotCode] = useState('RPT-801');
+  const [snapshots, setSnapshots] = useState<ExecutiveSnapshot[]>([]);
+  const [snapshotModalOpen, setSnapshotModalOpen] = useState(false);
+  const [snapshotNotes, setSnapshotNotes] = useState('Cierre ejecutivo consolidado del turno');
+
+  const [report, setReport] = useState<ConsolidatedState>({
     totalSales: 0,
     totalCollected: 0,
     totalPendingReceivables: 0,
@@ -44,46 +125,154 @@ export const ReportesView: React.FC = () => {
     inventorySaleValue: 0,
     lowStockCount: 0,
     customersCount: 0,
-    workOrdersCount: 0,
-    scaleTicketsCount: 0,
     invoices: [],
     expenses: [],
     products: [],
   });
 
+  const hasFacturacion = hasService('ms-facturacion');
+  const hasCaja = hasService('ms-caja');
+  const hasInventario = hasService('ms-inventario');
+  const hasClientes = hasService('ms-clientes');
+
   const reload = useCallback(async () => {
-    try {
-      const data = await apiGet<ExecutiveReportResponse>('/api/v1/reportes/executive');
-      setReport({
-        ok: true,
-        totalSales: data.totalSales || 0,
-        totalCollected: data.totalCollected || 0,
-        totalPendingReceivables: data.totalPendingReceivables || 0,
-        totalExpenses: data.totalExpenses || 0,
-        netOperatingProfit: data.netOperatingProfit || 0,
-        inventoryCostValue: data.inventoryCostValue || 0,
-        inventorySaleValue: data.inventorySaleValue || 0,
-        lowStockCount: data.lowStockCount || 0,
-        customersCount: data.customersCount || 0,
-        workOrdersCount: data.workOrdersCount || 0,
-        scaleTicketsCount: data.scaleTicketsCount || 0,
-        invoices: data.invoices || [],
-        expenses: data.expenses || [],
-        products: data.products || [],
-      });
-    } catch {
+    const [execRes, posRes, cajaRes, invRes, cliRes] = await Promise.allSettled([
+      apiGet<ExecutiveApiResponse>('/api/v1/reportes/executive'),
+      hasFacturacion
+        ? apiGet<{ invoices?: RemoteInvoice[] }>('/api/v1/facturacion/pos-state')
+        : Promise.resolve(null),
+      hasCaja
+        ? apiGet<{
+            cashIncomes?: number;
+            digitalIncomes?: number;
+            totalExpenses?: number;
+            expenses?: RemoteExpense[];
+          }>('/api/v1/caja/summary')
+        : Promise.resolve(null),
+      hasInventario
+        ? apiGet<{ products?: RemoteProduct[] }>('/api/v1/inventario/all')
+        : Promise.resolve(null),
+      hasClientes
+        ? apiGet<{ customers?: RemoteCustomer[] }>('/api/v1/clientes/all')
+        : Promise.resolve(null),
+    ]);
+
+    const execData = execRes.status === 'fulfilled' ? execRes.value : null;
+    if (execData) {
+      setNextSnapshotCode(execData.nextSnapshotCode || execData.nextCode || 'RPT-801');
+      setSnapshots(execData.snapshots || []);
     }
-  }, [apiGet]);
+
+    const livePos = posRes.status === 'fulfilled' && posRes.value ? posRes.value : null;
+    const liveCaja = cajaRes.status === 'fulfilled' && cajaRes.value ? cajaRes.value : null;
+    const liveInv = invRes.status === 'fulfilled' && invRes.value ? invRes.value : null;
+    const liveCli = cliRes.status === 'fulfilled' && cliRes.value ? cliRes.value : null;
+
+    const anyLiveSource = Boolean(livePos || liveCaja || liveInv || liveCli);
+
+    if (!anyLiveSource && execData) {
+      setReport({
+        totalSales: execData.totalSales || 0,
+        totalCollected: execData.totalCollected || 0,
+        totalPendingReceivables: execData.totalPendingReceivables || 0,
+        totalExpenses: execData.totalExpenses || 0,
+        netOperatingProfit: execData.netOperatingProfit || 0,
+        inventoryCostValue: execData.inventoryCostValue || 0,
+        inventorySaleValue: execData.inventorySaleValue || 0,
+        lowStockCount: execData.lowStockCount || 0,
+        customersCount: execData.customersCount || 0,
+        invoices: [],
+        expenses: [],
+        products: [],
+      });
+      return;
+    }
+
+    const invoices = livePos?.invoices || [];
+    const expenses = liveCaja?.expenses || [];
+    const products = liveInv?.products || [];
+    const customers = liveCli?.customers || [];
+
+    const totalSales = invoices.reduce((acc, inv) => acc + Number(inv.total || 0), 0);
+    const invoiceCollected = invoices.reduce((acc, inv) => acc + Number(inv.amountPaid || 0), 0);
+    const invoiceReceivables = invoices.reduce((acc, inv) => acc + Number(inv.pendingBalance || 0), 0);
+
+    const cajaIncomes = Number(liveCaja?.cashIncomes || 0) + Number(liveCaja?.digitalIncomes || 0);
+    const totalCollected = livePos ? invoiceCollected : cajaIncomes;
+
+    const customerReceivables = customers.reduce((acc, c) => acc + Math.max(0, Number(c.balance || 0)), 0);
+    const totalPendingReceivables = livePos ? invoiceReceivables : customerReceivables;
+
+    const totalExpenses =
+      liveCaja && typeof liveCaja.totalExpenses === 'number'
+        ? liveCaja.totalExpenses
+        : expenses.reduce((acc, exp) => acc + Number(exp.amount || 0), 0);
+
+    let inventoryCostValue = 0;
+    let inventorySaleValue = 0;
+    let lowStockCount = 0;
+    for (const p of products) {
+      const stk = Number(p.stock || 0);
+      const minStk = Number(p.minStock || 0);
+      inventoryCostValue += Number(p.costPrice || 0) * stk;
+      inventorySaleValue += Number(p.salePrice || 0) * stk;
+      if (stk <= minStk) {
+        lowStockCount += 1;
+      }
+    }
+
+    const netOperatingProfit = totalSales - totalExpenses;
+
+    setReport({
+      totalSales,
+      totalCollected,
+      totalPendingReceivables,
+      totalExpenses,
+      netOperatingProfit,
+      inventoryCostValue,
+      inventorySaleValue,
+      lowStockCount,
+      customersCount: customers.length,
+      invoices,
+      expenses,
+      products,
+    });
+  }, [apiGet, hasFacturacion, hasCaja, hasInventario, hasClientes]);
 
   useEffect(() => {
     void reload();
-  }, [reload, dialogVersion]);
+  }, [reload]);
 
   const todayStamp = new Date().toISOString().slice(0, 10);
 
+  const handleSaveSnapshot = (e: React.FormEvent) => {
+    e.preventDefault();
+    void run(async () => {
+      try {
+        const res = await apiPost<{ ok: boolean; snapshot: ExecutiveSnapshot }>('/api/v1/reportes/snapshots', {
+          totalSales: report.totalSales,
+          totalCollected: report.totalCollected,
+          totalPendingReceivables: report.totalPendingReceivables,
+          totalExpenses: report.totalExpenses,
+          netOperatingProfit: report.netOperatingProfit,
+          inventoryCostValue: report.inventoryCostValue,
+          inventorySaleValue: report.inventorySaleValue,
+          lowStockCount: report.lowStockCount,
+          customersCount: report.customersCount,
+          notes: snapshotNotes.trim() || 'Corte ejecutivo consolidado',
+        });
+        toast(`Corte ejecutivo ${res.snapshot.code} almacenado en histórico`);
+        setSnapshotModalOpen(false);
+        await reload();
+      } catch (err) {
+        toast(err instanceof Error ? err.message : 'No fue posible guardar el corte ejecutivo');
+      }
+    });
+  };
+
   const handleExportSalesCsv = () => {
     downloadCsvUtf8(
-      `proveko_ventas_${todayStamp}.csv`,
+      `reporte_ventas_${todayStamp}.csv`,
       [
         'Factura',
         'Fecha',
@@ -98,31 +287,31 @@ export const ReportesView: React.FC = () => {
         'Estado',
       ],
       report.invoices.map((inv) => [
-        inv.id,
-        inv.date,
+        inv.code || inv.id,
+        inv.date || inv.createdAt || '',
         inv.customerName,
-        inv.customerNit,
-        inv.paymentMethod,
-        inv.subtotal,
-        inv.taxTotal,
+        inv.customerNit || '',
+        inv.paymentMethod || 'Contado',
+        inv.subtotal ?? inv.total,
+        inv.taxTotal ?? 0,
         inv.total,
         inv.amountPaid,
         inv.pendingBalance,
-        inv.status,
-      ])
+        inv.status || (inv.pendingBalance > 0 ? 'Pendiente' : 'Pagada'),
+      ]),
     );
-    toast('Archivo Excel CSV de Ventas descargado correctamente');
+    toast('Archivo CSV UTF-8 de Ventas descargado correctamente');
   };
 
   const handleExportInventoryCsv = () => {
     downloadCsvUtf8(
-      `proveko_inventario_valorizado_${todayStamp}.csv`,
+      `reporte_inventario_valorizado_${todayStamp}.csv`,
       [
-        'Codigo',
+        'Código',
         'Producto',
-        'Categoria',
+        'Categoría',
         'Stock Actual',
-        'Stock Minimo',
+        'Stock Mínimo',
         'Costo Unitario',
         'Precio Venta',
         'Margen Unitario',
@@ -142,68 +331,123 @@ export const ReportesView: React.FC = () => {
         p.costPrice * p.stock,
         p.salePrice * p.stock,
         p.lotCode || '',
-      ])
+      ]),
     );
-    toast('Archivo Excel CSV de Inventario Valorizado descargado');
+    toast('Archivo CSV UTF-8 de Inventario Valorizado descargado');
   };
 
   const handleExportExpensesCsv = () => {
     downloadCsvUtf8(
-      `proveko_gastos_operativos_${todayStamp}.csv`,
-      ['Consecutivo', 'Fecha', 'Categoria', 'Concepto', 'Origen Fondos', 'Responsable', 'Valor'],
+      `reporte_egresos_operativos_${todayStamp}.csv`,
+      ['Consecutivo', 'Fecha', 'Categoría', 'Concepto', 'Origen Fondos', 'Responsable', 'Valor'],
       report.expenses.map((exp) => [
-        exp.id,
-        exp.date,
+        exp.code || exp.id,
+        exp.date || exp.createdAt || '',
         exp.category,
         exp.description,
-        exp.paymentSource,
-        exp.responsible,
+        exp.paymentSource || 'Caja',
+        exp.responsible || 'Operación',
         exp.amount,
-      ])
+      ]),
     );
-    toast('Archivo Excel CSV de Gastos Operativos descargado');
+    toast('Archivo CSV UTF-8 de Egresos Operativos descargado');
   };
 
-  const executivePrintPayload: PrintDocumentPayload = {
+  const handleExportSnapshotsCsv = () => {
+    downloadCsvUtf8(
+      `reporte_cortes_historicos_${todayStamp}.csv`,
+      [
+        'Corte',
+        'Fecha',
+        'Ventas Totales',
+        'Recaudo Efectivo',
+        'Cartera CxC',
+        'Egresos Operativos',
+        'Utilidad Operativa',
+        'Inventario Costo',
+        'Inventario Venta',
+        'Alertas Stock',
+        'Observaciones',
+      ],
+      snapshots.map((s) => [
+        s.code,
+        s.createdAt,
+        s.totalSales,
+        s.totalCollected,
+        s.totalPendingReceivables,
+        s.totalExpenses,
+        s.netOperatingProfit,
+        s.inventoryCostValue,
+        s.inventorySaleValue,
+        s.lowStockCount,
+        s.notes,
+      ]),
+    );
+    toast('Archivo CSV UTF-8 de Cortes Ejecutivos descargado');
+  };
+
+  const buildBalancePrintPayload = (
+    docNum: string,
+    issueDate: string,
+    kpi: {
+      totalSales: number;
+      totalCollected: number;
+      totalPendingReceivables: number;
+      totalExpenses: number;
+      netOperatingProfit: number;
+      inventoryCostValue: number;
+      inventorySaleValue: number;
+      lowStockCount: number;
+      notes?: string;
+    },
+  ): Record<string, unknown> => ({
     document_type: 'BALANCE EJECUTIVO Y ESTADO GERENCIAL',
     layout_variant: 'carta_membrete',
-    document_number: `BAL-${todayStamp}`,
-    issue_date: new Date().toISOString().slice(0, 16).replace('T', ' '),
+    document_number: docNum,
+    issue_date: issueDate,
     customer_name: 'Informe Consolidado de Gerencia y Operaciones',
-    payment_method: 'Consolidado Multi-Módulo',
+    payment_method: 'Consolidación Multi-Servicio',
     extra_fields: {
-      'Ventas Totales Facturadas': formatCop(report.totalSales),
-      'Recaudo Efectivo Ingresado': formatCop(report.totalCollected),
-      'Cartera Pendiente por Cobrar': formatCop(report.totalPendingReceivables),
-      'Gastos Operativos': formatCop(report.totalExpenses),
-      'Inventario a Costo': formatCop(report.inventoryCostValue),
-      'Inventario a Precio Venta': formatCop(report.inventorySaleValue),
-      'Alertas Stock Mínimo': `${report.lowStockCount} referencias`,
+      'Ventas Totales Facturadas': formatCop(kpi.totalSales),
+      'Recaudo Efectivo Ingresado': formatCop(kpi.totalCollected),
+      'Cartera Pendiente por Cobrar': formatCop(kpi.totalPendingReceivables),
+      'Egresos Operativos': formatCop(kpi.totalExpenses),
+      'Inventario a Costo': formatCop(kpi.inventoryCostValue),
+      'Inventario a Precio Venta': formatCop(kpi.inventorySaleValue),
+      'Alertas Stock Mínimo': `${kpi.lowStockCount} referencias`,
     },
     items: [
       {
         code: 'KPI-VEN',
-        description: `Ingresos Operacionales por Facturación (${report.invoices.length} facturas emitidas)`,
+        description: 'Ingresos Operacionales Consolidados por Ventas',
         quantity: 1,
-        unit_price: report.totalSales,
-        subtotal: report.totalSales,
+        unit_price: kpi.totalSales,
+        subtotal: kpi.totalSales,
       },
       {
         code: 'KPI-EGR',
-        description: `Menos: Gastos y Egresos Operativos de Caja (${report.expenses.length} comprobantes)`,
+        description: 'Menos: Egresos y Gastos Operativos Registrados',
         quantity: 1,
-        unit_price: -report.totalExpenses,
-        subtotal: -report.totalExpenses,
+        unit_price: -kpi.totalExpenses,
+        subtotal: -kpi.totalExpenses,
       },
     ],
-    subtotal: report.totalSales,
-    discount_total: report.totalExpenses,
-    grand_total: report.netOperatingProfit,
-    pending_balance: report.totalPendingReceivables,
-    notes: `Utilidad potencial estimada sobre inventario actual: ${formatCop(
-      report.inventorySaleValue - report.inventoryCostValue
-    )}.`,
-  };
+    subtotal: kpi.totalSales,
+    discount_total: kpi.totalExpenses,
+    grand_total: kpi.netOperatingProfit,
+    pending_balance: kpi.totalPendingReceivables,
+    notes:
+      kpi.notes ||
+      `Utilidad bruta potencial estimada sobre inventario valorizado: ${formatCop(
+        kpi.inventorySaleValue - kpi.inventoryCostValue,
+      )}.`,
+  });
+
+  const livePrintPayload = buildBalancePrintPayload(
+    `BAL-${todayStamp}`,
+    new Date().toISOString().slice(0, 16).replace('T', ' '),
+    report,
+  );
 
   return (
     <ModuleGate module="centro_reportes">
@@ -212,39 +456,45 @@ export const ReportesView: React.FC = () => {
           { label: 'Ventas Totales', value: formatCop(report.totalSales), color: 'var(--pk-primary)' },
           { label: 'Recaudo Efectivo', value: formatCop(report.totalCollected), color: 'var(--pk-emerald)' },
           { label: 'Cartera por Cobrar', value: formatCop(report.totalPendingReceivables), color: 'var(--pk-amber)' },
-          { label: 'Gastos', value: formatCop(report.totalExpenses), color: 'var(--pk-rose)' },
+          { label: 'Egresos Operativos', value: formatCop(report.totalExpenses), color: 'var(--pk-rose)' },
           {
             label: 'Utilidad Operativa',
             value: formatCop(report.netOperatingProfit),
             color: report.netOperatingProfit >= 0 ? 'var(--pk-emerald)' : 'var(--pk-rose)',
           },
-          { label: 'Valor Inventario', value: formatCop(report.inventoryCostValue), color: '#0f172a' },
+          { label: 'Inventario (Costo)', value: formatCop(report.inventoryCostValue), color: '#0f172a' },
         ]}
       />
 
       <div className="pk-card">
         <div className="pk-card-head">
           <div>
-            <div className="pk-card-title">📊 Centro Gerencial de Exportación Excel (CSV UTF-8) y Balance PDF</div>
+            <div className="pk-card-title">📊 Centro Gerencial — Consolidación Ejecutiva, CSV UTF-8 y Balance PDF</div>
             <div style={{ fontSize: 12, color: 'var(--pk-muted)', marginTop: 2 }}>
-              Inventario potencial a precio de venta: <strong>{formatCop(report.inventorySaleValue)}</strong> ·
-              Referencias en stock crítico: <strong>{report.lowStockCount}</strong> · Clientes activos:{' '}
-              <strong>{report.customersCount || 0}</strong>
+              Inventario a precio de venta: <strong>{formatCop(report.inventorySaleValue)}</strong> · Alertas bajo mínimo:{' '}
+              <strong>{report.lowStockCount}</strong> · Clientes activos: <strong>{report.customersCount}</strong>
             </div>
           </div>
           <div className="pk-row-actions">
+            <button
+              type="button"
+              className="pk-btn pk-btn-outline pk-btn-sm"
+              onClick={() => setSnapshotModalOpen(true)}
+            >
+              💾 Guardar Corte ({nextSnapshotCode})
+            </button>
             <button type="button" className="pk-btn pk-btn-emerald pk-btn-sm" onClick={handleExportSalesCsv}>
-              📥 Excel Ventas (.CSV)
+              📥 CSV Ventas
             </button>
             <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={handleExportInventoryCsv}>
-              📥 Excel Inventario Valorizado (.CSV)
+              📥 CSV Inventario
             </button>
             <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={handleExportExpensesCsv}>
-              📥 Excel Gastos (.CSV)
+              📥 CSV Egresos
             </button>
             <PkPrintButton
               label="🖨️ Imprimir Balance Ejecutivo PDF"
-              payload={executivePrintPayload}
+              payload={livePrintPayload}
               variant="primary"
             />
           </div>
@@ -253,62 +503,71 @@ export const ReportesView: React.FC = () => {
 
       <div className="pk-card">
         <div className="pk-card-head">
-          <div className="pk-card-title">🧾 Comparativo de Últimas Ventas y Estado de Recaudo ({report.invoices.length})</div>
-          <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={() => void reload()}>
-            🔄 Actualizar Corte
-          </button>
+          <div className="pk-card-title">🗂️ Cortes Ejecutivos Históricos Almacenados ({snapshots.length})</div>
+          <div className="pk-row-actions">
+            <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={handleExportSnapshotsCsv}>
+              📥 CSV Histórico
+            </button>
+            <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={() => void reload()}>
+              🔄 Actualizar Consolidado
+            </button>
+          </div>
         </div>
         <div className="pk-card-body">
           <div className="pk-table-wrap">
             <table className="pk-table">
               <thead>
                 <tr>
-                  <th>Factura</th>
-                  <th>Fecha</th>
-                  <th>Cliente</th>
-                  <th>Medio de Pago</th>
-                  <th>Total Facturado</th>
-                  <th>Recaudado</th>
-                  <th>Saldo CxC</th>
-                  <th>Estado</th>
+                  <th>Corte</th>
+                  <th>Fecha / Hora</th>
+                  <th>Ventas</th>
+                  <th>Recaudo</th>
+                  <th>Cartera CxC</th>
+                  <th>Egresos</th>
+                  <th>Utilidad Operativa</th>
+                  <th>Inv. Costo / Venta</th>
+                  <th>Observación</th>
+                  <th>PDF</th>
                 </tr>
               </thead>
               <tbody>
-                {report.invoices.length === 0 ? (
+                {snapshots.length === 0 ? (
                   <tr>
-                    <td colSpan={8} style={{ textAlign: 'center', color: 'var(--pk-muted)' }}>
-                      Aún no se registran facturas emitidas en la base de datos del cliente.
+                    <td colSpan={10} style={{ textAlign: 'center', color: 'var(--pk-muted)' }}>
+                      Aún no se han guardado cortes históricos en el esquema gerencial.
                     </td>
                   </tr>
                 ) : (
-                  report.invoices.map((inv) => (
-                    <tr key={inv.id}>
-                      <td>
-                        <span className="pk-badge pk-badge-blue">{inv.id}</span>
+                  snapshots.map((snap) => (
+                    <tr key={snap.id}>
+                      <td><span className="pk-badge pk-badge-blue">{snap.code}</span></td>
+                      <td>{snap.createdAt}</td>
+                      <td style={{ fontWeight: 700 }}>{formatCop(snap.totalSales)}</td>
+                      <td style={{ color: 'var(--pk-emerald)', fontWeight: 700 }}>{formatCop(snap.totalCollected)}</td>
+                      <td style={{ color: 'var(--pk-amber)', fontWeight: 700 }}>
+                        {formatCop(snap.totalPendingReceivables)}
                       </td>
-                      <td>{inv.date}</td>
-                      <td style={{ fontWeight: 700 }}>{inv.customerName}</td>
-                      <td>{inv.paymentMethod}</td>
-                      <td style={{ fontWeight: 800 }}>{formatCop(inv.total)}</td>
-                      <td style={{ color: 'var(--pk-emerald)', fontWeight: 700 }}>
-                        {formatCop(inv.amountPaid)}
-                      </td>
+                      <td style={{ color: 'var(--pk-rose)', fontWeight: 700 }}>{formatCop(snap.totalExpenses)}</td>
                       <td
                         style={{
-                          color: inv.pendingBalance > 0 ? 'var(--pk-amber)' : 'var(--pk-muted)',
-                          fontWeight: inv.pendingBalance > 0 ? 800 : 500,
+                          fontWeight: 800,
+                          color: snap.netOperatingProfit >= 0 ? 'var(--pk-emerald)' : 'var(--pk-rose)',
                         }}
                       >
-                        {formatCop(inv.pendingBalance)}
+                        {formatCop(snap.netOperatingProfit)}
                       </td>
                       <td>
-                        <span
-                          className={`pk-badge ${
-                            inv.pendingBalance > 0 ? 'pk-badge-amber' : 'pk-badge-emerald'
-                          }`}
-                        >
-                          {inv.status}
-                        </span>
+                        <div>{formatCop(snap.inventoryCostValue)}</div>
+                        <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>
+                          Venta: {formatCop(snap.inventorySaleValue)}
+                        </div>
+                      </td>
+                      <td>{snap.notes}</td>
+                      <td>
+                        <PkPrintButton
+                          label="🖨️ PDF"
+                          payload={buildBalancePrintPayload(snap.code, snap.createdAt, snap)}
+                        />
                       </td>
                     </tr>
                   ))
@@ -319,70 +578,158 @@ export const ReportesView: React.FC = () => {
         </div>
       </div>
 
-      <div className="pk-card">
-        <div className="pk-card-head">
-          <div className="pk-card-title">📦 Rentabilidad y Valorización por Producto ({report.products.length})</div>
-        </div>
-        <div className="pk-card-body">
-          <div className="pk-table-wrap">
-            <table className="pk-table">
-              <thead>
-                <tr>
-                  <th>Código</th>
-                  <th>Producto</th>
-                  <th>Categoría</th>
-                  <th>Stock</th>
-                  <th>Costo Unit.</th>
-                  <th>Precio Venta</th>
-                  <th>Margen Unit.</th>
-                  <th>% Rentab.</th>
-                  <th>Valorizado Costo</th>
-                  <th>Estado Stock</th>
-                </tr>
-              </thead>
-              <tbody>
-                {report.products.length === 0 ? (
+      {hasFacturacion && (
+        <div className="pk-card">
+          <div className="pk-card-head">
+            <div className="pk-card-title">🧾 Detalle Consolidado de Facturación y Cartera ({report.invoices.length})</div>
+          </div>
+          <div className="pk-card-body">
+            <div className="pk-table-wrap">
+              <table className="pk-table">
+                <thead>
                   <tr>
-                    <td colSpan={10} style={{ textAlign: 'center', color: 'var(--pk-muted)' }}>
-                      No hay productos registrados en el catálogo.
-                    </td>
+                    <th>Factura</th>
+                    <th>Fecha</th>
+                    <th>Cliente</th>
+                    <th>Medio de Pago</th>
+                    <th>Total Facturado</th>
+                    <th>Recaudado</th>
+                    <th>Saldo CxC</th>
+                    <th>Estado</th>
                   </tr>
-                ) : (
-                  report.products.map((p) => {
-                    const unitMargin = p.salePrice - p.costPrice;
-                    const marginPct = p.salePrice > 0 ? Math.round((unitMargin / p.salePrice) * 100) : 0;
-                    const isLow = p.stock <= p.minStock;
-                    return (
-                      <tr key={p.id}>
-                        <td>
-                          <span className="pk-badge pk-badge-slate">{p.code}</span>
+                </thead>
+                <tbody>
+                  {report.invoices.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} style={{ textAlign: 'center', color: 'var(--pk-muted)' }}>
+                        Sin facturas emitidas en el periodo consultado.
+                      </td>
+                    </tr>
+                  ) : (
+                    report.invoices.map((inv) => (
+                      <tr key={inv.id}>
+                        <td><span className="pk-badge pk-badge-blue">{inv.code || inv.id}</span></td>
+                        <td>{inv.date || inv.createdAt || '—'}</td>
+                        <td style={{ fontWeight: 700 }}>{inv.customerName}</td>
+                        <td>{inv.paymentMethod || 'Contado'}</td>
+                        <td style={{ fontWeight: 800 }}>{formatCop(inv.total)}</td>
+                        <td style={{ color: 'var(--pk-emerald)', fontWeight: 700 }}>{formatCop(inv.amountPaid)}</td>
+                        <td
+                          style={{
+                            color: inv.pendingBalance > 0 ? 'var(--pk-amber)' : 'var(--pk-muted)',
+                            fontWeight: inv.pendingBalance > 0 ? 800 : 500,
+                          }}
+                        >
+                          {formatCop(inv.pendingBalance)}
                         </td>
-                        <td style={{ fontWeight: 700 }}>{p.name}</td>
-                        <td>{p.category}</td>
-                        <td style={{ fontWeight: 800 }}>{p.stock}</td>
-                        <td>{formatCop(p.costPrice)}</td>
-                        <td>{formatCop(p.salePrice)}</td>
-                        <td style={{ color: 'var(--pk-emerald)', fontWeight: 700 }}>
-                          +{formatCop(unitMargin)}
-                        </td>
                         <td>
-                          <span className="pk-badge pk-badge-emerald">{marginPct}%</span>
-                        </td>
-                        <td style={{ fontWeight: 800 }}>{formatCop(p.costPrice * p.stock)}</td>
-                        <td>
-                          <span className={`pk-badge ${isLow ? 'pk-badge-amber' : 'pk-badge-blue'}`}>
-                            {isLow ? '⚠️ Reabastecer' : 'Óptimo'}
+                          <span className={`pk-badge ${inv.pendingBalance > 0 ? 'pk-badge-amber' : 'pk-badge-emerald'}`}>
+                            {inv.status || (inv.pendingBalance > 0 ? 'Pendiente' : 'Pagada')}
                           </span>
                         </td>
                       </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {hasInventario && (
+        <div className="pk-card">
+          <div className="pk-card-head">
+            <div className="pk-card-title">📦 Valorización de Inventario y Alertas Bajo Mínimo ({report.products.length})</div>
+          </div>
+          <div className="pk-card-body">
+            <div className="pk-table-wrap">
+              <table className="pk-table">
+                <thead>
+                  <tr>
+                    <th>Código</th>
+                    <th>Producto</th>
+                    <th>Categoría</th>
+                    <th>Stock</th>
+                    <th>Costo Unit.</th>
+                    <th>Precio Venta</th>
+                    <th>Margen Unit.</th>
+                    <th>Valorizado Costo</th>
+                    <th>Valorizado Venta</th>
+                    <th>Alerta Stock</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {report.products.length === 0 ? (
+                    <tr>
+                      <td colSpan={10} style={{ textAlign: 'center', color: 'var(--pk-muted)' }}>
+                        No hay referencias registradas en el inventario actual.
+                      </td>
+                    </tr>
+                  ) : (
+                    report.products.map((p) => {
+                      const unitMargin = p.salePrice - p.costPrice;
+                      const isLow = p.stock <= p.minStock;
+                      return (
+                        <tr key={p.id}>
+                          <td><span className="pk-badge pk-badge-slate">{p.code}</span></td>
+                          <td style={{ fontWeight: 700 }}>{p.name}</td>
+                          <td>{p.category}</td>
+                          <td style={{ fontWeight: 800 }}>{p.stock}</td>
+                          <td>{formatCop(p.costPrice)}</td>
+                          <td>{formatCop(p.salePrice)}</td>
+                          <td style={{ color: 'var(--pk-emerald)', fontWeight: 700 }}>+{formatCop(unitMargin)}</td>
+                          <td style={{ fontWeight: 700 }}>{formatCop(p.costPrice * p.stock)}</td>
+                          <td style={{ fontWeight: 800 }}>{formatCop(p.salePrice * p.stock)}</td>
+                          <td>
+                            <span className={`pk-badge ${isLow ? 'pk-badge-amber' : 'pk-badge-emerald'}`}>
+                              {isLow ? `⚠️ Bajo mínimo (${p.minStock})` : 'Óptimo'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <PkModal
+        open={snapshotModalOpen}
+        title="Guardar Instantánea / Corte Ejecutivo en Histórico"
+        onClose={() => setSnapshotModalOpen(false)}
+      >
+        <form onSubmit={handleSaveSnapshot} className="pk-form-grid">
+          <PkAutoCodeInput label="Código de Corte" value={nextSnapshotCode} />
+          <div className="pk-field">
+            <label>Ventas Consolidadas</label>
+            <input readOnly value={formatCop(report.totalSales)} />
+          </div>
+          <div className="pk-field">
+            <label>Utilidad Operativa</label>
+            <input readOnly value={formatCop(report.netOperatingProfit)} />
+          </div>
+          <div className="pk-field">
+            <label>Nota / Etiqueta del Corte *</label>
+            <input
+              required
+              value={snapshotNotes}
+              onChange={(e) => setSnapshotNotes(e.target.value)}
+              placeholder="Ej: Cierre mensual auditado"
+            />
+          </div>
+          <div className="pk-field" style={{ display: 'flex', alignItems: 'flex-end' }}>
+            <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
+              Confirmar Corte Histórico
+            </button>
+          </div>
+        </form>
+      </PkModal>
     </ModuleGate>
   );
 };
+
+export default ReportesView;
