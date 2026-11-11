@@ -1,5 +1,5 @@
-import React from 'react';
-import { useProveko } from '@proveko/ui-sdk';
+import React, { useMemo } from 'react';
+import { usePlatform } from '@platform/ui-sdk';
 
 export const TopModuleTabs: React.FC<{
   showAdminPanel: boolean;
@@ -14,21 +14,36 @@ export const TopModuleTabs: React.FC<{
     activeServiceKey,
     activeModuleKey,
     setActiveModuleKey,
+    activeSubmoduleKey,
+    setActiveSubmoduleKey,
+    hasService,
     hasModule,
+    hasSubmodule,
     roleViewFilter,
     setRoleViewFilter,
-    setPublicView,
     logout,
-    loginWithToken,
-  } = useProveko();
+    impersonateTenant,
+  } = usePlatform();
 
   const currentService = catalog.find((s) => s.serviceKey === activeServiceKey);
   const activeModules = (currentService?.modules || []).filter((m) => hasModule(m.moduleKey));
+  const activeSubmodules = (currentService?.submodules || []).filter(
+    (sm) => sm.dependsOnModule === activeModuleKey && hasSubmodule(activeModuleKey, sm.submoduleKey)
+  );
+
+  const availableCategories = useMemo(() => {
+    const set = new Set<string>();
+    for (const svc of catalog) {
+      if (hasService(svc.serviceKey) && svc.category && svc.category !== 'Transversal') {
+        set.add(svc.category);
+      }
+    }
+    return Array.from(set);
+  }, [catalog, hasService]);
 
   const handleSwitchTenant = (tenantId: string) => {
-    const found = tenantsList.find((t) => t.tenantId === tenantId);
-    if (found) {
-      loginWithToken('', role, username, found);
+    if (tenantId && tenantId !== tenant?.tenantId) {
+      void impersonateTenant(tenantId);
     }
   };
 
@@ -46,7 +61,7 @@ export const TopModuleTabs: React.FC<{
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {tenantsList.length > 1 && (
+          {role === 'superadmin' && tenantsList.filter((t) => t.status !== 'SUSPENDED').length > 1 && (
             <select
               aria-label="Cambiar empresa activa"
               value={tenant?.tenantId || ''}
@@ -61,16 +76,18 @@ export const TopModuleTabs: React.FC<{
                 fontWeight: 700,
               }}
             >
-              {tenantsList.map((t) => (
-                <option key={t.tenantId} value={t.tenantId}>
-                  🏢 {t.companyName} ({t.dbName})
-                </option>
-              ))}
+              {tenantsList
+                .filter((t) => t.status !== 'SUSPENDED')
+                .map((t) => (
+                  <option key={t.tenantId} value={t.tenantId}>
+                    {t.companyName} — NIT {t.nit}
+                  </option>
+                ))}
             </select>
           )}
 
           <select
-            aria-label="Vista por puesto de trabajo"
+            aria-label="Filtrar por área funcional"
             value={roleViewFilter}
             onChange={(e) => setRoleViewFilter(e.target.value)}
             style={{
@@ -83,57 +100,101 @@ export const TopModuleTabs: React.FC<{
               fontWeight: 600,
             }}
           >
-            <option value="ALL">👤 Vista: Todos los Módulos</option>
-            <option value="CAJERO">🛒 Puesto: Cajero / Ventas</option>
-            <option value="MESERO">🍽️ Puesto: Mesero / Comandas</option>
-            <option value="RECEPCION">🏨 Puesto: Recepción / Hotel</option>
-            <option value="TALLER_BODEGA">🔧 Puesto: Taller / Bodega / Báscula</option>
-            <option value="GERENCIA">📊 Puesto: Gerencia y Contabilidad</option>
+            <option value="ALL">Vista: Todas las Áreas</option>
+            {availableCategories.map((cat) => (
+              <option key={cat} value={cat}>
+                Área: {cat}
+              </option>
+            ))}
           </select>
 
-          <button
-            type="button"
-            className="pk-btn pk-btn-sm"
-            style={{ background: '#1e293b', color: '#fff', borderColor: '#334155' }}
-            onClick={onOpenAdmin}
-          >
-            ⚙️ Licencias
-          </button>
-
-          <button
-            type="button"
-            className="pk-btn pk-btn-sm"
-            style={{ background: '#1e293b', color: '#cbd5e1', borderColor: '#334155' }}
-            onClick={() => setPublicView('login')}
-          >
-            🔐 Cuenta ({username})
-          </button>
-
-          {role !== 'cliente' && (
-            <button type="button" className="pk-btn pk-btn-danger pk-btn-sm" onClick={logout}>
-              Salir
+          {role === 'superadmin' && (
+            <button
+              type="button"
+              className="pk-btn pk-btn-sm"
+              style={{ background: '#1e293b', color: '#fff', borderColor: '#334155' }}
+              onClick={onOpenAdmin}
+            >
+              Panel Corporativo
             </button>
           )}
+
+          <span
+            style={{
+              background: '#1e293b',
+              color: '#cbd5e1',
+              border: '1px solid #334155',
+              borderRadius: 7,
+              padding: '5px 10px',
+              fontSize: 12,
+              fontWeight: 600,
+            }}
+          >
+            {username}
+          </span>
+
+          <button type="button" className="pk-btn pk-btn-danger pk-btn-sm" onClick={() => void logout()}>
+            Cerrar Sesión
+          </button>
         </div>
       </header>
 
-      {!showAdminPanel && currentService && (
-        <div className="pk-subtabs-bar">
-          <div className="pk-subtabs-list">
-            {activeModules.map((mod) => (
+      {!showAdminPanel && activeModules.length > 0 && (
+        <nav className="pk-module-tabs" aria-label="Módulos del servicio activo">
+          {activeModules.map((mod) => {
+            const active = mod.moduleKey === activeModuleKey;
+            return (
               <button
-                key={mod.moduleKey}
                 type="button"
-                className={`pk-tab-pill ${activeModuleKey === mod.moduleKey ? 'active' : ''}`}
+                key={mod.moduleKey}
+                className={`pk-module-tab ${active ? 'active' : ''}`}
                 onClick={() => setActiveModuleKey(mod.moduleKey)}
               >
-                {mod.tabIcon} {mod.displayName}
+                <span>{mod.tabIcon}</span>
+                <span>{mod.displayName}</span>
               </button>
-            ))}
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--pk-muted)', fontWeight: 600 }}>
-            {currentService.summary}
-          </div>
+            );
+          })}
+        </nav>
+      )}
+
+      {!showAdminPanel && activeSubmodules.length > 0 && (
+        <div
+          aria-label="Submódulos habilitados"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            flexWrap: 'wrap',
+            padding: '7px 22px',
+            background: '#f8fafc',
+            borderBottom: '1px solid #e2e8f0',
+            fontSize: 12,
+          }}
+        >
+          <span style={{ fontWeight: 800, color: '#475569' }}>Submódulos activos:</span>
+          {activeSubmodules.map((sm) => {
+            const selected = sm.submoduleKey === activeSubmoduleKey;
+            return (
+              <button
+                type="button"
+                key={sm.submoduleKey}
+                onClick={() => setActiveSubmoduleKey(sm.submoduleKey)}
+                style={{
+                  border: selected ? '1px solid #2563eb' : '1px solid #cbd5e1',
+                  background: selected ? '#eff6ff' : '#ffffff',
+                  color: selected ? '#1d4ed8' : '#334155',
+                  borderRadius: 999,
+                  padding: '3px 10px',
+                  fontSize: 11.5,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                {sm.displayName}
+              </button>
+            );
+          })}
         </div>
       )}
     </>

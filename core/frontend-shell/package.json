@@ -1,5 +1,5 @@
 {
-  "name": "@proveko/frontend-shell",
+  "name": "ms-core-shell",
   "version": "3.0.0",
   "private": true,
   "type": "module",
