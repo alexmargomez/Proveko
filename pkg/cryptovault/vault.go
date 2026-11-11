@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"io"
 )
@@ -23,7 +24,7 @@ type Vault struct {
 
 func New(masterSecret string) *Vault {
 	return &Vault{
-		kekID: "kek-proveko-v3",
+		kekID: "kek-enterprise-v3",
 		kek:   sha256.Sum256([]byte(masterSecret)),
 	}
 }
@@ -66,6 +67,36 @@ func (v *Vault) Open(tenantID string, env Envelope) (string, error) {
 		return "", err
 	}
 	return string(plain), nil
+}
+
+func SealDSN(masterSecret, tenantID, plainDSN string) (string, error) {
+	if masterSecret == "" || tenantID == "" {
+		return "", errors.New("master secret and tenant id required")
+	}
+	env, err := New(masterSecret).Seal(tenantID, plainDSN)
+	if err != nil {
+		return "", err
+	}
+	raw, err := json.Marshal(env)
+	if err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(raw), nil
+}
+
+func UnsealDSN(masterSecret, tenantID, encodedEnvelope string) (string, error) {
+	if masterSecret == "" || tenantID == "" || encodedEnvelope == "" {
+		return "", errors.New("invalid unseal parameters")
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(encodedEnvelope)
+	if err != nil {
+		return "", err
+	}
+	var env Envelope
+	if err := json.Unmarshal(raw, &env); err != nil {
+		return "", err
+	}
+	return New(masterSecret).Open(tenantID, env)
 }
 
 func aesSeal(key, plaintext, aad []byte) ([]byte, error) {

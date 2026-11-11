@@ -1,23 +1,56 @@
 syntax = "proto3";
 package proveko.inventory.v1;
-option go_package = "github.com/alexmargomez/proveko/proto/inventory/v1;inventoryv1";
+option go_package = "platform-contracts/inventory/v1;inventoryv1";
 
 service InventoryService {
+  rpc QuoteProducts(QuoteProductsRequest) returns (QuoteProductsResponse);
   rpc DeductStock(DeductStockRequest) returns (DeductStockResponse);
+  rpc RestockItems(RestockItemsRequest) returns (RestockItemsResponse);
+}
+
+message QuoteProductsRequest {
+  repeated string product_ids = 1;
+}
+
+message ProductQuote {
+  string product_id = 1;
+  string code = 2;
+  string name = 3;
+  double sale_price = 4;
+  double tax_pct = 5;
+  double available_stock = 6;
+}
+
+message QuoteProductsResponse {
+  repeated ProductQuote products = 1;
 }
 
 message StockDeltaItem {
   string product_id = 1;
   double quantity = 2;
-  string reference_doc = 3;
-  string actor = 4;
+  double unit_cost = 3;
+  string warehouse_id = 4;
+  string movement_type = 5;
+  string reference_doc = 6;
+  string actor = 7;
 }
 
 message DeductStockRequest {
-  repeated StockDeltaItem items = 1;
+  string idempotency_key = 1;
+  repeated StockDeltaItem items = 2;
 }
 
 message DeductStockResponse {
+  bool ok = 1;
+  int32 processed_count = 2;
+}
+
+message RestockItemsRequest {
+  string idempotency_key = 1;
+  repeated StockDeltaItem items = 2;
+}
+
+message RestockItemsResponse {
   bool ok = 1;
   int32 processed_count = 2;
 }

@@ -1,97 +1,52 @@
 package backend
 
 import (
+	"crypto/ed25519"
 	"net/http"
 
-	"github.com/alexmargomez/proveko/pkg/authguard"
-	"github.com/alexmargomez/proveko/pkg/httpx"
-	"github.com/alexmargomez/proveko/pkg/tenantdb"
-	"github.com/go-chi/chi/v5"
+	"ms-reportes/internal/platform/config"
+	"ms-reportes/internal/platform/dbpool"
+	"ms-reportes/internal/platform/security"
+	"ms-reportes/internal/application"
+	"ms-reportes/internal/domain"
+	httpadapter "ms-reportes/internal/infrastructure/http"
+	"ms-reportes/internal/infrastructure/persistence/memory"
+	"ms-reportes/internal/infrastructure/persistence/postgres"
 )
 
 type Service struct {
-	db            *tenantdb.Manager
-	clusterSecret string
+	handler http.Handler
 }
 
-func NewService(db *tenantdb.Manager, clusterSecret string) *Service {
-	return &Service{
-		db:            db,
-		clusterSecret: clusterSecret,
+func NewService(
+	cfg config.ServiceConfig,
+	pubKey ed25519.PublicKey,
+	replay *security.ReplayGuard,
+	dbMgr *dbpool.Manager,
+) (*Service, error) {
+	if replay == nil {
+		replay = security.NewReplayGuard(16384)
 	}
+
+	var repo domain.Repository
+	if dbMgr != nil && dbMgr.HasPostgres() {
+		repo = postgres.NewRepository(dbMgr)
+	} else {
+		repo = memory.NewRepository()
+	}
+
+	app := application.NewService(repo)
+	h := httpadapter.NewHandler(app, pubKey, cfg.S2SSharedKey, replay, cfg.AllowedOrigins)
+
+	return &Service{handler: h}, nil
+}
+
+func (s *Service) Handler() http.Handler {
+	return s.handler
 }
 
 func (s *Service) Router() http.Handler {
-	r := chi.NewRouter()
-	r.Use(authguard.PropagateHeadersToContext(s.clusterSecret))
-
-	r.Get("/executive", s.handleExecutiveReport)
-
-	return r
+	return s.handler
 }
 
-func (s *Service) handleExecutiveReport(w http.ResponseWriter, r *http.Request) {
-	tc := authguard.FromContext(r.Context())
-
-	s.db.WithRead(r.Context(), tc.DBName, func(d *tenantdb.TenantData) {
-		var (
-			totalSales              float64
-			totalCollected          float64
-			totalPendingReceivables float64
-			totalExpenses           float64
-			inventoryCostValue      float64
-			inventorySaleValue      float64
-			lowStockCount           int
-		)
-
-		invoices := d.Invoices
-		if invoices == nil {
-			invoices = []tenantdb.Invoice{}
-		}
-		for _, inv := range invoices {
-			totalSales += inv.Total
-			totalCollected += inv.AmountPaid
-			totalPendingReceivables += inv.PendingBalance
-		}
-
-		expenses := d.Expenses
-		if expenses == nil {
-			expenses = []tenantdb.Expense{}
-		}
-		for _, exp := range expenses {
-			totalExpenses += exp.Amount
-		}
-
-		products := d.Products
-		if products == nil {
-			products = []tenantdb.Product{}
-		}
-		for _, p := range products {
-			inventoryCostValue += p.CostPrice * p.Stock
-			inventorySaleValue += p.SalePrice * p.Stock
-			if p.Stock <= p.MinStock {
-				lowStockCount++
-			}
-		}
-
-		netOperatingProfit := totalSales - totalExpenses
-
-		httpx.JSON(w, http.StatusOK, map[string]any{
-			"ok":                      true,
-			"totalSales":              totalSales,
-			"totalCollected":          totalCollected,
-			"totalPendingReceivables": totalPendingReceivables,
-			"totalExpenses":           totalExpenses,
-			"netOperatingProfit":      netOperatingProfit,
-			"inventoryCostValue":      inventoryCostValue,
-			"inventorySaleValue":      inventorySaleValue,
-			"lowStockCount":           lowStockCount,
-			"customersCount":          len(d.Customers),
-			"workOrdersCount":         len(d.WorkOrders),
-			"scaleTicketsCount":       len(d.ScaleTickets),
-			"invoices":                invoices,
-			"expenses":                expenses,
-			"products":                products,
-		})
-	})
-}
+func (s *Service) Close() {}

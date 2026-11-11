@@ -1,75 +1,60 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"log"
-	"net/http"
+	"time"
 
-	"github.com/alexmargomez/proveko/pkg/config"
-	"github.com/alexmargomez/proveko/pkg/grpcx"
-	"github.com/alexmargomez/proveko/pkg/httpx"
-	"github.com/alexmargomez/proveko/pkg/tenantdb"
-	customersv1 "github.com/alexmargomez/proveko/proto/customers/v1"
-	gastrov1 "github.com/alexmargomez/proveko/proto/gastro/v1"
-	hospitalityv1 "github.com/alexmargomez/proveko/proto/hospitality/v1"
-	inventoryv1 "github.com/alexmargomez/proveko/proto/inventory/v1"
-	printingv1 "github.com/alexmargomez/proveko/proto/printing/v1"
-	workshopv1 "github.com/alexmargomez/proveko/proto/workshop/v1"
-	"github.com/alexmargomez/proveko/services/ms-facturacion/backend"
-	"github.com/alexmargomez/proveko/services/ms-facturacion/migrations"
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	msfacturacion "ms-facturacion"
+	"ms-facturacion/backend"
+	"ms-facturacion/internal/platform/config"
+	"ms-facturacion/internal/platform/dbpool"
+	"ms-facturacion/internal/platform/gateway"
+	"ms-facturacion/internal/platform/httpx"
+	"ms-facturacion/internal/platform/security"
 )
 
 func main() {
-	cfg := config.Load()
-	db := tenantdb.NewManager(cfg)
-	db.RegisterServiceMigration("ms-facturacion", migrations.SchemaSQL)
+	cfg, err := config.LoadService("ms-facturacion", 4101)
+	if err != nil {
+		log.Fatalf("[ms-facturacion] invalid configuration: %v", err)
+	}
 
-	var clients backend.Clients
-	if addr := config.EnvOr("INVENTORY_GRPC_ADDR", ""); addr != "" {
-		if cc, err := grpcx.DialTCP(addr, cfg.ClusterSecret); err == nil {
-			clients.Inventory = inventoryv1.NewInventoryServiceClient(cc)
-		}
-	}
-	if addr := config.EnvOr("CUSTOMERS_GRPC_ADDR", ""); addr != "" {
-		if cc, err := grpcx.DialTCP(addr, cfg.ClusterSecret); err == nil {
-			clients.Customers = customersv1.NewCustomerServiceClient(cc)
-		}
-	}
-	if addr := config.EnvOr("WORKSHOP_GRPC_ADDR", ""); addr != "" {
-		if cc, err := grpcx.DialTCP(addr, cfg.ClusterSecret); err == nil {
-			clients.Workshop = workshopv1.NewWorkshopServiceClient(cc)
-		}
-	}
-	if addr := config.EnvOr("HOSPITALITY_GRPC_ADDR", ""); addr != "" {
-		if cc, err := grpcx.DialTCP(addr, cfg.ClusterSecret); err == nil {
-			clients.Hospitality = hospitalityv1.NewHospitalityServiceClient(cc)
-		}
-	}
-	if addr := config.EnvOr("GASTRO_GRPC_ADDR", ""); addr != "" {
-		if cc, err := grpcx.DialTCP(addr, cfg.ClusterSecret); err == nil {
-			clients.Gastro = gastrov1.NewGastroServiceClient(cc)
-		}
-	}
-	if addr := config.EnvOr("PRINTING_GRPC_ADDR", ""); addr != "" {
-		if cc, err := grpcx.DialTCP(addr, cfg.ClusterSecret); err == nil {
-			clients.Printing = printingv1.NewPrintServiceClient(cc)
+	gwClient := gateway.NewClient(cfg.GatewayURL, cfg.S2SSharedKey)
+	if cfg.CorePublicHex == "" && gwClient != nil {
+		for i := 0; i < 6; i++ {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			pubHex, fetchErr := gwClient.FetchVerifierPublicKey(ctx)
+			cancel()
+			if fetchErr == nil && pubHex != "" {
+				cfg.CorePublicHex = pubHex
+				break
+			}
+			time.Sleep(400 * time.Millisecond)
 		}
 	}
 
-	svc := backend.NewService(db, cfg.ClusterSecret, clients)
+	pubKey, err := security.LoadVerifierPublicKey(cfg.CorePublicHex, cfg.DevEd25519Seed, cfg.IsProduction())
+	if err != nil {
+		log.Fatalf("[ms-facturacion] failed to load verifier public key: %v", err)
+	}
 
-	root := chi.NewRouter()
-	root.Use(middleware.Recoverer)
-	root.Use(httpx.CORS)
-	root.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
-		httpx.JSON(w, http.StatusOK, map[string]any{"ok": true, "service": "ms-facturacion"})
-	})
-	root.Mount("/api/v1/facturacion", svc.Router())
+	replay := security.NewReplayGuard(16384)
+	dbMgr := dbpool.NewManager(cfg.CommonConfig, false)
+	svc := backend.NewService(cfg, pubKey, replay, dbMgr, backend.Clients{Gateway: gwClient})
 
-	port := config.EnvOr("PORT", "4103")
-	log.Printf("ms-facturacion HTTP listening on :%s", port)
-	if err := http.ListenAndServe(":"+port, root); err != nil {
-		log.Fatal(err)
+	if gwClient != nil {
+		gwClient.RegisterWithRetry(msfacturacion.ManifestJSON, cfg.ServicePublicURL)
+	}
+
+	httpAddr := fmt.Sprintf(":%d", cfg.HTTPPort)
+	httpSrv := httpx.NewServer(httpAddr, svc.Handler())
+	log.Printf("[ms-facturacion] HTTP server listening on %s", httpAddr)
+
+	if err := httpx.ListenAndServeGraceful(httpSrv, func() {
+		dbMgr.Close()
+	}); err != nil {
+		log.Fatalf("[ms-facturacion] server terminated with error: %v", err)
 	}
 }

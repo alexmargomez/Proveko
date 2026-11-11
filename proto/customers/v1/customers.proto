@@ -1,16 +1,38 @@
 syntax = "proto3";
 package proveko.customers.v1;
-option go_package = "github.com/alexmargomez/proveko/proto/customers/v1;customersv1";
+option go_package = "platform-contracts/customers/v1;customersv1";
 
 service CustomerService {
+  rpc ResolveCommercialTerms(ResolveCommercialTermsRequest) returns (ResolveCommercialTermsResponse);
   rpc ApplyAccountReceivableDelta(ReceivableDeltaRequest) returns (ReceivableDeltaResponse);
 }
 
-message ReceivableDeltaRequest {
+message ResolveCommercialTermsRequest {
   string customer_id = 1;
   string contract_id = 2;
-  double debt_delta = 3;
-  double contract_consumed_delta = 4;
+}
+
+message ResolveCommercialTermsResponse {
+  string customer_id = 1;
+  string customer_name = 2;
+  string customer_nit = 3;
+  string customer_phone = 4;
+  string customer_address = 5;
+  string contract_id = 6;
+  string contract_code = 7;
+  double discount_pct = 8;
+}
+
+message ReceivableDeltaRequest {
+  string idempotency_key = 1;
+  string customer_id = 2;
+  string contract_id = 3;
+  string invoice_id = 4;
+  string invoice_number = 5;
+  string issue_date = 6;
+  double invoice_total = 7;
+  double debt_delta = 8;
+  double contract_consumed_delta = 9;
 }
 
 message ReceivableDeltaResponse {

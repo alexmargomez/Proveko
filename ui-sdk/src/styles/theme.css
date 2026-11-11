@@ -341,7 +341,33 @@ html, body, #root {
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
 }
 
+.pk-num, .pk-kpi-value, .pk-table td.num, .pk-table th.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.pk-table td.num, .pk-table th.num {
+  text-align: right;
+}
+
+.pk-btn:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.pk-btn:focus-visible,
+.pk-nav-btn:focus-visible,
+.pk-tab-pill:focus-visible,
+.pk-field input:focus-visible,
+.pk-field select:focus-visible,
+.pk-field textarea:focus-visible {
+  outline: 2px solid var(--pk-primary);
+  outline-offset: 2px;
+}
+
+.pk-badge-rose { background: #fee2e2; color: #991b1b; }
+
 @media (max-width: 960px) {
   .pk-workstation { grid-template-columns: 1fr; }
   .pk-grid-2 { grid-template-columns: 1fr; }
 }
+

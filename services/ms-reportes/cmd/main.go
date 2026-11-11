@@ -1,37 +1,64 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
-	"net/http"
+	"time"
 
-	"github.com/alexmargomez/proveko/pkg/config"
-	"github.com/alexmargomez/proveko/pkg/httpx"
-	"github.com/alexmargomez/proveko/pkg/tenantdb"
-	"github.com/alexmargomez/proveko/services/ms-reportes/backend"
-	"github.com/alexmargomez/proveko/services/ms-reportes/migrations"
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	msreportes "ms-reportes"
+	"ms-reportes/backend"
+	"ms-reportes/internal/platform/config"
+	"ms-reportes/internal/platform/dbpool"
+	"ms-reportes/internal/platform/gateway"
+	"ms-reportes/internal/platform/httpx"
+	"ms-reportes/internal/platform/security"
 )
 
 func main() {
-	cfg := config.Load()
-	db := tenantdb.NewManager(cfg)
-	db.RegisterServiceMigration("ms-reportes", migrations.SchemaSQL)
+	cfg, err := config.LoadService("ms-reportes", 4114)
+	if err != nil {
+		log.Fatalf("[ms-reportes] invalid configuration: %v", err)
+	}
 
-	svc := backend.NewService(db, cfg.ClusterSecret)
+	gwClient := gateway.NewClient(cfg.GatewayURL, cfg.S2SSharedKey)
+	if cfg.CorePublicHex == "" && gwClient != nil {
+		for i := 0; i < 6; i++ {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			pubHex, fetchErr := gwClient.FetchVerifierPublicKey(ctx)
+			cancel()
+			if fetchErr == nil && pubHex != "" {
+				cfg.CorePublicHex = pubHex
+				break
+			}
+			time.Sleep(400 * time.Millisecond)
+		}
+	}
 
-	root := chi.NewRouter()
-	root.Use(middleware.Recoverer)
-	root.Use(httpx.CORS)
-	root.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
-		httpx.JSON(w, http.StatusOK, map[string]any{"ok": true, "service": "ms-reportes"})
-	})
-	root.Mount("/api/v1/reportes", svc.Router())
+	pubKey, err := security.LoadVerifierPublicKey(cfg.CorePublicHex, cfg.DevEd25519Seed, cfg.IsProduction())
+	if err != nil {
+		log.Fatalf("[ms-reportes] failed to load verifier public key: %v", err)
+	}
 
-	addr := fmt.Sprintf(":%d", cfg.BackendPort)
-	log.Printf("[ms-reportes] escuchando en %s", addr)
-	if err := http.ListenAndServe(addr, root); err != nil {
-		log.Fatal(err)
+	replay := security.NewReplayGuard(16384)
+	dbMgr := dbpool.NewManager(cfg.CommonConfig, false)
+	svc, err := backend.NewService(cfg, pubKey, replay, dbMgr)
+	if err != nil {
+		dbMgr.Close()
+		log.Fatalf("[ms-reportes] failed to initialize service: %v", err)
+	}
+
+	if gwClient != nil {
+		gwClient.RegisterWithRetry(msreportes.ManifestJSON, cfg.ServicePublicURL)
+	}
+
+	httpAddr := fmt.Sprintf(":%d", cfg.HTTPPort)
+	httpSrv := httpx.NewServer(httpAddr, svc.Handler())
+	log.Printf("[ms-reportes] HTTP server listening on %s", httpAddr)
+
+	if err := httpx.ListenAndServeGraceful(httpSrv, func() {
+		dbMgr.Close()
+	}); err != nil {
+		log.Fatalf("[ms-reportes] server terminated with error: %v", err)
 	}
 }

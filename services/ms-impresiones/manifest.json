@@ -3,16 +3,38 @@
   "displayName": "Impresiones y Membretes",
   "icon": "🖨️",
   "apiPrefix": "/api/v1/impresiones",
+  "uiBundlePath": "/api/v1/impresiones/ui.js",
+  "capabilities": [
+    "document_print"
+  ],
   "category": "Transversal",
-  "summary": "Configuración de logo, membrete empresarial, pie de garantía y formatos Carta / Tirilla 80mm para todo el sistema.",
+  "summary": "Configuración de membrete empresarial, resolución fiscal y formatos Carta o Tirilla 80mm.",
   "modules": [
     {
       "moduleKey": "config_membretes",
       "displayName": "Membrete y Formatos PDF/POS",
       "tabIcon": "🖨️",
       "defaultActive": true,
-      "summary": "Personaliza el encabezado oficial, NIT, resolución y formato de impresión."
+      "summary": "Personalización de encabezado oficial y diseño de impresión."
     }
   ],
-  "features": []
+  "features": [
+    {
+      "featureKey": "vista_previa_membrete",
+      "displayName": "Previsualización interactiva de formatos antes de imprimir",
+      "dependsOnModule": "config_membretes",
+      "dependsOnSubmodule": "plantillas_corporativas",
+      "defaultActive": true
+    }
+  ],
+  "bundleHash": "f55b999a920d",
+  "submodules": [
+    {
+      "submoduleKey": "plantillas_corporativas",
+      "displayName": "Identidad Visual, Resolución y Formatos de Papel",
+      "dependsOnModule": "config_membretes",
+      "defaultActive": true,
+      "summary": "Diseño institucional para Carta, Media Carta, Tirilla POS y Taller."
+    }
+  ]
 }

@@ -3,22 +3,30 @@
   "displayName": "Báscula y Transporte de Carga",
   "icon": "⚖️",
   "apiPrefix": "/api/v1/bascula",
+  "uiBundlePath": "/api/v1/bascula/ui.js",
   "category": "Logística Pesada",
-  "summary": "Pesaje camionero con tiquete automático, destare Bruto/Tara/Neto, conductores, transportistas y cargas.",
+  "summary": "Pesaje camionero con tiquete automático, destare Bruto/Tara/Neto, conductores, transportistas y rutas.",
   "modules": [
     {
       "moduleKey": "pesaje_camionero",
       "displayName": "Pesaje y Tiquetes de Báscula",
       "tabIcon": "⚖️",
       "defaultActive": true,
-      "summary": "Cálculo automático de peso neto vinculando placa, conductor, transportista y carga."
+      "summary": "Cálculo de peso neto vinculando vehículo pesado, conductor, transportista y ruta."
+    },
+    {
+      "moduleKey": "flota_conductores",
+      "displayName": "Conductores y Transportadoras",
+      "tabIcon": "🚛",
+      "defaultActive": true,
+      "summary": "Registro propio de conductores, tractocamiones y empresas transportadoras."
     },
     {
       "moduleKey": "rutas_manifiestos",
       "displayName": "Cargas y Manifiestos",
       "tabIcon": "🛣️",
       "defaultActive": true,
-      "summary": "Catálogo de rutas, tipos de carga y manifiestos despachados."
+      "summary": "Catálogo de rutas, tipos de carga y manifiestos."
     }
   ],
   "features": [
@@ -26,7 +34,32 @@
       "featureKey": "tiquete_doble_firma",
       "displayName": "Incluir firmas de conductor y operador en tiquete impreso",
       "dependsOnModule": "pesaje_camionero",
-      "defaultActive": true
+      "defaultActive": true,
+      "dependsOnSubmodule": "destare_bruto_tara"
+    }
+  ],
+  "bundleHash": "17dca8052a64",
+  "submodules": [
+    {
+      "submoduleKey": "destare_bruto_tara",
+      "displayName": "Captura de Peso Bruto, Tara y Peso Neto",
+      "dependsOnModule": "pesaje_camionero",
+      "defaultActive": true,
+      "summary": "Emisión certificada de tiquetes de pesaje industrial."
+    },
+    {
+      "submoduleKey": "registro_transportistas",
+      "displayName": "Habilitación de Conductores y Tractocamiones",
+      "dependsOnModule": "flota_conductores",
+      "defaultActive": true,
+      "summary": "Base maestra de vehículos de carga y empresas transportadoras."
+    },
+    {
+      "submoduleKey": "despacho_corredores",
+      "displayName": "Rutas Logísticas y Tipos de Material",
+      "dependsOnModule": "rutas_manifiestos",
+      "defaultActive": true,
+      "summary": "Control de orígenes, destinos y mercancía a granel."
     }
   ]
 }

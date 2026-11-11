@@ -1,0 +1,12 @@
+{
+  "serviceKey": "ms-platform",
+  "displayName": "Plataforma & SDK Estandarizado",
+  "icon": "🧩",
+  "apiPrefix": "/api/v1/platform",
+  "uiBundlePath": "/api/v1/platform/ui-sdk.js",
+  "bundleHash": "std-v1",
+  "category": "Infraestructura Transversal",
+  "summary": "Distribución centralizada de UI-SDK ESM, tokens visuales corporativos, declaraciones TypeScript y contratos S2S.",
+  "modules": [],
+  "features": []
+}

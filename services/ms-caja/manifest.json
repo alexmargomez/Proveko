@@ -3,8 +3,9 @@
   "displayName": "Caja y Tesorería",
   "icon": "💵",
   "apiPrefix": "/api/v1/caja",
+  "uiBundlePath": "/api/v1/caja/ui.js",
   "category": "Finanzas",
-  "summary": "Cuadre diario de efectivo, pagos digitales, comprobantes de gasto y arqueo imprimible.",
+  "summary": "Cuadre diario de efectivo, pagos digitales, comprobantes de gasto y conciliación bancaria.",
   "modules": [
     {
       "moduleKey": "arqueo_gastos",
@@ -26,7 +27,25 @@
       "featureKey": "impresion_egreso",
       "displayName": "Generar comprobante impreso de egreso de caja",
       "dependsOnModule": "arqueo_gastos",
-      "defaultActive": true
+      "defaultActive": true,
+      "dependsOnSubmodule": "apertura_cierre_turno"
+    }
+  ],
+  "bundleHash": "cb6381e67e6f",
+  "submodules": [
+    {
+      "submoduleKey": "apertura_cierre_turno",
+      "displayName": "Apertura, Arqueo y Egresos Menores",
+      "dependsOnModule": "arqueo_gastos",
+      "defaultActive": true,
+      "summary": "Control diario de efectivo y salidas justificadas."
+    },
+    {
+      "submoduleKey": "libros_bancos",
+      "displayName": "Saldos Bancarios y Medios Digitales",
+      "dependsOnModule": "bancos_tesoreria",
+      "defaultActive": true,
+      "summary": "Conciliación de transferencias y datáfonos."
     }
   ]
 }

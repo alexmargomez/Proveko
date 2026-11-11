@@ -3,13 +3,14 @@ package gastrov1
 import (
 	"context"
 
-	_ "github.com/alexmargomez/proveko/proto"
 	"google.golang.org/grpc"
+	_ "platform-contracts"
 )
 
 type ClearTableEvent struct {
-	TableID       string `json:"table_id"`
-	InvoiceNumber string `json:"invoice_number"`
+	IdempotencyKey string `json:"idempotency_key"`
+	TableID        string `json:"table_id"`
+	InvoiceNumber  string `json:"invoice_number"`
 }
 
 type ClearTableResponse struct {

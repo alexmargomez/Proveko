@@ -1,0 +1,826 @@
+[
+  {
+    "serviceKey": "ms-facturacion",
+    "displayName": "Facturación y Punto de Venta",
+    "icon": "🧾",
+    "apiPrefix": "/api/v1/facturacion",
+    "uiBundlePath": "/api/v1/facturacion/ui.js",
+    "category": "Comercial",
+    "summary": "Ventas en mostrador, cotizaciones, facturación electrónica y formatos especializados.",
+    "modules": [
+      {
+        "moduleKey": "pos_mostrador",
+        "displayName": "Facturar / Punto de Venta",
+        "tabIcon": "🛒",
+        "defaultActive": true,
+        "summary": "Caja rápida de 2 columnas con catálogo, servicios y facturas emitidas."
+      },
+      {
+        "moduleKey": "cotizaciones",
+        "displayName": "Cotizaciones Comerciales",
+        "tabIcon": "📄",
+        "defaultActive": true,
+        "summary": "Generación e impresión de cotizaciones comerciales."
+      },
+      {
+        "moduleKey": "facturas_taller",
+        "displayName": "Apartado Facturas de Taller",
+        "tabIcon": "🔧",
+        "defaultActive": true,
+        "summary": "Habilita integración automotriz dentro de Facturación cuando el servicio de Taller está activo."
+      },
+      {
+        "moduleKey": "facturacion_dian",
+        "displayName": "Facturación Electrónica DIAN",
+        "tabIcon": "⚡",
+        "defaultActive": true,
+        "summary": "Numeración autorizada, cálculo CUFE y estado de transmisión DIAN."
+      }
+    ],
+    "features": [
+      {
+        "featureKey": "descuento_linea",
+        "displayName": "Permitir descuentos por tarifa/convenio",
+        "dependsOnModule": "pos_mostrador",
+        "defaultActive": true,
+        "dependsOnSubmodule": "caja_rapida_pos"
+      },
+      {
+        "featureKey": "pagos_mixtos_cxc",
+        "displayName": "Permitir venta a crédito (Cartera CxC) y abonos",
+        "dependsOnModule": "pos_mostrador",
+        "defaultActive": true,
+        "dependsOnSubmodule": "caja_rapida_pos"
+      },
+      {
+        "featureKey": "asignar_mecanico",
+        "displayName": "Seleccionar mecánico en factura para liquidar comisión",
+        "dependsOnModule": "facturas_taller",
+        "defaultActive": true,
+        "dependsOnSubmodule": "liquidacion_automotriz"
+      },
+      {
+        "featureKey": "factura_taller_pdf",
+        "displayName": "Imprimir PDF con estructura automotriz",
+        "dependsOnModule": "facturas_taller",
+        "defaultActive": true,
+        "dependsOnSubmodule": "liquidacion_automotriz"
+      }
+    ],
+    "submodules": [
+      {
+        "submoduleKey": "caja_rapida_pos",
+        "displayName": "Terminal de Cobro y Carrito POS",
+        "dependsOnModule": "pos_mostrador",
+        "defaultActive": true,
+        "summary": "Captura ágil de códigos, precios de catálogo y medios de pago."
+      },
+      {
+        "submoduleKey": "historial_facturas",
+        "displayName": "Consulta y Reimpresión de Facturas",
+        "dependsOnModule": "pos_mostrador",
+        "defaultActive": true,
+        "summary": "Trazabilidad histórica y vista previa de documentos emitidos."
+      },
+      {
+        "submoduleKey": "emision_cotizaciones",
+        "displayName": "Propuestas y Vigencias Comerciales",
+        "dependsOnModule": "cotizaciones",
+        "defaultActive": true,
+        "summary": "Elaboración de cotizaciones con vigencia controlada."
+      },
+      {
+        "submoduleKey": "liquidacion_automotriz",
+        "displayName": "Liquidación de Placa, Kilometraje y Orden",
+        "dependsOnModule": "facturas_taller",
+        "defaultActive": true,
+        "summary": "Integración de vehículo, orden de trabajo y técnico en factura."
+      },
+      {
+        "submoduleKey": "transmision_cufe",
+        "displayName": "Numeración Fiscal y Firma CUFE",
+        "dependsOnModule": "facturacion_dian",
+        "defaultActive": true,
+        "summary": "Generación determinista de CUFE y control de numeración."
+      }
+    ],
+    "bundleHash": "447b4b8a8728"
+  },
+  {
+    "serviceKey": "ms-clientes",
+    "displayName": "Clientes y Terceros",
+    "icon": "👥",
+    "apiPrefix": "/api/v1/clientes",
+    "uiBundlePath": "/api/v1/clientes/ui.js",
+    "category": "Comercial",
+    "summary": "Directorio maestro de clientes, contratos comerciales, tarifarios y cuentas por cobrar.",
+    "modules": [
+      {
+        "moduleKey": "directorio_clientes",
+        "displayName": "Directorio de Clientes",
+        "tabIcon": "👤",
+        "defaultActive": true,
+        "summary": "Registro y consulta de personas y empresas."
+      },
+      {
+        "moduleKey": "cartera_cxc",
+        "displayName": "Cuentas por Cobrar (Cartera)",
+        "tabIcon": "💳",
+        "defaultActive": true,
+        "summary": "Control de saldos pendientes y registro de abonos."
+      },
+      {
+        "moduleKey": "contratos_convenios",
+        "displayName": "Contratos y Tarifarios",
+        "tabIcon": "🤝",
+        "defaultActive": true,
+        "summary": "Convenios empresariales, topes y descuentos automáticos."
+      }
+    ],
+    "features": [
+      {
+        "featureKey": "cupo_credito_control",
+        "displayName": "Controlar cupo máximo de crédito por cliente",
+        "dependsOnModule": "cartera_cxc",
+        "defaultActive": true,
+        "dependsOnSubmodule": "recaudo_abonos_cxc"
+      },
+      {
+        "featureKey": "descuento_automatico_convenio",
+        "displayName": "Aplicar descuento pactado automáticamente al facturar",
+        "dependsOnModule": "contratos_convenios",
+        "dependsOnSubmodule": "tarifarios_corporativos",
+        "defaultActive": true
+      }
+    ],
+    "submodules": [
+      {
+        "submoduleKey": "ficha_terceros",
+        "displayName": "Ficha Tributaria y Datos de Contacto",
+        "dependsOnModule": "directorio_clientes",
+        "defaultActive": true,
+        "summary": "Administración de personas naturales y jurídicas."
+      },
+      {
+        "submoduleKey": "recaudo_abonos_cxc",
+        "displayName": "Estado de Cuenta y Recaudo de Abonos",
+        "dependsOnModule": "cartera_cxc",
+        "defaultActive": true,
+        "summary": "Seguimiento de saldos vencidos y aplicación de pagos."
+      },
+      {
+        "submoduleKey": "tarifarios_corporativos",
+        "displayName": "Acuerdos de Descuento y Cupos",
+        "dependsOnModule": "contratos_convenios",
+        "defaultActive": true,
+        "summary": "Gestión de convenios institucionales con descuento pactado."
+      }
+    ],
+    "bundleHash": "c99c24af1799"
+  },
+  {
+    "serviceKey": "ms-inventario",
+    "displayName": "Inventario y Bodegas",
+    "icon": "📦",
+    "apiPrefix": "/api/v1/inventario",
+    "uiBundlePath": "/api/v1/inventario/ui.js",
+    "category": "Logística",
+    "summary": "Control de existencias, múltiples bodegas, traslados, solicitudes de insumos y Kardex valorizado.",
+    "modules": [
+      {
+        "moduleKey": "productos_stock",
+        "displayName": "Productos y Existencias",
+        "tabIcon": "📦",
+        "defaultActive": true,
+        "summary": "Alta de productos, ajuste rápido de stock, surtido y margen."
+      },
+      {
+        "moduleKey": "bodegas_traslados",
+        "displayName": "Bodegas y Traslados",
+        "tabIcon": "🏭",
+        "defaultActive": true,
+        "summary": "Administración de bodegas y traslados entre sedes."
+      },
+      {
+        "moduleKey": "kardex_lotes",
+        "displayName": "Kardex y Lotes",
+        "tabIcon": "📋",
+        "defaultActive": true,
+        "summary": "Trazabilidad de entradas, salidas, lotes y vencimientos."
+      },
+      {
+        "moduleKey": "solicitudes_insumos",
+        "displayName": "Solicitudes de Insumos",
+        "tabIcon": "📥",
+        "defaultActive": true,
+        "summary": "Requisiciones internas de materiales e insumos."
+      }
+    ],
+    "features": [
+      {
+        "featureKey": "alerta_stock_minimo",
+        "displayName": "Alertas visuales de productos por agotarse",
+        "dependsOnModule": "productos_stock",
+        "defaultActive": true,
+        "dependsOnSubmodule": "catalogo_maestro_sku"
+      },
+      {
+        "featureKey": "traslado_parcial_bodega",
+        "displayName": "Permitir traslados parciales de unidades entre bodegas",
+        "dependsOnModule": "bodegas_traslados",
+        "dependsOnSubmodule": "traslados_entre_sedes",
+        "defaultActive": true
+      }
+    ],
+    "submodules": [
+      {
+        "submoduleKey": "catalogo_maestro_sku",
+        "displayName": "Catálogo Maestro y Costo Promedio",
+        "dependsOnModule": "productos_stock",
+        "defaultActive": true,
+        "summary": "Control de SKUs, precios autorizados y márgenes."
+      },
+      {
+        "submoduleKey": "traslados_entre_sedes",
+        "displayName": "Traslados Totales y Parciales entre Bodegas",
+        "dependsOnModule": "bodegas_traslados",
+        "defaultActive": true,
+        "summary": "Transferencias valorizadas con doble registro en Kardex."
+      },
+      {
+        "submoduleKey": "auditoria_kardex",
+        "displayName": "Movimientos Valorizados y Lotes",
+        "dependsOnModule": "kardex_lotes",
+        "defaultActive": true,
+        "summary": "Auditoría cronológica de entradas, salidas y traslados."
+      },
+      {
+        "submoduleKey": "despacho_requisiciones",
+        "displayName": "Aprobación de Requisiciones Internas",
+        "dependsOnModule": "solicitudes_insumos",
+        "defaultActive": true,
+        "summary": "Control de consumo interno por área solicitante."
+      }
+    ],
+    "bundleHash": "0d7a4d4dcc83"
+  },
+  {
+    "serviceKey": "ms-caja",
+    "displayName": "Caja y Tesorería",
+    "icon": "💵",
+    "apiPrefix": "/api/v1/caja",
+    "uiBundlePath": "/api/v1/caja/ui.js",
+    "category": "Finanzas",
+    "summary": "Cuadre diario de efectivo, pagos digitales, comprobantes de gasto y conciliación bancaria.",
+    "modules": [
+      {
+        "moduleKey": "arqueo_gastos",
+        "displayName": "Cuadre de Caja y Gastos",
+        "tabIcon": "💰",
+        "defaultActive": true,
+        "summary": "Efectivo neto en caja, ingresos digitales y salidas operativas."
+      },
+      {
+        "moduleKey": "bancos_tesoreria",
+        "displayName": "Cuentas y Conciliación",
+        "tabIcon": "🏦",
+        "defaultActive": true,
+        "summary": "Movimientos de cuentas bancarias y billeteras digitales."
+      }
+    ],
+    "features": [
+      {
+        "featureKey": "impresion_egreso",
+        "displayName": "Generar comprobante impreso de egreso de caja",
+        "dependsOnModule": "arqueo_gastos",
+        "defaultActive": true,
+        "dependsOnSubmodule": "apertura_cierre_turno"
+      }
+    ],
+    "submodules": [
+      {
+        "submoduleKey": "apertura_cierre_turno",
+        "displayName": "Apertura, Arqueo y Egresos Menores",
+        "dependsOnModule": "arqueo_gastos",
+        "defaultActive": true,
+        "summary": "Control diario de efectivo y salidas justificadas."
+      },
+      {
+        "submoduleKey": "libros_bancos",
+        "displayName": "Saldos Bancarios y Medios Digitales",
+        "dependsOnModule": "bancos_tesoreria",
+        "defaultActive": true,
+        "summary": "Conciliación de transferencias y datáfonos."
+      }
+    ],
+    "bundleHash": "cb6381e67e6f"
+  },
+  {
+    "serviceKey": "ms-comandas",
+    "displayName": "Mesas y Comandas",
+    "icon": "🍽️",
+    "apiPrefix": "/api/v1/comandas",
+    "uiBundlePath": "/api/v1/comandas/ui.js",
+    "category": "Gastronomía",
+    "summary": "Atención de mesas, envío a cocina y barra, precuenta impresa y transferencia a facturación.",
+    "modules": [
+      {
+        "moduleKey": "mapa_mesas",
+        "displayName": "Mapa de Mesas y Pedidos",
+        "tabIcon": "🍽️",
+        "defaultActive": true,
+        "summary": "Selección de mesa, platos y precuenta."
+      },
+      {
+        "moduleKey": "monitor_cocina",
+        "displayName": "Pantalla Cocina y Barra",
+        "tabIcon": "👨‍🍳",
+        "defaultActive": true,
+        "summary": "Pedidos pendientes de preparación por orden de llegada."
+      }
+    ],
+    "features": [
+      {
+        "featureKey": "notas_preparacion",
+        "displayName": "Notas rápidas de término y preparación para cocina",
+        "dependsOnModule": "mapa_mesas",
+        "defaultActive": true,
+        "dependsOnSubmodule": "atencion_salon"
+      }
+    ],
+    "submodules": [
+      {
+        "submoduleKey": "atencion_salon",
+        "displayName": "Captura de Pedidos y Precuenta de Salón",
+        "dependsOnModule": "mapa_mesas",
+        "defaultActive": true,
+        "summary": "Asignación de platos, bebidas y envío a caja."
+      },
+      {
+        "submoduleKey": "despacho_comandas",
+        "displayName": "Cola de Preparación en Tiempo Real",
+        "dependsOnModule": "monitor_cocina",
+        "defaultActive": true,
+        "summary": "Priorización y despacho de platos preparados."
+      }
+    ],
+    "bundleHash": "8879eab20281"
+  },
+  {
+    "serviceKey": "ms-hoteleria",
+    "displayName": "Hotelería y Alojamiento",
+    "icon": "🏨",
+    "apiPrefix": "/api/v1/hoteleria",
+    "uiBundlePath": "/api/v1/hoteleria/ui.js",
+    "category": "Hospitalidad",
+    "summary": "Control de habitaciones, Check-In de huéspedes, consumos adicionales y Check-Out.",
+    "modules": [
+      {
+        "moduleKey": "recepcion_habitaciones",
+        "displayName": "Habitaciones y Check-In",
+        "tabIcon": "🛏️",
+        "defaultActive": true,
+        "summary": "Estado en vivo de habitaciones, Check-In, consumos y Check-Out."
+      },
+      {
+        "moduleKey": "tarifas_temporadas",
+        "displayName": "Tarifas Hoteleras",
+        "tabIcon": "📅",
+        "defaultActive": true,
+        "summary": "Configuración de acomodaciones y tarifas por noche."
+      }
+    ],
+    "features": [
+      {
+        "featureKey": "cargos_habitacion",
+        "displayName": "Cargar consumos adicionales a la habitación",
+        "dependsOnModule": "recepcion_habitaciones",
+        "defaultActive": true,
+        "dependsOnSubmodule": "ocupacion_huespedes"
+      }
+    ],
+    "submodules": [
+      {
+        "submoduleKey": "ocupacion_huespedes",
+        "displayName": "Registro Check-In, Consumos y Check-Out",
+        "dependsOnModule": "recepcion_habitaciones",
+        "defaultActive": true,
+        "summary": "Gestión integral de estadías y liquidación de hospedaje."
+      },
+      {
+        "submoduleKey": "planes_alojamiento",
+        "displayName": "Acomodaciones y Tarifas por Temporada",
+        "dependsOnModule": "tarifas_temporadas",
+        "defaultActive": true,
+        "summary": "Definición de precios según tipo de habitación."
+      }
+    ],
+    "bundleHash": "5d2e4e8be83b"
+  },
+  {
+    "serviceKey": "ms-taller",
+    "displayName": "Taller y Órdenes de Servicio",
+    "icon": "🔧",
+    "apiPrefix": "/api/v1/taller",
+    "uiBundlePath": "/api/v1/taller/ui.js",
+    "category": "Automotriz",
+    "summary": "Recepción de vehículos por placa, órdenes de trabajo, hoja de vida vehicular y comisiones.",
+    "modules": [
+      {
+        "moduleKey": "tablero_ordenes",
+        "displayName": "Órdenes de Trabajo",
+        "tabIcon": "📋",
+        "defaultActive": true,
+        "summary": "Ingreso de vehículo, avance por etapas y envío a facturación."
+      },
+      {
+        "moduleKey": "hoja_vida_vehiculos",
+        "displayName": "Vehículos y Placas",
+        "tabIcon": "🚗",
+        "defaultActive": true,
+        "summary": "Catálogo propio de vehículos, placas, kilometraje y SOAT."
+      },
+      {
+        "moduleKey": "comisiones_tecnicos",
+        "displayName": "Liquidación de Técnicos",
+        "tabIcon": "👷",
+        "defaultActive": true,
+        "summary": "Cálculo y pago de comisiones por especialista."
+      }
+    ],
+    "features": [
+      {
+        "featureKey": "alerta_cambio_aceite",
+        "displayName": "Sugerencia automática de próximo kilometraje de aceite",
+        "dependsOnModule": "tablero_ordenes",
+        "defaultActive": true,
+        "dependsOnSubmodule": "recepcion_diagnostico_ot"
+      }
+    ],
+    "submodules": [
+      {
+        "submoduleKey": "recepcion_diagnostico_ot",
+        "displayName": "Recepción, Diagnóstico y Cierre de OT",
+        "dependsOnModule": "tablero_ordenes",
+        "defaultActive": true,
+        "summary": "Flujo operativo desde ingreso vehicular hasta facturación."
+      },
+      {
+        "submoduleKey": "expediente_automotor",
+        "displayName": "Historial Técnico, Placas y Vencimientos",
+        "dependsOnModule": "hoja_vida_vehiculos",
+        "defaultActive": true,
+        "summary": "Trazabilidad de kilometraje, SOAT y tecnomecánica."
+      },
+      {
+        "submoduleKey": "liquidacion_especialistas",
+        "displayName": "Cálculo de Comisiones por Mano de Obra",
+        "dependsOnModule": "comisiones_tecnicos",
+        "defaultActive": true,
+        "summary": "Liquidación transparente por orden facturada."
+      }
+    ],
+    "bundleHash": "afdcf401a142"
+  },
+  {
+    "serviceKey": "ms-bascula",
+    "displayName": "Báscula y Transporte de Carga",
+    "icon": "⚖️",
+    "apiPrefix": "/api/v1/bascula",
+    "uiBundlePath": "/api/v1/bascula/ui.js",
+    "category": "Logística Pesada",
+    "summary": "Pesaje camionero con tiquete automático, destare Bruto/Tara/Neto, conductores, transportistas y rutas.",
+    "modules": [
+      {
+        "moduleKey": "pesaje_camionero",
+        "displayName": "Pesaje y Tiquetes de Báscula",
+        "tabIcon": "⚖️",
+        "defaultActive": true,
+        "summary": "Cálculo de peso neto vinculando vehículo pesado, conductor, transportista y ruta."
+      },
+      {
+        "moduleKey": "flota_conductores",
+        "displayName": "Conductores y Transportadoras",
+        "tabIcon": "🚛",
+        "defaultActive": true,
+        "summary": "Registro propio de conductores, tractocamiones y empresas transportadoras."
+      },
+      {
+        "moduleKey": "rutas_manifiestos",
+        "displayName": "Cargas y Manifiestos",
+        "tabIcon": "🛣️",
+        "defaultActive": true,
+        "summary": "Catálogo de rutas, tipos de carga y manifiestos."
+      }
+    ],
+    "features": [
+      {
+        "featureKey": "tiquete_doble_firma",
+        "displayName": "Incluir firmas de conductor y operador en tiquete impreso",
+        "dependsOnModule": "pesaje_camionero",
+        "defaultActive": true,
+        "dependsOnSubmodule": "destare_bruto_tara"
+      }
+    ],
+    "submodules": [
+      {
+        "submoduleKey": "destare_bruto_tara",
+        "displayName": "Captura de Peso Bruto, Tara y Peso Neto",
+        "dependsOnModule": "pesaje_camionero",
+        "defaultActive": true,
+        "summary": "Emisión certificada de tiquetes de pesaje industrial."
+      },
+      {
+        "submoduleKey": "registro_transportistas",
+        "displayName": "Habilitación de Conductores y Tractocamiones",
+        "dependsOnModule": "flota_conductores",
+        "defaultActive": true,
+        "summary": "Base maestra de vehículos de carga y empresas transportadoras."
+      },
+      {
+        "submoduleKey": "despacho_corredores",
+        "displayName": "Rutas Logísticas y Tipos de Material",
+        "dependsOnModule": "rutas_manifiestos",
+        "defaultActive": true,
+        "summary": "Control de orígenes, destinos y mercancía a granel."
+      }
+    ],
+    "bundleHash": "17dca8052a64"
+  },
+  {
+    "serviceKey": "ms-compras",
+    "displayName": "Compras y Proveedores",
+    "icon": "🚚",
+    "apiPrefix": "/api/v1/compras",
+    "uiBundlePath": "/api/v1/compras/ui.js",
+    "category": "Abastecimiento",
+    "summary": "Directorio de proveedores, órdenes de compra y recepción de mercancía.",
+    "modules": [
+      {
+        "moduleKey": "directorio_proveedores",
+        "displayName": "Proveedores",
+        "tabIcon": "🏢",
+        "defaultActive": true,
+        "summary": "Gestión de proveedores nacionales e importadores."
+      },
+      {
+        "moduleKey": "ordenes_compra",
+        "displayName": "Órdenes y Entradas de Compra",
+        "tabIcon": "📦",
+        "defaultActive": true,
+        "summary": "Órdenes de compra a proveedor e ingreso valorizado a bodega."
+      }
+    ],
+    "features": [
+      {
+        "featureKey": "recalculo_costo_promedio",
+        "displayName": "Actualizar costo promedio ponderado al recibir mercancía",
+        "dependsOnModule": "ordenes_compra",
+        "dependsOnSubmodule": "recepcion_mercancia_oc",
+        "defaultActive": true
+      }
+    ],
+    "submodules": [
+      {
+        "submoduleKey": "homologacion_proveedores",
+        "displayName": "Ficha Comercial y Tributaria de Proveedores",
+        "dependsOnModule": "directorio_proveedores",
+        "defaultActive": true,
+        "summary": "Directorio de fabricantes, distribuidores e importadores."
+      },
+      {
+        "submoduleKey": "recepcion_mercancia_oc",
+        "displayName": "Emisión de Orden e Ingreso Valorizado a Bodega",
+        "dependsOnModule": "ordenes_compra",
+        "defaultActive": true,
+        "summary": "Abastecimiento con recálculo automático de costo promedio."
+      }
+    ],
+    "bundleHash": "04d76fcb5b3b"
+  },
+  {
+    "serviceKey": "ms-agenda",
+    "displayName": "Agenda y Reservas",
+    "icon": "📅",
+    "apiPrefix": "/api/v1/agenda",
+    "uiBundlePath": "/api/v1/agenda/ui.js",
+    "category": "Servicios",
+    "summary": "Programación de citas, asignación de profesional o recurso y comprobantes.",
+    "modules": [
+      {
+        "moduleKey": "calendario_citas",
+        "displayName": "Citas y Reservas",
+        "tabIcon": "🕒",
+        "defaultActive": true,
+        "summary": "Agendamiento de citas y control de atención."
+      }
+    ],
+    "features": [
+      {
+        "featureKey": "comprobante_cita_impreso",
+        "displayName": "Emitir recordatorio y comprobante impreso de reserva",
+        "dependsOnModule": "calendario_citas",
+        "dependsOnSubmodule": "programacion_turnos",
+        "defaultActive": true
+      }
+    ],
+    "submodules": [
+      {
+        "submoduleKey": "programacion_turnos",
+        "displayName": "Programación por Profesional y Control de Asistencia",
+        "dependsOnModule": "calendario_citas",
+        "defaultActive": true,
+        "summary": "Gestión de disponibilidad horaria y confirmación de citas."
+      }
+    ],
+    "bundleHash": "f9cb24558cbb"
+  },
+  {
+    "serviceKey": "ms-taquilla",
+    "displayName": "Taquilla y Entradas",
+    "icon": "🎟️",
+    "apiPrefix": "/api/v1/taquilla",
+    "uiBundlePath": "/api/v1/taquilla/ui.js",
+    "category": "Eventos y Acceso",
+    "summary": "Emisión de boletas y entradas con consecutivo automático e impresión térmica.",
+    "modules": [
+      {
+        "moduleKey": "venta_boletas",
+        "displayName": "Emisión de Tiquetes",
+        "tabIcon": "🎟️",
+        "defaultActive": true,
+        "summary": "Taquilla ágil por evento y localidad."
+      }
+    ],
+    "features": [
+      {
+        "featureKey": "impresion_boleta_termica",
+        "displayName": "Impresión térmica inmediata de boleta con código de control",
+        "dependsOnModule": "venta_boletas",
+        "dependsOnSubmodule": "expendio_localidades",
+        "defaultActive": true
+      }
+    ],
+    "submodules": [
+      {
+        "submoduleKey": "expendio_localidades",
+        "displayName": "Venta Rápida por Evento, Aforo y Localidad",
+        "dependsOnModule": "venta_boletas",
+        "defaultActive": true,
+        "summary": "Control de boletería numerada y recaudo en taquilla."
+      }
+    ],
+    "bundleHash": "dcec7d2e9699"
+  },
+  {
+    "serviceKey": "ms-nomina",
+    "displayName": "Personal y Nómina",
+    "icon": "👔",
+    "apiPrefix": "/api/v1/nomina",
+    "uiBundlePath": "/api/v1/nomina/ui.js",
+    "category": "Talento Humano",
+    "summary": "Directorio de empleados, liquidación salarial y desprendibles de pago.",
+    "modules": [
+      {
+        "moduleKey": "liquidacion_nomina",
+        "displayName": "Empleados y Pagos",
+        "tabIcon": "📑",
+        "defaultActive": true,
+        "summary": "Alta de colaboradores, liquidación salarial y colilla."
+      }
+    ],
+    "features": [
+      {
+        "featureKey": "colilla_pago_corporativa",
+        "displayName": "Generar comprobante individual de pago de nómina",
+        "dependsOnModule": "liquidacion_nomina",
+        "dependsOnSubmodule": "nomina_desprendibles",
+        "defaultActive": true
+      }
+    ],
+    "submodules": [
+      {
+        "submoduleKey": "nomina_desprendibles",
+        "displayName": "Contratos Laborales, Devengados y Desprendibles",
+        "dependsOnModule": "liquidacion_nomina",
+        "defaultActive": true,
+        "summary": "Liquidación periódica de salarios, auxilios y deducciones."
+      }
+    ],
+    "bundleHash": "74da002d1ed4"
+  },
+  {
+    "serviceKey": "ms-contabilidad",
+    "displayName": "Contabilidad PUC",
+    "icon": "📘",
+    "apiPrefix": "/api/v1/contabilidad",
+    "uiBundlePath": "/api/v1/contabilidad/ui.js",
+    "category": "Finanzas",
+    "summary": "Plan Único de Cuentas (PUC), comprobantes contables y partida doble.",
+    "modules": [
+      {
+        "moduleKey": "comprobantes_puc",
+        "displayName": "Asientos y Plan PUC",
+        "tabIcon": "📘",
+        "defaultActive": true,
+        "summary": "Registro de comprobantes contables sobre cuentas PUC."
+      }
+    ],
+    "features": [
+      {
+        "featureKey": "validacion_partida_doble",
+        "displayName": "Exigir cuadre exacto débito/crédito antes de asentar comprobante",
+        "dependsOnModule": "comprobantes_puc",
+        "dependsOnSubmodule": "libro_diario_puc",
+        "defaultActive": true
+      }
+    ],
+    "submodules": [
+      {
+        "submoduleKey": "libro_diario_puc",
+        "displayName": "Catálogo PUC y Asientos de Partida Doble",
+        "dependsOnModule": "comprobantes_puc",
+        "defaultActive": true,
+        "summary": "Validación cuadrada de débitos y créditos contables."
+      }
+    ],
+    "bundleHash": "6212625bdc53"
+  },
+  {
+    "serviceKey": "ms-reportes",
+    "displayName": "Reportes y Exportación",
+    "icon": "📊",
+    "apiPrefix": "/api/v1/reportes",
+    "uiBundlePath": "/api/v1/reportes/ui.js",
+    "category": "Gerencia",
+    "summary": "Indicadores consolidados vía APIs, balance operativo y descarga en CSV o PDF.",
+    "modules": [
+      {
+        "moduleKey": "centro_reportes",
+        "displayName": "Balance y Descargas CSV",
+        "tabIcon": "📈",
+        "defaultActive": true,
+        "summary": "Resumen ejecutivo consolidado y exportación de datos."
+      }
+    ],
+    "features": [
+      {
+        "featureKey": "exportacion_ejecutiva_csv",
+        "displayName": "Habilitar descarga de sábanas de datos en formato CSV",
+        "dependsOnModule": "centro_reportes",
+        "dependsOnSubmodule": "tablero_gerencial_csv",
+        "defaultActive": true
+      }
+    ],
+    "submodules": [
+      {
+        "submoduleKey": "tablero_gerencial_csv",
+        "displayName": "Indicadores Ejecutivos y Exportación Tabular",
+        "dependsOnModule": "centro_reportes",
+        "defaultActive": true,
+        "summary": "Consolidación gerencial de ventas, cartera e inventario."
+      }
+    ],
+    "bundleHash": "ae0f4ce83fe7"
+  },
+  {
+    "serviceKey": "ms-impresiones",
+    "displayName": "Impresiones y Membretes",
+    "icon": "🖨️",
+    "apiPrefix": "/api/v1/impresiones",
+    "uiBundlePath": "/api/v1/impresiones/ui.js",
+    "capabilities": [
+      "document_print"
+    ],
+    "category": "Transversal",
+    "summary": "Configuración de membrete empresarial, resolución fiscal y formatos Carta o Tirilla 80mm.",
+    "modules": [
+      {
+        "moduleKey": "config_membretes",
+        "displayName": "Membrete y Formatos PDF/POS",
+        "tabIcon": "🖨️",
+        "defaultActive": true,
+        "summary": "Personalización de encabezado oficial y diseño de impresión."
+      }
+    ],
+    "features": [
+      {
+        "featureKey": "vista_previa_membrete",
+        "displayName": "Previsualización interactiva de formatos antes de imprimir",
+        "dependsOnModule": "config_membretes",
+        "dependsOnSubmodule": "plantillas_corporativas",
+        "defaultActive": true
+      }
+    ],
+    "submodules": [
+      {
+        "submoduleKey": "plantillas_corporativas",
+        "displayName": "Identidad Visual, Resolución y Formatos de Papel",
+        "dependsOnModule": "config_membretes",
+        "defaultActive": true,
+        "summary": "Diseño institucional para Carta, Media Carta, Tirilla POS y Taller."
+      }
+    ],
+    "bundleHash": "f55b999a920d"
+  }
+]

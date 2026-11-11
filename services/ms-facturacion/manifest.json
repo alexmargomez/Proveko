@@ -3,6 +3,7 @@
   "displayName": "Facturación y Punto de Venta",
   "icon": "🧾",
   "apiPrefix": "/api/v1/facturacion",
+  "uiBundlePath": "/api/v1/facturacion/ui.js",
   "category": "Comercial",
   "summary": "Ventas rápidas en mostrador, cotizaciones, facturación electrónica y formatos especializados.",
   "modules": [
@@ -18,7 +19,7 @@
       "displayName": "Cotizaciones Comerciales",
       "tabIcon": "📄",
       "defaultActive": true,
-      "summary": "Generación e impresión de cotizaciones y envío por WhatsApp."
+      "summary": "Generación e impresión de cotizaciones comerciales."
     },
     {
       "moduleKey": "facturas_taller",
@@ -39,26 +40,68 @@
     {
       "featureKey": "descuento_linea",
       "displayName": "Permitir descuentos por tarifa/convenio",
-      "dependsOnModule": "",
-      "defaultActive": true
+      "dependsOnModule": "pos_mostrador",
+      "defaultActive": true,
+      "dependsOnSubmodule": "caja_rapida_pos"
     },
     {
       "featureKey": "pagos_mixtos_cxc",
       "displayName": "Permitir venta a crédito (Cartera CxC) y abonos",
-      "dependsOnModule": "",
-      "defaultActive": true
+      "dependsOnModule": "pos_mostrador",
+      "defaultActive": true,
+      "dependsOnSubmodule": "caja_rapida_pos"
     },
     {
       "featureKey": "asignar_mecanico",
       "displayName": "Seleccionar mecánico en factura para liquidar comisión",
       "dependsOnModule": "facturas_taller",
-      "defaultActive": true
+      "defaultActive": true,
+      "dependsOnSubmodule": "liquidacion_automotriz"
     },
     {
       "featureKey": "factura_taller_pdf",
       "displayName": "Imprimir PDF con estructura automotriz (Placa, Km y Mecánico)",
       "dependsOnModule": "facturas_taller",
-      "defaultActive": true
+      "defaultActive": true,
+      "dependsOnSubmodule": "liquidacion_automotriz"
+    }
+  ],
+  "bundleHash": "447b4b8a8728",
+  "submodules": [
+    {
+      "submoduleKey": "caja_rapida_pos",
+      "displayName": "Terminal de Cobro y Carrito POS",
+      "dependsOnModule": "pos_mostrador",
+      "defaultActive": true,
+      "summary": "Captura ágil de códigos, precios de catálogo y medios de pago."
+    },
+    {
+      "submoduleKey": "historial_facturas",
+      "displayName": "Consulta y Reimpresión de Facturas",
+      "dependsOnModule": "pos_mostrador",
+      "defaultActive": true,
+      "summary": "Trazabilidad histórica y vista previa de documentos emitidos."
+    },
+    {
+      "submoduleKey": "emision_cotizaciones",
+      "displayName": "Propuestas y Vigencias Comerciales",
+      "dependsOnModule": "cotizaciones",
+      "defaultActive": true,
+      "summary": "Elaboración de cotizaciones con vigencia controlada."
+    },
+    {
+      "submoduleKey": "liquidacion_automotriz",
+      "displayName": "Liquidación de Placa, Kilometraje y Orden",
+      "dependsOnModule": "facturas_taller",
+      "defaultActive": true,
+      "summary": "Integración de vehículo, orden de trabajo y técnico en factura."
+    },
+    {
+      "submoduleKey": "transmision_cufe",
+      "displayName": "Numeración Fiscal y Firma CUFE",
+      "dependsOnModule": "facturacion_dian",
+      "defaultActive": true,
+      "summary": "Generación determinista de CUFE y control de numeración."
     }
   ]
 }

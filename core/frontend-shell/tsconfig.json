@@ -18,14 +18,8 @@
       "react/jsx-runtime": ["./node_modules/@types/react/jsx-runtime"],
       "react/jsx-dev-runtime": ["./node_modules/@types/react/jsx-dev-runtime"],
       "react-dom": ["./node_modules/@types/react-dom"],
-      "react-dom/client": ["./node_modules/@types/react-dom/client"],
-      "@proveko/ui-sdk": ["../../ui-sdk/src/index.ts"],
-      "@services/*": ["../../services/*"]
+      "react-dom/client": ["./node_modules/@types/react-dom/client"]
     }
   },
-  "include": [
-    "src",
-    "../../ui-sdk/src",
-    "../../services/**/frontend"
-  ]
+  "include": ["src"]
 }

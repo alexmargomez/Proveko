@@ -1,0 +1,16 @@
+{
+  "name": "ms-platform-sdk",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && esbuild index.ts --bundle --format=esm --target=es2020 --jsx=automatic --minify --external:react --external:react-dom --external:react/jsx-runtime --outfile=../internal/infrastructure/http/assets/ui-sdk.js"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.1",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.3"
+  }
+}

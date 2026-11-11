@@ -3,16 +3,35 @@
   "displayName": "Reportes y Exportación",
   "icon": "📊",
   "apiPrefix": "/api/v1/reportes",
+  "uiBundlePath": "/api/v1/reportes/ui.js",
   "category": "Gerencia",
-  "summary": "Indicadores consolidados de ventas, ganancias, cartera, inventario y descarga en Excel (.CSV) o PDF.",
+  "summary": "Indicadores consolidados de ventas, ganancias, cartera, inventario, cortes históricos y descarga en Excel (.CSV) o PDF.",
   "modules": [
     {
       "moduleKey": "centro_reportes",
       "displayName": "Balance y Descargas Excel",
       "tabIcon": "📈",
       "defaultActive": true,
-      "summary": "Resumen ejecutivo, exportación CSV e impresión gerencial."
+      "summary": "Resumen ejecutivo, cortes históricos, exportación CSV e impresión gerencial."
     }
   ],
-  "features": []
+  "features": [
+    {
+      "featureKey": "exportacion_ejecutiva_csv",
+      "displayName": "Habilitar descarga de sábanas de datos en formato CSV",
+      "dependsOnModule": "centro_reportes",
+      "dependsOnSubmodule": "tablero_gerencial_csv",
+      "defaultActive": true
+    }
+  ],
+  "bundleHash": "ae0f4ce83fe7",
+  "submodules": [
+    {
+      "submoduleKey": "tablero_gerencial_csv",
+      "displayName": "Indicadores Ejecutivos y Exportación Tabular",
+      "dependsOnModule": "centro_reportes",
+      "defaultActive": true,
+      "summary": "Consolidación gerencial de ventas, cartera e inventario."
+    }
+  ]
 }

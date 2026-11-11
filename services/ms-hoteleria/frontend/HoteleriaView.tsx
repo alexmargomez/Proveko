@@ -1,82 +1,137 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  useProveko,
+  usePlatform,
   ModuleGate,
   FeatureGate,
   PkAutoCodeInput,
-  PkEntitySelect,
+  PkSelect,
+  PkModal,
   PkPrintButton,
   PkKpiRow,
-  HotelRoom,
-  Customer,
-  InvoiceItem,
-  PrintDocumentPayload,
+  useAsyncAction,
   formatCop,
-} from '@proveko/ui-sdk';
+  downloadCsvUtf8,
+} from '@platform/ui-sdk';
 
-interface HotelRoomsResponse {
+interface RoomCharge {
+  id: string;
+  checkInCode: string;
+  concept: string;
+  amount: number;
+  date: string;
+}
+
+interface HotelRoom {
+  id: string;
+  roomNumber: string;
+  roomType: string;
+  floor: string;
+  nightlyRate: number;
+  status: string;
+  checkInCode: string;
+  guestId: string;
+  guestName: string;
+  guestDoc: string;
+  checkInDate: string;
+  nights: number;
+  extrasTotal: number;
+  charges: RoomCharge[];
+}
+
+interface GuestOption {
+  id: string;
+  name: string;
+  nit: string;
+  phone?: string;
+}
+
+interface HotelStateResponse {
   ok: boolean;
   nextCheckInCode: string;
   rooms: HotelRoom[];
-  customers: Customer[];
 }
+
+interface OptionalCustomersResponse {
+  ok?: boolean;
+  customers?: GuestOption[];
+}
+
+const VALID_MODULES = ['recepcion_habitaciones', 'tarifas_temporadas'] as const;
 
 export const HoteleriaView: React.FC = () => {
   const {
     activeModuleKey,
+    hasService,
     hasModule,
+    navigateTo,
     apiGet,
     apiPost,
     toast,
-    openQuickDialog,
-    sendToPosCheckout,
-    dialogVersion,
-  } = useProveko();
+  } = usePlatform();
+  const { busy, run } = useAsyncAction();
 
   const [nextCheckInCode, setNextCheckInCode] = useState('CHK-406');
   const [rooms, setRooms] = useState<HotelRoom[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customers, setCustomers] = useState<GuestOption[]>([]);
 
   const [selectedRoomId, setSelectedRoomId] = useState('');
+  const [useManualGuest, setUseManualGuest] = useState(false);
   const [selectedGuestId, setSelectedGuestId] = useState('');
+  const [manualGuestName, setManualGuestName] = useState('');
+  const [manualGuestDoc, setManualGuestDoc] = useState('');
   const [nights, setNights] = useState('1');
 
+  const [showNewRoomModal, setShowNewRoomModal] = useState(false);
   const [roomNumber, setRoomNumber] = useState('');
   const [roomType, setRoomType] = useState('Suite Ejecutiva Doble');
   const [floor, setFloor] = useState('Piso 2');
-  const [nightlyRate, setNightlyRate] = useState('180000');
+  const [nightlyRate, setNightlyRate] = useState('185000');
+
+  const [chargeModalRoom, setChargeModalRoom] = useState<HotelRoom | null>(null);
+  const [chargeConcept, setChargeConcept] = useState('Consumo Restaurante / Minibar');
+  const [chargeAmount, setChargeAmount] = useState('25000');
 
   const reload = useCallback(async () => {
     try {
-      const data = await apiGet<HotelRoomsResponse>('/api/v1/hoteleria/rooms');
-      const rList = data.rooms || [];
-      const cList = data.customers || [];
+      const data = await apiGet<HotelStateResponse>('/api/v1/hoteleria/rooms');
+      const roomList = data.rooms || [];
       setNextCheckInCode(data.nextCheckInCode || 'CHK-406');
-      setRooms(rList);
-      setCustomers(cList);
+      setRooms(roomList);
 
-      const avail = rList.filter((rm) => rm.status === 'Disponible');
+      const avail = roomList.filter((rm) => rm.status === 'Disponible');
       setSelectedRoomId((prev) => {
         if (prev && avail.some((rm) => rm.id === prev)) return prev;
         return avail.length > 0 ? avail[0].id : '';
       });
-      setSelectedGuestId((prev) => {
-        if (prev && cList.some((c) => c.id === prev)) return prev;
-        return cList.length > 0 ? cList[0].id : '';
-      });
-    } catch {
+
+      if (hasService('ms-clientes')) {
+        try {
+          const crm = await apiGet<OptionalCustomersResponse>('/api/v1/clientes/all');
+          const cList = crm.customers || [];
+          setCustomers(cList);
+          setSelectedGuestId((prev) => {
+            if (prev && cList.some((c) => c.id === prev)) return prev;
+            return cList.length > 0 ? cList[0].id : '';
+          });
+        } catch {
+          setCustomers([]);
+        }
+      } else {
+        setCustomers([]);
+      }
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'No fue posible cargar el estado hotelero');
     }
-  }, [apiGet]);
+  }, [apiGet, hasService, toast]);
 
   useEffect(() => {
     void reload();
-  }, [reload, dialogVersion]);
+  }, [reload]);
 
-  const validModules = ['recepcion_habitaciones', 'tarifas_temporadas'];
   const currentTab =
-    validModules.includes(activeModuleKey) && hasModule(activeModuleKey)
+    (VALID_MODULES as readonly string[]).includes(activeModuleKey) && hasModule(activeModuleKey)
       ? activeModuleKey
-      : validModules.find((m) => hasModule(m)) || 'recepcion_habitaciones';
+      : VALID_MODULES.find((m) => hasModule(m)) || 'recepcion_habitaciones';
 
   const availableRooms = rooms.filter((r) => r.status === 'Disponible');
   const occupiedRooms = rooms.filter((r) => r.status === 'Ocupada');
@@ -85,38 +140,124 @@ export const HoteleriaView: React.FC = () => {
     0
   );
 
-  const handleCheckIn = async (e: React.FormEvent) => {
+  const hasCustomerDirectory = hasService('ms-clientes') && customers.length > 0;
+  const effectiveManualMode = useManualGuest || !hasCustomerDirectory;
+
+  const handleCheckIn = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRoomId) {
-      toast('No hay habitación disponible seleccionada. Crea una nueva habitación primero.');
+      toast('Selecciona una habitación disponible o registra una nueva habitación');
       return;
     }
-    if (!selectedGuestId) {
-      toast('Selecciona o registra un huésped para el Check-In.');
+    const stayNights = Number(nights || 0);
+    if (!Number.isFinite(stayNights) || stayNights < 1) {
+      toast('El número de noches debe ser de al menos 1');
       return;
     }
-    await apiPost('/api/v1/hoteleria/checkin', {
-      roomId: selectedRoomId,
-      guestId: selectedGuestId,
-      nights: Math.max(1, Number(nights || 1)),
+
+    let guestId = '';
+    let guestName = '';
+    let guestDoc = '';
+
+    if (effectiveManualMode) {
+      guestName = manualGuestName.trim();
+      guestDoc = manualGuestDoc.trim();
+      if (!guestName) {
+        toast('Ingresa el nombre completo o razón social del huésped');
+        return;
+      }
+    } else {
+      const chosen = customers.find((c) => c.id === selectedGuestId);
+      if (!chosen) {
+        toast('Selecciona un huésped del directorio o ingresa sus datos manualmente');
+        return;
+      }
+      guestId = chosen.id;
+      guestName = chosen.name;
+      guestDoc = chosen.nit || '';
+    }
+
+    void run(async () => {
+      try {
+        await apiPost('/api/v1/hoteleria/checkin', {
+          roomId: selectedRoomId,
+          guestId,
+          guestName,
+          guestDoc,
+          nights: Math.floor(stayNights),
+        });
+        toast('Check-In hotelero registrado exitosamente');
+        setManualGuestName('');
+        setManualGuestDoc('');
+        setNights('1');
+        await reload();
+      } catch (err) {
+        toast(err instanceof Error ? err.message : 'No fue posible registrar el Check-In');
+      }
     });
-    toast('🏨 Check-In registrado exitosamente');
-    setNights('1');
-    await reload();
   };
 
-  const handleAddConsumption = async (room: HotelRoom) => {
-    await apiPost(`/api/v1/hoteleria/rooms/${room.id}/extra`, {
-      amount: 25000,
-      concept: 'Consumo Restaurante / Minibar',
+  const submitCreateRoom = (closeModalAfter: boolean) => (e: React.FormEvent) => {
+    e.preventDefault();
+    const rate = Number(nightlyRate || 0);
+    if (!roomNumber.trim() || !Number.isFinite(rate) || rate <= 0) {
+      toast('Ingresa el número de habitación y una tarifa por noche válida');
+      return;
+    }
+    void run(async () => {
+      try {
+        const res = await apiPost<{ room: HotelRoom }>('/api/v1/hoteleria/rooms', {
+          roomNumber: roomNumber.trim(),
+          roomType,
+          floor,
+          nightlyRate: rate,
+        });
+        toast(`Habitación registrada: ${res.room.roomNumber}`);
+        setRoomNumber('');
+        if (closeModalAfter) {
+          setShowNewRoomModal(false);
+        }
+        await reload();
+        if (res.room.status === 'Disponible') {
+          setSelectedRoomId(res.room.id);
+        }
+      } catch (err) {
+        toast(err instanceof Error ? err.message : 'Error al registrar la habitación');
+      }
     });
-    toast(`🍽️ Cargo de $25.000 sumado a ${room.roomNumber}`);
-    await reload();
+  };
+
+  const handleSubmitExtraCharge = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chargeModalRoom) return;
+    const amt = Number(chargeAmount || 0);
+    if (!chargeConcept.trim() || !Number.isFinite(amt) || amt <= 0) {
+      toast('Ingresa el concepto del consumo y un valor mayor a cero');
+      return;
+    }
+    const targetRoom = chargeModalRoom;
+    void run(async () => {
+      try {
+        await apiPost(`/api/v1/hoteleria/rooms/${encodeURIComponent(targetRoom.id)}/extra`, {
+          concept: chargeConcept.trim(),
+          amount: amt,
+        });
+        toast(`Cargo de ${formatCop(amt)} registrado en ${targetRoom.roomNumber}`);
+        setChargeModalRoom(null);
+        await reload();
+      } catch (err) {
+        toast(err instanceof Error ? err.message : 'Error al cargar consumo a la habitación');
+      }
+    });
   };
 
   const handleCheckoutToPos = (room: HotelRoom) => {
+    if (!hasService('ms-facturacion')) {
+      toast('El servicio de Facturación POS no está activo en la suscripción actual');
+      return;
+    }
     const stayNights = Math.max(1, room.nights || 1);
-    const items: InvoiceItem[] = [
+    const items: Array<Record<string, unknown>> = [
       {
         kind: 'SERVICIO',
         refId: room.id,
@@ -132,45 +273,29 @@ export const HoteleriaView: React.FC = () => {
         kind: 'SERVICIO',
         refId: `${room.id}-EXT`,
         code: 'EXT-HAB',
-        name: `Consumos Extra Habitación (${room.roomNumber})`,
+        name: `Consumos Adicionales Habitación (${room.roomNumber})`,
         qty: 1,
         price: room.extrasTotal,
         taxPct: 8,
       });
     }
-    sendToPosCheckout({
+    navigateTo('ms-facturacion', 'pos_mostrador', {
       customerId: room.guestId || undefined,
+      guestName: room.guestName,
       linkedRoomId: room.id,
+      roomNumber: room.roomNumber,
       items,
     });
     toast(`Cuenta de ${room.roomNumber} enviada a Caja POS para Check-Out`);
   };
 
-  const handleCreateRoom = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const rate = Number(nightlyRate || 0);
-    if (!roomNumber.trim() || rate <= 0) {
-      toast('Ingresa el número de habitación y una tarifa válida.');
-      return;
-    }
-    await apiPost('/api/v1/hoteleria/rooms', {
-      roomNumber,
-      roomType,
-      floor,
-      nightlyRate: rate,
-    });
-    toast('Habitación agregada al tarifario hotelero');
-    setRoomNumber('');
-    await reload();
-  };
-
-  const buildHotelStatementPayload = (room: HotelRoom): PrintDocumentPayload => {
+  const buildHotelStatementPayload = (room: HotelRoom): Record<string, unknown> => {
     const stayNights = Math.max(1, room.nights || 1);
     const lodgingSubtotal = stayNights * room.nightlyRate;
     const grandTotal = lodgingSubtotal + (room.extrasTotal || 0);
-    const guest = customers.find((c) => c.id === room.guestId);
+    const matchedCustomer = customers.find((c) => c.id === room.guestId);
 
-    const items: PrintDocumentPayload['items'] = [
+    const items: Array<Record<string, unknown>> = [
       {
         code: room.checkInCode || 'ALOJ',
         description: `Alojamiento ${room.roomNumber} — ${room.roomType}`,
@@ -179,7 +304,18 @@ export const HoteleriaView: React.FC = () => {
         subtotal: lodgingSubtotal,
       },
     ];
-    if (room.extrasTotal > 0) {
+
+    if (room.charges && room.charges.length > 0) {
+      room.charges.forEach((ch, idx) => {
+        items.push({
+          code: `EXT-${idx + 1}`,
+          description: `${ch.concept} (${ch.date})`,
+          quantity: 1,
+          unit_price: ch.amount,
+          subtotal: ch.amount,
+        });
+      });
+    } else if (room.extrasTotal > 0) {
       items.push({
         code: 'CONS-EXT',
         description: 'Consumos Restaurante / Minibar / Lavandería a la Habitación',
@@ -195,8 +331,8 @@ export const HoteleriaView: React.FC = () => {
       document_number: room.checkInCode || room.id.toUpperCase(),
       issue_date: room.checkInDate || new Date().toISOString().slice(0, 10),
       customer_name: room.guestName || 'Huésped Registrado',
-      customer_nit: guest?.nit || '',
-      customer_phone: guest?.phone || '',
+      customer_nit: room.guestDoc || matchedCustomer?.nit || '',
+      customer_phone: matchedCustomer?.phone || '',
       extra_fields: {
         Habitación: room.roomNumber,
         Acomodación: room.roomType,
@@ -208,8 +344,27 @@ export const HoteleriaView: React.FC = () => {
       items,
       subtotal: grandTotal,
       grand_total: grandTotal,
-      notes: 'Estado de cuenta hotelero previo a facturación de Check-Out.',
+      notes: 'Estado de cuenta hotelero informativo previo a facturación electrónica de Check-Out.',
     };
+  };
+
+  const handleExportRoomsCsv = () => {
+    downloadCsvUtf8(
+      'ocupacion_hotelera.csv',
+      ['ID', 'Habitación', 'Tipo Acomodación', 'Piso', 'Tarifa Noche', 'Estado', 'Check-In', 'Huésped', 'Noches', 'Extras'],
+      rooms.map((r) => [
+        r.id,
+        r.roomNumber,
+        r.roomType,
+        r.floor,
+        r.nightlyRate,
+        r.status,
+        r.checkInCode,
+        r.guestName,
+        r.nights,
+        r.extrasTotal,
+      ])
+    );
   };
 
   return (
@@ -219,53 +374,101 @@ export const HoteleriaView: React.FC = () => {
           <PkKpiRow
             items={[
               { label: 'Total Habitaciones', value: String(rooms.length) },
-              { label: 'Ocupadas', value: String(occupiedRooms.length), color: 'var(--pk-amber)' },
               { label: 'Disponibles', value: String(availableRooms.length), color: 'var(--pk-emerald)' },
-              { label: 'Cuentas en Estadía', value: formatCop(activeHotelTotal), color: 'var(--pk-primary)' },
+              { label: 'Ocupadas Hoy', value: String(occupiedRooms.length), color: 'var(--pk-primary)' },
+              { label: 'Cartera Huéspedes en Casa', value: formatCop(activeHotelTotal), color: 'var(--pk-amber)' },
             ]}
           />
 
-          <div className="pk-card">
+          <div className="pk-card" style={{ marginBottom: 16 }}>
             <div className="pk-card-head">
               <div className="pk-card-title">🛎️ Recepción y Registro de Check-In</div>
+              <div className="pk-row-actions">
+                {hasCustomerDirectory && (
+                  <button
+                    type="button"
+                    className="pk-btn pk-btn-outline pk-btn-sm"
+                    onClick={() => setUseManualGuest((v) => !v)}
+                  >
+                    {effectiveManualMode ? '📋 Elegir de Directorio Clientes' : '✍️ Ingresar Huésped Directo'}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="pk-btn pk-btn-primary pk-btn-sm"
+                  onClick={() => setShowNewRoomModal(true)}
+                >
+                  + Nueva Habitación
+                </button>
+              </div>
             </div>
             <div className="pk-card-body">
               <form onSubmit={handleCheckIn} className="pk-form-grid">
-                <PkAutoCodeInput label="Registro Check-In" value={nextCheckInCode} />
-                <PkEntitySelect
-                  label="Habitación Disponible"
+                <PkAutoCodeInput label="Folio Check-In" value={nextCheckInCode} />
+
+                <PkSelect
+                  label="Habitación Disponible *"
                   items={availableRooms}
                   value={selectedRoomId}
                   onChange={setSelectedRoomId}
                   getValue={(r) => r.id}
-                  getLabel={(r) => `${r.roomNumber} · ${r.roomType} (${formatCop(r.nightlyRate)}/noche)`}
+                  getLabel={(r) => `${r.roomNumber} — ${r.roomType} (${formatCop(r.nightlyRate)}/noche)`}
+                  onCreateNew={() => setShowNewRoomModal(true)}
                   createLabel="+ Nueva Habitación"
-                  onCreateNew={() => openQuickDialog('nueva-habitacion', () => void reload())}
+                  emptyLabel={availableRooms.length === 0 ? 'Sin habitaciones disponibles' : undefined}
                 />
-                <PkEntitySelect
-                  label="Huésped / Empresa"
-                  items={customers}
-                  value={selectedGuestId}
-                  onChange={setSelectedGuestId}
-                  getValue={(c) => c.id}
-                  getLabel={(c) => `${c.name} (${c.nit})`}
-                  createLabel="+ Nuevo Huésped"
-                  onCreateNew={() => openQuickDialog('nuevo-cliente', () => void reload())}
-                  searchable
-                />
+
+                {effectiveManualMode ? (
+                  <>
+                    <div className="pk-field">
+                      <label>Nombre Completo / Empresa Huésped *</label>
+                      <input
+                        required
+                        value={manualGuestName}
+                        onChange={(e) => setManualGuestName(e.target.value)}
+                        placeholder="Ej: Carolina Gómez / Grupo Empresarial"
+                      />
+                    </div>
+                    <div className="pk-field">
+                      <label>Documento / NIT</label>
+                      <input
+                        value={manualGuestDoc}
+                        onChange={(e) => setManualGuestDoc(e.target.value)}
+                        placeholder="Ej: 1.037.614.920"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <PkSelect
+                    label="Huésped / Empresa *"
+                    items={customers}
+                    value={selectedGuestId}
+                    onChange={setSelectedGuestId}
+                    getValue={(c) => c.id}
+                    getLabel={(c) => `${c.name}${c.nit ? ` (${c.nit})` : ''}`}
+                    searchable
+                  />
+                )}
+
                 <div className="pk-field">
-                  <label>N° de Noches *</label>
+                  <label>Noches de Estadía *</label>
                   <input
                     required
                     type="number"
                     min="1"
+                    max="365"
                     value={nights}
                     onChange={(e) => setNights(e.target.value)}
                   />
                 </div>
-                <div className="pk-field">
-                  <button type="submit" className="pk-btn pk-btn-primary">
-                    🏨 Registrar Check-In
+
+                <div className="pk-field" style={{ justifyContent: 'flex-end' }}>
+                  <button
+                    type="submit"
+                    className="pk-btn pk-btn-primary"
+                    disabled={busy || availableRooms.length === 0}
+                  >
+                    🏨 Confirmar Check-In
                   </button>
                 </div>
               </form>
@@ -274,77 +477,88 @@ export const HoteleriaView: React.FC = () => {
 
           <div className="pk-card">
             <div className="pk-card-head">
-              <div className="pk-card-title">🛏️ Mapa de Habitaciones y Cuentas Activas</div>
+              <div className="pk-card-title">🛏️ Tablero en Vivo de Habitaciones y Cuentas</div>
+              <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={handleExportRoomsCsv}>
+                📥 Exportar CSV
+              </button>
             </div>
             <div className="pk-card-body">
               <div className="pk-cards-grid">
-                {rooms.map((room) => {
-                  const isOccupied = room.status === 'Ocupada';
-                  const stayNights = Math.max(1, room.nights || 1);
-                  const lodgingAmount = isOccupied ? stayNights * room.nightlyRate : 0;
-                  const totalAccount = lodgingAmount + (room.extrasTotal || 0);
-
+                {rooms.map((rm) => {
+                  const occupied = rm.status === 'Ocupada';
+                  const stayNights = Math.max(1, rm.nights || 1);
+                  const roomTotal = occupied ? rm.nightlyRate * stayNights + (rm.extrasTotal || 0) : rm.nightlyRate;
                   return (
                     <div
-                      key={room.id}
+                      key={rm.id}
                       style={{
-                        border: isOccupied ? '2px solid var(--pk-primary)' : '1px solid var(--pk-border)',
+                        border: occupied ? '2px solid var(--pk-primary)' : '1px solid var(--pk-border)',
                         borderRadius: 12,
                         padding: 14,
-                        background: isOccupied ? '#f8fafc' : '#ffffff',
+                        background: occupied ? '#f8fafc' : '#ffffff',
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <strong style={{ fontSize: 15.5 }}>{room.roomNumber}</strong>
-                        <span className={`pk-badge ${isOccupied ? 'pk-badge-amber' : 'pk-badge-emerald'}`}>
-                          {room.status}
+                        <strong style={{ fontSize: 16 }}>{rm.roomNumber}</strong>
+                        <span className={occupied ? 'pk-badge pk-badge-blue' : 'pk-badge pk-badge-emerald'}>
+                          {rm.status}
                         </span>
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--pk-muted)', marginTop: 4 }}>
-                        {room.roomType} · {room.floor} · {formatCop(room.nightlyRate)}/noche
+                        {rm.roomType} · {rm.floor} · Tarifa: <strong>{formatCop(rm.nightlyRate)}</strong>/noche
                       </div>
 
-                      {isOccupied ? (
-                        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #e2e8f0' }}>
-                          <div style={{ fontSize: 12.5 }}>
-                            <strong>Huésped:</strong> {room.guestName}
+                      {occupied ? (
+                        <div style={{ marginTop: 10, borderTop: '1px dashed #cbd5e1', paddingTop: 10 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+                            👤 {rm.guestName}
                           </div>
                           <div style={{ fontSize: 12, color: '#475569', marginTop: 2 }}>
-                            <strong>Check-In:</strong> {room.checkInCode} ({room.checkInDate}) · {stayNights} noche(s)
+                            Folio: <strong>{rm.checkInCode}</strong> · Ingreso: {rm.checkInDate} · {stayNights} noche(s)
                           </div>
-                          <div style={{ fontSize: 12, color: '#475569', marginTop: 2 }}>
-                            Alojamiento: {formatCop(lodgingAmount)} + Extras: {formatCop(room.extrasTotal)}
-                          </div>
-                          <div style={{ fontSize: 15, fontWeight: 800, marginTop: 6, color: '#0f172a' }}>
-                            Total Cuenta: {formatCop(totalAccount)}
+                          {rm.extrasTotal > 0 && (
+                            <div style={{ fontSize: 12, color: 'var(--pk-amber)', fontWeight: 700, marginTop: 4 }}>
+                              🍽️ Consumos adicionales: {formatCop(rm.extrasTotal)}
+                            </div>
+                          )}
+                          <div style={{ fontSize: 16, fontWeight: 800, marginTop: 8, color: '#0f172a' }}>
+                            Saldo Habitación: {formatCop(roomTotal)}
                           </div>
 
                           <div className="pk-row-actions" style={{ marginTop: 10 }}>
                             <FeatureGate module="recepcion_habitaciones" feature="cargos_habitacion">
                               <button
                                 type="button"
-                                className="pk-btn pk-btn-amber pk-btn-sm"
-                                onClick={() => void handleAddConsumption(room)}
+                                className="pk-btn pk-btn-outline pk-btn-sm"
+                                disabled={busy}
+                                onClick={() => {
+                                  setChargeConcept('Consumo Restaurante / Minibar');
+                                  setChargeAmount('25000');
+                                  setChargeModalRoom(rm);
+                                }}
                               >
-                                🍽️ + Consumo ($25k)
+                                + Cargo Habitación
                               </button>
                             </FeatureGate>
+
                             <PkPrintButton
-                              label="🖨️ Imprimir Cuenta Hotelera"
-                              payload={buildHotelStatementPayload(room)}
+                              label="🖨️ Estado Cuenta"
+                              payload={buildHotelStatementPayload(rm)}
                             />
+
                             <button
                               type="button"
                               className="pk-btn pk-btn-emerald pk-btn-sm"
-                              onClick={() => handleCheckoutToPos(room)}
+                              disabled={busy}
+                              onClick={() => handleCheckoutToPos(rm)}
                             >
                               💵 Cobrar Check-Out en Caja
                             </button>
                           </div>
                         </div>
                       ) : (
-                        <div style={{ marginTop: 12, fontSize: 12, color: 'var(--pk-emerald)', fontWeight: 700 }}>
-                          ✓ Lista para asignación en recepción
+                        <div style={{ marginTop: 12, fontSize: 12, color: '#059669', fontWeight: 700 }}>
+                          Lista para asignación inmediata en recepción.
                         </div>
                       )}
                     </div>
@@ -353,72 +567,163 @@ export const HoteleriaView: React.FC = () => {
               </div>
             </div>
           </div>
+
+          <PkModal
+            open={showNewRoomModal}
+            title="Registrar Nueva Habitación Hotelera"
+            onClose={() => setShowNewRoomModal(false)}
+          >
+            <form onSubmit={submitCreateRoom(true)} className="pk-form-grid">
+              <div className="pk-field">
+                <label>Número o Nombre de Habitación *</label>
+                <input
+                  required
+                  value={roomNumber}
+                  onChange={(e) => setRoomNumber(e.target.value)}
+                  placeholder="Ej: 204 o Suite 401"
+                />
+              </div>
+              <div className="pk-field">
+                <label>Tipo de Acomodación</label>
+                <select value={roomType} onChange={(e) => setRoomType(e.target.value)}>
+                  <option value="Estándar Sencilla">Estándar Sencilla</option>
+                  <option value="Estándar Doble">Estándar Doble</option>
+                  <option value="Suite Ejecutiva Doble">Suite Ejecutiva Doble</option>
+                  <option value="Suite Presidencial / Familiar">Suite Presidencial / Familiar</option>
+                </select>
+              </div>
+              <div className="pk-field">
+                <label>Piso / Torre</label>
+                <select value={floor} onChange={(e) => setFloor(e.target.value)}>
+                  <option value="Piso 1">Piso 1</option>
+                  <option value="Piso 2">Piso 2</option>
+                  <option value="Piso 3">Piso 3</option>
+                  <option value="Piso 4 / Penthouse">Piso 4 / Penthouse</option>
+                </select>
+              </div>
+              <div className="pk-field">
+                <label>Tarifa por Noche (COP) *</label>
+                <input
+                  required
+                  type="number"
+                  min="1000"
+                  step="1000"
+                  value={nightlyRate}
+                  onChange={(e) => setNightlyRate(e.target.value)}
+                />
+              </div>
+              <div className="pk-field" style={{ justifyContent: 'flex-end' }}>
+                <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
+                  💾 Guardar Habitación
+                </button>
+              </div>
+            </form>
+          </PkModal>
+
+          <PkModal
+            open={Boolean(chargeModalRoom)}
+            title={chargeModalRoom ? `Cargar Consumo — ${chargeModalRoom.roomNumber}` : 'Cargar Consumo'}
+            onClose={() => setChargeModalRoom(null)}
+          >
+            <form onSubmit={handleSubmitExtraCharge} className="pk-form-grid">
+              <div className="pk-field">
+                <label>Concepto del Cargo *</label>
+                <input
+                  required
+                  value={chargeConcept}
+                  onChange={(e) => setChargeConcept(e.target.value)}
+                  placeholder="Ej: Consumo Restaurante / Minibar"
+                />
+                <div className="pk-row-actions" style={{ marginTop: 6 }}>
+                  {[
+                    { label: 'Minibar ($25.000)', concept: 'Consumo Minibar Habitación', amount: '25000' },
+                    { label: 'Room Service ($42.000)', concept: 'Servicio Restaurante a la Habitación', amount: '42000' },
+                    { label: 'Lavandería ($30.000)', concept: 'Servicio de Lavandería Express', amount: '30000' },
+                  ].map((p) => (
+                    <button
+                      key={p.label}
+                      type="button"
+                      className="pk-btn pk-btn-outline pk-btn-sm"
+                      onClick={() => {
+                        setChargeConcept(p.concept);
+                        setChargeAmount(p.amount);
+                      }}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="pk-field">
+                <label>Valor a Cargar (COP) *</label>
+                <input
+                  required
+                  type="number"
+                  min="500"
+                  step="500"
+                  value={chargeAmount}
+                  onChange={(e) => setChargeAmount(e.target.value)}
+                />
+              </div>
+              <div className="pk-field" style={{ justifyContent: 'flex-end' }}>
+                <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
+                  ➕ Aplicar Cargo a Habitación
+                </button>
+              </div>
+            </form>
+          </PkModal>
         </ModuleGate>
       )}
 
       {currentTab === 'tarifas_temporadas' && (
         <ModuleGate module="tarifas_temporadas">
-          <div className="pk-card">
+          <div className="pk-card" style={{ marginBottom: 16 }}>
             <div className="pk-card-head">
-              <div className="pk-card-title">📅 Configuración de Habitaciones y Tarifas por Noche</div>
-              <PkPrintButton
-                label="🖨️ Imprimir Tarifario Hotelero"
-                variant="primary"
-                payload={{
-                  document_type: 'REPORTE_TABLA',
-                  layout_variant: 'carta_membrete',
-                  document_number: `TAR-HTL-${new Date().toISOString().slice(0, 10)}`,
-                  issue_date: new Date().toISOString().slice(0, 10),
-                  customer_name: 'Tarifario Oficial de Acomodación Hotelera',
-                  items: rooms.map((r) => ({
-                    code: r.id.toUpperCase(),
-                    description: `${r.roomNumber} — ${r.roomType} (${r.floor}) [${r.status}]`,
-                    quantity: 1,
-                    unit_price: r.nightlyRate,
-                    subtotal: r.nightlyRate,
-                  })),
-                  grand_total: rooms.reduce((acc, r) => acc + r.nightlyRate, 0),
-                  notes: 'Tarifas vigentes por noche de alojamiento.',
-                }}
-              />
+              <div className="pk-card-title">📅 Configuración de Habitaciones y Tarifario Hotelero</div>
             </div>
             <div className="pk-card-body">
-              <form onSubmit={handleCreateRoom} className="pk-form-grid">
+              <form onSubmit={submitCreateRoom(false)} className="pk-form-grid">
                 <div className="pk-field">
-                  <label>N° o Nombre Habitación *</label>
+                  <label>Número o Nombre de Habitación *</label>
                   <input
                     required
                     value={roomNumber}
                     onChange={(e) => setRoomNumber(e.target.value)}
-                    placeholder="Ej: Habitación 301 / Cabaña 4"
+                    placeholder="Ej: 205 o Cabaña VIP 1"
                   />
                 </div>
                 <div className="pk-field">
                   <label>Tipo de Acomodación</label>
                   <select value={roomType} onChange={(e) => setRoomType(e.target.value)}>
                     <option value="Estándar Sencilla">Estándar Sencilla</option>
+                    <option value="Estándar Doble">Estándar Doble</option>
                     <option value="Suite Ejecutiva Doble">Suite Ejecutiva Doble</option>
-                    <option value="Suite Familiar">Suite Familiar</option>
-                    <option value="Cabaña VIP">Cabaña VIP</option>
+                    <option value="Suite Presidencial / Familiar">Suite Presidencial / Familiar</option>
                   </select>
                 </div>
                 <div className="pk-field">
-                  <label>Piso / Sector</label>
-                  <input value={floor} onChange={(e) => setFloor(e.target.value)} placeholder="Ej: Piso 2" />
+                  <label>Piso / Ubicación</label>
+                  <select value={floor} onChange={(e) => setFloor(e.target.value)}>
+                    <option value="Piso 1">Piso 1</option>
+                    <option value="Piso 2">Piso 2</option>
+                    <option value="Piso 3">Piso 3</option>
+                    <option value="Zona Campestre">Zona Campestre</option>
+                  </select>
                 </div>
                 <div className="pk-field">
-                  <label>Tarifa por Noche ($) *</label>
+                  <label>Tarifa Oficial por Noche (COP) *</label>
                   <input
                     required
                     type="number"
-                    min="1"
+                    min="1000"
+                    step="1000"
                     value={nightlyRate}
                     onChange={(e) => setNightlyRate(e.target.value)}
                   />
                 </div>
-                <div className="pk-field">
-                  <button type="submit" className="pk-btn pk-btn-primary">
-                    ➕ Agregar Habitación
+                <div className="pk-field" style={{ justifyContent: 'flex-end' }}>
+                  <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
+                    ➕ Agregar al Tarifario
                   </button>
                 </div>
               </form>
@@ -427,40 +732,41 @@ export const HoteleriaView: React.FC = () => {
 
           <div className="pk-card">
             <div className="pk-card-head">
-              <div className="pk-card-title">🏨 Catálogo de Acomodación y Tarifas ({rooms.length})</div>
+              <div className="pk-card-title">📋 Inventario de Habitaciones y Tarifas Vigentes</div>
+              <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={handleExportRoomsCsv}>
+                📥 Exportar Tarifario CSV
+              </button>
             </div>
             <div className="pk-card-body">
               <div className="pk-table-wrap">
                 <table className="pk-table">
                   <thead>
                     <tr>
+                      <th>Código</th>
                       <th>Habitación</th>
-                      <th>Tipo de Acomodación</th>
-                      <th>Piso / Zona</th>
+                      <th>Acomodación</th>
+                      <th>Ubicación</th>
                       <th>Tarifa / Noche</th>
                       <th>Estado Actual</th>
-                      <th>Huésped Actual</th>
                     </tr>
                   </thead>
                   <tbody>
                     {rooms.map((r) => (
                       <tr key={r.id}>
-                        <td style={{ fontWeight: 800 }}>{r.roomNumber}</td>
+                        <td style={{ fontWeight: 700 }}>{r.id.toUpperCase()}</td>
+                        <td style={{ fontWeight: 700 }}>{r.roomNumber}</td>
                         <td>{r.roomType}</td>
                         <td>{r.floor}</td>
-                        <td style={{ fontWeight: 800, color: 'var(--pk-primary)' }}>
-                          {formatCop(r.nightlyRate)}
-                        </td>
+                        <td style={{ fontWeight: 800 }}>{formatCop(r.nightlyRate)}</td>
                         <td>
                           <span
-                            className={`pk-badge ${
-                              r.status === 'Ocupada' ? 'pk-badge-amber' : 'pk-badge-emerald'
-                            }`}
+                            className={
+                              r.status === 'Ocupada' ? 'pk-badge pk-badge-blue' : 'pk-badge pk-badge-emerald'
+                            }
                           >
                             {r.status}
                           </span>
                         </td>
-                        <td>{r.guestName || '—'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -473,3 +779,5 @@ export const HoteleriaView: React.FC = () => {
     </div>
   );
 };
+
+export default HoteleriaView;

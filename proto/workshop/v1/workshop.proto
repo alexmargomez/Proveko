@@ -1,6 +1,6 @@
 syntax = "proto3";
 package proveko.workshop.v1;
-option go_package = "github.com/alexmargomez/proveko/proto/workshop/v1;workshopv1";
+option go_package = "platform-contracts/workshop/v1;workshopv1";
 
 service WorkshopService {
   rpc RegisterInvoicedOrderAndCommission(WorkshopInvoiceEvent) returns (WorkshopInvoiceResponse);

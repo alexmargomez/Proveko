@@ -1,359 +1,203 @@
-# ==============================================================================
-# PROVEKO — Microservicios Independientes (`ms:<dominio>`) en Kubernetes
-# ==============================================================================
-# - Cada Microservicio tiene su propio Deployment, Service (`ClusterIP`) y
-#   HorizontalPodAutoscaler (`HPA`).
-# - Si agregas un nuevo servidor físico (Worker Node) al clúster de Kubernetes,
-#   Kubernetes balancea o mueve los Pods automáticamente (o puedes fijarlo a un
-#   servidor dedicado con `nodeSelector`) sin cambiar ninguna URL gracias a CoreDNS.
-# ==============================================================================
-
-# 1. Microservicio: ms:crm (:4101)
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ms-crm
-  namespace: proveko
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: ms-crm
-  template:
-    metadata:
-      labels:
-        app: ms-crm
-        role: ms-host-runner
-        microservice: crm
-    spec:
-      containers:
-        - name: ms-crm
-          image: proveko/cluster-node:latest
-          ports:
-            - containerPort: 4101
-          env:
-            - name: PROVEKO_NODE_ROLE
-              value: "ms-host-runner"
-            - name: PROVEKO_PARENT_SERVICE
-              value: "ms:crm"
-            - name: PORT
-              value: "4101"
-          envFrom:
-            - configMapRef:
-                name: proveko-cluster-config
-            - secretRef:
-                name: proveko-cluster-secrets
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 4101
-            initialDelaySeconds: 5
-            periodSeconds: 10
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: ms-crm
-  namespace: proveko
-spec:
-  selector:
-    app: ms-crm
-  ports:
-    - port: 4101
-      targetPort: 4101
-  type: ClusterIP
----
-# 2. Microservicio: ms:inventory (:4102)
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: ms-inventory
-  namespace: proveko
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: ms-inventory
-  template:
-    metadata:
-      labels:
-        app: ms-inventory
-        role: ms-host-runner
-        microservice: inventory
-    spec:
-      containers:
-        - name: ms-inventory
-          image: proveko/cluster-node:latest
-          ports:
-            - containerPort: 4102
-          env:
-            - name: PROVEKO_NODE_ROLE
-              value: "ms-host-runner"
-            - name: PROVEKO_PARENT_SERVICE
-              value: "ms:inventory"
-            - name: PORT
-              value: "4102"
-          envFrom:
-            - configMapRef:
-                name: proveko-cluster-config
-            - secretRef:
-                name: proveko-cluster-secrets
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 4102
-            initialDelaySeconds: 5
-            periodSeconds: 10
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: ms-inventory
-  namespace: proveko
-spec:
-  selector:
-    app: ms-inventory
-  ports:
-    - port: 4102
-      targetPort: 4102
-  type: ClusterIP
----
-# 3. Microservicio: ms:invoicing (:4103) + Auto-Escalado Horizontal (HPA)
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: ms-invoicing
+  name: ms-facturacion
   namespace: proveko
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: ms-invoicing
+      app: ms-facturacion
   template:
     metadata:
       labels:
-        app: ms-invoicing
-        role: ms-host-runner
-        microservice: invoicing
+        app: ms-facturacion
+        role: domain-microservice
     spec:
       containers:
-        - name: ms-invoicing
-          image: proveko/cluster-node:latest
+        - name: ms-facturacion
+          image: proveko/ms-facturacion:latest
           ports:
-            - containerPort: 4103
+            - containerPort: 4101
           env:
-            - name: PROVEKO_NODE_ROLE
-              value: "ms-host-runner"
-            - name: PROVEKO_PARENT_SERVICE
-              value: "ms:invoicing"
+            - name: SERVICE_NAME
+              value: "ms-facturacion"
             - name: PORT
-              value: "4103"
+              value: "4101"
+            - name: SERVICE_PUBLIC_URL
+              value: "http://ms-facturacion.proveko.svc.cluster.local:4101"
           envFrom:
             - configMapRef:
                 name: proveko-cluster-config
             - secretRef:
-                name: proveko-cluster-secrets
+                name: proveko-mesh-verifier-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 4101
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ms-facturacion
+  namespace: proveko
+spec:
+  selector:
+    app: ms-facturacion
+  ports:
+    - name: http
+      port: 4101
+      targetPort: 4101
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-clientes
+  namespace: proveko
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ms-clientes
+  template:
+    metadata:
+      labels:
+        app: ms-clientes
+        role: domain-microservice
+    spec:
+      containers:
+        - name: ms-clientes
+          image: proveko/ms-clientes:latest
+          ports:
+            - containerPort: 4102
+          env:
+            - name: SERVICE_NAME
+              value: "ms-clientes"
+            - name: PORT
+              value: "4102"
+            - name: SERVICE_PUBLIC_URL
+              value: "http://ms-clientes.proveko.svc.cluster.local:4102"
+          envFrom:
+            - configMapRef:
+                name: proveko-cluster-config
+            - secretRef:
+                name: proveko-mesh-verifier-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 4102
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ms-clientes
+  namespace: proveko
+spec:
+  selector:
+    app: ms-clientes
+  ports:
+    - name: http
+      port: 4102
+      targetPort: 4102
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-inventario
+  namespace: proveko
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ms-inventario
+  template:
+    metadata:
+      labels:
+        app: ms-inventario
+        role: domain-microservice
+    spec:
+      containers:
+        - name: ms-inventario
+          image: proveko/ms-inventario:latest
+          ports:
+            - containerPort: 4103
+          env:
+            - name: SERVICE_NAME
+              value: "ms-inventario"
+            - name: PORT
+              value: "4103"
+            - name: SERVICE_PUBLIC_URL
+              value: "http://ms-inventario.proveko.svc.cluster.local:4103"
+          envFrom:
+            - configMapRef:
+                name: proveko-cluster-config
+            - secretRef:
+                name: proveko-mesh-verifier-secrets
           readinessProbe:
             httpGet:
               path: /health
               port: 4103
-            initialDelaySeconds: 5
-            periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: ms-invoicing
+  name: ms-inventario
   namespace: proveko
 spec:
   selector:
-    app: ms-invoicing
+    app: ms-inventario
   ports:
-    - port: 4103
+    - name: http
+      port: 4103
       targetPort: 4103
-  type: ClusterIP
 ---
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: ms-invoicing-hpa
-  namespace: proveko
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: ms-invoicing
-  minReplicas: 2
-  maxReplicas: 10
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 70
----
-# 4. Microservicio: ms:gastro (:4104)
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ms-gastro
+  name: ms-impresiones
   namespace: proveko
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
-      app: ms-gastro
+      app: ms-impresiones
   template:
     metadata:
       labels:
-        app: ms-gastro
-        role: ms-host-runner
-        microservice: gastro
+        app: ms-impresiones
+        role: domain-microservice
     spec:
       containers:
-        - name: ms-gastro
-          image: proveko/cluster-node:latest
+        - name: ms-impresiones
+          image: proveko/ms-impresiones:latest
           ports:
-            - containerPort: 4104
+            - containerPort: 4115
           env:
-            - name: PROVEKO_NODE_ROLE
-              value: "ms-host-runner"
-            - name: PROVEKO_PARENT_SERVICE
-              value: "ms:gastro"
+            - name: SERVICE_NAME
+              value: "ms-impresiones"
             - name: PORT
-              value: "4104"
+              value: "4115"
+            - name: SERVICE_PUBLIC_URL
+              value: "http://ms-impresiones.proveko.svc.cluster.local:4115"
           envFrom:
             - configMapRef:
                 name: proveko-cluster-config
             - secretRef:
-                name: proveko-cluster-secrets
+                name: proveko-mesh-verifier-secrets
           readinessProbe:
             httpGet:
               path: /health
-              port: 4104
-            initialDelaySeconds: 5
-            periodSeconds: 10
+              port: 4115
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: ms-gastro
+  name: ms-impresiones
   namespace: proveko
 spec:
   selector:
-    app: ms-gastro
+    app: ms-impresiones
   ports:
-    - port: 4104
-      targetPort: 4104
-  type: ClusterIP
----
-# 5. Microservicio: ms:hotel (:4105)
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: ms-hotel
-  namespace: proveko
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: ms-hotel
-  template:
-    metadata:
-      labels:
-        app: ms-hotel
-        role: ms-host-runner
-        microservice: hotel
-    spec:
-      containers:
-        - name: ms-hotel
-          image: proveko/cluster-node:latest
-          ports:
-            - containerPort: 4105
-          env:
-            - name: PROVEKO_NODE_ROLE
-              value: "ms-host-runner"
-            - name: PROVEKO_PARENT_SERVICE
-              value: "ms:hotel"
-            - name: PORT
-              value: "4105"
-          envFrom:
-            - configMapRef:
-                name: proveko-cluster-config
-            - secretRef:
-                name: proveko-cluster-secrets
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 4105
-            initialDelaySeconds: 5
-            periodSeconds: 10
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: ms-hotel
-  namespace: proveko
-spec:
-  selector:
-    app: ms-hotel
-  ports:
-    - port: 4105
-      targetPort: 4105
-  type: ClusterIP
----
-# 6. Microservicio: ms:finance (:4106)
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: ms-finance
-  namespace: proveko
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: ms-finance
-  template:
-    metadata:
-      labels:
-        app: ms-finance
-        role: ms-host-runner
-        microservice: finance
-    spec:
-      containers:
-        - name: ms-finance
-          image: proveko/cluster-node:latest
-          ports:
-            - containerPort: 4106
-          env:
-            - name: PROVEKO_NODE_ROLE
-              value: "ms-host-runner"
-            - name: PROVEKO_PARENT_SERVICE
-              value: "ms:finance"
-            - name: PORT
-              value: "4106"
-          envFrom:
-            - configMapRef:
-                name: proveko-cluster-config
-            - secretRef:
-                name: proveko-cluster-secrets
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 4106
-            initialDelaySeconds: 5
-            periodSeconds: 10
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: ms-finance
-  namespace: proveko
-spec:
-  selector:
-    app: ms-finance
-  ports:
-    - port: 4106
-      targetPort: 4106
-  type: ClusterIP
+    - name: http
+      port: 4115
+      targetPort: 4115

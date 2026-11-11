@@ -3,6 +3,7 @@
   "displayName": "Taller y Órdenes de Servicio",
   "icon": "🔧",
   "apiPrefix": "/api/v1/taller",
+  "uiBundlePath": "/api/v1/taller/ui.js",
   "category": "Automotriz",
   "summary": "Recepción de vehículos por placa, tablero de órdenes en vivo, hoja de vida y comisiones de técnicos.",
   "modules": [
@@ -33,7 +34,32 @@
       "featureKey": "alerta_cambio_aceite",
       "displayName": "Sugerencia automática de próximo kilometraje de aceite",
       "dependsOnModule": "tablero_ordenes",
-      "defaultActive": true
+      "defaultActive": true,
+      "dependsOnSubmodule": "recepcion_diagnostico_ot"
+    }
+  ],
+  "bundleHash": "afdcf401a142",
+  "submodules": [
+    {
+      "submoduleKey": "recepcion_diagnostico_ot",
+      "displayName": "Recepción, Diagnóstico y Cierre de OT",
+      "dependsOnModule": "tablero_ordenes",
+      "defaultActive": true,
+      "summary": "Flujo operativo desde ingreso vehicular hasta facturación."
+    },
+    {
+      "submoduleKey": "expediente_automotor",
+      "displayName": "Historial Técnico, Placas y Vencimientos",
+      "dependsOnModule": "hoja_vida_vehiculos",
+      "defaultActive": true,
+      "summary": "Trazabilidad de kilometraje, SOAT y tecnomecánica."
+    },
+    {
+      "submoduleKey": "liquidacion_especialistas",
+      "displayName": "Cálculo de Comisiones por Mano de Obra",
+      "dependsOnModule": "comisiones_tecnicos",
+      "defaultActive": true,
+      "summary": "Liquidación transparente por orden facturada."
     }
   ]
 }

@@ -1,6 +1,6 @@
 syntax = "proto3";
 package proveko.printing.v1;
-option go_package = "github.com/alexmargomez/proveko/proto/printing/v1;printingv1";
+option go_package = "platform-contracts/printing/v1;printingv1";
 
 service PrintService {
   rpc RenderDocument(RenderDocumentRequest) returns (RenderDocumentResponse);
@@ -16,8 +16,8 @@ message PrintLineItem {
 }
 
 message RenderDocumentRequest {
-  string document_type = 1;     // FACTURA, COTIZACION, CUENTA_HOTEL, COMANDA, ORDEN_TALLER, TIQUETE_BASCULA, RECIBO_CAJA, REPORTE_TABLA
-  string layout_variant = 2;    // estandar, factura_taller, tirilla_80mm, carta_membrete
+  string document_type = 1;
+  string layout_variant = 2;
   string document_number = 3;
   string issue_date = 4;
   string customer_name = 5;
@@ -25,7 +25,7 @@ message RenderDocumentRequest {
   string customer_phone = 7;
   string customer_address = 8;
   string payment_method = 9;
-  map<string, string> extra_fields = 10; // Placa, Vehiculo, Km, Mecanico, Habitacion, PesoBruto, PesoTara, PesoNeto, Conductor...
+  map<string, string> extra_fields = 10;
   repeated PrintLineItem items = 11;
   double subtotal = 12;
   double discount_total = 13;

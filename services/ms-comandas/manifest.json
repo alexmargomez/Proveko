@@ -3,6 +3,7 @@
   "displayName": "Mesas y Comandas",
   "icon": "🍽️",
   "apiPrefix": "/api/v1/comandas",
+  "uiBundlePath": "/api/v1/comandas/ui.js",
   "category": "Gastronomía",
   "summary": "Atención de mesas para meseros, envío a cocina/barra, precuenta impresa y cobro directo en caja.",
   "modules": [
@@ -26,7 +27,25 @@
       "featureKey": "notas_preparacion",
       "displayName": "Notas rápidas de término y preparación para cocina",
       "dependsOnModule": "mapa_mesas",
-      "defaultActive": true
+      "defaultActive": true,
+      "dependsOnSubmodule": "atencion_salon"
+    }
+  ],
+  "bundleHash": "8879eab20281",
+  "submodules": [
+    {
+      "submoduleKey": "atencion_salon",
+      "displayName": "Captura de Pedidos y Precuenta de Salón",
+      "dependsOnModule": "mapa_mesas",
+      "defaultActive": true,
+      "summary": "Asignación de platos, bebidas y envío a caja."
+    },
+    {
+      "submoduleKey": "despacho_comandas",
+      "displayName": "Cola de Preparación en Tiempo Real",
+      "dependsOnModule": "monitor_cocina",
+      "defaultActive": true,
+      "summary": "Priorización y despacho de platos preparados."
     }
   ]
 }

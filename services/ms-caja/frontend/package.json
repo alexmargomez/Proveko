@@ -1,0 +1,17 @@
+{
+  "name": "ms-caja-ui",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync-sdk": "curl -fsSL \"${GATEWAY_URL:-http://localhost:4000}/api/v1/platform/ui-sdk.d.ts\" -o ./sdk.d.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && esbuild CajaView.tsx --bundle --format=esm --target=es2020 --jsx=automatic --minify --external:react --external:react-dom --external:react/jsx-runtime --external:@platform/ui-sdk --outfile=../internal/infrastructure/http/ui_dist/ui.js"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.1",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.3"
+  }
+}

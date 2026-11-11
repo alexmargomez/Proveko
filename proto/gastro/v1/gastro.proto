@@ -1,6 +1,6 @@
 syntax = "proto3";
 package proveko.gastro.v1;
-option go_package = "github.com/alexmargomez/proveko/proto/gastro/v1;gastrov1";
+option go_package = "platform-contracts/gastro/v1;gastrov1";
 
 service GastroService {
   rpc ClearInvoicedTable(ClearTableEvent) returns (ClearTableResponse);

@@ -3,16 +3,35 @@
   "displayName": "Taquilla y Entradas",
   "icon": "🎟️",
   "apiPrefix": "/api/v1/taquilla",
+  "uiBundlePath": "/api/v1/taquilla/ui.js",
   "category": "Eventos y Acceso",
-  "summary": "Emisión de boletas/entradas con código consecutivo automático e impresión de tiquete.",
+  "summary": "Control de aforo por función y emisión de boletas con consecutivo automático e impresión térmica.",
   "modules": [
     {
       "moduleKey": "venta_boletas",
       "displayName": "Emisión de Tiquetes",
       "tabIcon": "🎟️",
       "defaultActive": true,
-      "summary": "Taquilla rápida con consecutivo QR automático."
+      "summary": "Taquilla ágil con control de aforo por localidad e impresión 80mm."
     }
   ],
-  "features": []
+  "features": [
+    {
+      "featureKey": "impresion_boleta_termica",
+      "displayName": "Impresión térmica inmediata de boleta con código de control",
+      "dependsOnModule": "venta_boletas",
+      "dependsOnSubmodule": "expendio_localidades",
+      "defaultActive": true
+    }
+  ],
+  "bundleHash": "dcec7d2e9699",
+  "submodules": [
+    {
+      "submoduleKey": "expendio_localidades",
+      "displayName": "Venta Rápida por Evento, Aforo y Localidad",
+      "dependsOnModule": "venta_boletas",
+      "defaultActive": true,
+      "summary": "Control de boletería numerada y recaudo en taquilla."
+    }
+  ]
 }

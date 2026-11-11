@@ -3,19 +3,25 @@ package workshopv1
 import (
 	"context"
 
-	_ "github.com/alexmargomez/proveko/proto"
 	"google.golang.org/grpc"
+	_ "platform-contracts"
 )
 
 type WorkshopInvoiceEvent struct {
-	WorkOrderID   string  `json:"work_order_id"`
-	MechanicID    string  `json:"mechanic_id"`
-	LaborGross    float64 `json:"labor_gross"`
-	InvoiceNumber string  `json:"invoice_number"`
+	IdempotencyKey string  `json:"idempotency_key"`
+	WorkOrderID    string  `json:"work_order_id"`
+	VehicleID      string  `json:"vehicle_id"`
+	MechanicID     string  `json:"mechanic_id"`
+	LaborGross     float64 `json:"labor_gross"`
+	InvoiceNumber  string  `json:"invoice_number"`
 }
 
 type WorkshopInvoiceResponse struct {
 	Ok           bool   `json:"ok"`
+	Plate        string `json:"plate"`
+	VehicleBrand string `json:"vehicle_brand"`
+	CurrentKm    int32  `json:"current_km"`
+	NextOilKm    int32  `json:"next_oil_km"`
 	MechanicName string `json:"mechanic_name"`
 }
 

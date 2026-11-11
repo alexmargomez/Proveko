@@ -1,52 +1,111 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  useProveko,
+  usePlatform,
   ModuleGate,
   FeatureGate,
   PkAutoCodeInput,
+  PkModal,
+  PkConfirmModal,
   PkPrintButton,
   PkKpiRow,
-  Expense,
-  PrintDocumentPayload,
+  useAsyncAction,
   formatCop,
-} from '@proveko/ui-sdk';
+  downloadCsvUtf8,
+} from '@platform/ui-sdk';
 
-interface BankMovementRecord {
+interface CashIncome {
   id: string;
-  createdAt: string;
-  moduleKey: string;
-  fields: Record<string, string>;
+  date: string;
+  category: string;
+  description: string;
+  amount: number;
+  paymentMethod: string;
+  responsible: string;
+}
+
+interface Expense {
+  id: string;
+  date: string;
+  category: string;
+  description: string;
+  amount: number;
+  paymentSource: string;
+  responsible: string;
+}
+
+interface BankMovement {
+  id: string;
+  date: string;
+  accountName: string;
+  movementType: string;
+  reference: string;
+  concept: string;
+  amount: number;
+  actor: string;
 }
 
 interface CajaSummaryResponse {
   ok: boolean;
+  cashIncomes: number;
+  digitalIncomes: number;
   cashSales: number;
   digitalSales: number;
   totalExpenses: number;
+  cashExpenses: number;
   netCash: number;
+  bankInTotal: number;
+  bankOutTotal: number;
+  nextIncomeCode: string;
   nextExpenseCode: string;
   nextBankCode: string;
+  incomes: CashIncome[];
   expenses: Expense[];
-  bankMovements: BankMovementRecord[];
+  bankMovements: BankMovement[];
 }
 
-export const CajaView: React.FC = () => {
-  const { activeModuleKey, hasModule, apiGet, apiPost, apiDelete, toast, dialogVersion } = useProveko();
+interface FacturacionSummaryOptional {
+  ok?: boolean;
+  cashSales?: number;
+  digitalSales?: number;
+  cashCollected?: number;
+  digitalCollected?: number;
+}
 
-  const [cashSales, setCashSales] = useState(0);
-  const [digitalSales, setDigitalSales] = useState(0);
+const VALID_MODULES = ['arqueo_gastos', 'bancos_tesoreria'] as const;
+
+export const CajaView: React.FC = () => {
+  const { activeModuleKey, hasService, hasModule, apiGet, apiPost, apiDelete, toast } = usePlatform();
+  const { busy, run } = useAsyncAction();
+
+  const [cashIncomes, setCashIncomes] = useState(0);
+  const [digitalIncomes, setDigitalIncomes] = useState(0);
+  const [posCashSales, setPosCashSales] = useState(0);
+  const [posDigitalSales, setPosDigitalSales] = useState(0);
   const [totalExpenses, setTotalExpenses] = useState(0);
-  const [netCash, setNetCash] = useState(0);
-  const [nextExpenseCode, setNextExpenseCode] = useState('EGR-506');
-  const [nextBankCode, setNextBankCode] = useState('BCO-206');
+  const [cashExpenses, setCashExpenses] = useState(0);
+  const [bankInTotal, setBankInTotal] = useState(0);
+  const [bankOutTotal, setBankOutTotal] = useState(0);
+  const [nextIncomeCode, setNextIncomeCode] = useState('ING-303');
+  const [nextExpenseCode, setNextExpenseCode] = useState('EGR-508');
+  const [nextBankCode, setNextBankCode] = useState('BCO-208');
+  const [incomes, setIncomes] = useState<CashIncome[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [bankMovements, setBankMovements] = useState<BankMovementRecord[]>([]);
+  const [bankMovements, setBankMovements] = useState<BankMovement[]>([]);
+
+  const [showIncomeModal, setShowIncomeModal] = useState(false);
+  const [incCategory, setIncCategory] = useState('Base / Apertura de Caja');
+  const [incDescription, setIncDescription] = useState('');
+  const [incAmount, setIncAmount] = useState('');
+  const [incPaymentMethod, setIncPaymentMethod] = useState('Efectivo');
+  const [incResponsible, setIncResponsible] = useState('Caja Principal');
 
   const [category, setCategory] = useState('Insumos Operativos');
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [paymentSource, setPaymentSource] = useState('Efectivo Caja');
   const [responsible, setResponsible] = useState('Caja Principal');
+
+  const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
 
   const [accountName, setAccountName] = useState('Bancolombia — Cuenta Empresarial');
   const [movementType, setMovementType] = useState('Ingreso');
@@ -57,76 +116,159 @@ export const CajaView: React.FC = () => {
   const reload = useCallback(async () => {
     try {
       const data = await apiGet<CajaSummaryResponse>('/api/v1/caja/summary');
-      setCashSales(data.cashSales || 0);
-      setDigitalSales(data.digitalSales || 0);
+      setCashIncomes(data.cashIncomes || 0);
+      setDigitalIncomes(data.digitalIncomes || 0);
       setTotalExpenses(data.totalExpenses || 0);
-      setNetCash(data.netCash || 0);
-      setNextExpenseCode(data.nextExpenseCode || 'EGR-506');
-      setNextBankCode(data.nextBankCode || 'BCO-206');
+      setCashExpenses(data.cashExpenses || 0);
+      setBankInTotal(data.bankInTotal || 0);
+      setBankOutTotal(data.bankOutTotal || 0);
+      setNextIncomeCode(data.nextIncomeCode || 'ING-303');
+      setNextExpenseCode(data.nextExpenseCode || 'EGR-508');
+      setNextBankCode(data.nextBankCode || 'BCO-208');
+      setIncomes(data.incomes || []);
       setExpenses(data.expenses || []);
       setBankMovements(data.bankMovements || []);
     } catch {
+      // Surface handled by platform context
     }
-  }, [apiGet]);
+
+    if (hasService('ms-facturacion')) {
+      try {
+        const pos = await apiGet<FacturacionSummaryOptional>('/api/v1/facturacion/summary');
+        setPosCashSales(Number(pos.cashSales ?? pos.cashCollected ?? 0) || 0);
+        setPosDigitalSales(Number(pos.digitalSales ?? pos.digitalCollected ?? 0) || 0);
+      } catch {
+        setPosCashSales(0);
+        setPosDigitalSales(0);
+      }
+    } else {
+      setPosCashSales(0);
+      setPosDigitalSales(0);
+    }
+  }, [apiGet, hasService]);
 
   useEffect(() => {
     void reload();
-  }, [reload, dialogVersion]);
+  }, [reload]);
 
-  const validModules = ['arqueo_gastos', 'bancos_tesoreria'];
   const currentTab =
-    validModules.includes(activeModuleKey) && hasModule(activeModuleKey)
+    VALID_MODULES.includes(activeModuleKey as (typeof VALID_MODULES)[number]) && hasModule(activeModuleKey)
       ? activeModuleKey
-      : validModules.find((m) => hasModule(m)) || 'arqueo_gastos';
+      : VALID_MODULES.find((m) => hasModule(m)) || 'arqueo_gastos';
 
-  const handleSaveExpense = async (e: React.FormEvent) => {
+  const combinedCashInflow = posCashSales + cashIncomes;
+  const combinedDigitalInflow = posDigitalSales + digitalIncomes;
+  const netCashDrawer = combinedCashInflow - cashExpenses;
+  const reconciledDigitalBalance = combinedDigitalInflow + bankInTotal - bankOutTotal;
+
+  const handleSaveIncome = (e: React.FormEvent) => {
+    e.preventDefault();
+    const numericAmount = Number(incAmount || 0);
+    if (!incDescription.trim() || !Number.isFinite(numericAmount) || numericAmount <= 0) {
+      toast('Ingresa una descripción y un monto positivo válido para el ingreso.');
+      return;
+    }
+    void run(async () => {
+      await apiPost('/api/v1/caja/incomes', {
+        category: incCategory,
+        description: incDescription.trim(),
+        amount: numericAmount,
+        paymentMethod: incPaymentMethod,
+        responsible: incResponsible.trim() || 'Caja Principal',
+      });
+      toast('Recibo de ingreso registrado en caja');
+      setIncDescription('');
+      setIncAmount('');
+      setShowIncomeModal(false);
+      await reload();
+    });
+  };
+
+  const handleSaveExpense = (e: React.FormEvent) => {
     e.preventDefault();
     const numericAmount = Number(amount || 0);
-    if (!description.trim() || numericAmount <= 0) {
-      toast('Ingresa descripción y un valor válido para el gasto.');
+    if (!description.trim() || !Number.isFinite(numericAmount) || numericAmount <= 0) {
+      toast('Ingresa descripción y un valor positivo válido para el gasto.');
       return;
     }
-    await apiPost('/api/v1/caja/expenses', {
-      category,
-      description,
-      amount: numericAmount,
-      paymentSource,
-      responsible,
+    void run(async () => {
+      await apiPost('/api/v1/caja/expenses', {
+        category,
+        description: description.trim(),
+        amount: numericAmount,
+        paymentSource,
+        responsible: responsible.trim() || 'Caja Principal',
+      });
+      toast('Comprobante de gasto registrado en caja');
+      setDescription('');
+      setAmount('');
+      await reload();
     });
-    toast('Comprobante de gasto registrado en caja');
-    setDescription('');
-    setAmount('');
-    await reload();
   };
 
-  const handleDeleteExpense = async (id: string) => {
-    await apiDelete(`/api/v1/caja/expenses/${id}`);
-    toast(`Egreso ${id} eliminado`);
-    await reload();
+  const handleConfirmDeleteExpense = () => {
+    if (!expenseToDelete) return;
+    const target = expenseToDelete;
+    void run(async () => {
+      await apiDelete(`/api/v1/caja/expenses/${encodeURIComponent(target.id)}`);
+      toast(`Comprobante de egreso ${target.id} anulado`);
+      setExpenseToDelete(null);
+      await reload();
+    });
   };
 
-  const handleSaveBankMovement = async (e: React.FormEvent) => {
+  const handleSaveBankMovement = (e: React.FormEvent) => {
     e.preventDefault();
     const numericAmount = Number(bankAmount || 0);
-    if (!concept.trim() || numericAmount <= 0) {
-      toast('Ingresa el concepto y el valor del movimiento.');
+    if (!concept.trim() || !Number.isFinite(numericAmount) || numericAmount <= 0) {
+      toast('Ingresa el concepto y un valor positivo válido para el movimiento bancario.');
       return;
     }
-    await apiPost('/api/v1/caja/bank-movements', {
-      accountName,
-      movementType,
-      reference,
-      concept,
-      amount: numericAmount,
+    void run(async () => {
+      await apiPost('/api/v1/caja/bank-movements', {
+        accountName,
+        movementType,
+        reference: reference.trim(),
+        concept: concept.trim(),
+        amount: numericAmount,
+      });
+      toast('Movimiento bancario conciliado correctamente');
+      setReference('');
+      setConcept('');
+      setBankAmount('');
+      await reload();
     });
-    toast('Movimiento bancario / billetera conciliado');
-    setReference('');
-    setConcept('');
-    setBankAmount('');
-    await reload();
   };
 
-  const arqueoPayload: PrintDocumentPayload = {
+  const handleExportArqueoCsv = () => {
+    const rows: (string | number)[][] = [
+      ...incomes.map((inc) => ['INGRESO', inc.id, inc.date, inc.category, inc.description, inc.paymentMethod, inc.responsible, inc.amount]),
+      ...expenses.map((exp) => ['EGRESO', exp.id, exp.date, exp.category, exp.description, exp.paymentSource, exp.responsible, -exp.amount]),
+    ];
+    downloadCsvUtf8(
+      `arqueo_caja_${new Date().toISOString().slice(0, 10)}.csv`,
+      ['Tipo', 'Consecutivo', 'Fecha', 'Categoría', 'Concepto', 'Medio / Origen', 'Responsable', 'Monto'],
+      rows
+    );
+  };
+
+  const handleExportBancosCsv = () => {
+    downloadCsvUtf8(
+      `conciliacion_bancos_${new Date().toISOString().slice(0, 10)}.csv`,
+      ['Código', 'Fecha', 'Cuenta', 'Tipo', 'Referencia', 'Concepto', 'Monto'],
+      bankMovements.map((m) => [
+        m.id,
+        m.date,
+        m.accountName,
+        m.movementType,
+        m.reference || 'S/R',
+        m.concept,
+        m.movementType === 'Ingreso' ? m.amount : -m.amount,
+      ])
+    );
+  };
+
+  const arqueoPayload: Record<string, unknown> = {
     document_type: 'RECIBO_CAJA',
     layout_variant: 'carta_membrete',
     document_number: `ARQ-${new Date().toISOString().slice(0, 10)}`,
@@ -134,26 +276,42 @@ export const CajaView: React.FC = () => {
     customer_name: 'Cierre y Arqueo Diario de Caja General',
     payment_method: 'Consolidado Efectivo + Digital',
     extra_fields: {
-      'Ventas en Efectivo': formatCop(cashSales),
-      'Ingresos Digitales': formatCop(digitalSales),
+      'Ventas POS Efectivo': formatCop(posCashSales),
+      'Ingresos Manuales Efectivo': formatCop(cashIncomes),
+      'Recaudo Digital Consolidado': formatCop(combinedDigitalInflow),
       'Total Gastos Operativos': formatCop(totalExpenses),
-      'Efectivo Neto en Gaveta': formatCop(netCash),
+      'Efectivo Neto en Gaveta': formatCop(netCashDrawer),
     },
     items: [
-      {
-        code: 'ING-EFE',
-        description: 'Recaudo Ventas y Abonos en Efectivo',
+      ...(posCashSales > 0
+        ? [
+            {
+              code: 'POS-EFE',
+              description: 'Recaudo Ventas POS en Efectivo',
+              quantity: 1,
+              unit_price: posCashSales,
+              subtotal: posCashSales,
+            },
+          ]
+        : []),
+      ...(posDigitalSales > 0
+        ? [
+            {
+              code: 'POS-DIG',
+              description: 'Recaudo Ventas POS Medios Digitales',
+              quantity: 1,
+              unit_price: posDigitalSales,
+              subtotal: posDigitalSales,
+            },
+          ]
+        : []),
+      ...incomes.map((inc) => ({
+        code: inc.id,
+        description: `INGRESO (${inc.paymentMethod}) — ${inc.category}: ${inc.description}`,
         quantity: 1,
-        unit_price: cashSales,
-        subtotal: cashSales,
-      },
-      {
-        code: 'ING-DIG',
-        description: 'Recaudo Transferencias, Tarjetas, Nequi y DaviPlata',
-        quantity: 1,
-        unit_price: digitalSales,
-        subtotal: digitalSales,
-      },
+        unit_price: inc.amount,
+        subtotal: inc.amount,
+      })),
       ...expenses.map((exp) => ({
         code: exp.id,
         description: `EGRESO (${exp.paymentSource}) — ${exp.category}: ${exp.description}`,
@@ -162,13 +320,13 @@ export const CajaView: React.FC = () => {
         subtotal: -exp.amount,
       })),
     ],
-    subtotal: cashSales + digitalSales,
-    grand_total: netCash,
-    notes: 'Arqueo físico verificado por cajero responsable y administración.',
+    subtotal: combinedCashInflow + combinedDigitalInflow,
+    grand_total: netCashDrawer,
+    notes: 'Arqueo físico de caja verificado por cajero responsable y administración.',
   };
 
-  const buildExpenseReceipt = (exp: Expense): PrintDocumentPayload => ({
-    document_type: 'RECIBO_CAJA',
+  const buildExpenseReceipt = (exp: Expense): Record<string, unknown> => ({
+    document_type: 'COMPROBANTE DE EGRESO',
     layout_variant: 'carta_membrete',
     document_number: exp.id,
     issue_date: exp.date,
@@ -190,15 +348,8 @@ export const CajaView: React.FC = () => {
     ],
     subtotal: exp.amount,
     grand_total: exp.amount,
-    notes: 'Comprobante interno de egreso de caja. Firma de recibido conforme.',
+    notes: 'Comprobante oficial de salida operativa de caja. Firma de recibido conforme.',
   });
-
-  const bankInTotal = bankMovements
-    .filter((m) => m.fields?.movementType === 'Ingreso')
-    .reduce((acc, m) => acc + Number(m.fields?.amount || 0), 0);
-  const bankOutTotal = bankMovements
-    .filter((m) => m.fields?.movementType !== 'Ingreso')
-    .reduce((acc, m) => acc + Number(m.fields?.amount || 0), 0);
 
   return (
     <div>
@@ -206,17 +357,29 @@ export const CajaView: React.FC = () => {
         <ModuleGate module="arqueo_gastos">
           <PkKpiRow
             items={[
-              { label: 'Ventas Efectivo', value: formatCop(cashSales), color: 'var(--pk-emerald)' },
-              { label: 'Ventas Digitales', value: formatCop(digitalSales), color: 'var(--pk-primary)' },
+              { label: 'Efectivo Total (POS + Caja)', value: formatCop(combinedCashInflow), color: 'var(--pk-emerald)' },
+              { label: 'Recaudo Digital Consolidado', value: formatCop(combinedDigitalInflow), color: 'var(--pk-primary)' },
               { label: 'Gastos Operativos', value: formatCop(totalExpenses), color: 'var(--pk-rose)' },
-              { label: 'Neto en Caja (Gaveta)', value: formatCop(netCash), color: '#0f172a' },
+              { label: 'Neto en Caja (Gaveta)', value: formatCop(netCashDrawer), color: '#0f172a' },
             ]}
           />
 
           <div className="pk-card">
             <div className="pk-card-head">
               <div className="pk-card-title">💰 Registrar Salida / Gasto de Caja</div>
-              <PkPrintButton label="🖨️ Imprimir Arqueo de Caja" payload={arqueoPayload} variant="primary" />
+              <div className="pk-row-actions">
+                <button
+                  type="button"
+                  className="pk-btn pk-btn-emerald pk-btn-sm"
+                  onClick={() => setShowIncomeModal(true)}
+                >
+                  ➕ Ingreso / Apertura ({nextIncomeCode})
+                </button>
+                <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={handleExportArqueoCsv}>
+                  📥 Exportar CSV
+                </button>
+                <PkPrintButton label="🖨️ Imprimir Arqueo de Caja" payload={arqueoPayload} variant="primary" />
+              </div>
             </div>
             <div className="pk-card-body">
               <form onSubmit={handleSaveExpense} className="pk-form-grid">
@@ -247,6 +410,7 @@ export const CajaView: React.FC = () => {
                     required
                     type="number"
                     min="1"
+                    step="any"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                     placeholder="Ej: 45000"
@@ -269,74 +433,203 @@ export const CajaView: React.FC = () => {
                   />
                 </div>
                 <div className="pk-field">
-                  <button type="submit" className="pk-btn pk-btn-primary">
-                    ➕ Registrar Egreso
+                  <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
+                    {busy ? 'Guardando...' : '➕ Registrar Egreso'}
                   </button>
                 </div>
               </form>
             </div>
           </div>
 
-          <div className="pk-card">
-            <div className="pk-card-head">
-              <div className="pk-card-title">🧾 Historial de Comprobantes de Egreso ({expenses.length})</div>
-            </div>
-            <div className="pk-card-body">
-              <div className="pk-table-wrap">
-                <table className="pk-table">
-                  <thead>
-                    <tr>
-                      <th>Consecutivo</th>
-                      <th>Fecha</th>
-                      <th>Categoría</th>
-                      <th>Concepto</th>
-                      <th>Fuente</th>
-                      <th>Responsable</th>
-                      <th>Valor</th>
-                      <th>Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {expenses.length === 0 ? (
+          <div className="pk-grid-2">
+            <div className="pk-card">
+              <div className="pk-card-head">
+                <div className="pk-card-title">🧾 Comprobantes de Egreso ({expenses.length})</div>
+              </div>
+              <div className="pk-card-body">
+                <div className="pk-table-wrap">
+                  <table className="pk-table">
+                    <thead>
                       <tr>
-                        <td colSpan={8} style={{ textAlign: 'center', color: 'var(--pk-muted)' }}>
-                          No hay gastos registrados en el turno actual.
-                        </td>
+                        <th>Consecutivo</th>
+                        <th>Fecha</th>
+                        <th>Categoría / Concepto</th>
+                        <th>Fuente</th>
+                        <th className="num">Valor</th>
+                        <th>Acciones</th>
                       </tr>
-                    ) : (
-                      expenses.map((exp) => (
-                        <tr key={exp.id}>
-                          <td>
-                            <span className="pk-badge pk-badge-slate">{exp.id}</span>
-                          </td>
-                          <td>{exp.date}</td>
-                          <td>{exp.category}</td>
-                          <td>{exp.description}</td>
-                          <td>{exp.paymentSource}</td>
-                          <td>{exp.responsible}</td>
-                          <td style={{ fontWeight: 800, color: 'var(--pk-rose)' }}>{formatCop(exp.amount)}</td>
-                          <td>
-                            <div className="pk-row-actions">
-                              <FeatureGate module="arqueo_gastos" feature="impresion_egreso">
-                                <PkPrintButton label="🖨️ Comprobante" payload={buildExpenseReceipt(exp)} />
-                              </FeatureGate>
-                              <button
-                                type="button"
-                                className="pk-btn pk-btn-danger pk-btn-sm"
-                                onClick={() => void handleDeleteExpense(exp.id)}
-                              >
-                                🗑️ Eliminar
-                              </button>
-                            </div>
+                    </thead>
+                    <tbody>
+                      {expenses.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} style={{ textAlign: 'center', color: 'var(--pk-muted)' }}>
+                            No hay gastos registrados en el turno actual.
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                      ) : (
+                        expenses.map((exp) => (
+                          <tr key={exp.id}>
+                            <td>
+                              <span className="pk-badge pk-badge-slate">{exp.id}</span>
+                            </td>
+                            <td>{exp.date}</td>
+                            <td>
+                              <div style={{ fontWeight: 700 }}>{exp.category}</div>
+                              <div style={{ fontSize: 11.5, color: 'var(--pk-muted)' }}>
+                                {exp.description} · Resp: {exp.responsible}
+                              </div>
+                            </td>
+                            <td>{exp.paymentSource}</td>
+                            <td className="num" style={{ fontWeight: 800, color: 'var(--pk-rose)' }}>
+                              {formatCop(exp.amount)}
+                            </td>
+                            <td>
+                              <div className="pk-row-actions">
+                                <FeatureGate module="arqueo_gastos" feature="impresion_egreso">
+                                  <PkPrintButton label="🖨️ Comprobante" payload={buildExpenseReceipt(exp)} />
+                                </FeatureGate>
+                                <button
+                                  type="button"
+                                  className="pk-btn pk-btn-danger pk-btn-sm"
+                                  disabled={busy}
+                                  onClick={() => setExpenseToDelete(exp)}
+                                >
+                                  Anular
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="pk-card">
+              <div className="pk-card-head">
+                <div className="pk-card-title">💵 Aperturas e Ingresos de Caja ({incomes.length})</div>
+              </div>
+              <div className="pk-card-body">
+                <div className="pk-table-wrap">
+                  <table className="pk-table">
+                    <thead>
+                      <tr>
+                        <th>Recibo</th>
+                        <th>Fecha</th>
+                        <th>Concepto</th>
+                        <th>Medio</th>
+                        <th className="num">Monto</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {incomes.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} style={{ textAlign: 'center', color: 'var(--pk-muted)' }}>
+                            Sin ingresos manuales registrados.
+                          </td>
+                        </tr>
+                      ) : (
+                        incomes.map((inc) => (
+                          <tr key={inc.id}>
+                            <td>
+                              <span className="pk-badge pk-badge-emerald">{inc.id}</span>
+                            </td>
+                            <td>{inc.date}</td>
+                            <td>
+                              <div style={{ fontWeight: 700 }}>{inc.category}</div>
+                              <div style={{ fontSize: 11.5, color: 'var(--pk-muted)' }}>{inc.description}</div>
+                            </td>
+                            <td>{inc.paymentMethod}</td>
+                            <td className="num" style={{ fontWeight: 800, color: 'var(--pk-emerald)' }}>
+                              +{formatCop(inc.amount)}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
+
+          <PkModal
+            open={showIncomeModal}
+            title="➕ Registrar Apertura o Ingreso Manual en Caja"
+            onClose={() => setShowIncomeModal(false)}
+          >
+            <form onSubmit={handleSaveIncome} className="pk-form-grid">
+              <PkAutoCodeInput label="Recibo de Caja" value={nextIncomeCode} />
+              <div className="pk-field">
+                <label>Categoría</label>
+                <select value={incCategory} onChange={(e) => setIncCategory(e.target.value)}>
+                  <option value="Base / Apertura de Caja">Base / Apertura de Caja</option>
+                  <option value="Recaudo Cartera">Recaudo Cartera</option>
+                  <option value="Aporte Operativo">Aporte Operativo</option>
+                  <option value="Otros Ingresos">Otros Ingresos</option>
+                </select>
+              </div>
+              <div className="pk-field">
+                <label>Descripción / Detalle *</label>
+                <input
+                  required
+                  value={incDescription}
+                  onChange={(e) => setIncDescription(e.target.value)}
+                  placeholder="Ej: Base inicial de efectivo turno mañana"
+                />
+              </div>
+              <div className="pk-field">
+                <label>Valor del Ingreso ($) *</label>
+                <input
+                  required
+                  type="number"
+                  min="1"
+                  step="any"
+                  value={incAmount}
+                  onChange={(e) => setIncAmount(e.target.value)}
+                  placeholder="Ej: 300000"
+                />
+              </div>
+              <div className="pk-field">
+                <label>Medio de Ingreso</label>
+                <select value={incPaymentMethod} onChange={(e) => setIncPaymentMethod(e.target.value)}>
+                  <option value="Efectivo">Efectivo</option>
+                  <option value="Transferencia Bancaria">Transferencia Bancaria</option>
+                  <option value="Nequi / DaviPlata">Nequi / DaviPlata</option>
+                  <option value="Tarjeta Débito / Crédito">Tarjeta Débito / Crédito</option>
+                </select>
+              </div>
+              <div className="pk-field">
+                <label>Responsable</label>
+                <input
+                  value={incResponsible}
+                  onChange={(e) => setIncResponsible(e.target.value)}
+                  placeholder="Caja Principal"
+                />
+              </div>
+              <div className="pk-field">
+                <button type="submit" className="pk-btn pk-btn-emerald" disabled={busy}>
+                  {busy ? 'Guardando...' : '💾 Guardar Ingreso'}
+                </button>
+              </div>
+            </form>
+          </PkModal>
+
+          <PkConfirmModal
+            open={Boolean(expenseToDelete)}
+            title="Confirmar Anulación de Egreso"
+            message={
+              expenseToDelete
+                ? `¿Deseas anular definitivamente el comprobante de gasto ${expenseToDelete.id} (${expenseToDelete.description}) por valor de ${formatCop(expenseToDelete.amount)}?`
+                : ''
+            }
+            confirmLabel="Anular Egreso"
+            onConfirm={handleConfirmDeleteExpense}
+            onCancel={() => setExpenseToDelete(null)}
+            busy={busy}
+          />
         </ModuleGate>
       )}
 
@@ -344,49 +637,49 @@ export const CajaView: React.FC = () => {
         <ModuleGate module="bancos_tesoreria">
           <PkKpiRow
             items={[
-              { label: 'Recaudo Digital POS', value: formatCop(digitalSales), color: 'var(--pk-primary)' },
+              { label: 'Recaudo Digital Operativo', value: formatCop(combinedDigitalInflow), color: 'var(--pk-primary)' },
               { label: 'Consignaciones / Entradas', value: formatCop(bankInTotal), color: 'var(--pk-emerald)' },
               { label: 'Pagos / Salidas Bancos', value: formatCop(bankOutTotal), color: 'var(--pk-rose)' },
-              {
-                label: 'Saldo Conciliado Digital',
-                value: formatCop(digitalSales + bankInTotal - bankOutTotal),
-                color: '#0f172a',
-              },
+              { label: 'Saldo Conciliado Digital', value: formatCop(reconciledDigitalBalance), color: '#0f172a' },
             ]}
           />
 
           <div className="pk-card">
             <div className="pk-card-head">
-              <div className="pk-card-title">🏦 Conciliación de Cuentas Bancarias, Nequi y DaviPlata</div>
-              <PkPrintButton
-                label="🖨️ Imprimir Extracto Conciliación"
-                variant="primary"
-                payload={{
-                  document_type: 'REPORTE_TABLA',
-                  layout_variant: 'carta_membrete',
-                  document_number: `CONC-${new Date().toISOString().slice(0, 10)}`,
-                  issue_date: new Date().toISOString().slice(0, 16).replace('T', ' '),
-                  customer_name: 'Conciliación Tesorería Bancos y Billeteras Digitales',
-                  extra_fields: {
-                    'Ventas Digitales POS': formatCop(digitalSales),
-                    'Entradas Conciliadas': formatCop(bankInTotal),
-                    'Salidas Conciliadas': formatCop(bankOutTotal),
-                  },
-                  items: bankMovements.map((m) => {
-                    const val = Number(m.fields?.amount || 0);
-                    const signed = m.fields?.movementType === 'Ingreso' ? val : -val;
-                    return {
-                      code: m.id,
-                      description: `${m.fields?.accountName || ''} [${m.fields?.movementType || ''}] — ${m.fields?.concept || ''} (Ref: ${m.fields?.reference || 'S/R'})`,
-                      quantity: 1,
-                      unit_price: signed,
-                      subtotal: signed,
-                    };
-                  }),
-                  grand_total: digitalSales + bankInTotal - bankOutTotal,
-                  notes: 'Extracto interno de movimientos conciliados en cuentas bancarias y billeteras.',
-                }}
-              />
+              <div className="pk-card-title">🏦 Conciliación de Cuentas Bancarias y Billeteras Digitales</div>
+              <div className="pk-row-actions">
+                <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={handleExportBancosCsv}>
+                  📥 Exportar CSV
+                </button>
+                <PkPrintButton
+                  label="🖨️ Imprimir Extracto Conciliación"
+                  variant="primary"
+                  payload={{
+                    document_type: 'EXTRACTO DE TESORERÍA',
+                    layout_variant: 'carta_membrete',
+                    document_number: `CONC-${new Date().toISOString().slice(0, 10)}`,
+                    issue_date: new Date().toISOString().slice(0, 16).replace('T', ' '),
+                    customer_name: 'Conciliación Tesorería Bancos y Billeteras Digitales',
+                    extra_fields: {
+                      'Recaudo Digital': formatCop(combinedDigitalInflow),
+                      'Entradas Conciliadas': formatCop(bankInTotal),
+                      'Salidas Conciliadas': formatCop(bankOutTotal),
+                    },
+                    items: bankMovements.map((m) => {
+                      const signed = m.movementType === 'Ingreso' ? m.amount : -m.amount;
+                      return {
+                        code: m.id,
+                        description: `${m.accountName} [${m.movementType}] — ${m.concept} (Ref: ${m.reference || 'S/R'})`,
+                        quantity: 1,
+                        unit_price: signed,
+                        subtotal: signed,
+                      };
+                    }),
+                    grand_total: reconciledDigitalBalance,
+                    notes: 'Extracto interno de movimientos conciliados en cuentas bancarias y billeteras digitales.',
+                  }}
+                />
+              </div>
             </div>
             <div className="pk-card-body">
               <form onSubmit={handleSaveBankMovement} className="pk-form-grid">
@@ -431,14 +724,15 @@ export const CajaView: React.FC = () => {
                     required
                     type="number"
                     min="1"
+                    step="any"
                     value={bankAmount}
                     onChange={(e) => setBankAmount(e.target.value)}
                     placeholder="Ej: 180000"
                   />
                 </div>
                 <div className="pk-field">
-                  <button type="submit" className="pk-btn pk-btn-emerald">
-                    💾 Registrar Movimiento
+                  <button type="submit" className="pk-btn pk-btn-emerald" disabled={busy}>
+                    {busy ? 'Guardando...' : '💾 Registrar Movimiento'}
                   </button>
                 </div>
               </form>
@@ -460,7 +754,7 @@ export const CajaView: React.FC = () => {
                       <th>Tipo</th>
                       <th>Referencia</th>
                       <th>Concepto</th>
-                      <th>Valor</th>
+                      <th className="num">Valor</th>
                       <th>Comprobante</th>
                     </tr>
                   </thead>
@@ -473,50 +767,49 @@ export const CajaView: React.FC = () => {
                       </tr>
                     ) : (
                       bankMovements.map((m) => {
-                        const val = Number(m.fields?.amount || 0);
-                        const isIn = m.fields?.movementType === 'Ingreso';
+                        const isIn = m.movementType === 'Ingreso';
                         return (
                           <tr key={m.id}>
                             <td>
                               <span className="pk-badge pk-badge-blue">{m.id}</span>
                             </td>
-                            <td>{m.createdAt}</td>
-                            <td style={{ fontWeight: 700 }}>{m.fields?.accountName}</td>
+                            <td>{m.date}</td>
+                            <td style={{ fontWeight: 700 }}>{m.accountName}</td>
                             <td>
                               <span className={`pk-badge ${isIn ? 'pk-badge-emerald' : 'pk-badge-amber'}`}>
-                                {m.fields?.movementType}
+                                {m.movementType}
                               </span>
                             </td>
-                            <td>{m.fields?.reference || '—'}</td>
-                            <td>{m.fields?.concept}</td>
-                            <td style={{ fontWeight: 800, color: isIn ? 'var(--pk-emerald)' : 'var(--pk-rose)' }}>
+                            <td>{m.reference || '—'}</td>
+                            <td>{m.concept}</td>
+                            <td className="num" style={{ fontWeight: 800, color: isIn ? 'var(--pk-emerald)' : 'var(--pk-rose)' }}>
                               {isIn ? '+' : '-'}
-                              {formatCop(val)}
+                              {formatCop(m.amount)}
                             </td>
                             <td>
                               <PkPrintButton
                                 label="🖨️ Soporte"
                                 payload={{
-                                  document_type: 'RECIBO_CAJA',
+                                  document_type: 'SOPORTE BANCARIO',
                                   layout_variant: 'carta_membrete',
                                   document_number: m.id,
-                                  issue_date: m.createdAt,
-                                  customer_name: m.fields?.accountName || 'Tesorería',
-                                  payment_method: m.fields?.movementType || 'Bancario',
+                                  issue_date: m.date,
+                                  customer_name: m.accountName,
+                                  payment_method: m.movementType,
                                   extra_fields: {
-                                    Cuenta: m.fields?.accountName || '',
-                                    Referencia: m.fields?.reference || 'N/A',
+                                    Cuenta: m.accountName,
+                                    Referencia: m.reference || 'N/A',
                                   },
                                   items: [
                                     {
                                       code: m.id,
-                                      description: m.fields?.concept || 'Movimiento bancario',
+                                      description: m.concept,
                                       quantity: 1,
-                                      unit_price: val,
-                                      subtotal: val,
+                                      unit_price: m.amount,
+                                      subtotal: m.amount,
                                     },
                                   ],
-                                  grand_total: val,
+                                  grand_total: m.amount,
                                 }}
                               />
                             </td>
@@ -534,3 +827,5 @@ export const CajaView: React.FC = () => {
     </div>
   );
 };
+
+export default CajaView;
