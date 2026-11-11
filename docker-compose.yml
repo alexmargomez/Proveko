@@ -1,57 +1,356 @@
+x-service-env: &service-common-env
+  APP_ENV: ${APP_ENV:-development}
+  DB_HOST: db
+  DB_PORT: 5432
+  POSTGRES_DB: ${POSTGRES_DB:-control_plane_db}
+  DB_USER: ${POSTGRES_USER:-postgres}
+  DB_PASSWORD: ${POSTGRES_PASSWORD:-change_me_postgres_secret_2026}
+  DB_SSLMODE: ${DB_SSLMODE:-disable}
+  S2S_SHARED_KEY: ${S2S_SHARED_KEY:-change_me_64_char_s2s_mesh_shared_key_2026}
+  GATEWAY_URL: ${GATEWAY_URL:-http://core:4000}
+  ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:4000,http://localhost:5173}
+
 services:
   db:
     image: postgres:16-alpine
     container_name: proveko_db
     restart: unless-stopped
-    command: ["postgres", "-c", "max_connections=300"]
+    command: ["postgres", "-c", "max_connections=600"]
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-proveko_control_db}
+      POSTGRES_DB: ${POSTGRES_DB:-control_plane_db}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-proveko_master_secret_2026}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_postgres_secret_2026}
     ports:
       - "${DB_EXTERNAL_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./core/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-proveko_control_db}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-control_plane_db}"]
       interval: 5s
       timeout: 5s
       retries: 5
     networks:
-      - internal
+      - mesh
 
   core:
-    image: proveko-go:latest
     build:
-      context: .
+      context: ./core
       dockerfile: Dockerfile
     container_name: proveko_core
     restart: unless-stopped
     ports:
-      - "${FRONTEND_PORT:-5173}:5173"
-      - "${BACKEND_PORT:-4000}:4000"
+      - "${PORT:-4000}:4000"
     environment:
-      FRONTEND_PORT: 5173
-      BACKEND_PORT: 4000
-      DB_HOST: db
-      DB_PORT: 5432
-      POSTGRES_DB: ${POSTGRES_DB:-proveko_control_db}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-proveko_master_secret_2026}
-      APP_DOMAIN: ${APP_DOMAIN:-localhost}
-      APP_URL: ${APP_URL:-http://localhost:4000}
-      JWT_MASTER_SEED: ${JWT_MASTER_SEED:-proveko_alpanel_jwt_master_seed_2026}
-      PROVEKO_CLUSTER_SECRET: ${PROVEKO_CLUSTER_SECRET:-proveko_alpanel_cluster_hmac_secret_2026}
-      PROVEKO_VAULT_KEK: ${PROVEKO_VAULT_KEK:-proveko_alpanel_aes256_kek_master_2026}
+      <<: *service-common-env
+      SERVICE_NAME: ms-core
+      PORT: 4000
+      JWT_SECRET: ${JWT_SECRET:-change_me_64_char_jwt_signing_secret_2026}
+      VAULT_KEK: ${VAULT_KEK:-change_me_64_char_aes256_vault_kek_2026}
+      CORE_ED25519_SEED: ${CORE_ED25519_SEED:-change_me_ed25519_seed_32_bytes!}
+      CORE_PRIVATE_KEY: ${CORE_PRIVATE_KEY:-}
+      SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL:-superadmin@plataforma.local}
+      SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD:-ChangeMeSuperAdmin2026*}
+      MS_PLATFORM_URL: http://ms-platform:4100
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4000/api/v1/health >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     depends_on:
       db:
         condition: service_healthy
     networks:
-      - internal
+      - mesh
+
+  ms-platform:
+    build:
+      context: ./services/ms-platform
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *service-common-env
+      SERVICE_NAME: ms-platform
+      PORT: 4100
+      SERVICE_PUBLIC_URL: http://ms-platform:4100
+    depends_on:
+      core:
+        condition: service_healthy
+    networks:
+      - mesh
+
+  ms-facturacion:
+    build:
+      context: ./services/ms-facturacion
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *service-common-env
+      SERVICE_NAME: ms-facturacion
+      PORT: 4101
+      SERVICE_PUBLIC_URL: http://ms-facturacion:4101
+    depends_on:
+      db:
+        condition: service_healthy
+      core:
+        condition: service_healthy
+    networks:
+      - mesh
+
+  ms-clientes:
+    build:
+      context: ./services/ms-clientes
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *service-common-env
+      SERVICE_NAME: ms-clientes
+      PORT: 4102
+      SERVICE_PUBLIC_URL: http://ms-clientes:4102
+    depends_on:
+      db:
+        condition: service_healthy
+      core:
+        condition: service_healthy
+    networks:
+      - mesh
+
+  ms-inventario:
+    build:
+      context: ./services/ms-inventario
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *service-common-env
+      SERVICE_NAME: ms-inventario
+      PORT: 4103
+      SERVICE_PUBLIC_URL: http://ms-inventario:4103
+    depends_on:
+      db:
+        condition: service_healthy
+      core:
+        condition: service_healthy
+    networks:
+      - mesh
+
+  ms-caja:
+    build:
+      context: ./services/ms-caja
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *service-common-env
+      SERVICE_NAME: ms-caja
+      PORT: 4104
+      SERVICE_PUBLIC_URL: http://ms-caja:4104
+    depends_on:
+      db:
+        condition: service_healthy
+      core:
+        condition: service_healthy
+    networks:
+      - mesh
+
+  ms-comandas:
+    build:
+      context: ./services/ms-comandas
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *service-common-env
+      SERVICE_NAME: ms-comandas
+      PORT: 4105
+      SERVICE_PUBLIC_URL: http://ms-comandas:4105
+    depends_on:
+      db:
+        condition: service_healthy
+      core:
+        condition: service_healthy
+    networks:
+      - mesh
+
+  ms-hoteleria:
+    build:
+      context: ./services/ms-hoteleria
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *service-common-env
+      SERVICE_NAME: ms-hoteleria
+      PORT: 4106
+      SERVICE_PUBLIC_URL: http://ms-hoteleria:4106
+    depends_on:
+      db:
+        condition: service_healthy
+      core:
+        condition: service_healthy
+    networks:
+      - mesh
+
+  ms-taller:
+    build:
+      context: ./services/ms-taller
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *service-common-env
+      SERVICE_NAME: ms-taller
+      PORT: 4107
+      SERVICE_PUBLIC_URL: http://ms-taller:4107
+    depends_on:
+      db:
+        condition: service_healthy
+      core:
+        condition: service_healthy
+    networks:
+      - mesh
+
+  ms-bascula:
+    build:
+      context: ./services/ms-bascula
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *service-common-env
+      SERVICE_NAME: ms-bascula
+      PORT: 4108
+      SERVICE_PUBLIC_URL: http://ms-bascula:4108
+    depends_on:
+      db:
+        condition: service_healthy
+      core:
+        condition: service_healthy
+    networks:
+      - mesh
+
+  ms-compras:
+    build:
+      context: ./services/ms-compras
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *service-common-env
+      SERVICE_NAME: ms-compras
+      PORT: 4109
+      SERVICE_PUBLIC_URL: http://ms-compras:4109
+    depends_on:
+      db:
+        condition: service_healthy
+      core:
+        condition: service_healthy
+    networks:
+      - mesh
+
+  ms-agenda:
+    build:
+      context: ./services/ms-agenda
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *service-common-env
+      SERVICE_NAME: ms-agenda
+      PORT: 4110
+      SERVICE_PUBLIC_URL: http://ms-agenda:4110
+    depends_on:
+      db:
+        condition: service_healthy
+      core:
+        condition: service_healthy
+    networks:
+      - mesh
+
+  ms-taquilla:
+    build:
+      context: ./services/ms-taquilla
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *service-common-env
+      SERVICE_NAME: ms-taquilla
+      PORT: 4111
+      SERVICE_PUBLIC_URL: http://ms-taquilla:4111
+    depends_on:
+      db:
+        condition: service_healthy
+      core:
+        condition: service_healthy
+    networks:
+      - mesh
+
+  ms-nomina:
+    build:
+      context: ./services/ms-nomina
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *service-common-env
+      SERVICE_NAME: ms-nomina
+      PORT: 4112
+      SERVICE_PUBLIC_URL: http://ms-nomina:4112
+    depends_on:
+      db:
+        condition: service_healthy
+      core:
+        condition: service_healthy
+    networks:
+      - mesh
+
+  ms-contabilidad:
+    build:
+      context: ./services/ms-contabilidad
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *service-common-env
+      SERVICE_NAME: ms-contabilidad
+      PORT: 4113
+      SERVICE_PUBLIC_URL: http://ms-contabilidad:4113
+    depends_on:
+      db:
+        condition: service_healthy
+      core:
+        condition: service_healthy
+    networks:
+      - mesh
+
+  ms-reportes:
+    build:
+      context: ./services/ms-reportes
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *service-common-env
+      SERVICE_NAME: ms-reportes
+      PORT: 4114
+      SERVICE_PUBLIC_URL: http://ms-reportes:4114
+    depends_on:
+      db:
+        condition: service_healthy
+      core:
+        condition: service_healthy
+    networks:
+      - mesh
+
+  ms-impresiones:
+    build:
+      context: ./services/ms-impresiones
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *service-common-env
+      SERVICE_NAME: ms-impresiones
+      PORT: 4115
+      SERVICE_PUBLIC_URL: http://ms-impresiones:4115
+    depends_on:
+      db:
+        condition: service_healthy
+      core:
+        condition: service_healthy
+    networks:
+      - mesh
 
 networks:
-  internal:
+  mesh:
     driver: bridge
 
 volumes:

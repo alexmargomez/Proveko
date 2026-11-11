@@ -1,9 +1,26 @@
-go 1.22.2
+go 1.22
 
 use (
 	.
 	./core
 	./pkg
 	./proto
-	./services
+	./services/ms-agenda
+	./services/ms-bascula
+	./services/ms-caja
+	./services/ms-clientes
+	./services/ms-comandas
+	./services/ms-compras
+	./services/ms-contabilidad
+	./services/ms-facturacion
+	./services/ms-hoteleria
+	./services/ms-impresiones
+	./services/ms-inventario
+	./services/ms-nomina
+	./services/ms-platform
+	./services/ms-reportes
+	./services/ms-taller
+	./services/ms-taquilla
+	./tests
+	./tools/scaffold-ms
 )

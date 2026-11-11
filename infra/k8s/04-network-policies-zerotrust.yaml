@@ -1,21 +1,12 @@
-# ==============================================================================
-# PROVEKO — Políticas de Red Zero-Trust en Kubernetes (`NetworkPolicy`)
-# ==============================================================================
-# 1. Ningún Pod de Microservicio (`role: ms-host-runner`) acepta conexiones
-#    entrantes de nadie excepto del Pod `api-gateway` (`role: api-gateway`).
-# 2. El StatefulSet de PostgreSQL (`app: proveko-db`) solo acepta conexiones TCP
-#    en el puerto 5432 desde `core-service`, `ms-host-runner` y `db-migrator`.
-# ==============================================================================
-
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: microservices-allow-only-api-gateway
+  name: microservices-zerotrust-ingress
   namespace: proveko
 spec:
   podSelector:
     matchLabels:
-      role: ms-host-runner
+      role: domain-microservice
   policyTypes:
     - Ingress
   ingress:
@@ -24,6 +15,8 @@ spec:
             matchLabels:
               role: api-gateway
       ports:
+        - protocol: TCP
+          port: 4100
         - protocol: TCP
           port: 4101
         - protocol: TCP
@@ -36,6 +29,40 @@ spec:
           port: 4105
         - protocol: TCP
           port: 4106
+        - protocol: TCP
+          port: 4107
+        - protocol: TCP
+          port: 4108
+        - protocol: TCP
+          port: 4109
+        - protocol: TCP
+          port: 4110
+        - protocol: TCP
+          port: 4111
+        - protocol: TCP
+          port: 4112
+        - protocol: TCP
+          port: 4113
+        - protocol: TCP
+          port: 4114
+        - protocol: TCP
+          port: 4115
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gateway-allow-s2s-from-microservices
+  namespace: proveko
+spec:
+  podSelector:
+    matchLabels:
+      role: api-gateway
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 4000
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -52,13 +79,10 @@ spec:
     - from:
         - podSelector:
             matchLabels:
-              role: core-service
+              role: api-gateway
         - podSelector:
             matchLabels:
-              role: ms-host-runner
-        - podSelector:
-            matchLabels:
-              role: db-migrator
+              role: domain-microservice
       ports:
         - protocol: TCP
           port: 5432
