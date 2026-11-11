@@ -3,7 +3,7 @@ package corev1
 import (
 	"context"
 
-	_ "github.com/alexmargomez/proveko/proto"
+	_ "platform-contracts"
 	"google.golang.org/grpc"
 )
 

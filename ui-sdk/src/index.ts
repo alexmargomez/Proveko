@@ -1,4 +1,3 @@
-export * from './types/domain';
-export * from './context/ProvekoContext';
-export * from './components/SdkPrimitives';
-export * from './components/GlobalEntityDialogs';
+export * from './types/platform';
+export * from './context/PlatformContext';
+export * from './components/Primitives';

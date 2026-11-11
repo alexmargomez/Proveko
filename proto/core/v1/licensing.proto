@@ -1,6 +1,6 @@
 syntax = "proto3";
 package proveko.core.v1;
-option go_package = "github.com/alexmargomez/proveko/proto/core/v1;corev1";
+option go_package = "platform-contracts/core/v1;corev1";
 
 service LicensingService {
   rpc ResolveTenantContext(ResolveTenantRequest) returns (TenantLicenseContext);

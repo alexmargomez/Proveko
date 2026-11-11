@@ -1,6 +1,6 @@
 syntax = "proto3";
 package proveko.hospitality.v1;
-option go_package = "github.com/alexmargomez/proveko/proto/hospitality/v1;hospitalityv1";
+option go_package = "platform-contracts/hospitality/v1;hospitalityv1";
 
 service HospitalityService {
   rpc CompleteRoomCheckout(RoomCheckoutEvent) returns (RoomCheckoutResponse);

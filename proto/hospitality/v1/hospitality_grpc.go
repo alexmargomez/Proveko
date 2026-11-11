@@ -3,13 +3,14 @@ package hospitalityv1
 import (
 	"context"
 
-	_ "github.com/alexmargomez/proveko/proto"
 	"google.golang.org/grpc"
+	_ "platform-contracts"
 )
 
 type RoomCheckoutEvent struct {
-	RoomID        string `json:"room_id"`
-	InvoiceNumber string `json:"invoice_number"`
+	IdempotencyKey string `json:"idempotency_key"`
+	RoomID         string `json:"room_id"`
+	InvoiceNumber  string `json:"invoice_number"`
 }
 
 type RoomCheckoutResponse struct {
