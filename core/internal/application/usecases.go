@@ -177,7 +177,15 @@ func (s *CoreService) createTenantInternal(ctx context.Context, in domain.Create
 	}
 
 	cat := s.catalog.Catalog()
-	svcs, mods, submods, feats := normalizeDefaultSubscriptions(cat, in.Services, in.Modules, in.Submodules, in.Features)
+	requestedSvcs := in.Services
+	if len(requestedSvcs) == 0 {
+		presetKey := strings.TrimSpace(in.BusinessPreset)
+		if presetKey == "" {
+			presetKey = strings.TrimSpace(in.Industry)
+		}
+		requestedSvcs = resolvePresetServices(cat, presetKey)
+	}
+	svcs, mods, submods, feats := normalizeDefaultSubscriptions(cat, requestedSvcs, in.Modules, in.Submodules, in.Features)
 	if err := licensegate.ValidateSubscriptionState4(cat, svcs, mods, submods, feats); err != nil {
 		return nil, err
 	}
@@ -411,6 +419,55 @@ func (s *CoreService) defaultSuperAdminTenant(ctx context.Context) (*domain.Tena
 	return all[0].Clone(), nil
 }
 
+func (s *CoreService) RepairEmptyModuleTenants(ctx context.Context) error {
+	tenants, err := s.repo.List(ctx)
+	if err != nil {
+		return err
+	}
+	cat := s.catalog.Catalog()
+	for _, ten := range tenants {
+		if len(ten.ActiveServices) > 0 && len(ten.ActiveModules) == 0 {
+			svcs, mods, submods, feats := normalizeDefaultSubscriptions(cat, ten.ActiveServices, nil, nil, nil)
+			ten.ActiveServices = svcs
+			ten.ActiveModules = mods
+			ten.ActiveSubmodules = submods
+			ten.ActiveFeatures = feats
+			if err := s.repo.UpdateSubscriptions(ctx, ten); err != nil {
+				return err
+			}
+			s.invalidateTenantCache(ten.TenantID)
+		}
+	}
+	return nil
+}
+
+func resolvePresetServices(cat []licensegate.ServiceManifest, preset string) []string {
+	presetCategories := map[string][]string{
+		"comercio":    {"Comercial", "Logística", "Finanzas", "Abastecimiento", "Gerencia", "Transversal"},
+		"automotriz":  {"Comercial", "Automotriz", "Logística", "Finanzas", "Abastecimiento", "Gerencia", "Transversal"},
+		"taller":      {"Comercial", "Automotriz", "Logística", "Finanzas", "Abastecimiento", "Gerencia", "Transversal"},
+		"restaurante": {"Gastronomía", "Comercial", "Logística", "Finanzas", "Abastecimiento", "Gerencia", "Transversal"},
+		"hotel":       {"Hospitalidad", "Gastronomía", "Comercial", "Servicios", "Finanzas", "Gerencia", "Transversal"},
+		"logistica":   {"Logística Pesada", "Comercial", "Logística", "Finanzas", "Gerencia", "Transversal"},
+		"bascula":     {"Logística Pesada", "Comercial", "Logística", "Finanzas", "Gerencia", "Transversal"},
+	}
+	allowed, ok := presetCategories[strings.ToLower(strings.TrimSpace(preset))]
+	if !ok || len(allowed) == 0 {
+		return nil
+	}
+	catSet := make(map[string]bool, len(allowed))
+	for _, c := range allowed {
+		catSet[c] = true
+	}
+	var svcs []string
+	for _, svc := range cat {
+		if catSet[svc.Category] {
+			svcs = append(svcs, svc.ServiceKey)
+		}
+	}
+	return svcs
+}
+
 func normalizeDefaultSubscriptions(cat []licensegate.ServiceManifest, svcs, mods, submods, feats []string) ([]string, []string, []string, []string) {
 	var outSvcs []string
 	if len(svcs) > 0 {
@@ -426,7 +483,7 @@ func normalizeDefaultSubscriptions(cat []licensegate.ServiceManifest, svcs, mods
 	}
 
 	var outMods []string
-	if mods != nil {
+	if len(mods) > 0 {
 		outMods = dedupeStrings(mods)
 	} else {
 		for _, s := range cat {
@@ -446,7 +503,7 @@ func normalizeDefaultSubscriptions(cat []licensegate.ServiceManifest, svcs, mods
 	}
 
 	var outSubmods []string
-	if submods != nil {
+	if len(submods) > 0 {
 		outSubmods = dedupeStrings(submods)
 	} else {
 		for _, s := range cat {
@@ -466,7 +523,7 @@ func normalizeDefaultSubscriptions(cat []licensegate.ServiceManifest, svcs, mods
 	}
 
 	var outFeats []string
-	if feats != nil {
+	if len(feats) > 0 {
 		outFeats = dedupeStrings(feats)
 	} else {
 		for _, s := range cat {

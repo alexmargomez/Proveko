@@ -272,51 +272,55 @@ export const App: React.FC = () => {
   }
 
   return (
-    <div className="pk-shell">
-      <SidebarMenu
-        showAdminPanel={false}
-        onToggleAdminPanel={(show) => {
-          if (show) setImpersonatingWorkstation(false);
-        }}
-      />
-      <div className="pk-main">
-        {isSuperAdmin && impersonatingWorkstation && (
-          <div
-            role="region"
-            aria-label="Modo Impersonación Corporativa"
-            style={{
-              background: '#1e3a8a',
-              color: '#ffffff',
-              padding: '8px 20px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-              fontSize: 12.5,
-              fontWeight: 700,
-              borderBottom: '1px solid #1d4ed8',
-            }}
+    <div style={{ width: '100%', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      {isSuperAdmin && impersonatingWorkstation && (
+        <div
+          role="region"
+          aria-label="Modo Impersonación Corporativa"
+          style={{
+            background: '#1e3a8a',
+            color: '#ffffff',
+            padding: '8px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            fontSize: 12.5,
+            fontWeight: 700,
+            borderBottom: '1px solid #1d4ed8',
+          }}
+        >
+          <span>
+            Modo Impersonación Corporativa Activo: Operando en{' '}
+            <strong>{tenant?.companyName || 'Empresa'}</strong> (NIT {tenant?.nit || 'N/A'})
+          </span>
+          <button
+            type="button"
+            className="pk-btn pk-btn-sm"
+            style={{ background: '#ffffff', color: '#0f172a', fontWeight: 800 }}
+            onClick={() => setImpersonatingWorkstation(false)}
           >
-            <span>
-              Modo Impersonación Corporativa Activo: Operando en{' '}
-              <strong>{tenant?.companyName || 'Empresa'}</strong> (NIT {tenant?.nit || 'N/A'})
-            </span>
-            <button
-              type="button"
-              className="pk-btn pk-btn-sm"
-              style={{ background: '#ffffff', color: '#0f172a', fontWeight: 800 }}
-              onClick={() => setImpersonatingWorkstation(false)}
-            >
-              Salir de Impersonación / Volver al Panel Corporativo
-            </button>
-          </div>
-        )}
-        <TopModuleTabs
+            Salir de Impersonación / Volver al Panel Corporativo
+          </button>
+        </div>
+      )}
+
+      <TopModuleTabs
+        showAdminPanel={false}
+        onOpenAdmin={() => setImpersonatingWorkstation(false)}
+      />
+
+      <div className="pk-workstation" style={{ flex: 1 }}>
+        <SidebarMenu
           showAdminPanel={false}
-          onOpenAdmin={() => setImpersonatingWorkstation(false)}
+          onToggleAdminPanel={(show) => {
+            if (show) setImpersonatingWorkstation(false);
+          }}
         />
-        <main className="pk-stage">
-          <RemoteServiceStage />
+        <main className="pk-main">
+          <div className="pk-stage">
+            <RemoteServiceStage />
+          </div>
         </main>
       </div>
     </div>

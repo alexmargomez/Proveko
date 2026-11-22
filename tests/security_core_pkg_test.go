@@ -184,6 +184,44 @@ func TestAuthArgon2idRBACAndPlatformGatewayDelivery(t *testing.T) {
 		t.Fatalf("expected 4-level default activeSubmodules to be populated on tenant registration")
 	}
 
+	// 4b. Public registration with empty arrays ([]) and businessPreset must auto-populate default modules, submodules, and features
+	presetResp, presetRaw := doHTTPRequest(t, cl.coreURL, http.MethodPost, "/api/v1/core/register", map[string]any{
+		"companyName":      "Distribuidora Central SAS",
+		"nit":              "901888777-2",
+		"businessPreset":   "comercio",
+		"adminEmail":       "admin@distribuidoracentral.example.org",
+		"password":         "CentralSecurePass2026!",
+		"activeServices":   []string{},
+		"activeModules":    []string{},
+		"activeSubmodules": []string{},
+		"activeFeatures":   []string{},
+	}, nil)
+	if presetResp.StatusCode != http.StatusCreated && presetResp.StatusCode != http.StatusOK {
+		t.Fatalf("preset register failed (%d): %s", presetResp.StatusCode, string(presetRaw))
+	}
+	var presetReg struct {
+		Token  string `json:"token"`
+		Tenant struct {
+			ActiveServices   []string `json:"activeServices"`
+			ActiveModules    []string `json:"activeModules"`
+			ActiveSubmodules []string `json:"activeSubmodules"`
+			ActiveFeatures   []string `json:"activeFeatures"`
+		} `json:"tenant"`
+	}
+	if err := json.Unmarshal(presetRaw, &presetReg); err != nil {
+		t.Fatalf("unmarshal preset register: %v", err)
+	}
+	if len(presetReg.Tenant.ActiveServices) == 0 || len(presetReg.Tenant.ActiveModules) == 0 || len(presetReg.Tenant.ActiveSubmodules) == 0 {
+		t.Fatalf("empty-slice registration regression: expected non-empty activeServices/activeModules/activeSubmodules, got svcs=%d mods=%d submods=%d",
+			len(presetReg.Tenant.ActiveServices), len(presetReg.Tenant.ActiveModules), len(presetReg.Tenant.ActiveSubmodules))
+	}
+	presetPos, presetPosRaw := doHTTPRequest(t, cl.coreURL, http.MethodGet, "/api/v1/facturacion/pos-state", nil, map[string]string{
+		"Authorization": "Bearer " + presetReg.Token,
+	})
+	if presetPos.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK on /pos-state for newly registered preset tenant, got %d: %s", presetPos.StatusCode, string(presetPosRaw))
+	}
+
 	// 5. Wrong password and unknown user login must fail with 401
 	wrongPass, _ := doHTTPRequest(t, cl.coreURL, http.MethodPost, "/api/v1/auth/login", map[string]any{
 		"username": "hacker_superadmin@evil.example.org",
