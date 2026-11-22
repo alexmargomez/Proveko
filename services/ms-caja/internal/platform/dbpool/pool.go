@@ -131,7 +131,7 @@ func (m *Manager) CreateDatabaseIfAllowed(ctx context.Context, rawDBName string,
 	ctxT, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
 
-	adminPool, err := m.getOrOpenPool(ctxT, m.cfg.ControlDB)
+	adminPool, err := m.openControlOrBootstrap(ctxT)
 	if err != nil {
 		return "", err
 	}
@@ -153,11 +153,36 @@ func (m *Manager) CreateDatabaseIfAllowed(ctx context.Context, rawDBName string,
 	return cleanDB, nil
 }
 
+func (m *Manager) openControlOrBootstrap(ctx context.Context) (*pgxpool.Pool, error) {
+	pool, err := m.getOrOpenPool(ctx, m.cfg.ControlDB)
+	if err == nil {
+		return pool, nil
+	}
+	if !m.allowProvisioning || (!strings.Contains(err.Error(), "3D000") && !strings.Contains(strings.ToLower(err.Error()), "does not exist")) {
+		return nil, err
+	}
+	if m.cfg.ControlDB == "" || m.cfg.ControlDB == "postgres" {
+		return nil, err
+	}
+	bootDSN := m.cfg.BuildDSN("postgres")
+	bootConn, bootErr := pgx.Connect(ctx, bootDSN)
+	if bootErr != nil {
+		return nil, err
+	}
+	quoted := pgx.Identifier{m.cfg.ControlDB}.Sanitize()
+	_, createErr := bootConn.Exec(ctx, "CREATE DATABASE "+quoted)
+	_ = bootConn.Close(ctx)
+	if createErr != nil && !strings.Contains(createErr.Error(), "42P04") && !strings.Contains(strings.ToLower(createErr.Error()), "already exists") {
+		return nil, createErr
+	}
+	return m.getOrOpenPool(ctx, m.cfg.ControlDB)
+}
+
 func (m *Manager) OpenControlPool(ctx context.Context, schemaDDL string) (*pgxpool.Pool, error) {
 	if !m.HasPostgres() {
 		return nil, errors.New("postgres host not configured")
 	}
-	pool, err := m.getOrOpenPool(ctx, m.cfg.ControlDB)
+	pool, err := m.openControlOrBootstrap(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -266,9 +291,25 @@ func (m *Manager) getOrOpenPool(ctx context.Context, dbName string) (*pgxpool.Po
 	if err != nil {
 		return nil, err
 	}
-	if err := pool.Ping(ctx); err != nil {
+	var pingErr error
+	for attempt := 0; attempt < 5; attempt++ {
+		pingErr = pool.Ping(ctx)
+		if pingErr == nil {
+			break
+		}
+		if strings.Contains(pingErr.Error(), "3D000") || strings.Contains(strings.ToLower(pingErr.Error()), "does not exist") {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			pool.Close()
+			return nil, ctx.Err()
+		case <-time.After(time.Duration(attempt+1) * 400 * time.Millisecond):
+		}
+	}
+	if pingErr != nil {
 		pool.Close()
-		return nil, err
+		return nil, pingErr
 	}
 
 	var evicted *pgxpool.Pool

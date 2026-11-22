@@ -37,7 +37,10 @@ func main() {
 
 	pubKey, err := security.LoadVerifierPublicKey(cfg.CorePublicHex, cfg.DevEd25519Seed, cfg.IsProduction())
 	if err != nil {
-		log.Fatalf("[ms-hoteleria] failed to load verifier public key: %v", err)
+		if gwClient == nil {
+			log.Fatalf("[ms-hoteleria] failed to load verifier public key: %v", err)
+		}
+		log.Printf("[ms-hoteleria] awaiting dynamic Ed25519 public key from Gateway (%s)", cfg.GatewayURL)
 	}
 
 	replay := security.NewReplayGuard(16384)

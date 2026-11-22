@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"path"
 	"strings"
 	"time"
 
@@ -17,8 +18,6 @@ import (
 	"platform-pkg/security"
 )
 
-// Client conecta cualquier microservicio exclusivamente contra GATEWAY_URL
-// para obtener la llave pública Ed25519, auto-registrarse y ejecutar invocaciones S2S.
 type Client struct {
 	gatewayURL string
 	s2sKey     string
@@ -33,21 +32,21 @@ func NewClient(gatewayURL, s2sKey string) *Client {
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
-			Timeout:   3 * time.Second,
+			Timeout:   2 * time.Second,
 			KeepAlive: 30 * time.Second,
 		}).DialContext,
 		MaxIdleConns:          128,
 		MaxIdleConnsPerHost:   32,
 		IdleConnTimeout:       60 * time.Second,
-		TLSHandshakeTimeout:   5 * time.Second,
-		ResponseHeaderTimeout: 10 * time.Second,
+		TLSHandshakeTimeout:   4 * time.Second,
+		ResponseHeaderTimeout: 5 * time.Second,
 	}
 	return &Client{
 		gatewayURL: trimmed,
 		s2sKey:     s2sKey,
 		httpClient: &http.Client{
 			Transport: transport,
-			Timeout:   10 * time.Second,
+			Timeout:   6 * time.Second,
 		},
 	}
 }
@@ -86,16 +85,28 @@ func (c *Client) RegisterWithRetry(manifestJSON []byte, servicePublicURL string)
 		return
 	}
 	go func() {
-		backoffs := []time.Duration{0, 300 * time.Millisecond, 1 * time.Second, 2 * time.Second, 5 * time.Second}
-		for _, wait := range backoffs {
-			if wait > 0 {
-				time.Sleep(wait)
+		initialBackoffs := []time.Duration{0, 300 * time.Millisecond, 800 * time.Millisecond, 1500 * time.Millisecond, 3 * time.Second}
+		step := 0
+		for {
+			if step < len(initialBackoffs) {
+				if wait := initialBackoffs[step]; wait > 0 {
+					time.Sleep(wait)
+				}
+				step++
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-			err := c.RegisterOnce(ctx, manifestJSON, servicePublicURL)
-			cancel()
+			ctxKey, cancelKey := context.WithTimeout(context.Background(), 4*time.Second)
+			if pubHex, err := c.FetchVerifierPublicKey(ctxKey); err == nil && pubHex != "" {
+				_ = security.SetDynamicVerifierKeyHex(pubHex)
+			}
+			cancelKey()
+
+			ctxReg, cancelReg := context.WithTimeout(context.Background(), 4*time.Second)
+			err := c.RegisterOnce(ctxReg, manifestJSON, servicePublicURL)
+			cancelReg()
 			if err == nil {
-				return
+				time.Sleep(20 * time.Second)
+			} else if step >= len(initialBackoffs) {
+				time.Sleep(3 * time.Second)
 			}
 		}
 	}()
@@ -132,7 +143,7 @@ func (c *Client) RegisterOnce(ctx context.Context, manifestJSON []byte, serviceP
 
 func (c *Client) CallS2S(ctx context.Context, targetService, method, endpointPath, idemKey string, reqBody any, respDst any) error {
 	if c == nil || c.gatewayURL == "" {
-		return nil
+		return apperr.Upstream("Dirección del Gateway S2S no configurada")
 	}
 	tc := authguard.FromContext(ctx)
 	if strings.TrimSpace(tc.RawPassport) == "" {
@@ -142,8 +153,15 @@ func (c *Client) CallS2S(ctx context.Context, targetService, method, endpointPat
 	if err != nil {
 		return apperr.Internal("No fue posible generar nonce criptográfico S2S")
 	}
-	cleanEndpoint := "/" + strings.TrimLeft(endpointPath, "/")
+	cleanEndpoint := path.Clean("/" + strings.TrimLeft(endpointPath, "/"))
 	targetURL := fmt.Sprintf("%s/api/v1/s2s/%s%s", c.gatewayURL, targetService, cleanEndpoint)
+
+	callCtx := ctx
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, 4*time.Second)
+		defer cancel()
+	}
 
 	var bodyReader io.Reader
 	if reqBody != nil {
@@ -154,16 +172,18 @@ func (c *Client) CallS2S(ctx context.Context, targetService, method, endpointPat
 		bodyReader = bytes.NewReader(raw)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, targetURL, bodyReader)
+	req, err := http.NewRequestWithContext(callCtx, method, targetURL, bodyReader)
 	if err != nil {
 		return apperr.Upstream("Error al preparar solicitud hacia " + targetService)
 	}
 	if reqBody != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	hopSig := security.SignHopMAC(c.s2sKey, tc.RawPassport, hopNonce, method, targetService, cleanEndpoint)
 	req.Header.Set(security.S2SKeyHeader, c.s2sKey)
 	req.Header.Set(security.PassportHeader, tc.RawPassport)
 	req.Header.Set(security.HopNonceHeader, hopNonce)
+	req.Header.Set(security.HopSigHeader, hopSig)
 	if strings.TrimSpace(idemKey) != "" {
 		req.Header.Set("Idempotency-Key", strings.TrimSpace(idemKey))
 	} else if strings.TrimSpace(tc.IdempotencyKey) != "" {

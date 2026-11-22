@@ -25,7 +25,42 @@ const (
 	maxHopsPerRoot   = 16
 )
 
-var validTenantDBRegex = regexp.MustCompile("^db_[a-z0-9_]{3,50}$")
+var (
+	validTenantDBRegex = regexp.MustCompile("^db_[a-z0-9_]{3,50}$")
+	dynPubMu           sync.RWMutex
+	dynPubKey          ed25519.PublicKey
+)
+
+func SetDynamicVerifierKey(pub ed25519.PublicKey) {
+	if len(pub) != ed25519.PublicKeySize {
+		return
+	}
+	copied := make(ed25519.PublicKey, ed25519.PublicKeySize)
+	copy(copied, pub)
+	dynPubMu.Lock()
+	dynPubKey = copied
+	dynPubMu.Unlock()
+}
+
+func SetDynamicVerifierKeyHex(publicHex string) error {
+	rawPub, err := hex.DecodeString(strings.TrimSpace(publicHex))
+	if err != nil || len(rawPub) != ed25519.PublicKeySize {
+		return errors.New("invalid CORE_PUBLIC_KEY hex")
+	}
+	SetDynamicVerifierKey(ed25519.PublicKey(rawPub))
+	return nil
+}
+
+func GetDynamicVerifierKey() ed25519.PublicKey {
+	dynPubMu.RLock()
+	defer dynPubMu.RUnlock()
+	if len(dynPubKey) != ed25519.PublicKeySize {
+		return nil
+	}
+	out := make(ed25519.PublicKey, ed25519.PublicKeySize)
+	copy(out, dynPubKey)
+	return out
+}
 
 type PassportClaims struct {
 	TenantID       string   `json:"tid"`
@@ -146,7 +181,9 @@ func LoadVerifierPublicKey(publicHex, devSeed string, isProd bool) (ed25519.Publ
 		if err != nil || len(rawPub) != ed25519.PublicKeySize {
 			return nil, errors.New("invalid CORE_PUBLIC_KEY hex")
 		}
-		return ed25519.PublicKey(rawPub), nil
+		pub := ed25519.PublicKey(rawPub)
+		SetDynamicVerifierKey(pub)
+		return pub, nil
 	}
 	if isProd {
 		return nil, errors.New("CORE_PUBLIC_KEY is mandatory in production")
@@ -155,6 +192,7 @@ func LoadVerifierPublicKey(publicHex, devSeed string, isProd bool) (ed25519.Publ
 	priv := ed25519.NewKeyFromSeed(digest[:])
 	pub := make(ed25519.PublicKey, ed25519.PublicKeySize)
 	copy(pub, priv.Public().(ed25519.PublicKey))
+	SetDynamicVerifierKey(pub)
 	return pub, nil
 }
 
@@ -192,6 +230,9 @@ func SignPassport(priv ed25519.PrivateKey, claims PassportClaims, ttl time.Durat
 }
 
 func decodeAndVerifySignature(pub ed25519.PublicKey, token string) (PassportClaims, error) {
+	if len(pub) != ed25519.PublicKeySize {
+		pub = GetDynamicVerifierKey()
+	}
 	if len(pub) != ed25519.PublicKeySize {
 		return PassportClaims{}, errors.New("missing verifier Ed25519 public key")
 	}

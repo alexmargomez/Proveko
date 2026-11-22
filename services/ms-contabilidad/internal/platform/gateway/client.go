@@ -85,24 +85,29 @@ func (c *Client) RegisterWithRetry(manifestJSON []byte, servicePublicURL string)
 		return
 	}
 	go func() {
-		backoffs := []time.Duration{0, 300 * time.Millisecond, 1 * time.Second, 2 * time.Second, 5 * time.Second}
-		for _, wait := range backoffs {
-			if wait > 0 {
-				time.Sleep(wait)
+		initialBackoffs := []time.Duration{0, 300 * time.Millisecond, 800 * time.Millisecond, 1500 * time.Millisecond, 3 * time.Second}
+		step := 0
+		for {
+			if step < len(initialBackoffs) {
+				if wait := initialBackoffs[step]; wait > 0 {
+					time.Sleep(wait)
+				}
+				step++
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-			err := c.RegisterOnce(ctx, manifestJSON, servicePublicURL)
-			cancel()
+			ctxKey, cancelKey := context.WithTimeout(context.Background(), 4*time.Second)
+			if pubHex, err := c.FetchVerifierPublicKey(ctxKey); err == nil && pubHex != "" {
+				_ = security.SetDynamicVerifierKeyHex(pubHex)
+			}
+			cancelKey()
+
+			ctxReg, cancelReg := context.WithTimeout(context.Background(), 4*time.Second)
+			err := c.RegisterOnce(ctxReg, manifestJSON, servicePublicURL)
+			cancelReg()
 			if err == nil {
-				break
+				time.Sleep(20 * time.Second)
+			} else if step >= len(initialBackoffs) {
+				time.Sleep(3 * time.Second)
 			}
-		}
-		ticker := time.NewTicker(20 * time.Second)
-		defer ticker.Stop()
-		for range ticker.C {
-			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-			_ = c.RegisterOnce(ctx, manifestJSON, servicePublicURL)
-			cancel()
 		}
 	}()
 }
