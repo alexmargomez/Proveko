@@ -60,6 +60,9 @@ func NewRegistry(cfg config.CoreConfig, dbMgr *dbpool.Manager) (*Registry, error
 	if err := svc.SeedDemoTenant(context.Background(), config.EnvOr("DEMO_ADMIN_PASSWORD", "AdminPlataforma2026*")); err != nil {
 		return nil, err
 	}
+	if err := svc.RepairEmptyModuleTenants(context.Background()); err != nil {
+		return nil, err
+	}
 	return &Registry{
 		Service: svc,
 		Catalog: cat,

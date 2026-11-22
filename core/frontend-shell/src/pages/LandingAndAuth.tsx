@@ -77,17 +77,21 @@ export const LandingAndAuth: React.FC = () => {
         }
       }
 
-      const res = await apiPost<{ token?: string; role: string; tenant: TenantSummary }>('/api/v1/core/register', {
+      const payload: Record<string, unknown> = {
         companyName,
         nit,
         adminUsername: adminEmail,
         password: adminPass,
         businessPreset: preset,
-        activeServices,
-        activeModules,
-        activeSubmodules,
-        activeFeatures,
-      });
+      };
+      if (activeServices.length > 0) {
+        payload.activeServices = activeServices;
+        payload.activeModules = activeModules;
+        payload.activeSubmodules = activeSubmodules;
+        payload.activeFeatures = activeFeatures;
+      }
+
+      const res = await apiPost<{ token?: string; role: string; tenant: TenantSummary }>('/api/v1/core/register', payload);
       if (role === 'superadmin' && res.role === 'superadmin') {
         await refreshBootstrap();
         setPublicView('app');
@@ -104,8 +108,22 @@ export const LandingAndAuth: React.FC = () => {
     setPublicView(isAuthenticated ? 'app' : 'login');
   };
 
+  const darkHeaderBtnStyle: React.CSSProperties = {
+    background: '#1e293b',
+    color: '#e2e8f0',
+    borderColor: '#334155',
+  };
+
   return (
-    <div style={{ minHeight: '100vh', background: '#0f172a', color: '#ffffff', display: 'flex', flexDirection: 'column' }}>
+    <div
+      style={{
+        minHeight: '100vh',
+        background: 'radial-gradient(circle at 50% 18%, #1e293b 0%, #0f172a 62%)',
+        color: '#ffffff',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
       <header className="pk-topbar" style={{ borderBottomColor: '#1e293b' }}>
         <div className="pk-brand">
           <span style={{ background: '#2563eb', padding: '4px 9px', borderRadius: 7 }}>◆</span>
@@ -113,11 +131,11 @@ export const LandingAndAuth: React.FC = () => {
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           {isAuthenticated && (
-            <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={goStationOrLogin}>
+            <button type="button" className="pk-btn pk-btn-sm" style={darkHeaderBtnStyle} onClick={goStationOrLogin}>
               Ir a la Estación
             </button>
           )}
-          <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={() => setPublicView('login')}>
+          <button type="button" className="pk-btn pk-btn-sm" style={darkHeaderBtnStyle} onClick={() => setPublicView('login')}>
             Iniciar Sesión
           </button>
           <button type="button" className="pk-btn pk-btn-primary pk-btn-sm" onClick={() => setPublicView('register')}>
@@ -128,16 +146,52 @@ export const LandingAndAuth: React.FC = () => {
 
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
         {publicView === 'landing' && (
-          <div style={{ maxWidth: 920, textAlign: 'center' }}>
-            <span className="pk-badge pk-badge-blue" style={{ fontSize: 12, padding: '5px 12px' }}>
-              Plataforma Empresarial Distribuida Multi-Empresa
+          <div style={{ maxWidth: 960, textAlign: 'center' }}>
+            <span className="pk-badge pk-badge-blue" style={{ fontSize: 12, padding: '5px 14px' }}>
+              Plataforma Empresarial Distribuida Multi-Empresa con Base de Datos Aislada
             </span>
             <h1 style={{ fontSize: 40, fontWeight: 900, margin: '18px 0 12px', lineHeight: 1.15 }}>
               Gestión modular integrada para comercio, logística, servicios e industria
             </h1>
-            <p style={{ color: '#94a3b8', fontSize: 16, maxWidth: 720, margin: '0 auto 28px' }}>
-              Facturación, Inventario Multi-Bodega, Órdenes de Servicio, Hotelería, Comandas Gastronómicas, Pesaje Camionero, Cartera, Contabilidad y Documentos Corporativos.
+            <p style={{ color: '#94a3b8', fontSize: 16, maxWidth: 740, margin: '0 auto 24px', lineHeight: 1.55 }}>
+              Facturación POS y Electrónica, Inventario Multi-Bodega, Órdenes de Servicio, Hotelería, Comandas Gastronómicas, Pesaje Camionero, Cartera, Contabilidad y Documentos Corporativos.
             </p>
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                justifyContent: 'center',
+                gap: 8,
+                maxWidth: 820,
+                margin: '0 auto 28px',
+              }}
+            >
+              {[
+                '🧾 Punto de Venta y DIAN',
+                '📦 Inventario Multi-Bodega',
+                '👥 Clientes, Convenios y Cartera',
+                '🔧 Taller y Comisiones',
+                '🍽️ Mesas y Comandas',
+                '🏨 Hotelería y Reservas',
+                '⚖️ Báscula Camionera',
+                '📘 Contabilidad y Nómina',
+              ].map((pill) => (
+                <span
+                  key={pill}
+                  style={{
+                    background: 'rgba(30, 41, 59, 0.85)',
+                    border: '1px solid #334155',
+                    color: '#cbd5e1',
+                    padding: '6px 12px',
+                    borderRadius: 999,
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}
+                >
+                  {pill}
+                </span>
+              ))}
+            </div>
             <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
               <button
                 type="button"

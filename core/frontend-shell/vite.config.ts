@@ -11,6 +11,7 @@ const platformImportMapPlugin = (): Plugin => ({
     order: 'post',
     handler(html) {
       const injection = [
+        '    <link rel="stylesheet" href="/assets/index-DsNRyJVy.css" />',
         '    <link rel="stylesheet" href="/api/v1/platform/theme.css" />',
         '    <script type="importmap">',
         '      {',
