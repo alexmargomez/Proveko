@@ -214,7 +214,7 @@ func (r *Repository) CreatePucAccount(ctx context.Context, dbName, idemKey strin
 	if idemKey != "" {
 		var raw []byte
 		err := tx.QueryRow(ctx, `
-			SELECT response_json FROM accounting.idempotency_keys
+			SELECT response_json::text FROM accounting.idempotency_keys
 			WHERE scope = 'puc' AND idem_key = $1
 		`, idemKey).Scan(&raw)
 		if err == nil {
@@ -260,8 +260,8 @@ func (r *Repository) CreatePucAccount(ctx context.Context, dbName, idemKey strin
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO accounting.idempotency_keys (scope, idem_key, response_json)
-			VALUES ('puc', $1, $2)
-		`, idemKey, raw); err != nil {
+			VALUES ('puc', $1, $2::jsonb)
+		`, idemKey, string(raw)); err != nil {
 			return nil, err
 		}
 	}
@@ -286,7 +286,7 @@ func (r *Repository) CreateVoucher(ctx context.Context, dbName, idemKey string, 
 	if idemKey != "" {
 		var raw []byte
 		err := tx.QueryRow(ctx, `
-			SELECT response_json FROM accounting.idempotency_keys
+			SELECT response_json::text FROM accounting.idempotency_keys
 			WHERE scope = 'voucher' AND idem_key = $1
 		`, idemKey).Scan(&raw)
 		if err == nil {
@@ -368,8 +368,8 @@ func (r *Repository) CreateVoucher(ctx context.Context, dbName, idemKey string, 
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO accounting.idempotency_keys (scope, idem_key, response_json)
-			VALUES ('voucher', $1, $2)
-		`, idemKey, raw); err != nil {
+			VALUES ('voucher', $1, $2::jsonb)
+		`, idemKey, string(raw)); err != nil {
 			return nil, err
 		}
 	}

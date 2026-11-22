@@ -221,7 +221,7 @@ func (r *Repository) CreateResource(ctx context.Context, dbName, idemKey string,
 	if idemKey != "" {
 		var raw []byte
 		err := tx.QueryRow(ctx, `
-			SELECT response_json FROM scheduling.idempotency_keys
+			SELECT response_json::text FROM scheduling.idempotency_keys
 			WHERE scope = 'resource' AND idem_key = $1
 		`, idemKey).Scan(&raw)
 		if err == nil {
@@ -258,8 +258,8 @@ func (r *Repository) CreateResource(ctx context.Context, dbName, idemKey string,
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO scheduling.idempotency_keys (scope, idem_key, response_json)
-			VALUES ('resource', $1, $2)
-		`, idemKey, raw); err != nil {
+			VALUES ('resource', $1, $2::jsonb)
+		`, idemKey, string(raw)); err != nil {
 			return nil, err
 		}
 	}
@@ -284,7 +284,7 @@ func (r *Repository) CreateAppointment(ctx context.Context, dbName, idemKey stri
 	if idemKey != "" {
 		var raw []byte
 		err := tx.QueryRow(ctx, `
-			SELECT response_json FROM scheduling.idempotency_keys
+			SELECT response_json::text FROM scheduling.idempotency_keys
 			WHERE scope = 'appointment' AND idem_key = $1
 		`, idemKey).Scan(&raw)
 		if err == nil {
@@ -361,8 +361,8 @@ func (r *Repository) CreateAppointment(ctx context.Context, dbName, idemKey stri
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO scheduling.idempotency_keys (scope, idem_key, response_json)
-			VALUES ('appointment', $1, $2)
-		`, idemKey, raw); err != nil {
+			VALUES ('appointment', $1, $2::jsonb)
+		`, idemKey, string(raw)); err != nil {
 			return nil, err
 		}
 	}

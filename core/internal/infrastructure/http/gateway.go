@@ -531,7 +531,7 @@ func (g *GatewayServer) handleLogout(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   -1,
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
-		Secure:   g.cfg.IsProduction() || r.TLS != nil,
+		Secure:   r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https"),
 	})
 	httpx.JSON(w, http.StatusOK, map[string]any{"ok": true})
 }
@@ -742,7 +742,7 @@ func (g *GatewayServer) issueSession(w http.ResponseWriter, r *http.Request, ten
 		MaxAge:   int(sessionTTL.Seconds()),
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
-		Secure:   g.cfg.IsProduction() || r.TLS != nil,
+		Secure:   r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https"),
 	})
 	return tok, nil
 }

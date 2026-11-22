@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"time"
 
 	mscore "ms-core"
 	"ms-core/backend/gateway"
@@ -24,7 +25,17 @@ func main() {
 	}
 
 	dbMgr := dbpool.NewManager(cfg.CommonConfig, true)
-	reg, err := provisioning.NewRegistry(cfg, dbMgr)
+	var reg *provisioning.Registry
+	for attempt := 1; attempt <= 8; attempt++ {
+		reg, err = provisioning.NewRegistry(cfg, dbMgr)
+		if err == nil {
+			break
+		}
+		if attempt < 8 {
+			log.Printf("[ms-core] waiting for database initialization (attempt %d/8): %v", attempt, err)
+			time.Sleep(time.Duration(attempt) * time.Second)
+		}
+	}
 	if err != nil {
 		dbMgr.Close()
 		log.Fatalf("[ms-core] failed to initialize registry: %v", err)

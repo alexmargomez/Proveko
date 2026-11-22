@@ -20,8 +20,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-control_plane_db}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_postgres_secret_2026}
-    ports:
-      - "${DB_EXTERNAL_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./core/migrations:/docker-entrypoint-initdb.d:ro
@@ -75,7 +73,7 @@ services:
       SERVICE_PUBLIC_URL: http://ms-platform:4100
     depends_on:
       core:
-        condition: service_healthy
+        condition: service_started
     networks:
       - mesh
 
@@ -93,7 +91,7 @@ services:
       db:
         condition: service_healthy
       core:
-        condition: service_healthy
+        condition: service_started
     networks:
       - mesh
 
@@ -111,7 +109,7 @@ services:
       db:
         condition: service_healthy
       core:
-        condition: service_healthy
+        condition: service_started
     networks:
       - mesh
 
@@ -129,7 +127,7 @@ services:
       db:
         condition: service_healthy
       core:
-        condition: service_healthy
+        condition: service_started
     networks:
       - mesh
 
@@ -147,7 +145,7 @@ services:
       db:
         condition: service_healthy
       core:
-        condition: service_healthy
+        condition: service_started
     networks:
       - mesh
 
@@ -165,7 +163,7 @@ services:
       db:
         condition: service_healthy
       core:
-        condition: service_healthy
+        condition: service_started
     networks:
       - mesh
 
@@ -183,7 +181,7 @@ services:
       db:
         condition: service_healthy
       core:
-        condition: service_healthy
+        condition: service_started
     networks:
       - mesh
 
@@ -201,7 +199,7 @@ services:
       db:
         condition: service_healthy
       core:
-        condition: service_healthy
+        condition: service_started
     networks:
       - mesh
 
@@ -219,7 +217,7 @@ services:
       db:
         condition: service_healthy
       core:
-        condition: service_healthy
+        condition: service_started
     networks:
       - mesh
 
@@ -237,7 +235,7 @@ services:
       db:
         condition: service_healthy
       core:
-        condition: service_healthy
+        condition: service_started
     networks:
       - mesh
 
@@ -255,7 +253,7 @@ services:
       db:
         condition: service_healthy
       core:
-        condition: service_healthy
+        condition: service_started
     networks:
       - mesh
 
@@ -273,7 +271,7 @@ services:
       db:
         condition: service_healthy
       core:
-        condition: service_healthy
+        condition: service_started
     networks:
       - mesh
 
@@ -291,7 +289,7 @@ services:
       db:
         condition: service_healthy
       core:
-        condition: service_healthy
+        condition: service_started
     networks:
       - mesh
 
@@ -309,7 +307,7 @@ services:
       db:
         condition: service_healthy
       core:
-        condition: service_healthy
+        condition: service_started
     networks:
       - mesh
 
@@ -327,7 +325,7 @@ services:
       db:
         condition: service_healthy
       core:
-        condition: service_healthy
+        condition: service_started
     networks:
       - mesh
 
@@ -345,7 +343,7 @@ services:
       db:
         condition: service_healthy
       core:
-        condition: service_healthy
+        condition: service_started
     networks:
       - mesh
 

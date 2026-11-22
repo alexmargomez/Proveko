@@ -152,7 +152,7 @@ func checkIdemTx[T any](ctx context.Context, tx pgx.Tx, key string) (T, bool, er
 		return zero, false, apperr.Internal(err.Error())
 	}
 	var raw []byte
-	err := tx.QueryRow(ctx, `SELECT payload FROM inventory.idempotency_keys WHERE idem_key = $1`, k).Scan(&raw)
+	err := tx.QueryRow(ctx, `SELECT payload::text FROM inventory.idempotency_keys WHERE idem_key = $1`, k).Scan(&raw)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return zero, false, nil
 	}
@@ -175,7 +175,7 @@ func saveIdemTx(ctx context.Context, tx pgx.Tx, key string, val any) error {
 	if err != nil {
 		return apperr.Internal(err.Error())
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO inventory.idempotency_keys (idem_key, payload) VALUES ($1, $2) ON CONFLICT (idem_key) DO NOTHING`, k, b)
+	_, err = tx.Exec(ctx, `INSERT INTO inventory.idempotency_keys (idem_key, payload) VALUES ($1, $2::jsonb) ON CONFLICT (idem_key) DO NOTHING`, k, string(b))
 	return err
 }
 

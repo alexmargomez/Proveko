@@ -151,7 +151,7 @@ func loadIdempotentPayload[T any](ctx context.Context, tx pgx.Tx, scopedKey stri
 		return zero, false, err
 	}
 	var raw []byte
-	err := tx.QueryRow(ctx, `SELECT payload FROM customers.idempotency_keys WHERE idem_key = $1`, scopedKey).Scan(&raw)
+	err := tx.QueryRow(ctx, `SELECT payload::text FROM customers.idempotency_keys WHERE idem_key = $1`, scopedKey).Scan(&raw)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return zero, false, nil
 	}

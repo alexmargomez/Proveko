@@ -53,7 +53,7 @@ func (r *TenantRepository) fetchOne(ctx context.Context, p *pgxpool.Pool, whereC
 	var envRaw []byte
 	err := p.QueryRow(ctx, `
 		SELECT tenant_id, company_name, nit, admin_username, password_hash, role,
-		       db_name, encrypted_dsn_envelope, business_preset, status, created_at
+		       db_name, encrypted_dsn_envelope::text, business_preset, status, created_at
 		FROM core_control.tenants
 		`+whereClause, arg).Scan(
 		&t.TenantID, &t.CompanyName, &t.Nit, &t.AdminUsername, &t.PasswordHash, &t.Role,
@@ -84,7 +84,7 @@ func (r *TenantRepository) List(ctx context.Context) ([]*domain.Tenant, error) {
 	}
 	rows, err := p.Query(ctx, `
 		SELECT tenant_id, company_name, nit, admin_username, password_hash, role,
-		       db_name, encrypted_dsn_envelope, business_preset, status, created_at
+		       db_name, encrypted_dsn_envelope::text, business_preset, status, created_at
 		FROM core_control.tenants
 		ORDER BY created_at ASC, tenant_id ASC
 	`)
@@ -178,10 +178,10 @@ func (r *TenantRepository) Create(ctx context.Context, tenant *domain.Tenant) er
 		INSERT INTO core_control.tenants (
 			tenant_id, company_name, nit, admin_username, password_hash, role,
 			db_name, encrypted_dsn_envelope, business_preset, status, created_at
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11)
 	`,
 		tenant.TenantID, tenant.CompanyName, tenant.Nit, tenant.AdminUsername, tenant.PasswordHash, tenant.Role,
-		tenant.DBName, envRaw, tenant.BusinessPreset, tenant.Status, tenant.CreatedAt,
+		tenant.DBName, string(envRaw), tenant.BusinessPreset, tenant.Status, tenant.CreatedAt,
 	)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key") {

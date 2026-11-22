@@ -279,7 +279,7 @@ func (r *Repository) CreateVehicle(ctx context.Context, dbName, idemKey string, 
 	cleanKey := strings.TrimSpace(idemKey)
 	if cleanKey != "" {
 		var raw []byte
-		err := tx.QueryRow(ctx, `SELECT response_json FROM workshop.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "veh:"+cleanKey).Scan(&raw)
+		err := tx.QueryRow(ctx, `SELECT response_json::text FROM workshop.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "veh:"+cleanKey).Scan(&raw)
 		if err == nil {
 			var cached domain.Vehicle
 			if jsonErr := json.Unmarshal(raw, &cached); jsonErr == nil {
@@ -325,9 +325,9 @@ func (r *Repository) CreateVehicle(ctx context.Context, dbName, idemKey string, 
 			return domain.Vehicle{}, err
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO workshop.idempotency_keys (idem_key, response_json) VALUES ($1, $2)
+			INSERT INTO workshop.idempotency_keys (idem_key, response_json) VALUES ($1, $2::jsonb)
 			ON CONFLICT (idem_key) DO NOTHING
-		`, "veh:"+cleanKey, raw); err != nil {
+		`, "veh:"+cleanKey, string(raw)); err != nil {
 			return domain.Vehicle{}, err
 		}
 	}
@@ -385,7 +385,7 @@ func (r *Repository) CreateWorkOrder(ctx context.Context, dbName, idemKey string
 	cleanKey := strings.TrimSpace(idemKey)
 	if cleanKey != "" {
 		var raw []byte
-		err := tx.QueryRow(ctx, `SELECT response_json FROM workshop.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "ord:"+cleanKey).Scan(&raw)
+		err := tx.QueryRow(ctx, `SELECT response_json::text FROM workshop.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "ord:"+cleanKey).Scan(&raw)
 		if err == nil {
 			var cached domain.WorkOrder
 			if jsonErr := json.Unmarshal(raw, &cached); jsonErr == nil {
@@ -462,9 +462,9 @@ func (r *Repository) CreateWorkOrder(ctx context.Context, dbName, idemKey string
 			return domain.WorkOrder{}, err
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO workshop.idempotency_keys (idem_key, response_json) VALUES ($1, $2)
+			INSERT INTO workshop.idempotency_keys (idem_key, response_json) VALUES ($1, $2::jsonb)
 			ON CONFLICT (idem_key) DO NOTHING
-		`, "ord:"+cleanKey, raw); err != nil {
+		`, "ord:"+cleanKey, string(raw)); err != nil {
 			return domain.WorkOrder{}, err
 		}
 	}
@@ -535,7 +535,7 @@ func (r *Repository) CreateWorker(ctx context.Context, dbName, idemKey string, i
 	cleanKey := strings.TrimSpace(idemKey)
 	if cleanKey != "" {
 		var raw []byte
-		err := tx.QueryRow(ctx, `SELECT response_json FROM workshop.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "tec:"+cleanKey).Scan(&raw)
+		err := tx.QueryRow(ctx, `SELECT response_json::text FROM workshop.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "tec:"+cleanKey).Scan(&raw)
 		if err == nil {
 			var cached domain.Worker
 			if jsonErr := json.Unmarshal(raw, &cached); jsonErr == nil {
@@ -568,9 +568,9 @@ func (r *Repository) CreateWorker(ctx context.Context, dbName, idemKey string, i
 			return domain.Worker{}, err
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO workshop.idempotency_keys (idem_key, response_json) VALUES ($1, $2)
+			INSERT INTO workshop.idempotency_keys (idem_key, response_json) VALUES ($1, $2::jsonb)
 			ON CONFLICT (idem_key) DO NOTHING
-		`, "tec:"+cleanKey, raw); err != nil {
+		`, "tec:"+cleanKey, string(raw)); err != nil {
 			return domain.Worker{}, err
 		}
 	}
@@ -596,7 +596,7 @@ func (r *Repository) SettleWorker(ctx context.Context, dbName, idemKey, workerID
 	cleanKey := strings.TrimSpace(idemKey)
 	if cleanKey != "" {
 		var raw []byte
-		err := tx.QueryRow(ctx, `SELECT response_json FROM workshop.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "liq:"+cleanKey).Scan(&raw)
+		err := tx.QueryRow(ctx, `SELECT response_json::text FROM workshop.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "liq:"+cleanKey).Scan(&raw)
 		if err == nil {
 			var cached domain.Settlement
 			if jsonErr := json.Unmarshal(raw, &cached); jsonErr == nil {
@@ -649,9 +649,9 @@ func (r *Repository) SettleWorker(ctx context.Context, dbName, idemKey, workerID
 			return domain.Settlement{}, err
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO workshop.idempotency_keys (idem_key, response_json) VALUES ($1, $2)
+			INSERT INTO workshop.idempotency_keys (idem_key, response_json) VALUES ($1, $2::jsonb)
 			ON CONFLICT (idem_key) DO NOTHING
-		`, "liq:"+cleanKey, raw); err != nil {
+		`, "liq:"+cleanKey, string(raw)); err != nil {
 			return domain.Settlement{}, err
 		}
 	}
@@ -677,7 +677,7 @@ func (r *Repository) RegisterInvoicedOrderAndCommission(ctx context.Context, dbN
 	cleanKey := strings.TrimSpace(in.IdempotencyKey)
 	if cleanKey != "" {
 		var raw []byte
-		err := tx.QueryRow(ctx, `SELECT response_json FROM workshop.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "inv:"+cleanKey).Scan(&raw)
+		err := tx.QueryRow(ctx, `SELECT response_json::text FROM workshop.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "inv:"+cleanKey).Scan(&raw)
 		if err == nil {
 			var cached domain.InvoiceSyncResult
 			if jsonErr := json.Unmarshal(raw, &cached); jsonErr == nil {
@@ -754,9 +754,9 @@ func (r *Repository) RegisterInvoicedOrderAndCommission(ctx context.Context, dbN
 			return domain.InvoiceSyncResult{}, err
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO workshop.idempotency_keys (idem_key, response_json) VALUES ($1, $2)
+			INSERT INTO workshop.idempotency_keys (idem_key, response_json) VALUES ($1, $2::jsonb)
 			ON CONFLICT (idem_key) DO NOTHING
-		`, "inv:"+cleanKey, raw); err != nil {
+		`, "inv:"+cleanKey, string(raw)); err != nil {
 			return domain.InvoiceSyncResult{}, err
 		}
 	}

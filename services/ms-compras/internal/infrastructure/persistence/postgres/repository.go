@@ -239,7 +239,7 @@ func (r *Repository) CreateSupplier(ctx context.Context, dbName, idemKey string,
 	if idemKey != "" {
 		var raw []byte
 		err := tx.QueryRow(ctx, `
-			SELECT response_json FROM procurement.idempotency_keys
+			SELECT response_json::text FROM procurement.idempotency_keys
 			WHERE scope = 'supplier' AND idem_key = $1
 		`, idemKey).Scan(&raw)
 		if err == nil {
@@ -287,8 +287,8 @@ func (r *Repository) CreateSupplier(ctx context.Context, dbName, idemKey string,
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO procurement.idempotency_keys (scope, idem_key, response_json)
-			VALUES ('supplier', $1, $2)
-		`, idemKey, raw); err != nil {
+			VALUES ('supplier', $1, $2::jsonb)
+		`, idemKey, string(raw)); err != nil {
 			return nil, err
 		}
 	}
@@ -335,7 +335,7 @@ func (r *Repository) FindIdempotentOrder(ctx context.Context, dbName, idemKey st
 	}
 	var raw []byte
 	err = p.QueryRow(ctx, `
-		SELECT response_json FROM procurement.idempotency_keys
+		SELECT response_json::text FROM procurement.idempotency_keys
 		WHERE scope = 'order' AND idem_key = $1
 	`, idemKey).Scan(&raw)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -371,7 +371,7 @@ func (r *Repository) CreateOrder(
 	if idemKey != "" {
 		var raw []byte
 		err := tx.QueryRow(ctx, `
-			SELECT response_json FROM procurement.idempotency_keys
+			SELECT response_json::text FROM procurement.idempotency_keys
 			WHERE scope = 'order' AND idem_key = $1
 		`, idemKey).Scan(&raw)
 		if err == nil {
@@ -434,8 +434,8 @@ func (r *Repository) CreateOrder(
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO procurement.idempotency_keys (scope, idem_key, response_json)
-			VALUES ('order', $1, $2)
-		`, idemKey, raw); err != nil {
+			VALUES ('order', $1, $2::jsonb)
+		`, idemKey, string(raw)); err != nil {
 			return nil, err
 		}
 	}

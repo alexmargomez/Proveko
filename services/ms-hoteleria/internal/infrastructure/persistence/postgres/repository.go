@@ -235,7 +235,7 @@ func (r *Repository) CreateRoom(ctx context.Context, dbName, idemKey string, in 
 	cleanKey := strings.TrimSpace(idemKey)
 	if cleanKey != "" {
 		var raw []byte
-		err := tx.QueryRow(ctx, `SELECT response_json FROM hospitality.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "rm:"+cleanKey).Scan(&raw)
+		err := tx.QueryRow(ctx, `SELECT response_json::text FROM hospitality.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "rm:"+cleanKey).Scan(&raw)
 		if err == nil {
 			var cached domain.HotelRoom
 			if jsonErr := json.Unmarshal(raw, &cached); jsonErr == nil {
@@ -281,9 +281,9 @@ func (r *Repository) CreateRoom(ctx context.Context, dbName, idemKey string, in 
 			return domain.HotelRoom{}, err
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO hospitality.idempotency_keys (idem_key, response_json) VALUES ($1, $2)
+			INSERT INTO hospitality.idempotency_keys (idem_key, response_json) VALUES ($1, $2::jsonb)
 			ON CONFLICT (idem_key) DO NOTHING
-		`, "rm:"+cleanKey, raw); err != nil {
+		`, "rm:"+cleanKey, string(raw)); err != nil {
 			return domain.HotelRoom{}, err
 		}
 	}
@@ -309,7 +309,7 @@ func (r *Repository) CheckIn(ctx context.Context, dbName, idemKey string, in dom
 	cleanKey := strings.TrimSpace(idemKey)
 	if cleanKey != "" {
 		var raw []byte
-		err := tx.QueryRow(ctx, `SELECT response_json FROM hospitality.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "chk:"+cleanKey).Scan(&raw)
+		err := tx.QueryRow(ctx, `SELECT response_json::text FROM hospitality.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "chk:"+cleanKey).Scan(&raw)
 		if err == nil {
 			var cached domain.HotelRoom
 			if jsonErr := json.Unmarshal(raw, &cached); jsonErr == nil {
@@ -354,9 +354,9 @@ func (r *Repository) CheckIn(ctx context.Context, dbName, idemKey string, in dom
 			return domain.HotelRoom{}, err
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO hospitality.idempotency_keys (idem_key, response_json) VALUES ($1, $2)
+			INSERT INTO hospitality.idempotency_keys (idem_key, response_json) VALUES ($1, $2::jsonb)
 			ON CONFLICT (idem_key) DO NOTHING
-		`, "chk:"+cleanKey, raw); err != nil {
+		`, "chk:"+cleanKey, string(raw)); err != nil {
 			return domain.HotelRoom{}, err
 		}
 	}
@@ -382,7 +382,7 @@ func (r *Repository) AddExtraCharge(ctx context.Context, dbName, idemKey, roomID
 	cleanKey := strings.TrimSpace(idemKey)
 	if cleanKey != "" {
 		var raw []byte
-		err := tx.QueryRow(ctx, `SELECT response_json FROM hospitality.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "ext:"+cleanKey).Scan(&raw)
+		err := tx.QueryRow(ctx, `SELECT response_json::text FROM hospitality.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "ext:"+cleanKey).Scan(&raw)
 		if err == nil {
 			var cached domain.HotelRoom
 			if jsonErr := json.Unmarshal(raw, &cached); jsonErr == nil {
@@ -423,9 +423,9 @@ func (r *Repository) AddExtraCharge(ctx context.Context, dbName, idemKey, roomID
 			return domain.HotelRoom{}, err
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO hospitality.idempotency_keys (idem_key, response_json) VALUES ($1, $2)
+			INSERT INTO hospitality.idempotency_keys (idem_key, response_json) VALUES ($1, $2::jsonb)
 			ON CONFLICT (idem_key) DO NOTHING
-		`, "ext:"+cleanKey, raw); err != nil {
+		`, "ext:"+cleanKey, string(raw)); err != nil {
 			return domain.HotelRoom{}, err
 		}
 	}
@@ -451,7 +451,7 @@ func (r *Repository) CompleteRoomCheckout(ctx context.Context, dbName, idemKey, 
 	cleanKey := strings.TrimSpace(idemKey)
 	if cleanKey != "" {
 		var raw []byte
-		err := tx.QueryRow(ctx, `SELECT response_json FROM hospitality.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "out:"+cleanKey).Scan(&raw)
+		err := tx.QueryRow(ctx, `SELECT response_json::text FROM hospitality.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "out:"+cleanKey).Scan(&raw)
 		if err == nil {
 			var cached struct {
 				RoomNumber string `json:"roomNumber"`
@@ -495,9 +495,9 @@ func (r *Repository) CompleteRoomCheckout(ctx context.Context, dbName, idemKey, 
 			return "", err
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO hospitality.idempotency_keys (idem_key, response_json) VALUES ($1, $2)
+			INSERT INTO hospitality.idempotency_keys (idem_key, response_json) VALUES ($1, $2::jsonb)
 			ON CONFLICT (idem_key) DO NOTHING
-		`, "out:"+cleanKey, raw); err != nil {
+		`, "out:"+cleanKey, string(raw)); err != nil {
 			return "", err
 		}
 	}

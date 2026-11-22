@@ -132,7 +132,7 @@ func insertInvoiceTx(ctx context.Context, tx pgx.Tx, inv domain.Invoice, idemKey
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7,
 			$8, $9, $10, $11,
-			$12, $13, $14, $15, $16,
+			$12, $13, $14, $15, $16::jsonb,
 			$17, $18, $19,
 			$20, $21, $22, $23,
 			$24, $25, $26, $27, $28, $29, $30
@@ -141,7 +141,7 @@ func insertInvoiceTx(ctx context.Context, tx pgx.Tx, inv domain.Invoice, idemKey
 	`,
 		inv.ID, inv.CUFE, inv.DianStatus, inv.IssueDate, inv.CustomerID, inv.CustomerName, inv.CustomerNIT,
 		inv.CustomerPhone, inv.CustomerAddress, inv.ContractID, inv.DiscountPct,
-		inv.VehicleID, inv.Plate, inv.MechanicID, inv.MechanicName, metaBytes,
+		inv.VehicleID, inv.Plate, inv.MechanicID, inv.MechanicName, string(metaBytes),
 		inv.LinkedRoomID, inv.LinkedTableID, inv.LayoutVariant,
 		inv.Subtotal, inv.DiscountTotal, inv.TaxTotal, inv.Total,
 		inv.PaymentMethod, inv.AmountPaid, inv.PendingBalance, inv.Status, inv.Notes, inv.Actor, createdAt,
@@ -189,11 +189,11 @@ func insertQuoteTx(ctx context.Context, tx pgx.Tx, q domain.Quote) error {
 		INSERT INTO invoicing.quotes (
 			id, created_at, customer_id, customer_name, customer_nit,
 			valid_until, items_json, subtotal, tax_total, total, status, notes
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12)
 		ON CONFLICT (id) DO NOTHING
 	`,
 		q.ID, q.CreatedAt, q.CustomerID, q.CustomerName, q.CustomerNIT,
-		q.ValidUntil, itemsBytes, q.Subtotal, q.TaxTotal, q.Total, q.Status, q.Notes,
+		q.ValidUntil, string(itemsBytes), q.Subtotal, q.TaxTotal, q.Total, q.Status, q.Notes,
 	)
 	return err
 }
@@ -294,7 +294,7 @@ func queryInvoices(ctx context.Context, pool *pgxpool.Pool, filterID string) ([]
 		SELECT
 			id, cufe, dian_status, issue_date, customer_id, customer_name, customer_nit,
 			customer_phone, customer_address, contract_id, discount_pct::float8,
-			vehicle_id, plate, mechanic_id, mechanic_name, workshop_meta,
+			vehicle_id, plate, mechanic_id, mechanic_name, workshop_meta::text,
 			linked_room_id, linked_table_id, layout_variant,
 			subtotal::float8, discount_total::float8, tax_total::float8, total::float8,
 			payment_method, amount_paid::float8, pending_balance::float8, status, notes, actor
@@ -407,7 +407,7 @@ func (r *Repository) ListQuotes(ctx context.Context, dbName string) ([]domain.Qu
 	rows, err := pool.Query(ctx, `
 		SELECT
 			id, created_at, customer_id, customer_name, customer_nit,
-			valid_until, items_json, subtotal::float8, tax_total::float8, total::float8,
+			valid_until, items_json::text, subtotal::float8, tax_total::float8, total::float8,
 			status, notes
 		FROM invoicing.quotes
 		ORDER BY id DESC
