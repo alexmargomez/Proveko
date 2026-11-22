@@ -171,7 +171,7 @@ func (r *Repository) CreateSnapshot(ctx context.Context, dbName, idemKey, create
 	if idemKey != "" {
 		var raw []byte
 		err := tx.QueryRow(ctx, `
-			SELECT response_json FROM reporting.idempotency_keys
+			SELECT response_json::text FROM reporting.idempotency_keys
 			WHERE scope = 'snapshot' AND idem_key = $1
 		`, idemKey).Scan(&raw)
 		if err == nil {
@@ -219,8 +219,8 @@ func (r *Repository) CreateSnapshot(ctx context.Context, dbName, idemKey, create
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO reporting.idempotency_keys (scope, idem_key, response_json)
-			VALUES ('snapshot', $1, $2)
-		`, idemKey, raw); err != nil {
+			VALUES ('snapshot', $1, $2::jsonb)
+		`, idemKey, string(raw)); err != nil {
 			return nil, err
 		}
 	}

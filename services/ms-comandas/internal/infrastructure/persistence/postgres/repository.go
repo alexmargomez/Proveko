@@ -263,7 +263,7 @@ func (r *Repository) CreateTable(ctx context.Context, dbName, idemKey string, in
 	cleanKey := strings.TrimSpace(idemKey)
 	if cleanKey != "" {
 		var raw []byte
-		err := tx.QueryRow(ctx, `SELECT response_json FROM gastro.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "tbl:"+cleanKey).Scan(&raw)
+		err := tx.QueryRow(ctx, `SELECT response_json::text FROM gastro.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "tbl:"+cleanKey).Scan(&raw)
 		if err == nil {
 			var cached domain.DiningTable
 			if jsonErr := json.Unmarshal(raw, &cached); jsonErr == nil {
@@ -296,9 +296,9 @@ func (r *Repository) CreateTable(ctx context.Context, dbName, idemKey string, in
 			return domain.DiningTable{}, err
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO gastro.idempotency_keys (idem_key, response_json) VALUES ($1, $2)
+			INSERT INTO gastro.idempotency_keys (idem_key, response_json) VALUES ($1, $2::jsonb)
 			ON CONFLICT (idem_key) DO NOTHING
-		`, "tbl:"+cleanKey, raw); err != nil {
+		`, "tbl:"+cleanKey, string(raw)); err != nil {
 			return domain.DiningTable{}, err
 		}
 	}
@@ -324,7 +324,7 @@ func (r *Repository) CreateMenuItem(ctx context.Context, dbName, idemKey string,
 	cleanKey := strings.TrimSpace(idemKey)
 	if cleanKey != "" {
 		var raw []byte
-		err := tx.QueryRow(ctx, `SELECT response_json FROM gastro.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "mnu:"+cleanKey).Scan(&raw)
+		err := tx.QueryRow(ctx, `SELECT response_json::text FROM gastro.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "mnu:"+cleanKey).Scan(&raw)
 		if err == nil {
 			var cached domain.MenuItem
 			if jsonErr := json.Unmarshal(raw, &cached); jsonErr == nil {
@@ -357,9 +357,9 @@ func (r *Repository) CreateMenuItem(ctx context.Context, dbName, idemKey string,
 			return domain.MenuItem{}, err
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO gastro.idempotency_keys (idem_key, response_json) VALUES ($1, $2)
+			INSERT INTO gastro.idempotency_keys (idem_key, response_json) VALUES ($1, $2::jsonb)
 			ON CONFLICT (idem_key) DO NOTHING
-		`, "mnu:"+cleanKey, raw); err != nil {
+		`, "mnu:"+cleanKey, string(raw)); err != nil {
 			return domain.MenuItem{}, err
 		}
 	}
@@ -385,7 +385,7 @@ func (r *Repository) AddItemToTable(ctx context.Context, dbName, idemKey, tableI
 	cleanKey := strings.TrimSpace(idemKey)
 	if cleanKey != "" {
 		var raw []byte
-		err := tx.QueryRow(ctx, `SELECT response_json FROM gastro.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "add:"+cleanKey).Scan(&raw)
+		err := tx.QueryRow(ctx, `SELECT response_json::text FROM gastro.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "add:"+cleanKey).Scan(&raw)
 		if err == nil {
 			var cached domain.DiningTable
 			if jsonErr := json.Unmarshal(raw, &cached); jsonErr == nil {
@@ -457,9 +457,9 @@ func (r *Repository) AddItemToTable(ctx context.Context, dbName, idemKey, tableI
 			return domain.DiningTable{}, err
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO gastro.idempotency_keys (idem_key, response_json) VALUES ($1, $2)
+			INSERT INTO gastro.idempotency_keys (idem_key, response_json) VALUES ($1, $2::jsonb)
 			ON CONFLICT (idem_key) DO NOTHING
-		`, "add:"+cleanKey, raw); err != nil {
+		`, "add:"+cleanKey, string(raw)); err != nil {
 			return domain.DiningTable{}, err
 		}
 	}
@@ -590,7 +590,7 @@ func (r *Repository) ClearInvoicedTable(ctx context.Context, dbName, idemKey, ta
 	cleanKey := strings.TrimSpace(idemKey)
 	if cleanKey != "" {
 		var raw []byte
-		err := tx.QueryRow(ctx, `SELECT response_json FROM gastro.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "clr:"+cleanKey).Scan(&raw)
+		err := tx.QueryRow(ctx, `SELECT response_json::text FROM gastro.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "clr:"+cleanKey).Scan(&raw)
 		if err == nil {
 			return true, nil
 		} else if !errors.Is(err, pgx.ErrNoRows) {

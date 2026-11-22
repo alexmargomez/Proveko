@@ -222,7 +222,7 @@ func (r *Repository) CreateEvent(ctx context.Context, dbName, idemKey string, in
 	if idemKey != "" {
 		var raw []byte
 		err := tx.QueryRow(ctx, `
-			SELECT response_json FROM ticketing.idempotency_keys
+			SELECT response_json::text FROM ticketing.idempotency_keys
 			WHERE scope = 'event' AND idem_key = $1
 		`, idemKey).Scan(&raw)
 		if err == nil {
@@ -264,8 +264,8 @@ func (r *Repository) CreateEvent(ctx context.Context, dbName, idemKey string, in
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO ticketing.idempotency_keys (scope, idem_key, response_json)
-			VALUES ('event', $1, $2)
-		`, idemKey, raw); err != nil {
+			VALUES ('event', $1, $2::jsonb)
+		`, idemKey, string(raw)); err != nil {
 			return nil, err
 		}
 	}
@@ -290,7 +290,7 @@ func (r *Repository) CreateTicket(ctx context.Context, dbName, idemKey string, i
 	if idemKey != "" {
 		var raw []byte
 		err := tx.QueryRow(ctx, `
-			SELECT response_json FROM ticketing.idempotency_keys
+			SELECT response_json::text FROM ticketing.idempotency_keys
 			WHERE scope = 'ticket' AND idem_key = $1
 		`, idemKey).Scan(&raw)
 		if err == nil {
@@ -395,8 +395,8 @@ func (r *Repository) CreateTicket(ctx context.Context, dbName, idemKey string, i
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO ticketing.idempotency_keys (scope, idem_key, response_json)
-			VALUES ('ticket', $1, $2)
-		`, idemKey, raw); err != nil {
+			VALUES ('ticket', $1, $2::jsonb)
+		`, idemKey, string(raw)); err != nil {
 			return nil, err
 		}
 	}

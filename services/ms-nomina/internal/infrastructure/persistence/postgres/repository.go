@@ -221,7 +221,7 @@ func (r *Repository) CreateEmployee(ctx context.Context, dbName, idemKey string,
 	if idemKey != "" {
 		var raw []byte
 		err := tx.QueryRow(ctx, `
-			SELECT response_json FROM payroll.idempotency_keys
+			SELECT response_json::text FROM payroll.idempotency_keys
 			WHERE scope = 'employee' AND idem_key = $1
 		`, idemKey).Scan(&raw)
 		if err == nil {
@@ -276,8 +276,8 @@ func (r *Repository) CreateEmployee(ctx context.Context, dbName, idemKey string,
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO payroll.idempotency_keys (scope, idem_key, response_json)
-			VALUES ('employee', $1, $2)
-		`, idemKey, raw); err != nil {
+			VALUES ('employee', $1, $2::jsonb)
+		`, idemKey, string(raw)); err != nil {
 			return nil, err
 		}
 	}
@@ -302,7 +302,7 @@ func (r *Repository) CreatePayroll(ctx context.Context, dbName, idemKey string, 
 	if idemKey != "" {
 		var raw []byte
 		err := tx.QueryRow(ctx, `
-			SELECT response_json FROM payroll.idempotency_keys
+			SELECT response_json::text FROM payroll.idempotency_keys
 			WHERE scope = 'payroll' AND idem_key = $1
 		`, idemKey).Scan(&raw)
 		if err == nil {
@@ -385,8 +385,8 @@ func (r *Repository) CreatePayroll(ctx context.Context, dbName, idemKey string, 
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO payroll.idempotency_keys (scope, idem_key, response_json)
-			VALUES ('payroll', $1, $2)
-		`, idemKey, raw); err != nil {
+			VALUES ('payroll', $1, $2::jsonb)
+		`, idemKey, string(raw)); err != nil {
 			return nil, err
 		}
 	}

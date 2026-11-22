@@ -318,7 +318,7 @@ func (r *Repository) CreateVehicle(ctx context.Context, dbName, idemKey string, 
 	cleanKey := strings.TrimSpace(idemKey)
 	if cleanKey != "" {
 		var raw []byte
-		err := tx.QueryRow(ctx, `SELECT response_json FROM scale.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "cam:"+cleanKey).Scan(&raw)
+		err := tx.QueryRow(ctx, `SELECT response_json::text FROM scale.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "cam:"+cleanKey).Scan(&raw)
 		if err == nil {
 			var cached domain.HeavyVehicle
 			if jsonErr := json.Unmarshal(raw, &cached); jsonErr == nil {
@@ -364,9 +364,9 @@ func (r *Repository) CreateVehicle(ctx context.Context, dbName, idemKey string, 
 			return domain.HeavyVehicle{}, err
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO scale.idempotency_keys (idem_key, response_json) VALUES ($1, $2)
+			INSERT INTO scale.idempotency_keys (idem_key, response_json) VALUES ($1, $2::jsonb)
 			ON CONFLICT (idem_key) DO NOTHING
-		`, "cam:"+cleanKey, raw); err != nil {
+		`, "cam:"+cleanKey, string(raw)); err != nil {
 			return domain.HeavyVehicle{}, err
 		}
 	}
@@ -392,7 +392,7 @@ func (r *Repository) CreateDriver(ctx context.Context, dbName, idemKey string, i
 	cleanKey := strings.TrimSpace(idemKey)
 	if cleanKey != "" {
 		var raw []byte
-		err := tx.QueryRow(ctx, `SELECT response_json FROM scale.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "cond:"+cleanKey).Scan(&raw)
+		err := tx.QueryRow(ctx, `SELECT response_json::text FROM scale.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "cond:"+cleanKey).Scan(&raw)
 		if err == nil {
 			var cached domain.Driver
 			if jsonErr := json.Unmarshal(raw, &cached); jsonErr == nil {
@@ -425,9 +425,9 @@ func (r *Repository) CreateDriver(ctx context.Context, dbName, idemKey string, i
 			return domain.Driver{}, err
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO scale.idempotency_keys (idem_key, response_json) VALUES ($1, $2)
+			INSERT INTO scale.idempotency_keys (idem_key, response_json) VALUES ($1, $2::jsonb)
 			ON CONFLICT (idem_key) DO NOTHING
-		`, "cond:"+cleanKey, raw); err != nil {
+		`, "cond:"+cleanKey, string(raw)); err != nil {
 			return domain.Driver{}, err
 		}
 	}
@@ -453,7 +453,7 @@ func (r *Repository) CreateCarrier(ctx context.Context, dbName, idemKey string, 
 	cleanKey := strings.TrimSpace(idemKey)
 	if cleanKey != "" {
 		var raw []byte
-		err := tx.QueryRow(ctx, `SELECT response_json FROM scale.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "trn:"+cleanKey).Scan(&raw)
+		err := tx.QueryRow(ctx, `SELECT response_json::text FROM scale.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "trn:"+cleanKey).Scan(&raw)
 		if err == nil {
 			var cached domain.Carrier
 			if jsonErr := json.Unmarshal(raw, &cached); jsonErr == nil {
@@ -486,9 +486,9 @@ func (r *Repository) CreateCarrier(ctx context.Context, dbName, idemKey string, 
 			return domain.Carrier{}, err
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO scale.idempotency_keys (idem_key, response_json) VALUES ($1, $2)
+			INSERT INTO scale.idempotency_keys (idem_key, response_json) VALUES ($1, $2::jsonb)
 			ON CONFLICT (idem_key) DO NOTHING
-		`, "trn:"+cleanKey, raw); err != nil {
+		`, "trn:"+cleanKey, string(raw)); err != nil {
 			return domain.Carrier{}, err
 		}
 	}
@@ -514,7 +514,7 @@ func (r *Repository) CreateRoute(ctx context.Context, dbName, idemKey string, in
 	cleanKey := strings.TrimSpace(idemKey)
 	if cleanKey != "" {
 		var raw []byte
-		err := tx.QueryRow(ctx, `SELECT response_json FROM scale.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "car:"+cleanKey).Scan(&raw)
+		err := tx.QueryRow(ctx, `SELECT response_json::text FROM scale.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "car:"+cleanKey).Scan(&raw)
 		if err == nil {
 			var cached domain.CargoRoute
 			if jsonErr := json.Unmarshal(raw, &cached); jsonErr == nil {
@@ -547,9 +547,9 @@ func (r *Repository) CreateRoute(ctx context.Context, dbName, idemKey string, in
 			return domain.CargoRoute{}, err
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO scale.idempotency_keys (idem_key, response_json) VALUES ($1, $2)
+			INSERT INTO scale.idempotency_keys (idem_key, response_json) VALUES ($1, $2::jsonb)
 			ON CONFLICT (idem_key) DO NOTHING
-		`, "car:"+cleanKey, raw); err != nil {
+		`, "car:"+cleanKey, string(raw)); err != nil {
 			return domain.CargoRoute{}, err
 		}
 	}
@@ -575,7 +575,7 @@ func (r *Repository) CreateTicket(ctx context.Context, dbName, idemKey string, i
 	cleanKey := strings.TrimSpace(idemKey)
 	if cleanKey != "" {
 		var raw []byte
-		err := tx.QueryRow(ctx, `SELECT response_json FROM scale.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "bas:"+cleanKey).Scan(&raw)
+		err := tx.QueryRow(ctx, `SELECT response_json::text FROM scale.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "bas:"+cleanKey).Scan(&raw)
 		if err == nil {
 			var cached domain.ScaleTicket
 			if jsonErr := json.Unmarshal(raw, &cached); jsonErr == nil {
@@ -665,9 +665,9 @@ func (r *Repository) CreateTicket(ctx context.Context, dbName, idemKey string, i
 			return domain.ScaleTicket{}, err
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO scale.idempotency_keys (idem_key, response_json) VALUES ($1, $2)
+			INSERT INTO scale.idempotency_keys (idem_key, response_json) VALUES ($1, $2::jsonb)
 			ON CONFLICT (idem_key) DO NOTHING
-		`, "bas:"+cleanKey, raw); err != nil {
+		`, "bas:"+cleanKey, string(raw)); err != nil {
 			return domain.ScaleTicket{}, err
 		}
 	}

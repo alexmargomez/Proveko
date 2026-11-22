@@ -225,7 +225,7 @@ func (r *Repository) CreateIncome(ctx context.Context, dbName, idemKey string, i
 	cleanKey := strings.TrimSpace(idemKey)
 	if cleanKey != "" {
 		var raw []byte
-		err := tx.QueryRow(ctx, `SELECT response_json FROM treasury.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "inc:"+cleanKey).Scan(&raw)
+		err := tx.QueryRow(ctx, `SELECT response_json::text FROM treasury.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "inc:"+cleanKey).Scan(&raw)
 		if err == nil {
 			var cached domain.CashIncome
 			if jsonErr := json.Unmarshal(raw, &cached); jsonErr == nil {
@@ -259,9 +259,9 @@ func (r *Repository) CreateIncome(ctx context.Context, dbName, idemKey string, i
 			return domain.CashIncome{}, err
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO treasury.idempotency_keys (idem_key, response_json) VALUES ($1, $2)
+			INSERT INTO treasury.idempotency_keys (idem_key, response_json) VALUES ($1, $2::jsonb)
 			ON CONFLICT (idem_key) DO NOTHING
-		`, "inc:"+cleanKey, raw); err != nil {
+		`, "inc:"+cleanKey, string(raw)); err != nil {
 			return domain.CashIncome{}, err
 		}
 	}
@@ -287,7 +287,7 @@ func (r *Repository) CreateExpense(ctx context.Context, dbName, idemKey string, 
 	cleanKey := strings.TrimSpace(idemKey)
 	if cleanKey != "" {
 		var raw []byte
-		err := tx.QueryRow(ctx, `SELECT response_json FROM treasury.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "exp:"+cleanKey).Scan(&raw)
+		err := tx.QueryRow(ctx, `SELECT response_json::text FROM treasury.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "exp:"+cleanKey).Scan(&raw)
 		if err == nil {
 			var cached domain.Expense
 			if jsonErr := json.Unmarshal(raw, &cached); jsonErr == nil {
@@ -321,9 +321,9 @@ func (r *Repository) CreateExpense(ctx context.Context, dbName, idemKey string, 
 			return domain.Expense{}, err
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO treasury.idempotency_keys (idem_key, response_json) VALUES ($1, $2)
+			INSERT INTO treasury.idempotency_keys (idem_key, response_json) VALUES ($1, $2::jsonb)
 			ON CONFLICT (idem_key) DO NOTHING
-		`, "exp:"+cleanKey, raw); err != nil {
+		`, "exp:"+cleanKey, string(raw)); err != nil {
 			return domain.Expense{}, err
 		}
 	}
@@ -365,7 +365,7 @@ func (r *Repository) CreateBankMovement(ctx context.Context, dbName, idemKey str
 	cleanKey := strings.TrimSpace(idemKey)
 	if cleanKey != "" {
 		var raw []byte
-		err := tx.QueryRow(ctx, `SELECT response_json FROM treasury.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "bco:"+cleanKey).Scan(&raw)
+		err := tx.QueryRow(ctx, `SELECT response_json::text FROM treasury.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "bco:"+cleanKey).Scan(&raw)
 		if err == nil {
 			var cached domain.BankMovement
 			if jsonErr := json.Unmarshal(raw, &cached); jsonErr == nil {
@@ -399,9 +399,9 @@ func (r *Repository) CreateBankMovement(ctx context.Context, dbName, idemKey str
 			return domain.BankMovement{}, err
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO treasury.idempotency_keys (idem_key, response_json) VALUES ($1, $2)
+			INSERT INTO treasury.idempotency_keys (idem_key, response_json) VALUES ($1, $2::jsonb)
 			ON CONFLICT (idem_key) DO NOTHING
-		`, "bco:"+cleanKey, raw); err != nil {
+		`, "bco:"+cleanKey, string(raw)); err != nil {
 			return domain.BankMovement{}, err
 		}
 	}
