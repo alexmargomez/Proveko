@@ -1,0 +1,8 @@
+.git
+**/node_modules
+sdk-src
+frontend
+*.md
+.env
+.env.*
+!.env.example
