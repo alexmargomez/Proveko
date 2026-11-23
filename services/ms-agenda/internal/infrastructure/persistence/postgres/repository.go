@@ -21,6 +21,26 @@ import (
 
 const seedMarkerPrefix = "__SEEDED__"
 
+const demoTenantDB = "db_demo_empresa"
+
+func isDemoTenant(dbName string) bool {
+	return strings.TrimSpace(dbName) == demoTenantDB
+}
+
+func resourceSeqStart(dbName string) int {
+	if isDemoTenant(dbName) {
+		return domain.ResourceSeqStart
+	}
+	return 0
+}
+
+func appointmentSeqStart(dbName string) int {
+	if isDemoTenant(dbName) {
+		return domain.AppointmentSeqStart
+	}
+	return 0
+}
+
 type Repository struct {
 	dbMgr  *dbpool.Manager
 	mu     sync.RWMutex
@@ -52,6 +72,12 @@ func (r *Repository) ensureSeeded(ctx context.Context, p *pgxpool.Pool, dbName s
 	if done {
 		return nil
 	}
+	if !isDemoTenant(dbName) {
+		r.mu.Lock()
+		r.seeded[dbName] = true
+		r.mu.Unlock()
+		return nil
+	}
 
 	tx, err := p.Begin(ctx)
 	if err != nil {
@@ -81,15 +107,15 @@ func (r *Repository) ensureSeeded(ctx context.Context, p *pgxpool.Pool, dbName s
 	now := time.Now().UTC().Format("2006-01-02 15:04")
 	slot := time.Now().UTC().Add(2 * time.Hour).Format("2006-01-02") + " 10:00"
 
-	resCode1, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.ResourceSeqPrefix, domain.ResourceSeqStart)
+	resCode1, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.ResourceSeqPrefix, resourceSeqStart(dbName))
 	if err != nil {
 		return err
 	}
-	resCode2, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.ResourceSeqPrefix, domain.ResourceSeqStart)
+	resCode2, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.ResourceSeqPrefix, resourceSeqStart(dbName))
 	if err != nil {
 		return err
 	}
-	aptCode1, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.AppointmentSeqPrefix, domain.AppointmentSeqStart)
+	aptCode1, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.AppointmentSeqPrefix, appointmentSeqStart(dbName))
 	if err != nil {
 		return err
 	}
@@ -140,11 +166,11 @@ func (r *Repository) GetAll(ctx context.Context, dbName string) (*domain.AllStat
 		return nil, err
 	}
 
-	nextApt, err := sequences.PeekSQL(ctx, p, domain.SchemaName, domain.AppointmentSeqPrefix, domain.AppointmentSeqStart)
+	nextApt, err := sequences.PeekSQL(ctx, p, domain.SchemaName, domain.AppointmentSeqPrefix, appointmentSeqStart(dbName))
 	if err != nil {
 		return nil, err
 	}
-	nextRes, err := sequences.PeekSQL(ctx, p, domain.SchemaName, domain.ResourceSeqPrefix, domain.ResourceSeqStart)
+	nextRes, err := sequences.PeekSQL(ctx, p, domain.SchemaName, domain.ResourceSeqPrefix, resourceSeqStart(dbName))
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +260,7 @@ func (r *Repository) CreateResource(ctx context.Context, dbName, idemKey string,
 		}
 	}
 
-	code, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.ResourceSeqPrefix, domain.ResourceSeqStart)
+	code, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.ResourceSeqPrefix, resourceSeqStart(dbName))
 	if err != nil {
 		return nil, err
 	}
@@ -327,7 +353,7 @@ func (r *Repository) CreateAppointment(ctx context.Context, dbName, idemKey stri
 		return nil, apperr.Conflict("El profesional o recurso seleccionado ya tiene una cita asignada en esa fecha y hora")
 	}
 
-	code, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.AppointmentSeqPrefix, domain.AppointmentSeqStart)
+	code, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.AppointmentSeqPrefix, appointmentSeqStart(dbName))
 	if err != nil {
 		return nil, err
 	}

@@ -23,7 +23,19 @@ const (
 	baseIncomeSeq  = 302
 	baseExpenseSeq = 507
 	baseBankSeq    = 207
+	demoTenantDB   = "db_demo_empresa"
 )
+
+func isDemoTenant(dbName string) bool {
+	return strings.TrimSpace(dbName) == demoTenantDB
+}
+
+func seqBasesForDB(dbName string) (int, int, int) {
+	if isDemoTenant(dbName) {
+		return baseIncomeSeq, baseExpenseSeq, baseBankSeq
+	}
+	return 0, 0, 0
+}
 
 type Repository struct {
 	dbMgr  *dbpool.Manager
@@ -50,6 +62,12 @@ func (r *Repository) openAndSeed(ctx context.Context, dbName string) (*pgxpool.P
 	done := r.seeded[dbName]
 	r.seedMu.RUnlock()
 	if done {
+		return pool, nil
+	}
+	if !isDemoTenant(dbName) {
+		r.seedMu.Lock()
+		r.seeded[dbName] = true
+		r.seedMu.Unlock()
 		return pool, nil
 	}
 
@@ -121,15 +139,16 @@ func (r *Repository) GetSnapshot(ctx context.Context, dbName string) (domain.Tre
 		return domain.TreasurySnapshot{}, err
 	}
 
-	nextInc, err := sequences.PeekSQL(ctx, pool, schemaName, "ING", baseIncomeSeq)
+	incBase, expBase, bcoBase := seqBasesForDB(dbName)
+	nextInc, err := sequences.PeekSQL(ctx, pool, schemaName, "ING", incBase)
 	if err != nil {
 		return domain.TreasurySnapshot{}, err
 	}
-	nextExp, err := sequences.PeekSQL(ctx, pool, schemaName, "EGR", baseExpenseSeq)
+	nextExp, err := sequences.PeekSQL(ctx, pool, schemaName, "EGR", expBase)
 	if err != nil {
 		return domain.TreasurySnapshot{}, err
 	}
-	nextBco, err := sequences.PeekSQL(ctx, pool, schemaName, "BCO", baseBankSeq)
+	nextBco, err := sequences.PeekSQL(ctx, pool, schemaName, "BCO", bcoBase)
 	if err != nil {
 		return domain.TreasurySnapshot{}, err
 	}
@@ -237,7 +256,8 @@ func (r *Repository) CreateIncome(ctx context.Context, dbName, idemKey string, i
 	}
 
 	now := time.Now()
-	code, err := sequences.NextSQL(ctx, tx, schemaName, "ING", baseIncomeSeq)
+	incBase, _, _ := seqBasesForDB(dbName)
+	code, err := sequences.NextSQL(ctx, tx, schemaName, "ING", incBase)
 	if err != nil {
 		return domain.CashIncome{}, err
 	}
@@ -299,7 +319,8 @@ func (r *Repository) CreateExpense(ctx context.Context, dbName, idemKey string, 
 	}
 
 	now := time.Now()
-	code, err := sequences.NextSQL(ctx, tx, schemaName, "EGR", baseExpenseSeq)
+	_, expBase, _ := seqBasesForDB(dbName)
+	code, err := sequences.NextSQL(ctx, tx, schemaName, "EGR", expBase)
 	if err != nil {
 		return domain.Expense{}, err
 	}
@@ -377,7 +398,8 @@ func (r *Repository) CreateBankMovement(ctx context.Context, dbName, idemKey str
 	}
 
 	now := time.Now()
-	code, err := sequences.NextSQL(ctx, tx, schemaName, "BCO", baseBankSeq)
+	_, _, bcoBase := seqBasesForDB(dbName)
+	code, err := sequences.NextSQL(ctx, tx, schemaName, "BCO", bcoBase)
 	if err != nil {
 		return domain.BankMovement{}, err
 	}

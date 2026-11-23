@@ -77,6 +77,16 @@ func (r *Repository) ensureSeeded(ctx context.Context, p *pgxpool.Pool, dbName s
 		return err
 	}
 
+	if strings.TrimSpace(dbName) != "db_demo_empresa" {
+		if err := tx.Commit(ctx); err != nil {
+			return err
+		}
+		r.mu.Lock()
+		r.seeded[dbName] = true
+		r.mu.Unlock()
+		return nil
+	}
+
 	now := time.Now().UTC().Format("2006-01-02 15:04")
 	evDate := time.Now().UTC().AddDate(0, 0, 7).Format("2006-01-02")
 

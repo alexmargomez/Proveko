@@ -17,11 +17,32 @@ import (
 )
 
 const (
-	schemaName   = "gastro"
-	serviceKey   = "ms-comandas"
-	baseTableSeq = 104
-	baseMenuSeq  = 205
+	schemaName       = "gastro"
+	serviceKey       = "ms-comandas"
+	demoDBName       = "db_demo_empresa"
+	demoBaseTableSeq = 104
+	demoBaseMenuSeq  = 205
+	baseTableSeq     = 100
+	baseMenuSeq      = 200
 )
+
+func isDemo(dbName string) bool {
+	return strings.TrimSpace(dbName) == demoDBName
+}
+
+func tableSeqBase(dbName string) int {
+	if isDemo(dbName) {
+		return demoBaseTableSeq
+	}
+	return baseTableSeq
+}
+
+func menuSeqBase(dbName string) int {
+	if isDemo(dbName) {
+		return demoBaseMenuSeq
+	}
+	return baseMenuSeq
+}
 
 type Repository struct {
 	dbMgr  *dbpool.Manager
@@ -69,7 +90,7 @@ func (r *Repository) openAndSeed(ctx context.Context, dbName string) (*pgxpool.P
 		return nil, err
 	}
 
-	if !hasAny {
+	if !hasAny && isDemo(dbName) {
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO gastro.menu_items (id, code, name, category, sale_price, tax_pct)
 			VALUES
@@ -123,7 +144,7 @@ func (r *Repository) GetState(ctx context.Context, dbName string) (domain.Gastro
 		return domain.GastroState{}, err
 	}
 
-	nextMenu, err := sequences.PeekSQL(ctx, pool, schemaName, "MNU", baseMenuSeq)
+	nextMenu, err := sequences.PeekSQL(ctx, pool, schemaName, "MNU", menuSeqBase(dbName))
 	if err != nil {
 		return domain.GastroState{}, err
 	}
@@ -274,7 +295,7 @@ func (r *Repository) CreateTable(ctx context.Context, dbName, idemKey string, in
 		}
 	}
 
-	code, err := sequences.NextSQL(ctx, tx, schemaName, "TBL", baseTableSeq)
+	code, err := sequences.NextSQL(ctx, tx, schemaName, "TBL", tableSeqBase(dbName))
 	if err != nil {
 		return domain.DiningTable{}, err
 	}
@@ -335,7 +356,7 @@ func (r *Repository) CreateMenuItem(ctx context.Context, dbName, idemKey string,
 		}
 	}
 
-	code, err := sequences.NextSQL(ctx, tx, schemaName, "MNU", baseMenuSeq)
+	code, err := sequences.NextSQL(ctx, tx, schemaName, "MNU", menuSeqBase(dbName))
 	if err != nil {
 		return domain.MenuItem{}, err
 	}

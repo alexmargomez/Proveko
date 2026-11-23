@@ -19,11 +19,25 @@ import (
 )
 
 const (
-	schemaName     = "hospitality"
-	serviceKey     = "ms-hoteleria"
-	baseRoomSeq    = 304
-	baseCheckInSeq = 405
+	schemaName         = "hospitality"
+	serviceKey         = "ms-hoteleria"
+	demoDBName         = "db_demo_empresa"
+	demoBaseRoomSeq    = 304
+	demoBaseCheckInSeq = 405
+	baseRoomSeq        = 300
+	baseCheckInSeq     = 400
 )
+
+func isDemo(dbName string) bool {
+	return strings.TrimSpace(dbName) == demoDBName
+}
+
+func seqBase(dbName string, demoBase, cleanBase int) int {
+	if isDemo(dbName) {
+		return demoBase
+	}
+	return cleanBase
+}
 
 type Repository struct {
 	dbMgr  *dbpool.Manager
@@ -68,7 +82,7 @@ func (r *Repository) openAndSeed(ctx context.Context, dbName string) (*pgxpool.P
 		return nil, err
 	}
 
-	if !hasAny {
+	if !hasAny && isDemo(dbName) {
 		today := time.Now().Format("2006-01-02")
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO hospitality.rooms (
@@ -110,7 +124,7 @@ func (r *Repository) GetState(ctx context.Context, dbName string) (domain.Hospit
 		return domain.HospitalityState{}, err
 	}
 
-	nextChk, err := sequences.PeekSQL(ctx, pool, schemaName, "CHK", baseCheckInSeq)
+	nextChk, err := sequences.PeekSQL(ctx, pool, schemaName, "CHK", seqBase(dbName, demoBaseCheckInSeq, baseCheckInSeq))
 	if err != nil {
 		return domain.HospitalityState{}, err
 	}
@@ -255,7 +269,7 @@ func (r *Repository) CreateRoom(ctx context.Context, dbName, idemKey string, in 
 		return domain.HotelRoom{}, apperr.Conflict("Ya existe una habitación registrada con ese número o identificador")
 	}
 
-	code, err := sequences.NextSQL(ctx, tx, schemaName, "RM", baseRoomSeq)
+	code, err := sequences.NextSQL(ctx, tx, schemaName, "RM", seqBase(dbName, demoBaseRoomSeq, baseRoomSeq))
 	if err != nil {
 		return domain.HotelRoom{}, err
 	}
@@ -328,7 +342,7 @@ func (r *Repository) CheckIn(ctx context.Context, dbName, idemKey string, in dom
 		return domain.HotelRoom{}, apperr.Conflict("La habitación seleccionada ya se encuentra ocupada")
 	}
 
-	chkCode, err := sequences.NextSQL(ctx, tx, schemaName, "CHK", baseCheckInSeq)
+	chkCode, err := sequences.NextSQL(ctx, tx, schemaName, "CHK", seqBase(dbName, demoBaseCheckInSeq, baseCheckInSeq))
 	if err != nil {
 		return domain.HotelRoom{}, err
 	}

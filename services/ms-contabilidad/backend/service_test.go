@@ -127,4 +127,13 @@ func TestContabilidadDoubleEntryInvariants(t *testing.T) {
 	if w.Code != http.StatusCreated {
 		t.Fatalf("expected 201 voucher, got %d %s", w.Code, w.Body.String())
 	}
+	var voucherOut struct {
+		Voucher struct {
+			Code string `json:"code"`
+		} `json:"voucher"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &voucherOut)
+	if voucherOut.Voucher.Code != "CMP-1" {
+		t.Fatalf("expected first voucher CMP-1 on a clean tenant, got %q", voucherOut.Voucher.Code)
+	}
 }

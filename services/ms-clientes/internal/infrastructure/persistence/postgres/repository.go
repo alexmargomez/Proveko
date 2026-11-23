@@ -62,6 +62,15 @@ func (r *Repository) ensureSeeded(ctx context.Context, dbName string) (*pgxpool.
 	if err := sequences.EnsureTableSQL(ctx, tx, schemaName); err != nil {
 		return nil, err
 	}
+	if strings.TrimSpace(dbName) != "db_demo_empresa" {
+		if err := tx.Commit(ctx); err != nil {
+			return nil, err
+		}
+		r.seedMu.Lock()
+		r.seeded[dbName] = true
+		r.seedMu.Unlock()
+		return pool, nil
+	}
 
 	var hasAny bool
 	if err := tx.QueryRow(ctx, `

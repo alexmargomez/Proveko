@@ -74,6 +74,7 @@ func (uc *PrintUseCase) RenderDocument(ctx context.Context, raw domain.RenderReq
 		return domain.RenderOutput{}, err
 	}
 	branding, _ = domain.NormalizeBranding(branding, false)
+	branding = domain.WithRenderFallbacks(branding)
 
 	variantKey := req.LayoutVariant
 	if variantKey == "" {

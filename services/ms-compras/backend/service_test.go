@@ -174,6 +174,9 @@ func TestComprasEndToEndAndInventoryRestock(t *testing.T) {
 	w = httptest.NewRecorder()
 	svc.Handler().ServeHTTP(w, signReq(http.MethodGet, "/api/v1/compras/all", nil, "", []string{"ms-compras"}))
 	_ = json.Unmarshal(w.Body.Bytes(), &allBefore)
+	if len(allBefore.Orders) != 1 || supResp.Supplier.Code != domain.SupplierSeqPrefix+"-1" {
+		t.Fatalf("expected clean tenant with 1 order and first supplier code %s-1, got orders=%d code=%s", domain.SupplierSeqPrefix, len(allBefore.Orders), supResp.Supplier.Code)
+	}
 
 	invMock.fail = true
 	w = httptest.NewRecorder()

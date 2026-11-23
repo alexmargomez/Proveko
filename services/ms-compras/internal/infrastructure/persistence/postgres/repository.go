@@ -21,6 +21,26 @@ import (
 
 const seedMarkerPrefix = "__SEEDED__"
 
+const demoTenantDB = "db_demo_empresa"
+
+func isDemoTenant(dbName string) bool {
+	return strings.TrimSpace(dbName) == demoTenantDB
+}
+
+func supplierSeqStart(dbName string) int {
+	if isDemoTenant(dbName) {
+		return domain.SupplierSeqStart
+	}
+	return 0
+}
+
+func orderSeqStart(dbName string) int {
+	if isDemoTenant(dbName) {
+		return domain.OrderSeqStart
+	}
+	return 0
+}
+
 type Repository struct {
 	dbMgr  *dbpool.Manager
 	mu     sync.RWMutex
@@ -52,6 +72,12 @@ func (r *Repository) ensureSeeded(ctx context.Context, p *pgxpool.Pool, dbName s
 	if done {
 		return nil
 	}
+	if !isDemoTenant(dbName) {
+		r.mu.Lock()
+		r.seeded[dbName] = true
+		r.mu.Unlock()
+		return nil
+	}
 
 	tx, err := p.Begin(ctx)
 	if err != nil {
@@ -79,15 +105,15 @@ func (r *Repository) ensureSeeded(ctx context.Context, p *pgxpool.Pool, dbName s
 	}
 
 	now := time.Now().UTC().Format("2006-01-02 15:04")
-	code1, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.SupplierSeqPrefix, domain.SupplierSeqStart)
+	code1, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.SupplierSeqPrefix, supplierSeqStart(dbName))
 	if err != nil {
 		return err
 	}
-	code2, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.SupplierSeqPrefix, domain.SupplierSeqStart)
+	code2, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.SupplierSeqPrefix, supplierSeqStart(dbName))
 	if err != nil {
 		return err
 	}
-	ordCode1, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.OrderSeqPrefix, domain.OrderSeqStart)
+	ordCode1, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.OrderSeqPrefix, orderSeqStart(dbName))
 	if err != nil {
 		return err
 	}
@@ -138,11 +164,11 @@ func (r *Repository) GetAll(ctx context.Context, dbName string) (*domain.AllStat
 		return nil, err
 	}
 
-	nextSup, err := sequences.PeekSQL(ctx, p, domain.SchemaName, domain.SupplierSeqPrefix, domain.SupplierSeqStart)
+	nextSup, err := sequences.PeekSQL(ctx, p, domain.SchemaName, domain.SupplierSeqPrefix, supplierSeqStart(dbName))
 	if err != nil {
 		return nil, err
 	}
-	nextOrd, err := sequences.PeekSQL(ctx, p, domain.SchemaName, domain.OrderSeqPrefix, domain.OrderSeqStart)
+	nextOrd, err := sequences.PeekSQL(ctx, p, domain.SchemaName, domain.OrderSeqPrefix, orderSeqStart(dbName))
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +286,7 @@ func (r *Repository) CreateSupplier(ctx context.Context, dbName, idemKey string,
 		return nil, apperr.Conflict("Ya existe un proveedor registrado con ese NIT")
 	}
 
-	code, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.SupplierSeqPrefix, domain.SupplierSeqStart)
+	code, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.SupplierSeqPrefix, supplierSeqStart(dbName))
 	if err != nil {
 		return nil, err
 	}
@@ -322,7 +348,7 @@ func (r *Repository) PeekNextOrderCode(ctx context.Context, dbName string) (stri
 	if err != nil {
 		return "", err
 	}
-	return sequences.PeekSQL(ctx, p, domain.SchemaName, domain.OrderSeqPrefix, domain.OrderSeqStart)
+	return sequences.PeekSQL(ctx, p, domain.SchemaName, domain.OrderSeqPrefix, orderSeqStart(dbName))
 }
 
 func (r *Repository) FindIdempotentOrder(ctx context.Context, dbName, idemKey string) (*domain.PurchaseOrder, error) {
@@ -399,7 +425,7 @@ func (r *Repository) CreateOrder(
 		return nil, err
 	}
 
-	code, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.OrderSeqPrefix, domain.OrderSeqStart)
+	code, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.OrderSeqPrefix, orderSeqStart(dbName))
 	if err != nil {
 		return nil, err
 	}

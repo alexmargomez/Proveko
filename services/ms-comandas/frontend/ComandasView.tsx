@@ -88,7 +88,7 @@ export const ComandasView: React.FC = () => {
   const [showNewTableModal, setShowNewTableModal] = useState(false);
   const [tableName, setTableName] = useState('');
   const [tableZone, setTableZone] = useState('Salón Principal');
-  const [tableWaiter, setTableWaiter] = useState('Camila Restrepo');
+  const [tableWaiter, setTableWaiter] = useState('');
 
   const [showNewDishModal, setShowNewDishModal] = useState(false);
   const [dishName, setDishName] = useState('');

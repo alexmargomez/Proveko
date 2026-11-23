@@ -122,8 +122,8 @@ export const BasculaView: React.FC = () => {
 
   const [showRouteModal, setShowRouteModal] = useState(false);
   const [routeDesc, setRouteDesc] = useState('');
-  const [origin, setOrigin] = useState('Puerto Buenaventura');
-  const [destination, setDestination] = useState('Zona Franca Bogotá');
+  const [origin, setOrigin] = useState('');
+  const [destination, setDestination] = useState('');
 
   const reload = useCallback(async () => {
     try {

@@ -12,12 +12,29 @@ import (
 )
 
 const (
-	baseTicketSeq  = 1005
-	baseVehicleSeq = 302
-	baseDriverSeq  = 202
-	baseCarrierSeq = 402
-	baseRouteSeq   = 105
+	demoDBName         = "db_demo_empresa"
+	demoBaseTicketSeq  = 1005
+	demoBaseVehicleSeq = 302
+	demoBaseDriverSeq  = 202
+	demoBaseCarrierSeq = 402
+	demoBaseRouteSeq   = 105
+	baseTicketSeq      = 1000
+	baseVehicleSeq     = 300
+	baseDriverSeq      = 200
+	baseCarrierSeq     = 400
+	baseRouteSeq       = 100
 )
+
+func isDemo(dbName string) bool {
+	return strings.TrimSpace(dbName) == demoDBName
+}
+
+func seqBase(dbName string, demoBase, cleanBase int) int {
+	if isDemo(dbName) {
+		return demoBase
+	}
+	return cleanBase
+}
 
 type tenantStore struct {
 	vehicles     []domain.HeavyVehicle
@@ -49,6 +66,22 @@ func NewRepository() *Repository {
 
 func (r *Repository) ensureTenantLocked(dbName string) *tenantStore {
 	if st, ok := r.tenants[dbName]; ok {
+		return st
+	}
+	if !isDemo(dbName) {
+		st := &tenantStore{
+			vehicles:     []domain.HeavyVehicle{},
+			drivers:      []domain.Driver{},
+			carriers:     []domain.Carrier{},
+			routes:       []domain.CargoRoute{},
+			tickets:      []domain.ScaleTicket{},
+			idemVehicles: make(map[string]domain.HeavyVehicle),
+			idemDrivers:  make(map[string]domain.Driver),
+			idemCarriers: make(map[string]domain.Carrier),
+			idemRoutes:   make(map[string]domain.CargoRoute),
+			idemTickets:  make(map[string]domain.ScaleTicket),
+		}
+		r.tenants[dbName] = st
 		return st
 	}
 	now := time.Now()
@@ -114,11 +147,11 @@ func (r *Repository) GetState(_ context.Context, dbName string) (domain.ScaleSta
 	copy(tickets, st.tickets)
 
 	return domain.ScaleState{
-		NextTicketCode:  r.seq.Peek(dbName, "BAS", baseTicketSeq),
-		NextVehicleCode: r.seq.Peek(dbName, "CAM", baseVehicleSeq),
-		NextDriverCode:  r.seq.Peek(dbName, "COND", baseDriverSeq),
-		NextCarrierCode: r.seq.Peek(dbName, "TRN", baseCarrierSeq),
-		NextRouteCode:   r.seq.Peek(dbName, "CAR", baseRouteSeq),
+		NextTicketCode:  r.seq.Peek(dbName, "BAS", seqBase(dbName, demoBaseTicketSeq, baseTicketSeq)),
+		NextVehicleCode: r.seq.Peek(dbName, "CAM", seqBase(dbName, demoBaseVehicleSeq, baseVehicleSeq)),
+		NextDriverCode:  r.seq.Peek(dbName, "COND", seqBase(dbName, demoBaseDriverSeq, baseDriverSeq)),
+		NextCarrierCode: r.seq.Peek(dbName, "TRN", seqBase(dbName, demoBaseCarrierSeq, baseCarrierSeq)),
+		NextRouteCode:   r.seq.Peek(dbName, "CAR", seqBase(dbName, demoBaseRouteSeq, baseRouteSeq)),
 		Tickets:         tickets,
 		Vehicles:        vehicles,
 		Drivers:         drivers,
@@ -146,7 +179,7 @@ func (r *Repository) CreateVehicle(_ context.Context, dbName, idemKey string, in
 		}
 	}
 
-	code := r.seq.Next(dbName, "CAM", baseVehicleSeq)
+	code := r.seq.Next(dbName, "CAM", seqBase(dbName, demoBaseVehicleSeq, baseVehicleSeq))
 	veh, err := domain.BuildHeavyVehicle(code, in)
 	if err != nil {
 		return domain.HeavyVehicle{}, err
@@ -170,7 +203,7 @@ func (r *Repository) CreateDriver(_ context.Context, dbName, idemKey string, in 
 		}
 	}
 
-	code := r.seq.Next(dbName, "COND", baseDriverSeq)
+	code := r.seq.Next(dbName, "COND", seqBase(dbName, demoBaseDriverSeq, baseDriverSeq))
 	drv, err := domain.BuildDriver(code, in)
 	if err != nil {
 		return domain.Driver{}, err
@@ -194,7 +227,7 @@ func (r *Repository) CreateCarrier(_ context.Context, dbName, idemKey string, in
 		}
 	}
 
-	code := r.seq.Next(dbName, "TRN", baseCarrierSeq)
+	code := r.seq.Next(dbName, "TRN", seqBase(dbName, demoBaseCarrierSeq, baseCarrierSeq))
 	car, err := domain.BuildCarrier(code, in)
 	if err != nil {
 		return domain.Carrier{}, err
@@ -218,7 +251,7 @@ func (r *Repository) CreateRoute(_ context.Context, dbName, idemKey string, in d
 		}
 	}
 
-	code := r.seq.Next(dbName, "CAR", baseRouteSeq)
+	code := r.seq.Next(dbName, "CAR", seqBase(dbName, demoBaseRouteSeq, baseRouteSeq))
 	rt, err := domain.BuildCargoRoute(code, in)
 	if err != nil {
 		return domain.CargoRoute{}, err
@@ -296,7 +329,7 @@ func (r *Repository) CreateTicket(_ context.Context, dbName, idemKey string, in 
 		return domain.ScaleTicket{}, apperr.NotFound("Tipo de carga o ruta no encontrado")
 	}
 
-	code := r.seq.Next(dbName, "BAS", baseTicketSeq)
+	code := r.seq.Next(dbName, "BAS", seqBase(dbName, demoBaseTicketSeq, baseTicketSeq))
 	tk, err := domain.BuildScaleTicket(code, in, veh, drv, car, rt, time.Now())
 	if err != nil {
 		return domain.ScaleTicket{}, err

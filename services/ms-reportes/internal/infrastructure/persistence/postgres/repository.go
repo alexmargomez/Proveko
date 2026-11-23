@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,6 +17,19 @@ import (
 )
 
 const seedMarkerPrefix = "__SEEDED__"
+
+const demoTenantDB = "db_demo_empresa"
+
+func isDemoTenant(dbName string) bool {
+	return strings.TrimSpace(dbName) == demoTenantDB
+}
+
+func snapshotSeqStart(dbName string) int {
+	if isDemoTenant(dbName) {
+		return domain.SnapshotSeqStart
+	}
+	return 0
+}
 
 type Repository struct {
 	dbMgr  *dbpool.Manager
@@ -48,6 +62,12 @@ func (r *Repository) ensureSeeded(ctx context.Context, p *pgxpool.Pool, dbName s
 	if done {
 		return nil
 	}
+	if !isDemoTenant(dbName) {
+		r.mu.Lock()
+		r.seeded[dbName] = true
+		r.mu.Unlock()
+		return nil
+	}
 
 	tx, err := p.Begin(ctx)
 	if err != nil {
@@ -75,7 +95,7 @@ func (r *Repository) ensureSeeded(ctx context.Context, p *pgxpool.Pool, dbName s
 	}
 
 	now := time.Now().UTC().Format("2006-01-02 15:04")
-	rptCode1, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.SnapshotSeqPrefix, domain.SnapshotSeqStart)
+	rptCode1, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.SnapshotSeqPrefix, snapshotSeqStart(dbName))
 	if err != nil {
 		return err
 	}
@@ -116,7 +136,7 @@ func (r *Repository) ListSnapshots(ctx context.Context, dbName string) (*domain.
 		return nil, err
 	}
 
-	nextCode, err := sequences.PeekSQL(ctx, p, domain.SchemaName, domain.SnapshotSeqPrefix, domain.SnapshotSeqStart)
+	nextCode, err := sequences.PeekSQL(ctx, p, domain.SchemaName, domain.SnapshotSeqPrefix, snapshotSeqStart(dbName))
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +209,7 @@ func (r *Repository) CreateSnapshot(ctx context.Context, dbName, idemKey, create
 		return nil, err
 	}
 
-	code, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.SnapshotSeqPrefix, domain.SnapshotSeqStart)
+	code, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.SnapshotSeqPrefix, snapshotSeqStart(dbName))
 	if err != nil {
 		return nil, err
 	}

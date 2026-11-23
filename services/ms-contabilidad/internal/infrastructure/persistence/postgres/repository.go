@@ -21,6 +21,19 @@ import (
 
 const seedMarkerPrefix = "__SEEDED__"
 
+const demoTenantDB = "db_demo_empresa"
+
+func isDemoTenant(dbName string) bool {
+	return strings.TrimSpace(dbName) == demoTenantDB
+}
+
+func voucherSeqStart(dbName string) int {
+	if isDemoTenant(dbName) {
+		return domain.VoucherSeqStart
+	}
+	return 0
+}
+
 type Repository struct {
 	dbMgr  *dbpool.Manager
 	mu     sync.RWMutex
@@ -79,10 +92,6 @@ func (r *Repository) ensureSeeded(ctx context.Context, p *pgxpool.Pool, dbName s
 	}
 
 	now := time.Now().UTC().Format("2006-01-02 15:04")
-	cmpCode1, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.VoucherSeqPrefix, domain.VoucherSeqStart)
-	if err != nil {
-		return err
-	}
 
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO accounting.puc_accounts (id, code, name, category, created_at)
@@ -98,19 +107,25 @@ func (r *Repository) ensureSeeded(ctx context.Context, p *pgxpool.Pool, dbName s
 		return err
 	}
 
-	if _, err := tx.Exec(ctx, `
-		INSERT INTO accounting.vouchers (
-			id, code, debit_account_id, debit_account_code, debit_account_name,
-			credit_account_id, credit_account_code, credit_account_name,
-			third_party_id, third_party_name, third_party_nit, concept, amount, created_at
-		) VALUES (
-			$1, $1, 'puc-111005', '111005', 'Bancos Moneda Nacional',
-			'puc-413505', '413505', 'Ingresos Operacionales Comercio',
-			'cli-demo-1', 'Inversiones del Norte S.A.S.', '900.312.880-2',
-			'Consignación recaudo operacional del día', 1850000, $2
-		) ON CONFLICT DO NOTHING
-	`, cmpCode1, now); err != nil {
-		return err
+	if isDemoTenant(dbName) {
+		cmpCode1, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.VoucherSeqPrefix, voucherSeqStart(dbName))
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO accounting.vouchers (
+				id, code, debit_account_id, debit_account_code, debit_account_name,
+				credit_account_id, credit_account_code, credit_account_name,
+				third_party_id, third_party_name, third_party_nit, concept, amount, created_at
+			) VALUES (
+				$1, $1, 'puc-111005', '111005', 'Bancos Moneda Nacional',
+				'puc-413505', '413505', 'Ingresos Operacionales Comercio',
+				'cli-demo-1', 'Inversiones del Norte S.A.S.', '900.312.880-2',
+				'Consignación recaudo operacional del día', 1850000, $2
+			) ON CONFLICT DO NOTHING
+		`, cmpCode1, now); err != nil {
+			return err
+		}
 	}
 
 	if _, err := tx.Exec(ctx, `
@@ -135,7 +150,7 @@ func (r *Repository) GetAll(ctx context.Context, dbName string) (*domain.AllStat
 		return nil, err
 	}
 
-	nextVoucher, err := sequences.PeekSQL(ctx, p, domain.SchemaName, domain.VoucherSeqPrefix, domain.VoucherSeqStart)
+	nextVoucher, err := sequences.PeekSQL(ctx, p, domain.SchemaName, domain.VoucherSeqPrefix, voucherSeqStart(dbName))
 	if err != nil {
 		return nil, err
 	}
@@ -337,7 +352,7 @@ func (r *Repository) CreateVoucher(ctx context.Context, dbName, idemKey string, 
 		return nil, err
 	}
 
-	code, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.VoucherSeqPrefix, domain.VoucherSeqStart)
+	code, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.VoucherSeqPrefix, voucherSeqStart(dbName))
 	if err != nil {
 		return nil, err
 	}

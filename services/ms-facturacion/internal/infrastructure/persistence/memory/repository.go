@@ -11,9 +11,17 @@ import (
 )
 
 const (
+	demoTenantDB   = "db_demo_empresa"
 	baseInvoiceSeq = 9012
 	baseQuoteSeq   = 3011
 )
+
+func seqBasesForDB(dbName string) (int, int) {
+	if strings.TrimSpace(dbName) == demoTenantDB {
+		return baseInvoiceSeq, baseQuoteSeq
+	}
+	return 0, 0
+}
 
 type tenantStore struct {
 	invoices []domain.Invoice
@@ -40,10 +48,14 @@ func (r *Repository) ensureTenantLocked(dbName string) *tenantStore {
 	if st, ok := r.tenants[dbName]; ok {
 		return st
 	}
-	seedInvoices, seedQuotes := domain.DefaultSeedData(time.Now())
+	invoices := []domain.Invoice{}
+	quotes := []domain.Quote{}
+	if strings.TrimSpace(dbName) == demoTenantDB {
+		invoices, quotes = domain.DefaultSeedData(time.Now())
+	}
 	st := &tenantStore{
-		invoices: seedInvoices,
-		quotes:   seedQuotes,
+		invoices: invoices,
+		quotes:   quotes,
 		idemKeys: make(map[string]string),
 	}
 	r.tenants[dbName] = st
@@ -55,8 +67,9 @@ func (r *Repository) PeekSequences(_ context.Context, dbName string) (string, st
 	_ = r.ensureTenantLocked(dbName)
 	r.mu.Unlock()
 
-	nextInv := r.seq.Peek(dbName, "FEVP", baseInvoiceSeq)
-	nextQuote := r.seq.Peek(dbName, "COT", baseQuoteSeq)
+	invBase, quoteBase := seqBasesForDB(dbName)
+	nextInv := r.seq.Peek(dbName, "FEVP", invBase)
+	nextQuote := r.seq.Peek(dbName, "COT", quoteBase)
 	return nextInv, nextQuote, nil
 }
 
@@ -65,7 +78,8 @@ func (r *Repository) ReserveInvoiceNumber(_ context.Context, dbName string) (str
 	_ = r.ensureTenantLocked(dbName)
 	r.mu.Unlock()
 
-	return r.seq.Next(dbName, "FEVP", baseInvoiceSeq), nil
+	invBase, _ := seqBasesForDB(dbName)
+	return r.seq.Next(dbName, "FEVP", invBase), nil
 }
 
 func (r *Repository) ReserveQuoteNumber(_ context.Context, dbName string) (string, error) {
@@ -73,7 +87,8 @@ func (r *Repository) ReserveQuoteNumber(_ context.Context, dbName string) (strin
 	_ = r.ensureTenantLocked(dbName)
 	r.mu.Unlock()
 
-	return r.seq.Next(dbName, "COT", baseQuoteSeq), nil
+	_, quoteBase := seqBasesForDB(dbName)
+	return r.seq.Next(dbName, "COT", quoteBase), nil
 }
 
 func (r *Repository) FindInvoiceByIdempotencyKey(_ context.Context, dbName, idemKey string) (*domain.Invoice, error) {

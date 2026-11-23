@@ -36,6 +36,16 @@ func (r *Repository) ensureSeededLocked(dbName string) *tenantBucket {
 	if b, ok := r.buckets[dbName]; ok {
 		return b
 	}
+	if strings.TrimSpace(dbName) != "db_demo_empresa" {
+		b := &tenantBucket{
+			events:      []*domain.TicketingEvent{},
+			tickets:     []*domain.Ticket{},
+			idemEvents:  make(map[string]*domain.TicketingEvent),
+			idemTickets: make(map[string]*domain.Ticket),
+		}
+		r.buckets[dbName] = b
+		return b
+	}
 	now := time.Now().UTC().Format("2006-01-02 15:04")
 	evDate := time.Now().UTC().AddDate(0, 0, 7).Format("2006-01-02")
 

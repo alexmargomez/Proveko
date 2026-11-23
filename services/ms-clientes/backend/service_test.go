@@ -76,9 +76,17 @@ func TestApplicationAndGRPCInvariants(t *testing.T) {
 	repo := memory.NewRepository()
 	app := application.NewService(repo)
 
+	freshSnap, err := repo.GetAll(context.Background(), "db_empresa_real_nueva")
+	if err != nil {
+		t.Fatalf("GetAll on new tenant failed: %v", err)
+	}
+	if len(freshSnap.Customers) != 0 || len(freshSnap.Contracts) != 0 || len(freshSnap.Tariffs) != 0 || len(freshSnap.PendingInvoices) != 0 {
+		t.Fatalf("tenant isolation breach: new company inherited demo data: %+v", freshSnap)
+	}
+
 	ctxWithFeatures := authguard.WithContext(context.Background(), authguard.TenantContext{
 		TenantID:       "ten-1",
-		DBName:         "db_corporativo_01",
+		DBName:         "db_demo_empresa",
 		Username:       "admin@empresa.co",
 		Role:           "admin",
 		ActiveServices: []string{"ms-clientes"},
@@ -108,7 +116,7 @@ func TestApplicationAndGRPCInvariants(t *testing.T) {
 
 	ctxWithoutCreditFeature := authguard.WithContext(context.Background(), authguard.TenantContext{
 		TenantID:       "ten-1",
-		DBName:         "db_corporativo_01",
+		DBName:         "db_demo_empresa",
 		Username:       "admin@empresa.co",
 		Role:           "admin",
 		ActiveServices: []string{"ms-clientes"},
@@ -221,7 +229,7 @@ func TestHTTPZeroTrustAndEndpoints(t *testing.T) {
 		t.Helper()
 		passport, signErr := security.SignPassport(priv, security.PassportClaims{
 			TenantID:       "ten-http",
-			DBName:         "db_empresa_http",
+			DBName:         "db_demo_empresa",
 			Username:       "operador@empresa.co",
 			Role:           "admin",
 			Audience:       "ms-clientes",

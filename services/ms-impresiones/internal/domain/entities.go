@@ -15,6 +15,8 @@ const (
 	FormatMediaCarta    = "media_carta"
 	FormatTirilla80mm   = "tirilla_80mm"
 	FormatFacturaTaller = "factura_taller"
+
+	RenderFallbackCompanyName = "DOCUMENTO COMERCIAL"
 )
 
 var strictHexColorRegex = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
@@ -59,6 +61,20 @@ func DefaultSeedBranding() BrandingConfig {
 	}
 }
 
+func DefaultNeutralBranding() BrandingConfig {
+	return BrandingConfig{
+		PrimaryColor:  DefaultPrimaryColor,
+		DefaultFormat: DefaultSeedBranding().DefaultFormat,
+	}
+}
+
+func WithRenderFallbacks(b BrandingConfig) BrandingConfig {
+	if strings.TrimSpace(b.CompanyName) == "" {
+		b.CompanyName = RenderFallbackCompanyName
+	}
+	return b
+}
+
 func NormalizeBranding(in BrandingConfig, requireMandatory bool) (BrandingConfig, error) {
 	out := BrandingConfig{
 		CompanyName:    strings.TrimSpace(in.CompanyName),
@@ -79,13 +95,6 @@ func NormalizeBranding(in BrandingConfig, requireMandatory bool) (BrandingConfig
 		}
 		if out.Nit == "" {
 			return BrandingConfig{}, apperr.Validation("El NIT empresarial es obligatorio")
-		}
-	} else {
-		if out.CompanyName == "" {
-			out.CompanyName = "Empresa Comercial S.A.S."
-		}
-		if out.Nit == "" {
-			out.Nit = "900.000.000-1"
 		}
 	}
 

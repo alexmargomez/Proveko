@@ -42,6 +42,21 @@ func (r *Repository) ensureSeeded(dbName string) *tenantStore {
 	if st, ok := r.tenants[dbName]; ok {
 		return st
 	}
+	if strings.TrimSpace(dbName) != "db_demo_empresa" {
+		st := &tenantStore{
+			tariffs:       []domain.Tariff{},
+			contracts:     []domain.Contract{},
+			customers:     []domain.Customer{},
+			receivables:   []domain.Receivable{},
+			idemCustomers: make(map[string]domain.Customer),
+			idemTariffs:   make(map[string]domain.Tariff),
+			idemContracts: make(map[string]domain.Contract),
+			idemAbonos:    make(map[string]domain.Receivable),
+			idemDeltas:    make(map[string]domain.ReceivableDeltaResult),
+		}
+		r.tenants[dbName] = st
+		return st
+	}
 	seed := domain.InitialSeedBundle(time.Now())
 
 	tariffs := make([]domain.Tariff, len(seed.Tariffs))

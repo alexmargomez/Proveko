@@ -12,9 +12,23 @@ import (
 )
 
 const (
-	baseRoomSeq    = 304
-	baseCheckInSeq = 405
+	demoDBName         = "db_demo_empresa"
+	demoBaseRoomSeq    = 304
+	demoBaseCheckInSeq = 405
+	baseRoomSeq        = 300
+	baseCheckInSeq     = 400
 )
+
+func isDemo(dbName string) bool {
+	return strings.TrimSpace(dbName) == demoDBName
+}
+
+func seqBase(dbName string, demoBase, cleanBase int) int {
+	if isDemo(dbName) {
+		return demoBase
+	}
+	return cleanBase
+}
 
 type tenantStore struct {
 	rooms        []domain.HotelRoom
@@ -41,6 +55,17 @@ func NewRepository() *Repository {
 
 func (r *Repository) ensureTenantLocked(dbName string) *tenantStore {
 	if st, ok := r.tenants[dbName]; ok {
+		return st
+	}
+	if !isDemo(dbName) {
+		st := &tenantStore{
+			rooms:        []domain.HotelRoom{},
+			idemRooms:    make(map[string]domain.HotelRoom),
+			idemCheckIn:  make(map[string]domain.HotelRoom),
+			idemExtra:    make(map[string]domain.HotelRoom),
+			idemCheckout: make(map[string]string),
+		}
+		r.tenants[dbName] = st
 		return st
 	}
 	today := time.Now().Format("2006-01-02")
@@ -118,7 +143,7 @@ func (r *Repository) GetState(_ context.Context, dbName string) (domain.Hospital
 		rooms[i] = st.rooms[i].Clone()
 	}
 	return domain.HospitalityState{
-		NextCheckInCode: r.seq.Peek(dbName, "CHK", baseCheckInSeq),
+		NextCheckInCode: r.seq.Peek(dbName, "CHK", seqBase(dbName, demoBaseCheckInSeq, baseCheckInSeq)),
 		Rooms:           rooms,
 	}, nil
 }
@@ -142,7 +167,7 @@ func (r *Repository) CreateRoom(_ context.Context, dbName, idemKey string, in do
 		}
 	}
 
-	seqCode := r.seq.Next(dbName, "RM", baseRoomSeq)
+	seqCode := r.seq.Next(dbName, "RM", seqBase(dbName, demoBaseRoomSeq, baseRoomSeq))
 	room, err := domain.BuildHotelRoom(seqCode, in)
 	if err != nil {
 		return domain.HotelRoom{}, err
@@ -172,7 +197,7 @@ func (r *Repository) CheckIn(_ context.Context, dbName, idemKey string, in domai
 			if candidate.Status == domain.RoomStatusOcupada {
 				return domain.HotelRoom{}, apperr.Conflict("La habitación seleccionada ya se encuentra ocupada")
 			}
-			chkCode := r.seq.Next(dbName, "CHK", baseCheckInSeq)
+			chkCode := r.seq.Next(dbName, "CHK", seqBase(dbName, demoBaseCheckInSeq, baseCheckInSeq))
 			if err := candidate.ApplyCheckIn(chkCode, in, time.Now()); err != nil {
 				return domain.HotelRoom{}, err
 			}

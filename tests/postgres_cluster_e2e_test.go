@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -225,6 +226,18 @@ func TestRealPostgresProductionBootAndAll17Services(t *testing.T) {
 			t.Fatalf("real PostgreSQL GET %s (%s) failed with %d: %s\nService logs:\n%s",
 				ep.path, ep.svc, lastStatus, string(lastBody), logsBySvc[ep.svc].String())
 		}
+		assertNoDemoMarkers(t, ep.svc, ep.path, string(lastBody))
+	}
+
+	demoResp, demoRaw := doHTTPRequest(t, coreURL, http.MethodPost, "/api/v1/core/demo-session", map[string]any{
+		"rolePreview": "admin_empresa",
+	}, nil)
+	if demoResp.StatusCode != http.StatusOK {
+		t.Fatalf("real PostgreSQL demo session failed (%d): %s", demoResp.StatusCode, string(demoRaw))
+	}
+	demoHeaders := map[string]string{"Authorization": "Bearer " + extractJSONToken(t, demoRaw)}
+	if r, raw := doHTTPRequest(t, coreURL, http.MethodGet, "/api/v1/facturacion/pos-state", nil, demoHeaders); r.StatusCode != http.StatusOK || !strings.Contains(string(raw), "FEVP-9012") {
+		t.Fatalf("demo company must keep its showcase invoices on real PostgreSQL (%d): %s", r.StatusCode, string(raw))
 	}
 
 	// 5. Exercise JSONB INSERT + idempotent JSONB SELECT replay on real PostgreSQL

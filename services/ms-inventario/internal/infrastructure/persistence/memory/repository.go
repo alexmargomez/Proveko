@@ -42,6 +42,25 @@ func (r *Repository) ensureTenantLocked(dbName string) *tenantStore {
 	if st, ok := r.tenants[dbName]; ok {
 		return st
 	}
+	if strings.TrimSpace(dbName) != "db_demo_empresa" {
+		wh1 := &domain.Warehouse{
+			ID:       "wh-principal",
+			Code:     r.seq.Next(dbName, domain.WarehouseSeqPrefix, 0),
+			Name:     "Bodega Principal",
+			Location: "Sede Principal",
+			Manager:  "",
+		}
+		st := &tenantStore{
+			warehouses: []*domain.Warehouse{wh1},
+			products:   []*domain.Product{},
+			kardex:     []*domain.KardexMovement{},
+			requests:   []*domain.SupplyRequest{},
+			idem:       make(map[string][]byte),
+		}
+		r.tenants[dbName] = st
+		return st
+	}
+
 	wh1Code := r.seq.Next(dbName, domain.WarehouseSeqPrefix, domain.WarehouseSeqStart)
 	wh2Code := r.seq.Next(dbName, domain.WarehouseSeqPrefix, domain.WarehouseSeqStart)
 	p1Code := r.seq.Next(dbName, domain.ProductSeqPrefix, domain.ProductSeqStart)

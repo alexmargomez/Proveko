@@ -13,6 +13,19 @@ import (
 	"ms-contabilidad/internal/domain"
 )
 
+const demoTenantDB = "db_demo_empresa"
+
+func isDemoTenant(dbName string) bool {
+	return strings.TrimSpace(dbName) == demoTenantDB
+}
+
+func voucherSeqStart(dbName string) int {
+	if isDemoTenant(dbName) {
+		return domain.VoucherSeqStart
+	}
+	return 0
+}
+
 type tenantBucket struct {
 	accounts     []*domain.PucAccount
 	vouchers     []*domain.AccountingVoucher
@@ -38,17 +51,28 @@ func (r *Repository) ensureSeededLocked(dbName string) *tenantBucket {
 		return b
 	}
 	now := time.Now().UTC().Format("2006-01-02 15:04")
-	cmpCode1 := r.seq.Next(dbName, domain.VoucherSeqPrefix, domain.VoucherSeqStart)
+	accounts := []*domain.PucAccount{
+		{ID: "puc-110505", Code: "110505", Name: "Caja General", Category: "Activo", CreatedAt: now},
+		{ID: "puc-111005", Code: "111005", Name: "Bancos Moneda Nacional", Category: "Activo", CreatedAt: now},
+		{ID: "puc-130505", Code: "130505", Name: "Clientes Nacionales", Category: "Activo", CreatedAt: now},
+		{ID: "puc-220505", Code: "220505", Name: "Proveedores Nacionales", Category: "Pasivo", CreatedAt: now},
+		{ID: "puc-413505", Code: "413505", Name: "Ingresos Operacionales Comercio", Category: "Ingreso", CreatedAt: now},
+		{ID: "puc-513530", Code: "513530", Name: "Servicios Públicos y Operación", Category: "Gasto", CreatedAt: now},
+	}
+	if !isDemoTenant(dbName) {
+		b := &tenantBucket{
+			accounts:     accounts,
+			vouchers:     []*domain.AccountingVoucher{},
+			idemAccounts: make(map[string]*domain.PucAccount),
+			idemVouchers: make(map[string]*domain.AccountingVoucher),
+		}
+		r.buckets[dbName] = b
+		return b
+	}
+	cmpCode1 := r.seq.Next(dbName, domain.VoucherSeqPrefix, voucherSeqStart(dbName))
 
 	b := &tenantBucket{
-		accounts: []*domain.PucAccount{
-			{ID: "puc-110505", Code: "110505", Name: "Caja General", Category: "Activo", CreatedAt: now},
-			{ID: "puc-111005", Code: "111005", Name: "Bancos Moneda Nacional", Category: "Activo", CreatedAt: now},
-			{ID: "puc-130505", Code: "130505", Name: "Clientes Nacionales", Category: "Activo", CreatedAt: now},
-			{ID: "puc-220505", Code: "220505", Name: "Proveedores Nacionales", Category: "Pasivo", CreatedAt: now},
-			{ID: "puc-413505", Code: "413505", Name: "Ingresos Operacionales Comercio", Category: "Ingreso", CreatedAt: now},
-			{ID: "puc-513530", Code: "513530", Name: "Servicios Públicos y Operación", Category: "Gasto", CreatedAt: now},
-		},
+		accounts: accounts,
 		vouchers: []*domain.AccountingVoucher{
 			{
 				ID:                cmpCode1,
@@ -92,7 +116,7 @@ func (r *Repository) GetAll(_ context.Context, dbName string) (*domain.AllState,
 		vouchers[i] = v.Clone()
 	}
 
-	nextVoucher := r.seq.Peek(dbName, domain.VoucherSeqPrefix, domain.VoucherSeqStart)
+	nextVoucher := r.seq.Peek(dbName, domain.VoucherSeqPrefix, voucherSeqStart(dbName))
 	balances := domain.ComputeAccountBalances(accounts, vouchers)
 
 	return &domain.AllState{
@@ -167,7 +191,7 @@ func (r *Repository) CreateVoucher(_ context.Context, dbName, idemKey string, in
 		return nil, err
 	}
 
-	code := r.seq.Next(dbName, domain.VoucherSeqPrefix, domain.VoucherSeqStart)
+	code := r.seq.Next(dbName, domain.VoucherSeqPrefix, voucherSeqStart(dbName))
 	voucher, err := domain.NewAccountingVoucher(code, debitAcc, creditAcc, in, now)
 	if err != nil {
 		return nil, err
