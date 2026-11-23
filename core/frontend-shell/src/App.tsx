@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { usePlatform } from '@platform/ui-sdk';
 import { SidebarMenu } from './layout/SidebarMenu';
-import { TopModuleTabs } from './layout/TopModuleTabs';
+import { TopModuleTabs, ServiceContextHeader } from './layout/TopModuleTabs';
 import { LandingAndAuth } from './pages/LandingAndAuth';
 import { SuperAdminPanel } from './pages/SuperAdminPanel';
 import { WorkstationHome } from './pages/WorkstationHome';
@@ -381,7 +381,7 @@ export const App: React.FC = () => {
   }
 
   return (
-    <div style={{ width: '100%', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div className="pk-workstation-shell">
       {isSuperAdmin && impersonatingWorkstation && (
         <div
           role="region"
@@ -396,6 +396,7 @@ export const App: React.FC = () => {
             gap: 12,
             fontSize: 12.5,
             fontWeight: 700,
+            flexShrink: 0,
           }}
         >
           <span>
@@ -426,6 +427,7 @@ export const App: React.FC = () => {
             gap: 12,
             flexWrap: 'wrap',
             fontSize: 12.5,
+            flexShrink: 0,
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -505,6 +507,7 @@ export const App: React.FC = () => {
           />
         </div>
         <main className="pk-main">
+          <ServiceContextHeader />
           {workstationView === 'home' && <WorkstationHome />}
           {workstationView === 'users' && <CompanyUsersPanel />}
           {workstationView === 'activate-modules' && <CompanyModulesPanel />}

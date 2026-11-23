@@ -35,34 +35,14 @@ export const SidebarMenu: React.FC<{
       className={`pk-rail-sidebar ${pinned ? 'pinned' : ''} ${mobileOpen ? 'mobile-open' : ''}`}
       aria-label="Menú principal de navegación"
     >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '8px 10px 4px',
-        }}
-      >
-        <span className="pk-rail-section-label">Menú Principal</span>
+      <div className="pk-rail-header">
+        <span className="pk-rail-header-title">Menú Principal</span>
         <button
           type="button"
+          className={`pk-rail-pin-btn ${pinned ? 'active' : ''}`}
           onClick={onTogglePin}
           aria-pressed={pinned}
           title={pinned ? 'Contraer menú automático al pasar el cursor' : 'Mantener menú lateral abierto'}
-          style={{
-            border: 'none',
-            background: pinned ? 'rgba(255,183,3,0.22)' : 'rgba(255,255,255,0.08)',
-            color: pinned ? '#ffb703' : '#cbd5e1',
-            borderRadius: 8,
-            width: 34,
-            height: 32,
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            marginLeft: 'auto',
-            flexShrink: 0,
-          }}
         >
           <PkIcon name="pin" size={15} />
         </button>
@@ -107,17 +87,7 @@ export const SidebarMenu: React.FC<{
               </span>
               <span className="pk-rail-label">{svc.displayName}</span>
               {enabledMods.length > 1 && (
-                <span
-                  className="pk-rail-label"
-                  style={{
-                    flex: 'none',
-                    maxWidth: 20,
-                    fontSize: 11,
-                    opacity: 0.75,
-                    transform: isOpen ? 'rotate(180deg)' : 'none',
-                    transition: 'transform 0.15s',
-                  }}
-                >
+                <span className={`pk-rail-chevron ${isOpen ? 'open' : ''}`} aria-hidden="true">
                   ▾
                 </span>
               )}

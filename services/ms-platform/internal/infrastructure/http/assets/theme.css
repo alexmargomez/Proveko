@@ -47,6 +47,7 @@ body,
 .pk-topbar {
   min-height: 56px;
   width: 100%;
+  flex-shrink: 0;
   background: #ffffff;
   color: var(--pk-text);
   display: flex;
@@ -255,20 +256,31 @@ body,
 }
 
 /* ============================================================================
-   HOVER-EXPANDABLE & PINNABLE RAIL NAVIGATION
+   HOVER-EXPANDABLE & PINNABLE RAIL NAVIGATION (INVARIANT X = 32.0PX AXIS)
    ============================================================================ */
+.pk-workstation-shell {
+  width: 100%;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--pk-bg);
+}
+
 .pk-app-frame {
   display: flex;
   width: 100%;
   flex: 1;
-  min-height: calc(100vh - 56px);
+  min-height: 0;
   position: relative;
   align-items: stretch;
+  overflow: hidden;
 }
 
 .pk-rail-host {
   position: relative;
   width: var(--pk-rail-collapsed);
+  height: 100%;
   flex-shrink: 0;
   z-index: 55;
   transition: width 0.2s cubic-bezier(0.16, 1, 0.3, 1);
@@ -279,19 +291,48 @@ body,
 }
 
 .pk-rail-sidebar {
-  position: sticky;
-  top: 56px;
-  height: calc(100vh - 56px);
+  position: relative;
+  height: 100%;
   width: var(--pk-rail-collapsed);
+  padding: 4px 0 12px;
   background: linear-gradient(180deg, #023047 0%, #012436 100%);
   color: #e2e8f0;
   display: flex;
   flex-direction: column;
   overflow-x: hidden;
   overflow-y: auto;
-  transition: width 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s ease;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
-  scrollbar-width: thin;
+  overscroll-behavior: contain;
+  transition: width 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
+  border-right: none;
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.08);
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.pk-rail-sidebar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.pk-rail-sidebar::-webkit-scrollbar-track,
+.pk-rail-sidebar::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.pk-rail-sidebar::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.pk-rail-sidebar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+}
+
+.pk-rail-sidebar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.36);
 }
 
 .pk-rail-sidebar:hover,
@@ -301,44 +342,136 @@ body,
   width: var(--pk-rail-expanded);
 }
 
-.pk-rail-sidebar:hover:not(.pinned),
-.pk-rail-sidebar:focus-within:not(.pinned) {
-  box-shadow: 10px 0 32px rgba(2, 26, 41, 0.32);
+@supports selector(::-webkit-scrollbar) {
+  .pk-rail-sidebar:hover,
+  .pk-rail-sidebar:focus-within,
+  .pk-rail-sidebar.pinned,
+  .pk-rail-sidebar.mobile-open {
+    scrollbar-width: auto;
+  }
+
+  .pk-rail-sidebar:hover::-webkit-scrollbar,
+  .pk-rail-sidebar:focus-within::-webkit-scrollbar,
+  .pk-rail-sidebar.pinned::-webkit-scrollbar,
+  .pk-rail-sidebar.mobile-open::-webkit-scrollbar {
+    display: block;
+    width: 4px;
+    height: 0;
+  }
 }
 
-.pk-rail-section-label {
+@supports not selector(::-webkit-scrollbar) {
+  .pk-rail-sidebar:hover,
+  .pk-rail-sidebar:focus-within,
+  .pk-rail-sidebar.pinned,
+  .pk-rail-sidebar.mobile-open {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+  }
+}
+
+.pk-rail-sidebar:hover:not(.pinned),
+.pk-rail-sidebar:focus-within:not(.pinned) {
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.08), 12px 0 32px rgba(2, 26, 41, 0.34);
+}
+
+.pk-rail-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 6px 10px 4px;
+  flex-shrink: 0;
+}
+
+.pk-rail-header-title {
+  display: none;
   font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: #7dd3fc;
-  max-width: 0;
-  height: 0;
-  padding: 0;
-  overflow: hidden;
   white-space: nowrap;
-  opacity: 0;
-  transition: opacity 0.15s ease;
+}
+
+.pk-rail-sidebar:hover .pk-rail-header,
+.pk-rail-sidebar:focus-within .pk-rail-header,
+.pk-rail-sidebar.pinned .pk-rail-header,
+.pk-rail-sidebar.mobile-open .pk-rail-header {
+  justify-content: space-between;
+  padding: 6px 12px 4px 16px;
+}
+
+.pk-rail-sidebar:hover .pk-rail-header-title,
+.pk-rail-sidebar:focus-within .pk-rail-header-title,
+.pk-rail-sidebar.pinned .pk-rail-header-title,
+.pk-rail-sidebar.mobile-open .pk-rail-header-title {
+  display: block;
+}
+
+.pk-rail-pin-btn {
+  width: 36px;
+  height: 34px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  line-height: 0;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+
+.pk-rail-pin-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
+.pk-rail-pin-btn.active {
+  background: rgba(255, 183, 3, 0.22);
+  color: var(--pk-brand-amber);
+}
+
+.pk-rail-pin-btn svg,
+.pk-rail-icon svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+.pk-rail-section-label {
+  display: none;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #7dd3fc;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .pk-rail-sidebar:hover .pk-rail-section-label,
 .pk-rail-sidebar:focus-within .pk-rail-section-label,
 .pk-rail-sidebar.pinned .pk-rail-section-label,
 .pk-rail-sidebar.mobile-open .pk-rail-section-label {
-  max-width: 220px;
-  height: auto;
-  padding: 8px 16px 4px;
-  opacity: 1;
+  display: block;
+  padding: 6px 16px 3px;
 }
 
 .pk-rail-item {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 13px;
-  width: calc(100% - 14px);
-  margin: 2px 7px;
-  padding: 10px 13px;
+  justify-content: flex-start;
+  gap: 0;
+  width: 44px;
+  height: 40px;
+  margin: 2px 10px;
+  padding: 0;
   border: none;
   border-radius: 10px;
   background: transparent;
@@ -348,7 +481,16 @@ body,
   text-align: left;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.14s ease, color 0.14s ease;
+  flex-shrink: 0;
+  transition: background 0.14s ease, color 0.14s ease, width 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pk-rail-sidebar:hover .pk-rail-item,
+.pk-rail-sidebar:focus-within .pk-rail-item,
+.pk-rail-sidebar.pinned .pk-rail-item,
+.pk-rail-sidebar.mobile-open .pk-rail-item {
+  width: calc(100% - 20px);
+  padding-right: 12px;
 }
 
 .pk-rail-item:hover {
@@ -364,36 +506,59 @@ body,
 }
 
 .pk-rail-icon {
-  width: 24px;
-  height: 24px;
+  width: 44px;
+  height: 40px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
+  flex: 0 0 44px;
+  line-height: 0;
 }
 
 .pk-rail-label {
+  display: none;
   flex: 1;
-  max-width: 0;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  opacity: 0;
-  transition: opacity 0.15s ease;
+}
+
+.pk-rail-chevron {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  flex-shrink: 0;
+  font-size: 11px;
+  opacity: 0.78;
+  transition: transform 0.15s ease;
+}
+
+.pk-rail-chevron.open {
+  transform: rotate(180deg);
 }
 
 .pk-rail-sidebar:hover .pk-rail-label,
 .pk-rail-sidebar:focus-within .pk-rail-label,
 .pk-rail-sidebar.pinned .pk-rail-label,
 .pk-rail-sidebar.mobile-open .pk-rail-label {
-  max-width: 200px;
-  opacity: 1;
+  display: block;
+}
+
+.pk-rail-sidebar:hover .pk-rail-chevron,
+.pk-rail-sidebar:focus-within .pk-rail-chevron,
+.pk-rail-sidebar.pinned .pk-rail-chevron,
+.pk-rail-sidebar.mobile-open .pk-rail-chevron {
+  display: inline-flex;
 }
 
 .pk-rail-sublist {
   display: none;
   flex-direction: column;
   gap: 2px;
-  padding: 2px 12px 6px 46px;
+  padding: 2px 10px 6px 54px;
 }
 
 .pk-rail-sidebar:hover .pk-rail-sublist.open,
@@ -432,7 +597,8 @@ body,
 .pk-rail-divider {
   height: 1px;
   background: rgba(255, 255, 255, 0.12);
-  margin: 8px 12px;
+  margin: 6px 12px;
+  flex-shrink: 0;
 }
 
 .pk-shell,
@@ -445,6 +611,8 @@ body,
 .pk-main {
   flex: 1;
   min-width: 0;
+  height: 100%;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
 }
@@ -1091,6 +1259,18 @@ body,
 }
 
 @media (max-width: 768px) {
+  .pk-workstation-shell {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+  .pk-app-frame {
+    overflow: visible;
+  }
+  .pk-main {
+    height: auto;
+    overflow-y: visible;
+  }
   .pk-mobile-menu-btn {
     display: inline-flex;
   }
@@ -1102,7 +1282,7 @@ body,
     top: 0;
     left: 0;
     bottom: 0;
-    height: 100vh;
+    height: 100dvh;
     z-index: 85;
     transform: translateX(-100%);
     transition: transform 0.22s ease;
