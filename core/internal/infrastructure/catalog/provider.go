@@ -26,8 +26,16 @@ func NewProvider(manifestsDir string) *Provider {
 	p := &Provider{
 		byKey: make(map[string]licensegate.ServiceManifest),
 	}
+	catalogRaw := embeddedCatalogJSON
+	liveCatalogPath := strings.TrimSpace(os.Getenv("LIVE_CATALOG_FILE"))
+	if liveCatalogPath == "" {
+		liveCatalogPath = "/app/catalog/default_catalog.json"
+	}
+	if diskRaw, err := os.ReadFile(liveCatalogPath); err == nil && len(diskRaw) > 0 {
+		catalogRaw = diskRaw
+	}
 	var base []licensegate.ServiceManifest
-	if err := json.Unmarshal(embeddedCatalogJSON, &base); err == nil {
+	if err := json.Unmarshal(catalogRaw, &base); err == nil {
 		for _, m := range base {
 			p.Upsert(m)
 		}

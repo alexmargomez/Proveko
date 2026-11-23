@@ -50,6 +50,9 @@ services:
       SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL:-superadmin@plataforma.local}
       SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD:-ChangeMeSuperAdmin2026*}
       MS_PLATFORM_URL: http://ms-platform:4100
+    volumes:
+      - ./core/embed_dist:/app/embed_dist:ro
+      - ./core/internal/infrastructure/catalog:/app/catalog:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4000/api/v1/health >/dev/null || exit 1"]
       interval: 5s
@@ -71,6 +74,8 @@ services:
       SERVICE_NAME: ms-platform
       PORT: 4100
       SERVICE_PUBLIC_URL: http://ms-platform:4100
+    volumes:
+      - ./services/ms-platform/internal/infrastructure/http/assets:/app/assets:ro
     depends_on:
       core:
         condition: service_started
