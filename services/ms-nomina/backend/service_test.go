@@ -94,8 +94,22 @@ func TestNominaSalaryAndPeriodInvariants(t *testing.T) {
 		return req
 	}
 
-	// Create employee
 	w := httptest.NewRecorder()
+	svc.Handler().ServeHTTP(w, signReq(http.MethodGet, "/api/v1/nomina/all", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("get all failed: %d %s", w.Code, w.Body.String())
+	}
+	var initial struct {
+		Employees []domain.Employee          `json:"employees"`
+		Payrolls  []domain.PayrollSettlement `json:"payrolls"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &initial)
+	if len(initial.Employees) != 0 || len(initial.Payrolls) != 0 {
+		t.Fatalf("expected empty state for new tenant, got %d employees and %d payrolls", len(initial.Employees), len(initial.Payrolls))
+	}
+
+	// Create employee
+	w = httptest.NewRecorder()
 	svc.Handler().ServeHTTP(w, signReq(http.MethodPost, "/api/v1/nomina/employees", map[string]any{
 		"name":       "Valentina Ospina",
 		"docNumber":  "1020999888",

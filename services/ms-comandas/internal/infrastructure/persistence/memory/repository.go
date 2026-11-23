@@ -11,9 +11,30 @@ import (
 )
 
 const (
-	baseTableSeq = 104
-	baseMenuSeq  = 205
+	demoDBName       = "db_demo_empresa"
+	demoBaseTableSeq = 104
+	demoBaseMenuSeq  = 205
+	baseTableSeq     = 100
+	baseMenuSeq      = 200
 )
+
+func isDemo(dbName string) bool {
+	return strings.TrimSpace(dbName) == demoDBName
+}
+
+func tableSeqBase(dbName string) int {
+	if isDemo(dbName) {
+		return demoBaseTableSeq
+	}
+	return baseTableSeq
+}
+
+func menuSeqBase(dbName string) int {
+	if isDemo(dbName) {
+		return demoBaseMenuSeq
+	}
+	return baseMenuSeq
+}
 
 type tenantStore struct {
 	tables      []domain.DiningTable
@@ -41,6 +62,18 @@ func NewRepository() *Repository {
 
 func (r *Repository) ensureTenantLocked(dbName string) *tenantStore {
 	if st, ok := r.tenants[dbName]; ok {
+		return st
+	}
+	if !isDemo(dbName) {
+		st := &tenantStore{
+			tables:      []domain.DiningTable{},
+			menuItems:   []domain.MenuItem{},
+			idemTables:  make(map[string]domain.DiningTable),
+			idemMenu:    make(map[string]domain.MenuItem),
+			idemAddItem: make(map[string]domain.DiningTable),
+			idemCleared: make(map[string]bool),
+		}
+		r.tenants[dbName] = st
 		return st
 	}
 	st := &tenantStore{
@@ -116,7 +149,7 @@ func (r *Repository) GetState(_ context.Context, dbName string) (domain.GastroSt
 	copy(menu, st.menuItems)
 
 	return domain.GastroState{
-		NextMenuCode: r.seq.Peek(dbName, "MNU", baseMenuSeq),
+		NextMenuCode: r.seq.Peek(dbName, "MNU", menuSeqBase(dbName)),
 		Tables:       tables,
 		Products:     menu,
 	}, nil
@@ -134,7 +167,7 @@ func (r *Repository) CreateTable(_ context.Context, dbName, idemKey string, in d
 		}
 	}
 
-	seqCode := r.seq.Next(dbName, "TBL", baseTableSeq)
+	seqCode := r.seq.Next(dbName, "TBL", tableSeqBase(dbName))
 	tbl, err := domain.BuildDiningTable(seqCode, in)
 	if err != nil {
 		return domain.DiningTable{}, err
@@ -158,7 +191,7 @@ func (r *Repository) CreateMenuItem(_ context.Context, dbName, idemKey string, i
 		}
 	}
 
-	seqCode := r.seq.Next(dbName, "MNU", baseMenuSeq)
+	seqCode := r.seq.Next(dbName, "MNU", menuSeqBase(dbName))
 	item, err := domain.BuildMenuItem(seqCode, in)
 	if err != nil {
 		return domain.MenuItem{}, err

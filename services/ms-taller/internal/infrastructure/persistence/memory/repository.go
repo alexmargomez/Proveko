@@ -13,11 +13,27 @@ import (
 )
 
 const (
-	baseVehicleSeq    = 203
-	baseWorkerSeq     = 105
-	baseOrderSeq      = 705
-	baseSettlementSeq = 305
+	demoDBName            = "db_demo_empresa"
+	demoBaseVehicleSeq    = 203
+	demoBaseWorkerSeq     = 105
+	demoBaseOrderSeq      = 705
+	demoBaseSettlementSeq = 305
+	baseVehicleSeq        = 200
+	baseWorkerSeq         = 100
+	baseOrderSeq          = 700
+	baseSettlementSeq     = 300
 )
+
+func isDemo(dbName string) bool {
+	return strings.TrimSpace(dbName) == demoDBName
+}
+
+func seqBase(dbName string, demoBase, cleanBase int) int {
+	if isDemo(dbName) {
+		return demoBase
+	}
+	return cleanBase
+}
 
 type tenantStore struct {
 	vehicles       []domain.Vehicle
@@ -48,6 +64,21 @@ func NewRepository() *Repository {
 
 func (r *Repository) ensureTenantLocked(dbName string) *tenantStore {
 	if st, ok := r.tenants[dbName]; ok {
+		return st
+	}
+	if !isDemo(dbName) {
+		st := &tenantStore{
+			vehicles:       []domain.Vehicle{},
+			workers:        []domain.Worker{},
+			orders:         []domain.WorkOrder{},
+			settlements:    []domain.Settlement{},
+			idemVehicles:   make(map[string]domain.Vehicle),
+			idemWorkers:    make(map[string]domain.Worker),
+			idemOrders:     make(map[string]domain.WorkOrder),
+			idemSettles:    make(map[string]domain.Settlement),
+			idemInvoiceRPC: make(map[string]domain.InvoiceSyncResult),
+		}
+		r.tenants[dbName] = st
 		return st
 	}
 	now := time.Now()
@@ -183,9 +214,9 @@ func (r *Repository) GetState(_ context.Context, dbName string) (domain.Workshop
 	copy(settlements, st.settlements)
 
 	return domain.WorkshopState{
-		NextOrderCode:   r.seq.Peek(dbName, "OT", baseOrderSeq),
-		NextWorkerCode:  r.seq.Peek(dbName, "TEC", baseWorkerSeq),
-		NextVehicleCode: r.seq.Peek(dbName, "VEH", baseVehicleSeq),
+		NextOrderCode:   r.seq.Peek(dbName, "OT", seqBase(dbName, demoBaseOrderSeq, baseOrderSeq)),
+		NextWorkerCode:  r.seq.Peek(dbName, "TEC", seqBase(dbName, demoBaseWorkerSeq, baseWorkerSeq)),
+		NextVehicleCode: r.seq.Peek(dbName, "VEH", seqBase(dbName, demoBaseVehicleSeq, baseVehicleSeq)),
 		Orders:          orders,
 		Workers:         workers,
 		Settlements:     settlements,
@@ -212,7 +243,7 @@ func (r *Repository) CreateVehicle(_ context.Context, dbName, idemKey string, in
 		}
 	}
 
-	seqCode := r.seq.Next(dbName, "VEH", baseVehicleSeq)
+	seqCode := r.seq.Next(dbName, "VEH", seqBase(dbName, demoBaseVehicleSeq, baseVehicleSeq))
 	veh, err := domain.BuildVehicle(seqCode, in)
 	if err != nil {
 		return domain.Vehicle{}, err
@@ -279,7 +310,7 @@ func (r *Repository) CreateWorkOrder(_ context.Context, dbName, idemKey string, 
 	}
 
 	vehCopy := st.vehicles[vehIdx]
-	orderCode := r.seq.Next(dbName, "OT", baseOrderSeq)
+	orderCode := r.seq.Next(dbName, "OT", seqBase(dbName, demoBaseOrderSeq, baseOrderSeq))
 	order, err := domain.BuildWorkOrder(orderCode, in, &vehCopy, workerName, time.Now())
 	if err != nil {
 		return domain.WorkOrder{}, err
@@ -323,7 +354,7 @@ func (r *Repository) CreateWorker(_ context.Context, dbName, idemKey string, in 
 		}
 	}
 
-	code := r.seq.Next(dbName, "TEC", baseWorkerSeq)
+	code := r.seq.Next(dbName, "TEC", seqBase(dbName, demoBaseWorkerSeq, baseWorkerSeq))
 	wk, err := domain.BuildWorker(code, in)
 	if err != nil {
 		return domain.Worker{}, err
@@ -350,7 +381,7 @@ func (r *Repository) SettleWorker(_ context.Context, dbName, idemKey, workerID s
 	for i := range st.workers {
 		if st.workers[i].ID == workerID || strings.EqualFold(st.workers[i].Code, workerID) {
 			candidate := st.workers[i]
-			liqCode := r.seq.Next(dbName, "LIQ", baseSettlementSeq)
+			liqCode := r.seq.Next(dbName, "LIQ", seqBase(dbName, demoBaseSettlementSeq, baseSettlementSeq))
 			settlement, err := candidate.Settle(liqCode, time.Now())
 			if err != nil {
 				return domain.Settlement{}, err

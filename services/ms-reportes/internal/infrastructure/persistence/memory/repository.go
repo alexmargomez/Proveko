@@ -2,12 +2,26 @@ package memory
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
 	"ms-reportes/internal/platform/seqmem"
 	"ms-reportes/internal/domain"
 )
+
+const demoTenantDB = "db_demo_empresa"
+
+func isDemoTenant(dbName string) bool {
+	return strings.TrimSpace(dbName) == demoTenantDB
+}
+
+func snapshotSeqStart(dbName string) int {
+	if isDemoTenant(dbName) {
+		return domain.SnapshotSeqStart
+	}
+	return 0
+}
 
 type tenantBucket struct {
 	snapshots     []*domain.ExecutiveSnapshot
@@ -31,8 +45,16 @@ func (r *Repository) ensureSeededLocked(dbName string) *tenantBucket {
 	if b, ok := r.buckets[dbName]; ok {
 		return b
 	}
+	if !isDemoTenant(dbName) {
+		b := &tenantBucket{
+			snapshots:     []*domain.ExecutiveSnapshot{},
+			idemSnapshots: make(map[string]*domain.ExecutiveSnapshot),
+		}
+		r.buckets[dbName] = b
+		return b
+	}
 	now := time.Now().UTC().Format("2006-01-02 15:04")
-	rptCode1 := r.seq.Next(dbName, domain.SnapshotSeqPrefix, domain.SnapshotSeqStart)
+	rptCode1 := r.seq.Next(dbName, domain.SnapshotSeqPrefix, snapshotSeqStart(dbName))
 
 	b := &tenantBucket{
 		snapshots: []*domain.ExecutiveSnapshot{
@@ -68,7 +90,7 @@ func (r *Repository) ListSnapshots(_ context.Context, dbName string) (*domain.Sn
 	for i, snap := range b.snapshots {
 		snapshots[i] = snap.Clone()
 	}
-	nextCode := r.seq.Peek(dbName, domain.SnapshotSeqPrefix, domain.SnapshotSeqStart)
+	nextCode := r.seq.Peek(dbName, domain.SnapshotSeqPrefix, snapshotSeqStart(dbName))
 
 	return &domain.SnapshotsState{
 		NextCode:         nextCode,
@@ -93,7 +115,7 @@ func (r *Repository) CreateSnapshot(_ context.Context, dbName, idemKey, createdB
 		return nil, err
 	}
 
-	code := r.seq.Next(dbName, domain.SnapshotSeqPrefix, domain.SnapshotSeqStart)
+	code := r.seq.Next(dbName, domain.SnapshotSeqPrefix, snapshotSeqStart(dbName))
 	snap, err := domain.NewExecutiveSnapshot(code, createdBy, in, now)
 	if err != nil {
 		return nil, err

@@ -20,13 +20,29 @@ import (
 )
 
 const (
-	schemaName        = "workshop"
-	serviceKey        = "ms-taller"
-	baseVehicleSeq    = 203
-	baseWorkerSeq     = 105
-	baseOrderSeq      = 705
-	baseSettlementSeq = 305
+	schemaName            = "workshop"
+	serviceKey            = "ms-taller"
+	demoDBName            = "db_demo_empresa"
+	demoBaseVehicleSeq    = 203
+	demoBaseWorkerSeq     = 105
+	demoBaseOrderSeq      = 705
+	demoBaseSettlementSeq = 305
+	baseVehicleSeq        = 200
+	baseWorkerSeq         = 100
+	baseOrderSeq          = 700
+	baseSettlementSeq     = 300
 )
+
+func isDemo(dbName string) bool {
+	return strings.TrimSpace(dbName) == demoDBName
+}
+
+func seqBase(dbName string, demoBase, cleanBase int) int {
+	if isDemo(dbName) {
+		return demoBase
+	}
+	return cleanBase
+}
 
 type Repository struct {
 	dbMgr  *dbpool.Manager
@@ -75,7 +91,7 @@ func (r *Repository) openAndSeed(ctx context.Context, dbName string) (*pgxpool.P
 		return nil, err
 	}
 
-	if !hasAny {
+	if !hasAny && isDemo(dbName) {
 		now := time.Now()
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO workshop.vehicles (id, plate, brand, vehicle_type, customer_id, customer_name, current_km, next_oil_km, soat_expiry)
@@ -136,15 +152,15 @@ func (r *Repository) GetState(ctx context.Context, dbName string) (domain.Worksh
 		return domain.WorkshopState{}, err
 	}
 
-	nextOrd, err := sequences.PeekSQL(ctx, pool, schemaName, "OT", baseOrderSeq)
+	nextOrd, err := sequences.PeekSQL(ctx, pool, schemaName, "OT", seqBase(dbName, demoBaseOrderSeq, baseOrderSeq))
 	if err != nil {
 		return domain.WorkshopState{}, err
 	}
-	nextWk, err := sequences.PeekSQL(ctx, pool, schemaName, "TEC", baseWorkerSeq)
+	nextWk, err := sequences.PeekSQL(ctx, pool, schemaName, "TEC", seqBase(dbName, demoBaseWorkerSeq, baseWorkerSeq))
 	if err != nil {
 		return domain.WorkshopState{}, err
 	}
-	nextVeh, err := sequences.PeekSQL(ctx, pool, schemaName, "VEH", baseVehicleSeq)
+	nextVeh, err := sequences.PeekSQL(ctx, pool, schemaName, "VEH", seqBase(dbName, demoBaseVehicleSeq, baseVehicleSeq))
 	if err != nil {
 		return domain.WorkshopState{}, err
 	}
@@ -299,7 +315,7 @@ func (r *Repository) CreateVehicle(ctx context.Context, dbName, idemKey string, 
 		return domain.Vehicle{}, apperr.Conflict("Ya existe un vehículo registrado con la placa " + normPlate)
 	}
 
-	code, err := sequences.NextSQL(ctx, tx, schemaName, "VEH", baseVehicleSeq)
+	code, err := sequences.NextSQL(ctx, tx, schemaName, "VEH", seqBase(dbName, demoBaseVehicleSeq, baseVehicleSeq))
 	if err != nil {
 		return domain.Vehicle{}, err
 	}
@@ -427,7 +443,7 @@ func (r *Repository) CreateWorkOrder(ctx context.Context, dbName, idemKey string
 	}
 
 	now := time.Now()
-	code, err := sequences.NextSQL(ctx, tx, schemaName, "OT", baseOrderSeq)
+	code, err := sequences.NextSQL(ctx, tx, schemaName, "OT", seqBase(dbName, demoBaseOrderSeq, baseOrderSeq))
 	if err != nil {
 		return domain.WorkOrder{}, err
 	}
@@ -546,7 +562,7 @@ func (r *Repository) CreateWorker(ctx context.Context, dbName, idemKey string, i
 		}
 	}
 
-	code, err := sequences.NextSQL(ctx, tx, schemaName, "TEC", baseWorkerSeq)
+	code, err := sequences.NextSQL(ctx, tx, schemaName, "TEC", seqBase(dbName, demoBaseWorkerSeq, baseWorkerSeq))
 	if err != nil {
 		return domain.Worker{}, err
 	}
@@ -622,7 +638,7 @@ func (r *Repository) SettleWorker(ctx context.Context, dbName, idemKey, workerID
 	}
 
 	now := time.Now()
-	liqCode, err := sequences.NextSQL(ctx, tx, schemaName, "LIQ", baseSettlementSeq)
+	liqCode, err := sequences.NextSQL(ctx, tx, schemaName, "LIQ", seqBase(dbName, demoBaseSettlementSeq, baseSettlementSeq))
 	if err != nil {
 		return domain.Settlement{}, err
 	}

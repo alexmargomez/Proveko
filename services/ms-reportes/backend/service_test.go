@@ -120,6 +120,9 @@ func TestReportesSnapshotsAndExecutive(t *testing.T) {
 	if snapOut.Snapshot.NetOperatingProfit != 7400000 {
 		t.Fatalf("expected net profit 7400000, got %v", snapOut.Snapshot.NetOperatingProfit)
 	}
+	if snapOut.Snapshot.Code != domain.SnapshotSeqPrefix+"-1" {
+		t.Fatalf("expected first snapshot %s-1 on a clean tenant, got %q", domain.SnapshotSeqPrefix, snapOut.Snapshot.Code)
+	}
 
 	// Executive report reflects latest snapshot
 	w = httptest.NewRecorder()

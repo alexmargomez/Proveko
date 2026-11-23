@@ -755,9 +755,27 @@ func TestConcurrentSameIdempotencyKeyAndPartialWarehouseTransfer(t *testing.T) {
 		}
 	}
 
-	// 2. Partial warehouse transfer: move 7 of 18 units from wh-principal to wh-auxiliar -> 11 in wh-principal & 7 in wh-auxiliar
+	// 2. Partial warehouse transfer: move 7 of 18 units from wh-principal to a newly created branch warehouse
+	stWh, rawWh := clusterCall(t, cl.coreURL, http.MethodPost, "/api/v1/inventario/warehouses", token, "idem-create-branch-wh", map[string]any{
+		"name":     "Bodega Sala de Ventas",
+		"location": "Mostrador Comercial",
+	})
+	if stWh != http.StatusCreated && stWh != http.StatusOK {
+		t.Fatalf("create destination warehouse failed (%d): %s", stWh, string(rawWh))
+	}
+	var whOut struct {
+		Warehouse struct {
+			ID string `json:"id"`
+		} `json:"warehouse"`
+	}
+	_ = json.Unmarshal(rawWh, &whOut)
+	destWarehouseID := whOut.Warehouse.ID
+	if destWarehouseID == "" {
+		t.Fatalf("destination warehouse id missing: %s", string(rawWh))
+	}
+
 	stTr, rawTr := clusterCall(t, cl.coreURL, http.MethodPost, "/api/v1/inventario/products/"+prodID+"/transfer", token, "idem-partial-transfer-7", map[string]any{
-		"targetWarehouseId": "wh-auxiliar",
+		"targetWarehouseId": destWarehouseID,
 		"qty":               7,
 		"note":              "Abastecimiento parcial sala de ventas",
 	})
@@ -783,7 +801,7 @@ func TestConcurrentSameIdempotencyKeyAndPartialWarehouseTransfer(t *testing.T) {
 			foundOrigin = true
 			originStock = p.Stock
 		}
-		if p.Code == prodCode && p.WarehouseID == "wh-auxiliar" {
+		if p.Code == prodCode && p.WarehouseID == destWarehouseID {
 			foundDest = true
 			destStock = p.Stock
 		}

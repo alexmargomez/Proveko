@@ -19,14 +19,31 @@ import (
 )
 
 const (
-	schemaName     = "scale"
-	serviceKey     = "ms-bascula"
-	baseTicketSeq  = 1005
-	baseVehicleSeq = 302
-	baseDriverSeq  = 202
-	baseCarrierSeq = 402
-	baseRouteSeq   = 105
+	schemaName         = "scale"
+	serviceKey         = "ms-bascula"
+	demoDBName         = "db_demo_empresa"
+	demoBaseTicketSeq  = 1005
+	demoBaseVehicleSeq = 302
+	demoBaseDriverSeq  = 202
+	demoBaseCarrierSeq = 402
+	demoBaseRouteSeq   = 105
+	baseTicketSeq      = 1000
+	baseVehicleSeq     = 300
+	baseDriverSeq      = 200
+	baseCarrierSeq     = 400
+	baseRouteSeq       = 100
 )
+
+func isDemo(dbName string) bool {
+	return strings.TrimSpace(dbName) == demoDBName
+}
+
+func seqBase(dbName string, demoBase, cleanBase int) int {
+	if isDemo(dbName) {
+		return demoBase
+	}
+	return cleanBase
+}
 
 type Repository struct {
 	dbMgr  *dbpool.Manager
@@ -76,7 +93,7 @@ func (r *Repository) openAndSeed(ctx context.Context, dbName string) (*pgxpool.P
 		return nil, err
 	}
 
-	if !hasAny {
+	if !hasAny && isDemo(dbName) {
 		now := time.Now()
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO scale.heavy_vehicles (id, code, plate, brand, axle_config, reference_tare_kg)
@@ -152,23 +169,23 @@ func (r *Repository) GetState(ctx context.Context, dbName string) (domain.ScaleS
 		return domain.ScaleState{}, err
 	}
 
-	nextTk, err := sequences.PeekSQL(ctx, pool, schemaName, "BAS", baseTicketSeq)
+	nextTk, err := sequences.PeekSQL(ctx, pool, schemaName, "BAS", seqBase(dbName, demoBaseTicketSeq, baseTicketSeq))
 	if err != nil {
 		return domain.ScaleState{}, err
 	}
-	nextVeh, err := sequences.PeekSQL(ctx, pool, schemaName, "CAM", baseVehicleSeq)
+	nextVeh, err := sequences.PeekSQL(ctx, pool, schemaName, "CAM", seqBase(dbName, demoBaseVehicleSeq, baseVehicleSeq))
 	if err != nil {
 		return domain.ScaleState{}, err
 	}
-	nextDrv, err := sequences.PeekSQL(ctx, pool, schemaName, "COND", baseDriverSeq)
+	nextDrv, err := sequences.PeekSQL(ctx, pool, schemaName, "COND", seqBase(dbName, demoBaseDriverSeq, baseDriverSeq))
 	if err != nil {
 		return domain.ScaleState{}, err
 	}
-	nextCar, err := sequences.PeekSQL(ctx, pool, schemaName, "TRN", baseCarrierSeq)
+	nextCar, err := sequences.PeekSQL(ctx, pool, schemaName, "TRN", seqBase(dbName, demoBaseCarrierSeq, baseCarrierSeq))
 	if err != nil {
 		return domain.ScaleState{}, err
 	}
-	nextRt, err := sequences.PeekSQL(ctx, pool, schemaName, "CAR", baseRouteSeq)
+	nextRt, err := sequences.PeekSQL(ctx, pool, schemaName, "CAR", seqBase(dbName, demoBaseRouteSeq, baseRouteSeq))
 	if err != nil {
 		return domain.ScaleState{}, err
 	}
@@ -338,7 +355,7 @@ func (r *Repository) CreateVehicle(ctx context.Context, dbName, idemKey string, 
 		return domain.HeavyVehicle{}, apperr.Conflict("Ya existe un tractocamión registrado con la placa " + normPlate)
 	}
 
-	code, err := sequences.NextSQL(ctx, tx, schemaName, "CAM", baseVehicleSeq)
+	code, err := sequences.NextSQL(ctx, tx, schemaName, "CAM", seqBase(dbName, demoBaseVehicleSeq, baseVehicleSeq))
 	if err != nil {
 		return domain.HeavyVehicle{}, err
 	}
@@ -403,7 +420,7 @@ func (r *Repository) CreateDriver(ctx context.Context, dbName, idemKey string, i
 		}
 	}
 
-	code, err := sequences.NextSQL(ctx, tx, schemaName, "COND", baseDriverSeq)
+	code, err := sequences.NextSQL(ctx, tx, schemaName, "COND", seqBase(dbName, demoBaseDriverSeq, baseDriverSeq))
 	if err != nil {
 		return domain.Driver{}, err
 	}
@@ -464,7 +481,7 @@ func (r *Repository) CreateCarrier(ctx context.Context, dbName, idemKey string, 
 		}
 	}
 
-	code, err := sequences.NextSQL(ctx, tx, schemaName, "TRN", baseCarrierSeq)
+	code, err := sequences.NextSQL(ctx, tx, schemaName, "TRN", seqBase(dbName, demoBaseCarrierSeq, baseCarrierSeq))
 	if err != nil {
 		return domain.Carrier{}, err
 	}
@@ -525,7 +542,7 @@ func (r *Repository) CreateRoute(ctx context.Context, dbName, idemKey string, in
 		}
 	}
 
-	code, err := sequences.NextSQL(ctx, tx, schemaName, "CAR", baseRouteSeq)
+	code, err := sequences.NextSQL(ctx, tx, schemaName, "CAR", seqBase(dbName, demoBaseRouteSeq, baseRouteSeq))
 	if err != nil {
 		return domain.CargoRoute{}, err
 	}
@@ -639,7 +656,7 @@ func (r *Repository) CreateTicket(ctx context.Context, dbName, idemKey string, i
 	}
 
 	now := time.Now()
-	code, err := sequences.NextSQL(ctx, tx, schemaName, "BAS", baseTicketSeq)
+	code, err := sequences.NextSQL(ctx, tx, schemaName, "BAS", seqBase(dbName, demoBaseTicketSeq, baseTicketSeq))
 	if err != nil {
 		return domain.ScaleTicket{}, err
 	}

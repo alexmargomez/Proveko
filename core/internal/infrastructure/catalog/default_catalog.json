@@ -364,7 +364,7 @@
         "summary": "Priorización y despacho de platos preparados."
       }
     ],
-    "bundleHash": "8879eab20281"
+    "bundleHash": "edb88ccdc452"
   },
   {
     "serviceKey": "ms-hoteleria",
@@ -545,7 +545,7 @@
         "summary": "Control de orígenes, destinos y mercancía a granel."
       }
     ],
-    "bundleHash": "17dca8052a64"
+    "bundleHash": "f7f311b34ea7"
   },
   {
     "serviceKey": "ms-compras",

@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 
 	"github.com/jackc/pgx/v5"
@@ -12,6 +13,15 @@ import (
 	"ms-impresiones/internal/domain"
 	"ms-impresiones/migrations"
 )
+
+const demoTenantDB = "db_demo_empresa"
+
+func initialBranding(dbName string) domain.BrandingConfig {
+	if strings.TrimSpace(dbName) == demoTenantDB {
+		return domain.DefaultSeedBranding()
+	}
+	return domain.DefaultNeutralBranding()
+}
 
 type Repository struct {
 	dbMgr  *dbpool.Manager
@@ -45,7 +55,7 @@ func (r *Repository) ensureSeeded(ctx context.Context, dbName string, pool *pgxp
 	}
 	r.seedMu.Unlock()
 
-	seed := domain.DefaultSeedBranding()
+	seed := initialBranding(dbName)
 	_, err := pool.Exec(ctx, `
 		INSERT INTO printing.branding_configs (
 			id, company_name, nit, tax_regime, address, phone, email, dian_resolution, footer_warranty, primary_color, default_format
@@ -78,7 +88,7 @@ func (r *Repository) GetBranding(ctx context.Context, dbName string) (domain.Bra
 	if err != nil {
 		return domain.BrandingConfig{}, err
 	}
-	return scanPrimaryBranding(ctx, pool)
+	return scanPrimaryBranding(ctx, pool, dbName)
 }
 
 func (r *Repository) SaveBranding(ctx context.Context, dbName, idemKey string, cfg domain.BrandingConfig) (domain.BrandingConfig, error) {
@@ -105,7 +115,7 @@ func (r *Repository) SaveBranding(ctx context.Context, dbName, idemKey string, c
 			return domain.BrandingConfig{}, apperr.Wrap(apperr.KindInternal, "Error al verificar idempotencia", idemErr)
 		}
 		if tag.RowsAffected() == 0 {
-			existing, readErr := scanPrimaryBranding(ctx, tx)
+			existing, readErr := scanPrimaryBranding(ctx, tx, dbName)
 			if readErr != nil {
 				return domain.BrandingConfig{}, readErr
 			}
@@ -181,7 +191,7 @@ type rowQuerier interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
-func scanPrimaryBranding(ctx context.Context, q rowQuerier) (domain.BrandingConfig, error) {
+func scanPrimaryBranding(ctx context.Context, q rowQuerier, dbName string) (domain.BrandingConfig, error) {
 	var b domain.BrandingConfig
 	err := q.QueryRow(ctx, `
 		SELECT company_name, nit, tax_regime, address, phone, email, dian_resolution, footer_warranty, primary_color, default_format
@@ -200,7 +210,7 @@ func scanPrimaryBranding(ctx context.Context, q rowQuerier) (domain.BrandingConf
 		&b.DefaultFormat,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.DefaultSeedBranding(), nil
+		return initialBranding(dbName), nil
 	}
 	if err != nil {
 		return domain.BrandingConfig{}, apperr.Wrap(apperr.KindInternal, "Error al consultar el membrete empresarial", err)

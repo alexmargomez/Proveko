@@ -94,8 +94,22 @@ func TestTaquillaCapacityInvariant(t *testing.T) {
 		return req
 	}
 
-	// Create event with capacity 5
 	w := httptest.NewRecorder()
+	svc.Handler().ServeHTTP(w, signReq(http.MethodGet, "/api/v1/taquilla/all", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("get all failed: %d %s", w.Code, w.Body.String())
+	}
+	var initial struct {
+		Events  []domain.TicketingEvent `json:"events"`
+		Tickets []domain.Ticket         `json:"tickets"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &initial)
+	if len(initial.Events) != 0 || len(initial.Tickets) != 0 {
+		t.Fatalf("expected empty state for new tenant, got %d events and %d tickets", len(initial.Events), len(initial.Tickets))
+	}
+
+	// Create event with capacity 5
+	w = httptest.NewRecorder()
 	svc.Handler().ServeHTTP(w, signReq(http.MethodPost, "/api/v1/taquilla/events", map[string]any{
 		"name":      "Función Privada",
 		"zone":      "VIP",

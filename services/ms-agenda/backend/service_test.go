@@ -107,6 +107,9 @@ func TestAgendaAntiOverlapInvariant(t *testing.T) {
 		Resource domain.ProfResource `json:"resource"`
 	}
 	_ = json.Unmarshal(w.Body.Bytes(), &resOut)
+	if resOut.Resource.Code != domain.ResourceSeqPrefix+"-1" {
+		t.Fatalf("expected first resource %s-1 on a clean tenant, got %q", domain.ResourceSeqPrefix, resOut.Resource.Code)
+	}
 
 	// Book slot
 	w = httptest.NewRecorder()

@@ -84,6 +84,27 @@ func (r *Repository) ensureSeeded(ctx context.Context, dbName string, pool *pgxp
 		return nil
 	}
 
+	if strings.TrimSpace(dbName) != "db_demo_empresa" {
+		wh1Code, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.WarehouseSeqPrefix, 0)
+		if err != nil {
+			return apperr.Internal(err.Error())
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO inventory.warehouses (id, code, name, location, manager)
+			VALUES ('wh-principal', $1, 'Bodega Principal', 'Sede Principal', '')
+			ON CONFLICT (id) DO NOTHING
+		`, wh1Code); err != nil {
+			return apperr.Internal(err.Error())
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return apperr.Internal(err.Error())
+		}
+		r.seedMu.Lock()
+		r.seeded[dbName] = true
+		r.seedMu.Unlock()
+		return nil
+	}
+
 	wh1Code, err := sequences.NextSQL(ctx, tx, domain.SchemaName, domain.WarehouseSeqPrefix, domain.WarehouseSeqStart)
 	if err != nil {
 		return apperr.Internal(err.Error())

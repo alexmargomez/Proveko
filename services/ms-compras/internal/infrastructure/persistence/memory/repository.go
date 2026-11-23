@@ -13,6 +13,26 @@ import (
 	"ms-compras/internal/domain"
 )
 
+const demoTenantDB = "db_demo_empresa"
+
+func isDemoTenant(dbName string) bool {
+	return strings.TrimSpace(dbName) == demoTenantDB
+}
+
+func supplierSeqStart(dbName string) int {
+	if isDemoTenant(dbName) {
+		return domain.SupplierSeqStart
+	}
+	return 0
+}
+
+func orderSeqStart(dbName string) int {
+	if isDemoTenant(dbName) {
+		return domain.OrderSeqStart
+	}
+	return 0
+}
+
 type tenantBucket struct {
 	suppliers   []*domain.Supplier
 	orders      []*domain.PurchaseOrder
@@ -36,10 +56,19 @@ func (r *Repository) ensureSeededLocked(dbName string) *tenantBucket {
 	if b, ok := r.tenants[dbName]; ok {
 		return b
 	}
+	if !isDemoTenant(dbName) {
+		b := &tenantBucket{
+			suppliers:   []*domain.Supplier{},
+			orders:      []*domain.PurchaseOrder{},
+			idempotency: make(map[string][]byte),
+		}
+		r.tenants[dbName] = b
+		return b
+	}
 	now := time.Now().UTC().Format("2006-01-02 15:04")
-	code1 := r.seq.Next(dbName, domain.SupplierSeqPrefix, domain.SupplierSeqStart)
-	code2 := r.seq.Next(dbName, domain.SupplierSeqPrefix, domain.SupplierSeqStart)
-	ordCode1 := r.seq.Next(dbName, domain.OrderSeqPrefix, domain.OrderSeqStart)
+	code1 := r.seq.Next(dbName, domain.SupplierSeqPrefix, supplierSeqStart(dbName))
+	code2 := r.seq.Next(dbName, domain.SupplierSeqPrefix, supplierSeqStart(dbName))
+	ordCode1 := r.seq.Next(dbName, domain.OrderSeqPrefix, orderSeqStart(dbName))
 
 	s1 := &domain.Supplier{
 		ID:        "sup-demo-1",
@@ -106,8 +135,8 @@ func (r *Repository) GetAll(_ context.Context, dbName string) (*domain.AllState,
 	}
 
 	return &domain.AllState{
-		NextSupplierCode: r.seq.Peek(dbName, domain.SupplierSeqPrefix, domain.SupplierSeqStart),
-		NextOrderCode:    r.seq.Peek(dbName, domain.OrderSeqPrefix, domain.OrderSeqStart),
+		NextSupplierCode: r.seq.Peek(dbName, domain.SupplierSeqPrefix, supplierSeqStart(dbName)),
+		NextOrderCode:    r.seq.Peek(dbName, domain.OrderSeqPrefix, orderSeqStart(dbName)),
 		Suppliers:        suppliers,
 		Orders:           orders,
 	}, nil
@@ -147,7 +176,7 @@ func (r *Repository) CreateSupplier(_ context.Context, dbName, idemKey string, i
 		}
 	}
 
-	code := r.seq.Next(dbName, domain.SupplierSeqPrefix, domain.SupplierSeqStart)
+	code := r.seq.Next(dbName, domain.SupplierSeqPrefix, supplierSeqStart(dbName))
 	now := time.Now().UTC().Format("2006-01-02 15:04")
 	sup, err := domain.NewSupplier(money.NewID("sup"), code, in, now)
 	if err != nil {
@@ -192,7 +221,7 @@ func (r *Repository) PeekNextOrderCode(_ context.Context, dbName string) (string
 	defer r.mu.Unlock()
 
 	r.ensureSeededLocked(dbName)
-	return r.seq.Peek(dbName, domain.OrderSeqPrefix, domain.OrderSeqStart), nil
+	return r.seq.Peek(dbName, domain.OrderSeqPrefix, orderSeqStart(dbName)), nil
 }
 
 func (r *Repository) FindIdempotentOrder(_ context.Context, dbName, idemKey string) (*domain.PurchaseOrder, error) {
@@ -245,7 +274,7 @@ func (r *Repository) CreateOrder(
 		return nil, apperr.NotFound("Proveedor no encontrado")
 	}
 
-	code := r.seq.Next(dbName, domain.OrderSeqPrefix, domain.OrderSeqStart)
+	code := r.seq.Next(dbName, domain.OrderSeqPrefix, orderSeqStart(dbName))
 	now := time.Now().UTC().Format("2006-01-02 15:04")
 	ord, err := domain.NewPurchaseOrder(code, sup, in, inventorySynced, actor, now)
 	if err != nil {

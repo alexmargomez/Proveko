@@ -69,7 +69,6 @@ export const RegistrationWizard: React.FC<{
     catalog,
     businessPresets,
     pricingCop,
-    role,
     apiPost,
     loginWithToken,
     refreshBootstrap,
@@ -252,7 +251,7 @@ export const RegistrationWizard: React.FC<{
         tenant: TenantSummary;
       }>('/api/v1/core/register', payload);
 
-      if (role === 'superadmin' && res.role === 'superadmin') {
+      if (res.role === 'superadmin' && !res.token) {
         setCheckoutModalOpen(false);
         await refreshBootstrap();
         setPublicView('app');

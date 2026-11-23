@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"sync"
 	"time"
 
@@ -11,6 +12,26 @@ import (
 	"ms-agenda/internal/platform/seqmem"
 	"ms-agenda/internal/domain"
 )
+
+const demoTenantDB = "db_demo_empresa"
+
+func isDemoTenant(dbName string) bool {
+	return strings.TrimSpace(dbName) == demoTenantDB
+}
+
+func resourceSeqStart(dbName string) int {
+	if isDemoTenant(dbName) {
+		return domain.ResourceSeqStart
+	}
+	return 0
+}
+
+func appointmentSeqStart(dbName string) int {
+	if isDemoTenant(dbName) {
+		return domain.AppointmentSeqStart
+	}
+	return 0
+}
 
 type tenantBucket struct {
 	resources    []*domain.ProfResource
@@ -35,12 +56,21 @@ func (r *Repository) ensureSeededLocked(dbName string) *tenantBucket {
 	if b, ok := r.tenants[dbName]; ok {
 		return b
 	}
+	if !isDemoTenant(dbName) {
+		b := &tenantBucket{
+			resources:    []*domain.ProfResource{},
+			appointments: []*domain.Appointment{},
+			idempotency:  make(map[string][]byte),
+		}
+		r.tenants[dbName] = b
+		return b
+	}
 	now := time.Now().UTC().Format("2006-01-02 15:04")
 	slot := time.Now().UTC().Add(2 * time.Hour).Format("2006-01-02") + " 10:00"
 
-	resCode1 := r.seq.Next(dbName, domain.ResourceSeqPrefix, domain.ResourceSeqStart)
-	resCode2 := r.seq.Next(dbName, domain.ResourceSeqPrefix, domain.ResourceSeqStart)
-	aptCode1 := r.seq.Next(dbName, domain.AppointmentSeqPrefix, domain.AppointmentSeqStart)
+	resCode1 := r.seq.Next(dbName, domain.ResourceSeqPrefix, resourceSeqStart(dbName))
+	resCode2 := r.seq.Next(dbName, domain.ResourceSeqPrefix, resourceSeqStart(dbName))
+	aptCode1 := r.seq.Next(dbName, domain.AppointmentSeqPrefix, appointmentSeqStart(dbName))
 
 	res1 := &domain.ProfResource{
 		ID:        "res-demo-1",
@@ -101,8 +131,8 @@ func (r *Repository) GetAll(_ context.Context, dbName string) (*domain.AllState,
 	}
 
 	return &domain.AllState{
-		NextCode:         r.seq.Peek(dbName, domain.AppointmentSeqPrefix, domain.AppointmentSeqStart),
-		NextResourceCode: r.seq.Peek(dbName, domain.ResourceSeqPrefix, domain.ResourceSeqStart),
+		NextCode:         r.seq.Peek(dbName, domain.AppointmentSeqPrefix, appointmentSeqStart(dbName)),
+		NextResourceCode: r.seq.Peek(dbName, domain.ResourceSeqPrefix, resourceSeqStart(dbName)),
 		Resources:        resources,
 		Appointments:     appointments,
 	}, nil
@@ -122,7 +152,7 @@ func (r *Repository) CreateResource(_ context.Context, dbName, idemKey string, i
 		}
 	}
 
-	code := r.seq.Next(dbName, domain.ResourceSeqPrefix, domain.ResourceSeqStart)
+	code := r.seq.Next(dbName, domain.ResourceSeqPrefix, resourceSeqStart(dbName))
 	now := time.Now().UTC().Format("2006-01-02 15:04")
 	res, err := domain.NewProfResource(money.NewID("res"), code, in, now)
 	if err != nil {
@@ -174,7 +204,7 @@ func (r *Repository) CreateAppointment(_ context.Context, dbName, idemKey string
 		}
 	}
 
-	code := r.seq.Next(dbName, domain.AppointmentSeqPrefix, domain.AppointmentSeqStart)
+	code := r.seq.Next(dbName, domain.AppointmentSeqPrefix, appointmentSeqStart(dbName))
 	now := time.Now().UTC().Format("2006-01-02 15:04")
 	apt, err := domain.NewAppointment(code, res, in, now)
 	if err != nil {

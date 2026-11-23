@@ -16,7 +16,19 @@ const (
 	baseIncomeSeq  = 302
 	baseExpenseSeq = 507
 	baseBankSeq    = 207
+	demoTenantDB   = "db_demo_empresa"
 )
+
+func isDemoTenant(dbName string) bool {
+	return strings.TrimSpace(dbName) == demoTenantDB
+}
+
+func seqBasesForDB(dbName string) (int, int, int) {
+	if isDemoTenant(dbName) {
+		return baseIncomeSeq, baseExpenseSeq, baseBankSeq
+	}
+	return 0, 0, 0
+}
 
 type tenantStore struct {
 	incomes       []domain.CashIncome
@@ -42,6 +54,16 @@ func NewRepository() *Repository {
 
 func (r *Repository) ensureSeeded(dbName string) *tenantStore {
 	if st, ok := r.tenants[dbName]; ok {
+		return st
+	}
+	if !isDemoTenant(dbName) {
+		st := &tenantStore{
+			incomes:       []domain.CashIncome{},
+			expenses:      []domain.Expense{},
+			bankMovements: []domain.BankMovement{},
+			idempotency:   make(map[string][]byte),
+		}
+		r.tenants[dbName] = st
 		return st
 	}
 	now := time.Now()
@@ -133,10 +155,11 @@ func (r *Repository) GetSnapshot(_ context.Context, dbName string) (domain.Treas
 		movements[i] = st.bankMovements[i].Clone()
 	}
 
+	incBase, expBase, bcoBase := seqBasesForDB(dbName)
 	return domain.TreasurySnapshot{
-		NextIncomeCode:  r.seq.Peek(dbName, "ING", baseIncomeSeq),
-		NextExpenseCode: r.seq.Peek(dbName, "EGR", baseExpenseSeq),
-		NextBankCode:    r.seq.Peek(dbName, "BCO", baseBankSeq),
+		NextIncomeCode:  r.seq.Peek(dbName, "ING", incBase),
+		NextExpenseCode: r.seq.Peek(dbName, "EGR", expBase),
+		NextBankCode:    r.seq.Peek(dbName, "BCO", bcoBase),
 		Incomes:         incomes,
 		Expenses:        expenses,
 		BankMovements:   movements,
@@ -158,7 +181,8 @@ func (r *Repository) CreateIncome(_ context.Context, dbName, idemKey string, in 
 		}
 	}
 
-	code := r.seq.Next(dbName, "ING", baseIncomeSeq)
+	incBase, _, _ := seqBasesForDB(dbName)
+	code := r.seq.Next(dbName, "ING", incBase)
 	inc, err := domain.BuildCashIncome(code, in, actor, time.Now())
 	if err != nil {
 		return domain.CashIncome{}, err
@@ -187,7 +211,8 @@ func (r *Repository) CreateExpense(_ context.Context, dbName, idemKey string, in
 		}
 	}
 
-	code := r.seq.Next(dbName, "EGR", baseExpenseSeq)
+	_, expBase, _ := seqBasesForDB(dbName)
+	code := r.seq.Next(dbName, "EGR", expBase)
 	exp, err := domain.BuildExpense(code, in, actor, time.Now())
 	if err != nil {
 		return domain.Expense{}, err
@@ -235,7 +260,8 @@ func (r *Repository) CreateBankMovement(_ context.Context, dbName, idemKey strin
 		}
 	}
 
-	code := r.seq.Next(dbName, "BCO", baseBankSeq)
+	_, _, bcoBase := seqBasesForDB(dbName)
+	code := r.seq.Next(dbName, "BCO", bcoBase)
 	mov, err := domain.BuildBankMovement(code, in, actor, time.Now())
 	if err != nil {
 		return domain.BankMovement{}, err

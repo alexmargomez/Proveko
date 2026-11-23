@@ -2,10 +2,20 @@ package memory
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"ms-impresiones/internal/domain"
 )
+
+const demoTenantDB = "db_demo_empresa"
+
+func initialBranding(dbName string) domain.BrandingConfig {
+	if strings.TrimSpace(dbName) == demoTenantDB {
+		return domain.DefaultSeedBranding()
+	}
+	return domain.DefaultNeutralBranding()
+}
 
 type logEntry struct {
 	req    domain.RenderRequest
@@ -34,7 +44,7 @@ func (r *Repository) ensureSeededLocked(dbName string) *tenantStore {
 		return st
 	}
 	st := &tenantStore{
-		branding: domain.DefaultSeedBranding(),
+		branding: initialBranding(dbName),
 		idemKeys: make(map[string]domain.BrandingConfig),
 		logs:     make([]logEntry, 0, 16),
 	}
