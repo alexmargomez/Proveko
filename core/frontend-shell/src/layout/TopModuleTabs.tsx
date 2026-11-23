@@ -17,17 +17,8 @@ export const TopModuleTabs: React.FC<{
     logout,
     impersonateTenant,
   } = useSession();
-  const { catalog, hasService, hasModule, hasSubmodule } = useLicensing();
-  const {
-    workstationView,
-    setWorkstationView,
-    activeServiceKey,
-    activeModuleKey,
-    setActiveModuleKey,
-    activeSubmoduleKey,
-    setActiveSubmoduleKey,
-    navigateTo,
-  } = useNavigation();
+  const { catalog, hasService, hasModule } = useLicensing();
+  const { setWorkstationView, navigateTo } = useNavigation();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -59,12 +50,6 @@ export const TopModuleTabs: React.FC<{
       document.removeEventListener('keydown', onKeyDown);
     };
   }, []);
-
-  const currentService = catalog.find((s) => s.serviceKey === activeServiceKey);
-  const activeModules = (currentService?.modules || []).filter((m) => hasModule(m.moduleKey));
-  const activeSubmodules = (currentService?.submodules || []).filter(
-    (sm) => sm.dependsOnModule === activeModuleKey && hasSubmodule(activeModuleKey, sm.submoduleKey)
-  );
 
   const searchItems = useMemo(() => {
     const list: { id: string; title: string; subtitle: string; icon: string; run: () => void }[] = [
@@ -155,8 +140,7 @@ export const TopModuleTabs: React.FC<{
   }, [role, roleTemplates, userProfile?.internalRole]);
 
   return (
-    <>
-      <header className="pk-topbar">
+    <header className="pk-topbar">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {onToggleMobileMenu && (
             <button
@@ -442,79 +426,100 @@ export const TopModuleTabs: React.FC<{
                 </button>
               </div>
             )}
-          </div>
         </div>
-      </header>
+      </div>
+    </header>
+  );
+};
 
-      {workstationView === 'service' && currentService && (
-        <div className="pk-ws-header">
-          <div className="pk-ws-title-row">
-            <h1 className="pk-ws-title">
-              <span
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 9,
-                  background: '#eff6ff',
-                  color: 'var(--pk-primary)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
+export const ServiceContextHeader: React.FC = () => {
+  const { catalog, hasModule, hasSubmodule } = useLicensing();
+  const {
+    workstationView,
+    activeServiceKey,
+    activeModuleKey,
+    setActiveModuleKey,
+    activeSubmoduleKey,
+    setActiveSubmoduleKey,
+  } = useNavigation();
+
+  const currentService = catalog.find((s) => s.serviceKey === activeServiceKey);
+  if (workstationView !== 'service' || !currentService) {
+    return null;
+  }
+
+  const activeModules = (currentService.modules || []).filter((m) => hasModule(m.moduleKey));
+  const activeSubmodules = (currentService.submodules || []).filter(
+    (sm) => sm.dependsOnModule === activeModuleKey && hasSubmodule(activeModuleKey, sm.submoduleKey)
+  );
+
+  return (
+    <div className="pk-ws-header">
+      <div className="pk-ws-title-row">
+        <h1 className="pk-ws-title">
+          <span
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 9,
+              background: '#eff6ff',
+              color: 'var(--pk-primary)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <PkIcon name={currentService.serviceKey} size={19} />
+          </span>
+          <span>{currentService.displayName}</span>
+        </h1>
+        {activeSubmodules.length > 1 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            {activeSubmodules.map((sm) => {
+              const selected = sm.submoduleKey === activeSubmoduleKey;
+              return (
+                <button
+                  type="button"
+                  key={sm.submoduleKey}
+                  onClick={() => setActiveSubmoduleKey(sm.submoduleKey)}
+                  style={{
+                    border: selected ? '1px solid var(--pk-primary)' : '1px solid #cbd5e1',
+                    background: selected ? '#eff6ff' : '#ffffff',
+                    color: selected ? 'var(--pk-primary)' : '#475569',
+                    borderRadius: 999,
+                    padding: '4px 11px',
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {sm.displayName}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {activeModules.length > 0 && (
+        <nav className="pk-folder-tabs" role="tablist" aria-label="Secciones del área activa">
+          {activeModules.map((mod) => {
+            const active = mod.moduleKey === activeModuleKey;
+            return (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={active}
+                key={mod.moduleKey}
+                className={`pk-folder-tab ${active ? 'active' : ''}`}
+                onClick={() => setActiveModuleKey(mod.moduleKey)}
               >
-                <PkIcon name={currentService.serviceKey} size={19} />
-              </span>
-              <span>{currentService.displayName}</span>
-            </h1>
-            {activeSubmodules.length > 1 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                {activeSubmodules.map((sm) => {
-                  const selected = sm.submoduleKey === activeSubmoduleKey;
-                  return (
-                    <button
-                      type="button"
-                      key={sm.submoduleKey}
-                      onClick={() => setActiveSubmoduleKey(sm.submoduleKey)}
-                      style={{
-                        border: selected ? '1px solid var(--pk-primary)' : '1px solid #cbd5e1',
-                        background: selected ? '#eff6ff' : '#ffffff',
-                        color: selected ? 'var(--pk-primary)' : '#475569',
-                        borderRadius: 999,
-                        padding: '4px 11px',
-                        fontSize: 11.5,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {sm.displayName}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {activeModules.length > 0 && (
-            <nav className="pk-folder-tabs" role="tablist" aria-label="Secciones del área activa">
-              {activeModules.map((mod) => {
-                const active = mod.moduleKey === activeModuleKey;
-                return (
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={active}
-                    key={mod.moduleKey}
-                    className={`pk-folder-tab ${active ? 'active' : ''}`}
-                    onClick={() => setActiveModuleKey(mod.moduleKey)}
-                  >
-                    <span>{mod.displayName}</span>
-                  </button>
-                );
-              })}
-            </nav>
-          )}
-        </div>
+                <span>{mod.displayName}</span>
+              </button>
+            );
+          })}
+        </nav>
       )}
-    </>
+    </div>
   );
 };
