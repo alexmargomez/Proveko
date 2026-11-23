@@ -7,19 +7,48 @@ import React, {
   useMemo,
   useRef,
 } from 'react';
-import { ServiceManifest, TenantSummary } from '../types/platform';
+import {
+  BusinessPresetSpec,
+  PricingMatrixCOP,
+  RoleTemplateSpec,
+  ServiceManifest,
+  TenantSummary,
+  UserProfileSummary,
+} from '../types/platform';
 
 export type PublicViewMode = 'landing' | 'login' | 'register' | 'app';
+export type WorkstationViewMode = 'home' | 'service' | 'users' | 'activate-modules';
 
 export interface SessionContextValue {
   token: string;
   role: string;
   username: string;
+  userProfile: UserProfileSummary | null;
+  isCompanyAdmin: boolean;
+  isDemo: boolean;
+  isBootstrapping: boolean;
   publicView: PublicViewMode;
   setPublicView: (v: PublicViewMode) => void;
   tenant: TenantSummary | null;
+  companyTenant: TenantSummary | null;
   tenantsList: TenantSummary[];
-  loginWithToken: (tok: string, role: string, username: string, ten: TenantSummary) => void;
+  businessPresets: BusinessPresetSpec[];
+  pricingCop: PricingMatrixCOP | null;
+  roleTemplates: RoleTemplateSpec[];
+  loginWithToken: (
+    tok: string,
+    role: string,
+    username: string,
+    ten: TenantSummary,
+    extra?: {
+      fullName?: string;
+      internalRole?: string;
+      isCompanyAdmin?: boolean;
+      isDemo?: boolean;
+      companyTenant?: TenantSummary | null;
+    }
+  ) => void;
+  startDemoSession: (rolePreview?: string) => Promise<void>;
   impersonateTenant: (tenantId: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshBootstrap: () => Promise<void>;
@@ -40,6 +69,8 @@ export interface LicenseContextValue {
 }
 
 export interface NavigationContextValue {
+  workstationView: WorkstationViewMode;
+  setWorkstationView: (view: WorkstationViewMode) => void;
   activeServiceKey: string;
   setActiveServiceKey: (key: string) => void;
   activeModuleKey: string;
@@ -76,6 +107,24 @@ function makeIdempotencyKey(): string {
   return `idem-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function readStoredNav<T extends string>(key: string, fallback: T): T {
+  try {
+    const val = sessionStorage.getItem(key);
+    return val ? (val as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStoredNav(key: string, val: string): void {
+  try {
+    if (val) sessionStorage.setItem(key, val);
+    else sessionStorage.removeItem(key);
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
 const SandboxedPrintModal: React.FC<{
   html: string;
   title: string;
@@ -107,7 +156,7 @@ const SandboxedPrintModal: React.FC<{
         onClick={(e) => e.stopPropagation()}
       >
         <div className="pk-card-head" style={{ background: '#023047', color: '#fff' }}>
-          <div className="pk-card-title">{title || 'Vista previa de documento'}</div>
+          <div className="pk-card-title" style={{ color: '#fff' }}>{title || 'Vista previa de documento'}</div>
           <div className="pk-row-actions">
             <button type="button" className="pk-btn pk-btn-emerald pk-btn-sm" onClick={handlePrint}>
               Imprimir / Guardar PDF
@@ -137,22 +186,57 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     localStorage.removeItem('pk_jwt');
     return localStorage.getItem('pk_has_session') === '1';
   });
+  const [isBootstrapping, setIsBootstrapping] = useState<boolean>(
+    () => localStorage.getItem('pk_has_session') === '1'
+  );
   const [role, setRole] = useState<string>(() => localStorage.getItem('pk_role') || 'cliente');
   const [username, setUsername] = useState<string>(() => localStorage.getItem('pk_user') || '');
-  const [publicView, setPublicView] = useState<PublicViewMode>(() =>
-    localStorage.getItem('pk_has_session') === '1' ? 'app' : 'landing'
+  const [userProfile, setUserProfile] = useState<UserProfileSummary | null>(null);
+  const [publicView, setPublicViewState] = useState<PublicViewMode>(() =>
+    localStorage.getItem('pk_has_session') === '1' ? 'app' : readStoredNav<PublicViewMode>('pk_pub_view', 'landing')
+  );
+  const [workstationView, setWorkstationViewState] = useState<WorkstationViewMode>(() =>
+    readStoredNav<WorkstationViewMode>('pk_ws_view', 'home')
   );
   const [tenant, setTenant] = useState<TenantSummary | null>(null);
+  const [companyTenant, setCompanyTenant] = useState<TenantSummary | null>(null);
   const [tenantsList, setTenantsList] = useState<TenantSummary[]>([]);
   const [catalog, setCatalog] = useState<ServiceManifest[]>([]);
-  const [activeServiceKey, setActiveServiceKeyState] = useState<string>('');
-  const [activeModuleKey, setActiveModuleKey] = useState<string>('');
+  const [businessPresets, setBusinessPresets] = useState<BusinessPresetSpec[]>([]);
+  const [pricingCop, setPricingCop] = useState<PricingMatrixCOP | null>(null);
+  const [roleTemplates, setRoleTemplates] = useState<RoleTemplateSpec[]>([]);
+  const [activeServiceKey, setActiveServiceKeyState] = useState<string>(() =>
+    readStoredNav<string>('pk_active_svc', '')
+  );
+  const [activeModuleKey, setActiveModuleKeyState] = useState<string>(() =>
+    readStoredNav<string>('pk_active_mod', '')
+  );
   const [activeSubmoduleKey, setActiveSubmoduleKey] = useState<string>('');
   const [roleViewFilter, setRoleViewFilter] = useState<string>('ALL');
   const [toastMsg, setToastMsg] = useState<string>('');
   const [incomingPayload, setIncomingPayload] = useState<Record<string, unknown> | null>(null);
   const [printPreview, setPrintPreview] = useState<{ html: string; title: string } | null>(null);
+
   const toastTimerRef = useRef<number | null>(null);
+  const activeSvcRef = useRef<string>(activeServiceKey);
+  const activeModRef = useRef<string>(activeModuleKey);
+  activeSvcRef.current = activeServiceKey;
+  activeModRef.current = activeModuleKey;
+
+  const setPublicView = useCallback((v: PublicViewMode) => {
+    setPublicViewState(v);
+    writeStoredNav('pk_pub_view', v);
+  }, []);
+
+  const setWorkstationView = useCallback((v: WorkstationViewMode) => {
+    setWorkstationViewState(v);
+    writeStoredNav('pk_ws_view', v);
+  }, []);
+
+  const setActiveModuleKey = useCallback((k: string) => {
+    setActiveModuleKeyState(k);
+    writeStoredNav('pk_active_mod', k);
+  }, []);
 
   const toast = useCallback((msg: string) => {
     setToastMsg(msg);
@@ -162,7 +246,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     toastTimerRef.current = window.setTimeout(() => {
       setToastMsg('');
       toastTimerRef.current = null;
-    }, 3400);
+    }, 3600);
   }, []);
 
   const clearLocalSession = useCallback(() => {
@@ -170,19 +254,28 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     localStorage.removeItem('pk_has_session');
     localStorage.removeItem('pk_role');
     localStorage.removeItem('pk_user');
+    writeStoredNav('pk_ws_view', '');
+    writeStoredNav('pk_active_svc', '');
+    writeStoredNav('pk_active_mod', '');
+    writeStoredNav('pk_impersonating', '');
     setToken('');
     setHasSession(false);
+    setIsBootstrapping(false);
     setRole('cliente');
     setUsername('');
+    setUserProfile(null);
     setTenant(null);
+    setCompanyTenant(null);
     setTenantsList([]);
     setActiveServiceKeyState('');
-    setActiveModuleKey('');
+    setActiveModuleKeyState('');
+    setActiveSubmoduleKey('');
     setRoleViewFilter('ALL');
+    setWorkstationViewState('home');
     setIncomingPayload(null);
     setPrintPreview(null);
     setPublicView('landing');
-  }, []);
+  }, [setPublicView]);
 
   const buildHeaders = useCallback(
     (extra?: Record<string, string>): Record<string, string> => {
@@ -207,13 +300,16 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       } catch {
         data = null;
       }
-      if (res.status === 401 && !path.endsWith('/login')) {
+      if (res.status === 401 && !path.endsWith('/login') && !path.endsWith('/public-catalog')) {
         clearLocalSession();
       }
       if (!res.ok || data?.ok === false) {
         const errMsg = (typeof data?.error === 'string' && data.error) || `Error HTTP ${res.status}`;
         toast(errMsg);
         throw new Error(errMsg);
+      }
+      if (typeof data?.token === 'string' && data.token) {
+        setToken(data.token);
       }
       return data as T;
     },
@@ -262,43 +358,88 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [apiRequest]
   );
 
+  useEffect(() => {
+    let active = true;
+    fetch('/api/v1/core/public-catalog', { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!active || !data) return;
+        if (Array.isArray(data.catalog) && data.catalog.length > 0) {
+          setCatalog((prev) => (prev.length > 0 ? prev : data.catalog));
+        }
+        if (Array.isArray(data.presets)) setBusinessPresets(data.presets);
+        if (data.pricing) setPricingCop(data.pricing);
+        if (Array.isArray(data.roleTemplates)) setRoleTemplates(data.roleTemplates);
+      })
+      .catch(() => {
+        // Offline ignored
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const applyCatalogSelection = useCallback((nextCatalog: ServiceManifest[], nextTenant: TenantSummary | null) => {
     if (!nextTenant || nextCatalog.length === 0) return;
-    setActiveServiceKeyState((prev) => {
-      const valid = nextCatalog.find(
-        (s) => s.serviceKey === prev && nextTenant.activeServices.includes(s.serviceKey)
+    const prevSvc = activeSvcRef.current;
+    const prevMod = activeModRef.current;
+    const valid = nextCatalog.find(
+      (s) => s.serviceKey === prevSvc && nextTenant.activeServices.includes(s.serviceKey)
+    );
+    const chosen = valid || nextCatalog.find((s) => nextTenant.activeServices.includes(s.serviceKey)) || nextCatalog[0];
+    if (!chosen) return;
+
+    setActiveServiceKeyState(chosen.serviceKey);
+    writeStoredNav('pk_active_svc', chosen.serviceKey);
+
+    if (chosen.modules.length > 0) {
+      const keepMod = chosen.modules.find(
+        (m) => m.moduleKey === prevMod && nextTenant.activeModules.includes(m.moduleKey)
       );
-      const chosen = valid || nextCatalog.find((s) => nextTenant.activeServices.includes(s.serviceKey)) || nextCatalog[0];
-      if (chosen && chosen.modules.length > 0) {
-        setActiveModuleKey((prevMod) => {
-          const keepMod = chosen.modules.find(
-            (m) => m.moduleKey === prevMod && nextTenant.activeModules.includes(m.moduleKey)
-          );
-          if (keepMod) return keepMod.moduleKey;
-          const firstEnabled =
-            chosen.modules.find((m) => nextTenant.activeModules.includes(m.moduleKey)) || chosen.modules[0];
-          return firstEnabled.moduleKey;
-        });
-      }
-      return chosen.serviceKey;
-    });
+      const firstEnabled =
+        keepMod ||
+        chosen.modules.find((m) => nextTenant.activeModules.includes(m.moduleKey)) ||
+        chosen.modules[0];
+      setActiveModuleKeyState(firstEnabled.moduleKey);
+      writeStoredNav('pk_active_mod', firstEnabled.moduleKey);
+    }
   }, []);
 
   const refreshBootstrap = useCallback(async () => {
-    if (!token && !hasSession) return;
+    if (!token && !hasSession) {
+      setIsBootstrapping(false);
+      return;
+    }
     try {
       const data = await apiGet<{
         catalog: ServiceManifest[];
         tenant: TenantSummary;
+        companyTenant?: TenantSummary;
         tenants?: TenantSummary[];
         userRole?: string;
         username?: string;
+        userProfile?: UserProfileSummary;
+        presets?: BusinessPresetSpec[];
+        pricing?: PricingMatrixCOP;
+        roleTemplates?: RoleTemplateSpec[];
       }>('/api/v1/core/bootstrap');
       const nextCatalog = data.catalog || [];
       const nextTenant = data.tenant || null;
       setCatalog(nextCatalog);
       setTenant(nextTenant);
+      setCompanyTenant(data.companyTenant || nextTenant);
       setTenantsList(data.tenants || []);
+      if (Array.isArray(data.presets)) setBusinessPresets(data.presets);
+      if (data.pricing) setPricingCop(data.pricing);
+      if (Array.isArray(data.roleTemplates)) setRoleTemplates(data.roleTemplates);
+      if (data.userProfile) {
+        setUserProfile(data.userProfile);
+        if (!data.userProfile.isCompanyAdmin && data.userRole !== 'superadmin') {
+          setWorkstationViewState((cur) =>
+            cur === 'users' || cur === 'activate-modules' ? 'home' : cur
+          );
+        }
+      }
       if (data.userRole) {
         setRole(data.userRole);
         localStorage.setItem('pk_role', data.userRole);
@@ -309,7 +450,9 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
       applyCatalogSelection(nextCatalog, nextTenant);
     } catch {
-      // Handled via apiRequest toast / 401 clearLocalSession
+      // Handled via apiRequest
+    } finally {
+      setIsBootstrapping(false);
     }
   }, [apiGet, applyCatalogSelection, hasSession, token]);
 
@@ -321,7 +464,9 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const setActiveServiceKey = useCallback(
     (key: string) => {
+      setWorkstationView('service');
       setActiveServiceKeyState(key);
+      writeStoredNav('pk_active_svc', key);
       const svc = catalog.find((s) => s.serviceKey === key);
       if (svc && svc.modules.length > 0) {
         const activeMod =
@@ -329,7 +474,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setActiveModuleKey(activeMod.moduleKey);
       }
     },
-    [catalog, tenant]
+    [catalog, setActiveModuleKey, setWorkstationView, tenant]
   );
 
   const hasService = useCallback(
@@ -387,20 +532,74 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [printService, tenant]
   );
 
-  const loginWithToken = useCallback((tok: string, r: string, u: string, ten: TenantSummary) => {
-    localStorage.removeItem('pk_jwt');
-    localStorage.setItem('pk_has_session', '1');
-    localStorage.setItem('pk_role', r);
-    localStorage.setItem('pk_user', u);
-    setToken(tok);
-    setHasSession(true);
-    setRole(r);
-    setUsername(u);
-    setTenant(ten);
-    setIncomingPayload(null);
-    setPrintPreview(null);
-    setPublicView('app');
-  }, []);
+  const loginWithToken = useCallback(
+    (
+      tok: string,
+      r: string,
+      u: string,
+      ten: TenantSummary,
+      extra?: {
+        fullName?: string;
+        internalRole?: string;
+        isCompanyAdmin?: boolean;
+        isDemo?: boolean;
+        companyTenant?: TenantSummary | null;
+      }
+    ) => {
+      localStorage.removeItem('pk_jwt');
+      localStorage.setItem('pk_has_session', '1');
+      localStorage.setItem('pk_role', r);
+      localStorage.setItem('pk_user', u);
+      setToken(tok);
+      setHasSession(true);
+      setIsBootstrapping(false);
+      setRole(r);
+      setUsername(u);
+      setTenant(ten);
+      setCompanyTenant(extra?.companyTenant || ten);
+      setUserProfile({
+        userId: '',
+        username: u,
+        fullName: extra?.fullName || u,
+        internalRole: extra?.internalRole || (r === 'superadmin' ? 'superadmin' : 'admin_empresa'),
+        isCompanyAdmin: extra?.isCompanyAdmin ?? true,
+        isDemo: Boolean(extra?.isDemo || ten.isDemo),
+      });
+      setWorkstationView('home');
+      setIncomingPayload(null);
+      setPrintPreview(null);
+      setPublicView('app');
+    },
+    [setPublicView, setWorkstationView]
+  );
+
+  const startDemoSession = useCallback(
+    async (rolePreview = 'admin_empresa') => {
+      const resp = await apiPost<{
+        token: string;
+        role: string;
+        internalRole?: string;
+        username: string;
+        fullName?: string;
+        isCompanyAdmin?: boolean;
+        isDemo?: boolean;
+        tenant: TenantSummary;
+        companyTenant?: TenantSummary;
+      }>('/api/v1/core/demo-session', { rolePreview });
+      loginWithToken(resp.token, resp.role, resp.username, resp.tenant, {
+        fullName: resp.fullName,
+        internalRole: resp.internalRole,
+        isCompanyAdmin: resp.isCompanyAdmin,
+        isDemo: true,
+        companyTenant: resp.companyTenant || resp.tenant,
+      });
+      if (rolePreview !== 'admin_empresa') {
+        setWorkstationView('service');
+      }
+      applyCatalogSelection(catalog, resp.tenant);
+    },
+    [apiPost, applyCatalogSelection, catalog, loginWithToken, setWorkstationView]
+  );
 
   const impersonateTenant = useCallback(
     async (tenantId: string) => {
@@ -409,22 +608,26 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         role: string;
         username: string;
         tenant: TenantSummary;
+        companyTenant?: TenantSummary;
       }>('/api/v1/core/impersonate', { tenantId });
       localStorage.removeItem('pk_jwt');
       localStorage.setItem('pk_has_session', '1');
       localStorage.setItem('pk_role', resp.role);
       localStorage.setItem('pk_user', resp.username);
+      writeStoredNav('pk_impersonating', '1');
       setToken(resp.token);
       setHasSession(true);
       setRole(resp.role);
       setUsername(resp.username);
       setTenant(resp.tenant);
+      setCompanyTenant(resp.companyTenant || resp.tenant);
+      setWorkstationView('home');
       setIncomingPayload(null);
       setPrintPreview(null);
       applyCatalogSelection(catalog, resp.tenant);
-      toast(`Contexto cambiado a ${resp.tenant.companyName}`);
+      toast(`Operando en ${resp.tenant.companyName}`);
     },
-    [apiPost, applyCatalogSelection, catalog, toast]
+    [apiPost, applyCatalogSelection, catalog, setWorkstationView, toast]
   );
 
   const logout = useCallback(async () => {
@@ -438,11 +641,11 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const navigateTo = useCallback(
     (serviceKey: string, moduleKey?: string, payload?: Record<string, unknown>) => {
-      if (payload) {
-        setIncomingPayload(payload);
-      }
+      setIncomingPayload(payload || null);
+      setWorkstationView('service');
       setActiveServiceKeyState(serviceKey);
-      if (moduleKey) {
+      writeStoredNav('pk_active_svc', serviceKey);
+      if (moduleKey && (!tenant || tenant.activeModules.includes(moduleKey))) {
         setActiveModuleKey(moduleKey);
       } else {
         const svc = catalog.find((s) => s.serviceKey === serviceKey);
@@ -453,7 +656,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
       }
     },
-    [catalog, tenant]
+    [catalog, setActiveModuleKey, setWorkstationView, tenant]
   );
 
   const clearIncomingPayload = useCallback(() => setIncomingPayload(null), []);
@@ -480,16 +683,28 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [apiPost, hasPrintCapability, openHtmlPrintWindow, printService, toast]
   );
 
+  const isCompanyAdmin = Boolean(role === 'superadmin' || userProfile?.isCompanyAdmin);
+  const isDemo = Boolean(userProfile?.isDemo || tenant?.isDemo);
+
   const sessionValue = useMemo<SessionContextValue>(
     () => ({
       token,
       role,
       username,
+      userProfile,
+      isCompanyAdmin,
+      isDemo,
+      isBootstrapping,
       publicView,
       setPublicView,
       tenant,
+      companyTenant,
       tenantsList,
+      businessPresets,
+      pricingCop,
+      roleTemplates,
       loginWithToken,
+      startDemoSession,
       impersonateTenant,
       logout,
       refreshBootstrap,
@@ -503,10 +718,20 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       token,
       role,
       username,
+      userProfile,
+      isCompanyAdmin,
+      isDemo,
+      isBootstrapping,
       publicView,
+      setPublicView,
       tenant,
+      companyTenant,
       tenantsList,
+      businessPresets,
+      pricingCop,
+      roleTemplates,
       loginWithToken,
+      startDemoSession,
       impersonateTenant,
       logout,
       refreshBootstrap,
@@ -532,6 +757,8 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const navigationValue = useMemo<NavigationContextValue>(
     () => ({
+      workstationView,
+      setWorkstationView,
       activeServiceKey,
       setActiveServiceKey,
       activeModuleKey,
@@ -547,9 +774,12 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       requestPrintDocument,
     }),
     [
+      workstationView,
+      setWorkstationView,
       activeServiceKey,
       setActiveServiceKey,
       activeModuleKey,
+      setActiveModuleKey,
       activeSubmoduleKey,
       roleViewFilter,
       navigateTo,

@@ -48,6 +48,10 @@ declare module '@platform/ui-sdk' {
     adminUsername: string;
     dbName: string;
     businessPreset: string;
+    paymentStatus?: string;
+    monthlyCop?: number;
+    maxUsersAllowed?: number;
+    isDemo?: boolean;
     status: string;
     activeServices: string[];
     activeModules: string[];
@@ -56,17 +60,101 @@ declare module '@platform/ui-sdk' {
     createdAt: string;
   }
 
+  export interface BusinessPresetSpec {
+    key: string;
+    name: string;
+    badge: string;
+    description: string;
+    baseMonthlyCop: number;
+    includedServices: string[];
+  }
+
+  export interface PricingMatrixCOP {
+    extraServiceCop: number;
+    extraModuleCop: number;
+    extraSubmoduleCop: number;
+    extraFeatureCop: number;
+  }
+
+  export interface RoleTemplateSpec {
+    roleKey: string;
+    displayName: string;
+    description: string;
+    isCompanyAdmin: boolean;
+    recommendedServices: string[];
+    recommendedModules: string[];
+  }
+
+  export interface UserProfileSummary {
+    userId: string;
+    username: string;
+    fullName: string;
+    internalRole: string;
+    isCompanyAdmin: boolean;
+    isDemo: boolean;
+  }
+
+  export interface TenantUserRecord {
+    userId: string;
+    tenantId: string;
+    username: string;
+    email: string;
+    fullName: string;
+    internalRole: string;
+    isCompanyAdmin: boolean;
+    allowedServices: string[];
+    allowedModules: string[];
+    status: string;
+    createdAt: string;
+  }
+
+  export interface ModuleActivationRecord {
+    requestId: string;
+    tenantId: string;
+    companyName: string;
+    requestedBy: string;
+    addedServices: string[];
+    addedModules: string[];
+    addedSubmodules: string[];
+    addedFeatures: string[];
+    monthlyCopAfter: number;
+    status: string;
+    createdAt: string;
+  }
+
   export type PublicViewMode = 'landing' | 'login' | 'register' | 'app';
+  export type WorkstationViewMode = 'home' | 'service' | 'users' | 'activate-modules';
 
   export interface SessionContextValue {
     token: string;
     role: string;
     username: string;
+    userProfile: UserProfileSummary | null;
+    isCompanyAdmin: boolean;
+    isDemo: boolean;
+    isBootstrapping: boolean;
     publicView: PublicViewMode;
     setPublicView: (v: PublicViewMode) => void;
     tenant: TenantSummary | null;
+    companyTenant: TenantSummary | null;
     tenantsList: TenantSummary[];
-    loginWithToken: (tok: string, role: string, username: string, ten: TenantSummary) => void;
+    businessPresets: BusinessPresetSpec[];
+    pricingCop: PricingMatrixCOP | null;
+    roleTemplates: RoleTemplateSpec[];
+    loginWithToken: (
+      tok: string,
+      role: string,
+      username: string,
+      ten: TenantSummary,
+      extra?: {
+        fullName?: string;
+        internalRole?: string;
+        isCompanyAdmin?: boolean;
+        isDemo?: boolean;
+        companyTenant?: TenantSummary | null;
+      }
+    ) => void;
+    startDemoSession: (rolePreview?: string) => Promise<void>;
     impersonateTenant: (tenantId: string) => Promise<void>;
     logout: () => Promise<void>;
     refreshBootstrap: () => Promise<void>;
@@ -87,6 +175,8 @@ declare module '@platform/ui-sdk' {
   }
 
   export interface NavigationContextValue {
+    workstationView: WorkstationViewMode;
+    setWorkstationView: (view: WorkstationViewMode) => void;
     activeServiceKey: string;
     setActiveServiceKey: (key: string) => void;
     activeModuleKey: string;

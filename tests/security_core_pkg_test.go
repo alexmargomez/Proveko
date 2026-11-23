@@ -222,6 +222,140 @@ func TestAuthArgon2idRBACAndPlatformGatewayDelivery(t *testing.T) {
 		t.Fatalf("expected 200 OK on /pos-state for newly registered preset tenant, got %d: %s", presetPos.StatusCode, string(presetPosRaw))
 	}
 
+	// 4c. Public catalog pre-login, unauthenticated platform write protection, & 1-click Demo Session with role simulation + mutation lock
+	pubCatResp, pubCatRaw := doHTTPRequest(t, cl.coreURL, http.MethodGet, "/api/v1/core/public-catalog", nil, nil)
+	if pubCatResp.StatusCode != http.StatusOK || !strings.Contains(string(pubCatRaw), "baseMonthlyCop") {
+		t.Fatalf("expected 200 OK and presets with baseMonthlyCop on /public-catalog, got %d: %s", pubCatResp.StatusCode, string(pubCatRaw))
+	}
+	unauthContractReg, _ := doHTTPRequest(t, cl.coreURL, http.MethodPost, "/api/v1/platform/contracts/register", map[string]any{
+		"serviceKey": "ms-rogue",
+	}, nil)
+	if unauthContractReg.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden on unauthenticated POST /api/v1/platform/contracts/register via Gateway, got %d", unauthContractReg.StatusCode)
+	}
+	badDemoRole, _ := doHTTPRequest(t, cl.coreURL, http.MethodPost, "/api/v1/core/demo-session", map[string]any{
+		"rolePreview": "hacker_role",
+	}, nil)
+	if badDemoRole.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request on invalid demo rolePreview, got %d", badDemoRole.StatusCode)
+	}
+	demoResp, demoRaw := doHTTPRequest(t, cl.coreURL, http.MethodPost, "/api/v1/core/demo-session", map[string]any{
+		"rolePreview": "admin_empresa",
+	}, nil)
+	if demoResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK on /demo-session, got %d: %s", demoResp.StatusCode, string(demoRaw))
+	}
+	var demoAuth struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(demoRaw, &demoAuth); err != nil || demoAuth.Token == "" {
+		t.Fatalf("decode demo token: %v", err)
+	}
+	demoHeaders := map[string]string{"Authorization": "Bearer " + demoAuth.Token}
+	demoMutateUser, _ := doHTTPRequest(t, cl.coreURL, http.MethodPost, "/api/v1/core/company/users", map[string]any{
+		"fullName":     "Intruso Demo",
+		"username":     "intruso.demo@empresa.local",
+		"password":     "DemoPass2026!",
+		"internalRole": "cajero",
+	}, demoHeaders)
+	if demoMutateUser.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden when Demo token attempts POST /company/users, got %d", demoMutateUser.StatusCode)
+	}
+	demoMutateMods, _ := doHTTPRequest(t, cl.coreURL, http.MethodPost, "/api/v1/core/company/activate-modules", map[string]any{
+		"addServices": []string{"ms-nomina"},
+	}, demoHeaders)
+	if demoMutateMods.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden when Demo token attempts POST /company/activate-modules, got %d", demoMutateMods.StatusCode)
+	}
+
+	// 4d. Company Admin creates an internal Cashier employee with ONLY ms-facturacion & ms-clientes enabled -> Zero-Trust per-user intersection enforced!
+	adminHeaders := map[string]string{"Authorization": "Bearer " + presetReg.Token}
+	createEmpResp, createEmpRaw := doHTTPRequest(t, cl.coreURL, http.MethodPost, "/api/v1/core/company/users", map[string]any{
+		"fullName":        "Laura Cajera Principal",
+		"username":        "cajera1@distribuidoracentral.example.org",
+		"password":        "CajaSegura2026!",
+		"internalRole":    "cajero",
+		"isCompanyAdmin":  false,
+		"allowedServices": []string{"ms-facturacion", "ms-clientes"},
+		"allowedModules":  []string{"pos_mostrador", "directorio_clientes"},
+	}, adminHeaders)
+	if createEmpResp.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201 Created on POST /api/v1/core/company/users, got %d: %s", createEmpResp.StatusCode, string(createEmpRaw))
+	}
+	var createdEmp struct {
+		User struct {
+			UserID string `json:"userId"`
+		} `json:"user"`
+	}
+	if err := json.Unmarshal(createEmpRaw, &createdEmp); err != nil || createdEmp.User.UserID == "" {
+		t.Fatalf("decode created employee id: %v (%s)", err, string(createEmpRaw))
+	}
+
+	empLogin, empLoginRaw := doHTTPRequest(t, cl.coreURL, http.MethodPost, "/api/v1/core/login", map[string]any{
+		"username": "cajera1@distribuidoracentral.example.org",
+		"password": "CajaSegura2026!",
+	}, nil)
+	if empLogin.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK on internal employee login, got %d: %s", empLogin.StatusCode, string(empLoginRaw))
+	}
+	var empAuth struct {
+		Token          string `json:"token"`
+		IsCompanyAdmin bool   `json:"isCompanyAdmin"`
+		Tenant         struct {
+			ActiveServices []string `json:"activeServices"`
+			ActiveModules  []string `json:"activeModules"`
+		} `json:"tenant"`
+	}
+	if err := json.Unmarshal(empLoginRaw, &empAuth); err != nil {
+		t.Fatalf("decode employee login: %v", err)
+	}
+	if empAuth.IsCompanyAdmin {
+		t.Fatalf("privilege escalation: cajero employee must NOT have isCompanyAdmin=true")
+	}
+	empHeaders := map[string]string{"Authorization": "Bearer " + empAuth.Token}
+
+	// Employee CAN access assigned ms-facturacion pos_mostrador
+	empPos, _ := doHTTPRequest(t, cl.coreURL, http.MethodGet, "/api/v1/facturacion/pos-state", nil, empHeaders)
+	if empPos.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK when cashier accesses assigned ms-facturacion, got %d", empPos.StatusCode)
+	}
+	// Employee CANNOT access unassigned ms-inventario directly (even though company has ms-inventario!)
+	empInv, _ := doHTTPRequest(t, cl.coreURL, http.MethodGet, "/api/v1/inventario/state", nil, empHeaders)
+	if empInv.StatusCode != http.StatusForbidden {
+		t.Fatalf("per-user RBAC breach: cashier without ms-inventario got %d on /api/v1/inventario/state instead of 403", empInv.StatusCode)
+	}
+	// Employee CANNOT create other users
+	empCreateUser, _ := doHTTPRequest(t, cl.coreURL, http.MethodPost, "/api/v1/core/company/users", map[string]any{
+		"fullName": "Intruso",
+		"username": "intruso@distribuidoracentral.example.org",
+		"password": "Password123!",
+	}, empHeaders)
+	if empCreateUser.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403 when non-admin employee attempts POST /company/users, got %d", empCreateUser.StatusCode)
+	}
+
+	// Deleting the employee MUST immediately revoke their active JWT (Fail-Closed 401, zero privilege escalation!)
+	delEmpResp, delEmpRaw := doHTTPRequest(t, cl.coreURL, http.MethodDelete, "/api/v1/core/company/users/"+createdEmp.User.UserID, nil, adminHeaders)
+	if delEmpResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK on DELETE /company/users/%s, got %d: %s", createdEmp.User.UserID, delEmpResp.StatusCode, string(delEmpRaw))
+	}
+	revokedPos, _ := doHTTPRequest(t, cl.coreURL, http.MethodGet, "/api/v1/facturacion/pos-state", nil, empHeaders)
+	if revokedPos.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("CRITICAL RBAC breach: deleted employee JWT returned %d instead of 401 Unauthorized", revokedPos.StatusCode)
+	}
+
+	// 4e. Company Admin self-activates additional area (ms-taller) via Standby Activation; empty payload returns 400
+	emptyActResp, _ := doHTTPRequest(t, cl.coreURL, http.MethodPost, "/api/v1/core/company/activate-modules", map[string]any{}, adminHeaders)
+	if emptyActResp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request on empty /company/activate-modules, got %d", emptyActResp.StatusCode)
+	}
+	actModResp, actModRaw := doHTTPRequest(t, cl.coreURL, http.MethodPost, "/api/v1/core/company/activate-modules", map[string]any{
+		"addServices": []string{"ms-taller"},
+	}, adminHeaders)
+	if actModResp.StatusCode != http.StatusOK || !strings.Contains(string(actModRaw), "ms-taller") {
+		t.Fatalf("expected 200 OK and ms-taller activated on /company/activate-modules, got %d: %s", actModResp.StatusCode, string(actModRaw))
+	}
+
 	// 5. Wrong password and unknown user login must fail with 401
 	wrongPass, _ := doHTTPRequest(t, cl.coreURL, http.MethodPost, "/api/v1/auth/login", map[string]any{
 		"username": "hacker_superadmin@evil.example.org",

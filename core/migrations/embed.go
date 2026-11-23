@@ -8,6 +8,9 @@ var tenantsSQL string
 //go:embed 002_catalog_and_subscriptions.sql
 var subscriptionsSQL string
 
+//go:embed 003_tenant_users_and_commercial.sql
+var tenantUsersAndCommercialSQL string
+
 func SchemaSQL() string {
-	return tenantsSQL + "\n" + subscriptionsSQL
+	return tenantsSQL + "\n" + subscriptionsSQL + "\n" + tenantUsersAndCommercialSQL
 }

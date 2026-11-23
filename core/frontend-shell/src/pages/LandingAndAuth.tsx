@@ -1,46 +1,27 @@
 import React, { useState } from 'react';
-import { usePlatform, useAsyncAction, TenantSummary } from '@platform/ui-sdk';
-
-const INDUSTRY_PRESETS: Record<string, { label: string; categories: string[] }> = {
-  full: {
-    label: 'Suite Empresarial Completa (Todas las Áreas)',
-    categories: [],
-  },
-  comercio: {
-    label: 'Comercio, Almacén y Punto de Venta',
-    categories: ['Comercial', 'Logística', 'Finanzas', 'Abastecimiento', 'Gerencia', 'Transversal'],
-  },
-  automotriz: {
-    label: 'Centro Automotriz, Repuestos y Comisiones',
-    categories: ['Comercial', 'Automotriz', 'Logística', 'Finanzas', 'Abastecimiento', 'Gerencia', 'Transversal'],
-  },
-  restaurante: {
-    label: 'Restaurante, Gastrobar y Cocina',
-    categories: ['Gastronomía', 'Comercial', 'Logística', 'Finanzas', 'Abastecimiento', 'Gerencia', 'Transversal'],
-  },
-  hotel: {
-    label: 'Hotel, Cabañas y Alojamiento',
-    categories: ['Hospitalidad', 'Gastronomía', 'Comercial', 'Servicios', 'Finanzas', 'Gerencia', 'Transversal'],
-  },
-  logistica: {
-    label: 'Báscula Camionera, Transporte y Logística',
-    categories: ['Logística Pesada', 'Comercial', 'Logística', 'Finanzas', 'Gerencia', 'Transversal'],
-  },
-};
+import { formatCop, TenantSummary, useAsyncAction, usePlatform } from '@platform/ui-sdk';
+import { PkIcon } from '../components/ServiceIcons';
+import { RegistrationWizard } from './RegistrationWizard';
 
 export const LandingAndAuth: React.FC = () => {
-  const { publicView, setPublicView, token, tenant, role, apiPost, loginWithToken, refreshBootstrap, catalog, toast } = usePlatform();
+  const {
+    publicView,
+    setPublicView,
+    token,
+    tenant,
+    catalog,
+    businessPresets,
+    apiPost,
+    loginWithToken,
+    startDemoSession,
+    toast,
+  } = usePlatform();
   const { busy, run } = useAsyncAction();
   const isAuthenticated = Boolean(token || tenant);
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-
-  const [companyName, setCompanyName] = useState('');
-  const [nit, setNit] = useState('');
-  const [adminEmail, setAdminEmail] = useState('');
-  const [adminPass, setAdminPass] = useState('');
-  const [preset, setPreset] = useState('full');
+  const [selectedPresetForWizard, setSelectedPresetForWizard] = useState<string | undefined>(undefined);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,285 +29,446 @@ export const LandingAndAuth: React.FC = () => {
       const res = await apiPost<{
         token: string;
         role: string;
+        internalRole?: string;
         username: string;
+        fullName?: string;
+        isCompanyAdmin?: boolean;
+        isDemo?: boolean;
         tenant: TenantSummary;
+        companyTenant?: TenantSummary;
       }>('/api/v1/core/login', { username, password });
-      loginWithToken(res.token, res.role, res.username, res.tenant);
-      await refreshBootstrap();
-      toast(`Sesión iniciada como ${res.username}`);
+      loginWithToken(res.token, res.role, res.username, res.tenant, {
+        fullName: res.fullName,
+        internalRole: res.internalRole,
+        isCompanyAdmin: res.isCompanyAdmin,
+        isDemo: res.isDemo,
+        companyTenant: res.companyTenant || res.tenant,
+      });
+      toast(`Sesión iniciada como ${res.fullName || res.username}`);
     });
   };
 
-  const handleRegister = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleLaunchDemo = (rolePreview = 'admin_empresa') => {
     void run(async () => {
-      const allowedCategories = INDUSTRY_PRESETS[preset]?.categories || [];
-      let activeServices: string[] = [];
-      let activeModules: string[] = [];
-      let activeSubmodules: string[] = [];
-      let activeFeatures: string[] = [];
-
-      if (allowedCategories.length > 0 && catalog.length > 0) {
-        for (const svc of catalog) {
-          if (allowedCategories.includes(svc.category)) {
-            activeServices.push(svc.serviceKey);
-            activeModules = activeModules.concat(svc.modules.map((m) => m.moduleKey));
-            activeSubmodules = activeSubmodules.concat((svc.submodules || []).map((sm) => sm.submoduleKey));
-            activeFeatures = activeFeatures.concat((svc.features || []).map((f) => f.featureKey));
-          }
-        }
-      }
-
-      const payload: Record<string, unknown> = {
-        companyName,
-        nit,
-        adminUsername: adminEmail,
-        password: adminPass,
-        businessPreset: preset,
-      };
-      if (activeServices.length > 0) {
-        payload.activeServices = activeServices;
-        payload.activeModules = activeModules;
-        payload.activeSubmodules = activeSubmodules;
-        payload.activeFeatures = activeFeatures;
-      }
-
-      const res = await apiPost<{ token?: string; role: string; tenant: TenantSummary }>('/api/v1/core/register', payload);
-      if (role === 'superadmin' && res.role === 'superadmin') {
-        await refreshBootstrap();
-        setPublicView('app');
-        toast(`Empresa "${res.tenant.companyName}" aprovisionada correctamente`);
-        return;
-      }
-      loginWithToken(res.token || '', res.role || 'cliente', res.tenant.adminUsername, res.tenant);
-      await refreshBootstrap();
-      toast(`Empresa "${res.tenant.companyName}" aprovisionada correctamente`);
+      await startDemoSession(rolePreview);
+      toast('Modo Demostración Activo — Explora todas las áreas libremente');
     });
   };
 
-  const goStationOrLogin = () => {
-    setPublicView(isAuthenticated ? 'app' : 'login');
+  const openWizardWithPreset = (presetKey?: string) => {
+    setSelectedPresetForWizard(presetKey);
+    setPublicView('register');
   };
 
-  const darkHeaderBtnStyle: React.CSSProperties = {
-    background: '#1e293b',
-    color: '#e2e8f0',
-    borderColor: '#334155',
-  };
+  const activeAuthMode = publicView === 'register' ? 'register' : publicView === 'login' ? 'login' : 'showcase';
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background: 'radial-gradient(circle at 50% 18%, #1e293b 0%, #0f172a 62%)',
-        color: '#ffffff',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
-      <header className="pk-topbar" style={{ borderBottomColor: '#1e293b' }}>
-        <div className="pk-brand">
-          <span style={{ background: '#2563eb', padding: '4px 9px', borderRadius: 7 }}>◆</span>
-          <span>PROVEKO EMPRESARIAL</span>
-        </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          {isAuthenticated && (
-            <button type="button" className="pk-btn pk-btn-sm" style={darkHeaderBtnStyle} onClick={goStationOrLogin}>
-              Ir a la Estación
+    <div style={{ minHeight: '100vh', background: 'var(--pk-bg)', display: 'flex', flexDirection: 'column' }}>
+      <header className="pk-topbar">
+        <button
+          type="button"
+          className="pk-brand"
+          style={{ cursor: 'pointer' }}
+          onClick={() => setPublicView('landing')}
+        >
+          <span className="pk-logo-box">PK</span>
+          <div className="pk-brand-meta">
+            <div className="pk-brand-title">
+              <span>PROVEKO</span>
+              <span style={{ color: '#cbd5e1', fontWeight: 400 }}>|</span>
+              <span style={{ color: 'var(--pk-primary)', fontWeight: 700, fontSize: 13.5 }}>
+                {activeAuthMode === 'showcase'
+                  ? 'Soluciones para tu Empresa'
+                  : activeAuthMode === 'register'
+                  ? 'Configura tu Empresa'
+                  : 'Iniciar Sesión'}
+              </span>
+            </div>
+            <div className="pk-brand-sub">Sistema Integrado de Ventas, Inventario, Operaciones y Finanzas</div>
+          </div>
+        </button>
+
+        <nav className="pk-surface-tabs" aria-label="Navegación principal pública">
+          <button
+            type="button"
+            className={`pk-surface-tab ${activeAuthMode === 'showcase' ? 'active' : ''}`}
+            onClick={() => setPublicView('landing')}
+          >
+            <span>Muestra de la Plataforma</span>
+          </button>
+          <button
+            type="button"
+            className={`pk-surface-tab ${activeAuthMode === 'login' || activeAuthMode === 'register' ? 'active' : ''}`}
+            onClick={() => setPublicView(activeAuthMode === 'register' ? 'register' : 'login')}
+          >
+            <span>Login / Registra tu Negocio</span>
+          </button>
+          <button
+            type="button"
+            className="pk-surface-tab"
+            disabled={busy}
+            onClick={() => {
+              if (isAuthenticated) {
+                setPublicView('app');
+              } else {
+                handleLaunchDemo('admin_empresa');
+              }
+            }}
+          >
+            <span>{isAuthenticated ? 'Volver a mi Estación' : 'Demo en Vivo'}</span>
+          </button>
+        </nav>
+
+        <div className="pk-row-actions">
+          {isAuthenticated ? (
+            <button type="button" className="pk-btn pk-btn-primary pk-btn-sm" onClick={() => setPublicView('app')}>
+              Ir a mi Estación Activa →
             </button>
+          ) : (
+            <>
+              <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={() => setPublicView('login')}>
+                Iniciar Sesión
+              </button>
+              <button
+                type="button"
+                className="pk-btn pk-btn-primary pk-btn-sm"
+                onClick={() => openWizardWithPreset(undefined)}
+              >
+                Crear Cuenta para mi Negocio
+              </button>
+            </>
           )}
-          <button type="button" className="pk-btn pk-btn-sm" style={darkHeaderBtnStyle} onClick={() => setPublicView('login')}>
-            Iniciar Sesión
-          </button>
-          <button type="button" className="pk-btn pk-btn-primary pk-btn-sm" onClick={() => setPublicView('register')}>
-            Crear Empresa Nueva
-          </button>
         </div>
       </header>
 
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <main className="pk-public-container" style={{ flex: 1 }}>
         {publicView === 'landing' && (
-          <div style={{ maxWidth: 960, textAlign: 'center' }}>
-            <span className="pk-badge pk-badge-blue" style={{ fontSize: 12, padding: '5px 14px' }}>
-              Plataforma Empresarial Distribuida Multi-Empresa con Base de Datos Aislada
-            </span>
-            <h1 style={{ fontSize: 40, fontWeight: 900, margin: '18px 0 12px', lineHeight: 1.15 }}>
-              Gestión modular integrada para comercio, logística, servicios e industria
-            </h1>
-            <p style={{ color: '#94a3b8', fontSize: 16, maxWidth: 740, margin: '0 auto 24px', lineHeight: 1.55 }}>
-              Facturación POS y Electrónica, Inventario Multi-Bodega, Órdenes de Servicio, Hotelería, Comandas Gastronómicas, Pesaje Camionero, Cartera, Contabilidad y Documentos Corporativos.
-            </p>
-            <div
-              style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                justifyContent: 'center',
-                gap: 8,
-                maxWidth: 820,
-                margin: '0 auto 28px',
-              }}
-            >
-              {[
-                '🧾 Punto de Venta y DIAN',
-                '📦 Inventario Multi-Bodega',
-                '👥 Clientes, Convenios y Cartera',
-                '🔧 Taller y Comisiones',
-                '🍽️ Mesas y Comandas',
-                '🏨 Hotelería y Reservas',
-                '⚖️ Báscula Camionera',
-                '📘 Contabilidad y Nómina',
-              ].map((pill) => (
-                <span
-                  key={pill}
+          <div className="pk-stack" style={{ gap: 22 }}>
+            <section className="pk-hero-banner">
+              <div>
+                <span className="pk-hero-badge">SISTEMA DE VENTAS, INVENTARIO Y CONTROL DE NEGOCIOS</span>
+                <h1
                   style={{
-                    background: 'rgba(30, 41, 59, 0.85)',
-                    border: '1px solid #334155',
-                    color: '#cbd5e1',
-                    padding: '6px 12px',
-                    borderRadius: 999,
-                    fontSize: 12,
-                    fontWeight: 600,
+                    fontSize: 32,
+                    fontWeight: 900,
+                    margin: '14px 0 12px',
+                    lineHeight: 1.2,
+                    letterSpacing: '-0.02em',
                   }}
                 >
-                  {pill}
-                </span>
-              ))}
-            </div>
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                className="pk-btn pk-btn-primary"
-                style={{ padding: '12px 22px', fontSize: 14 }}
-                onClick={goStationOrLogin}
-              >
-                {isAuthenticated ? 'Continuar en la Estación' : 'Iniciar Sesión Operativa'}
-              </button>
-              <button
-                type="button"
-                className="pk-btn pk-btn-emerald"
-                style={{ padding: '12px 22px', fontSize: 14 }}
-                onClick={() => setPublicView('register')}
-              >
-                Registrar Nueva Empresa
-              </button>
-            </div>
-          </div>
-        )}
+                  Administra tu negocio de forma fácil: Facturación, Inventario, Comandas, Taller, Hotelería y Caja en un solo lugar.
+                </h1>
+                <p style={{ color: '#dbeafe', fontSize: 15, lineHeight: 1.6, margin: '0 0 22px', maxWidth: 680 }}>
+                  Elige el tipo de negocio que tienes, personaliza las herramientas para cada área y crea usuarios con permisos individuales para tus cajeros, meseros, bodegueros, técnicos o contadores.
+                </p>
+                <div className="pk-row-actions" style={{ gap: 10 }}>
+                  <button
+                    type="button"
+                    className="pk-btn pk-btn-amber-brand"
+                    style={{ padding: '11px 20px', fontSize: 13.5 }}
+                    onClick={() => openWizardWithPreset(undefined)}
+                  >
+                    Crear Cuenta para mi Negocio →
+                  </button>
+                  <button
+                    type="button"
+                    className="pk-btn pk-btn-hero-outline"
+                    style={{ padding: '11px 18px', fontSize: 13.5 }}
+                    disabled={busy}
+                    onClick={() => handleLaunchDemo('admin_empresa')}
+                  >
+                    {busy ? 'Abriendo Demo...' : 'Probar Demostración en Vivo (1 Clic)'}
+                  </button>
+                  <button
+                    type="button"
+                    className="pk-btn pk-btn-hero-outline"
+                    style={{ padding: '11px 18px', fontSize: 13.5 }}
+                    onClick={() => setPublicView('login')}
+                  >
+                    Iniciar Sesión
+                  </button>
+                </div>
+              </div>
 
-        {(publicView === 'login' || (publicView === 'app' && !isAuthenticated)) && (
-          <div className="pk-card" style={{ maxWidth: 460, color: 'var(--pk-text)' }}>
-            <div className="pk-card-head">
-              <div className="pk-card-title">Iniciar Sesión Corporativa</div>
-              <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={() => setPublicView('register')}>
-                Crear Empresa
-              </button>
-            </div>
-            <div className="pk-card-body">
-              <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div className="pk-field">
-                  <label htmlFor="login-user">Correo Electrónico</label>
-                  <input
-                    id="login-user"
-                    required
-                    autoComplete="username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    placeholder="usuario@empresa.com"
-                  />
+              <div className="pk-quote-card">
+                <div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.07em',
+                      color: '#fde68a',
+                      fontWeight: 800,
+                    }}
+                  >
+                    Listo para operar hoy mismo
+                  </div>
+                  <div style={{ fontSize: 20, fontWeight: 800, margin: '6px 0 12px' }}>
+                    Todo lo que tu empresa y tu equipo necesitan
+                  </div>
+                  <div style={{ fontSize: 13, color: '#e2e8f0', lineHeight: 1.75 }}>
+                    <div>✓ Punto de Venta rápido, Cotizaciones y Facturación.</div>
+                    <div>✓ Inventario Multi-Bodega, Compras y Cuentas por Cobrar.</div>
+                    <div>✓ Mesas/Comandas, Taller, Hotelería y Báscula Camionera.</div>
+                    <div>✓ Usuarios por cargo: asigna qué servicios ve cada trabajador.</div>
+                  </div>
                 </div>
-                <div className="pk-field">
-                  <label htmlFor="login-pass">Contraseña</label>
-                  <input
-                    id="login-pass"
-                    required
-                    type="password"
-                    autoComplete="current-password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                  />
-                </div>
-                <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
-                  {busy ? 'Verificando...' : 'Ingresar'}
+                <button
+                  type="button"
+                  className="pk-btn pk-btn-emerald"
+                  style={{ width: '100%', marginTop: 16, padding: '11px 16px', fontSize: 13.5 }}
+                  onClick={() => openWizardWithPreset('comercio')}
+                >
+                  Configurar mi Plan Ahora →
                 </button>
-              </form>
-            </div>
-          </div>
-        )}
+              </div>
+            </section>
 
-        {publicView === 'register' && (
-          <div className="pk-card" style={{ maxWidth: 560, color: 'var(--pk-text)' }}>
-            <div className="pk-card-head">
-              <div className="pk-card-title">Aprovisionar Nueva Empresa</div>
-              <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={() => setPublicView('login')}>
-                Ya tengo cuenta
-              </button>
-            </div>
-            <div className="pk-card-body">
-              <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div className="pk-field">
-                  <label htmlFor="reg-company">Razón Social / Nombre del Negocio *</label>
-                  <input
-                    id="reg-company"
-                    required
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    placeholder="Ej: Comercializadora Andina S.A.S."
-                  />
+            {businessPresets.length > 0 && (
+              <section className="pk-card">
+                <div className="pk-card-head" style={{ background: '#ffffff', padding: '15px 20px' }}>
+                  <div>
+                    <div className="pk-card-title" style={{ fontSize: 16.5 }}>
+                      Planes según tu Tipo de Negocio
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--pk-muted)', marginTop: 2 }}>
+                      Selecciona tu actividad para iniciar el asistente paso a paso con los módulos ideales preseleccionados.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="pk-btn pk-btn-primary pk-btn-sm"
+                    onClick={() => openWizardWithPreset(undefined)}
+                  >
+                    Armar Plan Personalizado
+                  </button>
                 </div>
-                <div className="pk-field">
-                  <label htmlFor="reg-nit">NIT / Identificación Tributaria *</label>
-                  <input
-                    id="reg-nit"
-                    required
-                    value={nit}
-                    onChange={(e) => setNit(e.target.value)}
-                    placeholder="Ej: 901.552.310-1"
-                  />
-                </div>
-                <div className="pk-field">
-                  <label htmlFor="reg-preset">Actividad Económica Principal</label>
-                  <select id="reg-preset" value={preset} onChange={(e) => setPreset(e.target.value)}>
-                    {Object.entries(INDUSTRY_PRESETS).map(([key, item]) => (
-                      <option key={key} value={key}>
-                        {item.label}
-                      </option>
+                <div className="pk-card-body">
+                  <div className="pk-plan-grid">
+                    {businessPresets.map((preset) => (
+                      <div key={preset.key} className="pk-plan-card">
+                        <div>
+                          <div className="pk-row-between" style={{ marginBottom: 8 }}>
+                            <span className="pk-badge pk-badge-blue">{preset.badge}</span>
+                            <span
+                              style={{
+                                fontWeight: 900,
+                                fontSize: 14.5,
+                                color: 'var(--pk-primary)',
+                                fontVariantNumeric: 'tabular-nums',
+                              }}
+                            >
+                              {formatCop(preset.baseMonthlyCop)}/mes
+                            </span>
+                          </div>
+                          <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--pk-navy)', marginBottom: 6 }}>
+                            {preset.name}
+                          </div>
+                          <p style={{ margin: 0, fontSize: 12.5, color: 'var(--pk-muted)', lineHeight: 1.5 }}>
+                            {preset.description}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="pk-btn pk-btn-outline pk-btn-sm"
+                          style={{ width: '100%' }}
+                          onClick={() => openWizardWithPreset(preset.key)}
+                        >
+                          Elegir este Plan →
+                        </button>
+                      </div>
                     ))}
-                  </select>
+                  </div>
                 </div>
-                <div className="pk-field">
-                  <label htmlFor="reg-email">Correo Administrador *</label>
-                  <input
-                    id="reg-email"
-                    required
-                    type="email"
-                    autoComplete="username"
-                    value={adminEmail}
-                    onChange={(e) => setAdminEmail(e.target.value)}
-                    placeholder="gerencia@empresa.com"
-                  />
+              </section>
+            )}
+
+            {catalog.length > 0 && (
+              <section className="pk-card">
+                <div className="pk-card-head" style={{ background: '#ffffff', padding: '15px 20px' }}>
+                  <div>
+                    <div className="pk-card-title" style={{ fontSize: 16.5 }}>
+                      Áreas y Módulos Disponibles en la Plataforma
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--pk-muted)', marginTop: 2 }}>
+                      Activa únicamente los centros operativos que requiere tu empresa y amplíalos cuando crezcas.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="pk-btn pk-btn-outline pk-btn-sm"
+                    disabled={busy}
+                    onClick={() => handleLaunchDemo('admin_empresa')}
+                  >
+                    Probarlos en Vivo en el Demo →
+                  </button>
                 </div>
-                <div className="pk-field">
-                  <label htmlFor="reg-pass">Contraseña (mínimo 8 caracteres) *</label>
-                  <input
-                    id="reg-pass"
-                    required
-                    minLength={8}
-                    type="password"
-                    autoComplete="new-password"
-                    value={adminPass}
-                    onChange={(e) => setAdminPass(e.target.value)}
-                    placeholder="Mínimo 8 caracteres"
-                  />
+                <div className="pk-card-body">
+                  <div className="pk-plan-grid">
+                    {catalog.map((svc) => (
+                      <div key={svc.serviceKey} className="pk-plan-card">
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                            <span
+                              style={{
+                                width: 36,
+                                height: 36,
+                                borderRadius: 9,
+                                background: '#eff6ff',
+                                color: 'var(--pk-primary)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              <PkIcon name={svc.serviceKey} size={19} />
+                            </span>
+                            <div>
+                              <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--pk-navy)' }}>
+                                {svc.displayName}
+                              </div>
+                              <span className="pk-badge pk-badge-slate">{svc.category}</span>
+                            </div>
+                          </div>
+                          <p style={{ margin: '0 0 10px', fontSize: 12.5, color: 'var(--pk-muted)', lineHeight: 1.45 }}>
+                            {svc.summary}
+                          </p>
+                          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                            {(svc.modules || []).map((mod) => (
+                              <span
+                                key={mod.moduleKey}
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  background: '#f8fafc',
+                                  border: '1px solid #e2e8f0',
+                                  color: '#334155',
+                                  padding: '3px 8px',
+                                  borderRadius: 6,
+                                }}
+                              >
+                                {mod.displayName}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <button type="submit" className="pk-btn pk-btn-emerald" disabled={busy}>
-                  {busy ? 'Aprovisionando...' : 'Crear Empresa y Acceder'}
-                </button>
-              </form>
-            </div>
+              </section>
+            )}
           </div>
         )}
-      </div>
+
+        {(publicView === 'login' || publicView === 'register' || (publicView === 'app' && !isAuthenticated)) && (
+          <div className="pk-stack">
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginBottom: 4 }}>
+              <button
+                type="button"
+                className={`pk-btn ${publicView !== 'register' ? 'pk-btn-primary' : 'pk-btn-outline'}`}
+                onClick={() => setPublicView('login')}
+              >
+                Iniciar Sesión en mi Empresa
+              </button>
+              <button
+                type="button"
+                className={`pk-btn ${publicView === 'register' ? 'pk-btn-primary' : 'pk-btn-outline'}`}
+                onClick={() => openWizardWithPreset(undefined)}
+              >
+                Crear Cuenta Paso a Paso
+              </button>
+            </div>
+
+            {publicView === 'register' ? (
+              <RegistrationWizard
+                initialPresetKey={selectedPresetForWizard}
+                onSwitchToLogin={() => setPublicView('login')}
+              />
+            ) : (
+              <div className="pk-card" style={{ maxWidth: 450, width: '100%', margin: '8px auto 0' }}>
+                <div className="pk-card-head" style={{ background: '#ffffff', padding: '16px 20px' }}>
+                  <div>
+                    <div className="pk-card-title" style={{ fontSize: 17 }}>
+                      Iniciar Sesión
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--pk-muted)', marginTop: 2 }}>
+                      Ingresa con tu cuenta de administrador o de trabajador asignado
+                    </div>
+                  </div>
+                </div>
+                <div className="pk-card-body" style={{ padding: 20 }}>
+                  <form onSubmit={handleLogin} className="pk-stack">
+                    <div className="pk-field">
+                      <label htmlFor="pk-login-user">Usuario o Correo Electrónico</label>
+                      <input
+                        id="pk-login-user"
+                        type="text"
+                        required
+                        autoComplete="username"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        placeholder="usuario@empresa.co"
+                      />
+                    </div>
+                    <div className="pk-field">
+                      <label htmlFor="pk-login-pass">Contraseña</label>
+                      <input
+                        id="pk-login-pass"
+                        type="password"
+                        required
+                        autoComplete="current-password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className="pk-btn pk-btn-primary"
+                      disabled={busy}
+                      style={{ width: '100%', padding: '11px', marginTop: 4, fontSize: 13.5 }}
+                    >
+                      {busy ? 'Validando acceso...' : 'Entrar al Sistema'}
+                    </button>
+                  </form>
+
+                  <div
+                    style={{
+                      marginTop: 16,
+                      paddingTop: 14,
+                      borderTop: '1px solid var(--pk-border)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 8,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className="pk-btn pk-btn-outline"
+                      style={{ width: '100%' }}
+                      disabled={busy}
+                      onClick={() => handleLaunchDemo('admin_empresa')}
+                    >
+                      Explorar Demostración en Vivo sin Registro
+                    </button>
+                    <div className="pk-row-between" style={{ fontSize: 12.5, paddingTop: 4 }}>
+                      <span style={{ color: 'var(--pk-muted)' }}>¿Aún no registras tu empresa?</span>
+                      <button
+                        type="button"
+                        className="pk-btn pk-btn-outline pk-btn-sm"
+                        onClick={() => openWizardWithPreset(undefined)}
+                      >
+                        Crear Cuenta →
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </main>
     </div>
   );
 };

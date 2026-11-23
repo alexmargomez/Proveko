@@ -257,4 +257,55 @@ func TestRealPostgresProductionBootAndAll17Services(t *testing.T) {
 			t.Fatalf("attempt %d POST /api/v1/caja/incomes with JSONB idempotency failed (%d): %s", attempt, incResp.StatusCode, string(incRaw))
 		}
 	}
+
+	// 6. Exercise core_control.tenant_users CRUD, per-user RBAC, and immediate deleted-user revocation on real PostgreSQL 16
+	empResp, empRaw := doHTTPRequest(t, coreURL, http.MethodPost, "/api/v1/core/company/users", map[string]any{
+		"fullName":        "Carlos Cajero PG16",
+		"username":        "cajero.pg16@corporativo-verifica.co",
+		"password":        "CajaPg16Pass2026!",
+		"internalRole":    "cajero",
+		"isCompanyAdmin":  false,
+		"allowedServices": []string{"ms-facturacion", "ms-clientes"},
+		"allowedModules":  []string{"pos_mostrador", "directorio_clientes"},
+	}, authHeaders)
+	if empResp.StatusCode != http.StatusCreated {
+		t.Fatalf("real PostgreSQL POST /company/users failed (%d): %s", empResp.StatusCode, string(empRaw))
+	}
+	var createdEmp struct {
+		User struct {
+			UserID string `json:"userId"`
+		} `json:"user"`
+	}
+	if err := json.Unmarshal(empRaw, &createdEmp); err != nil || createdEmp.User.UserID == "" {
+		t.Fatalf("decode created PG16 employee: %v (%s)", err, string(empRaw))
+	}
+
+	empLogin, empLoginRaw := doHTTPRequest(t, coreURL, http.MethodPost, "/api/v1/core/login", map[string]any{
+		"username": "cajero.pg16@corporativo-verifica.co",
+		"password": "CajaPg16Pass2026!",
+	}, nil)
+	if empLogin.StatusCode != http.StatusOK {
+		t.Fatalf("real PostgreSQL employee login failed (%d): %s", empLogin.StatusCode, string(empLoginRaw))
+	}
+	var empAuth struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(empLoginRaw, &empAuth); err != nil || empAuth.Token == "" {
+		t.Fatalf("decode PG16 employee token: %v", err)
+	}
+	empHeaders := map[string]string{"Authorization": "Bearer " + empAuth.Token}
+
+	if r, _ := doHTTPRequest(t, coreURL, http.MethodGet, "/api/v1/facturacion/pos-state", nil, empHeaders); r.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK for PG16 cashier on assigned ms-facturacion, got %d", r.StatusCode)
+	}
+	if r, _ := doHTTPRequest(t, coreURL, http.MethodGet, "/api/v1/inventario/all", nil, empHeaders); r.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden for PG16 cashier on unassigned ms-inventario, got %d", r.StatusCode)
+	}
+
+	if r, raw := doHTTPRequest(t, coreURL, http.MethodDelete, "/api/v1/core/company/users/"+createdEmp.User.UserID, nil, authHeaders); r.StatusCode != http.StatusOK {
+		t.Fatalf("real PostgreSQL DELETE /company/users/%s failed (%d): %s", createdEmp.User.UserID, r.StatusCode, string(raw))
+	}
+	if r, _ := doHTTPRequest(t, coreURL, http.MethodGet, "/api/v1/facturacion/pos-state", nil, empHeaders); r.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 Unauthorized after deleting PG16 employee, got %d", r.StatusCode)
+	}
 }

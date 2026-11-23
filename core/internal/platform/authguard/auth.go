@@ -23,9 +23,14 @@ type ctxKey struct{}
 
 type TenantContext struct {
 	TenantID         string   `json:"tenant_id"`
+	UserID           string   `json:"user_id,omitempty"`
 	DBName           string   `json:"db_name"`
 	Username         string   `json:"username"`
+	FullName         string   `json:"full_name,omitempty"`
 	Role             string   `json:"role"`
+	InternalRole     string   `json:"internal_role,omitempty"`
+	IsCompanyAdmin   bool     `json:"is_company_admin,omitempty"`
+	IsDemo           bool     `json:"is_demo,omitempty"`
 	ActiveServices   []string `json:"active_services"`
 	ActiveModules    []string `json:"active_modules"`
 	ActiveSubmodules []string `json:"active_submodules"`

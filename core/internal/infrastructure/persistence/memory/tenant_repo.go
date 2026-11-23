@@ -11,16 +11,20 @@ import (
 )
 
 type TenantRepository struct {
-	mu      sync.RWMutex
-	tenants map[string]*domain.Tenant
-	order   []string
-	dbs     map[string]bool
+	mu       sync.RWMutex
+	tenants  map[string]*domain.Tenant
+	order    []string
+	dbs      map[string]bool
+	users    map[string]*domain.TenantUser
+	userKeys []string
+	requests []*domain.ModuleActivationRequest
 }
 
 func NewTenantRepository() *TenantRepository {
 	return &TenantRepository{
 		tenants: make(map[string]*domain.Tenant),
 		dbs:     make(map[string]bool),
+		users:   make(map[string]*domain.TenantUser),
 	}
 }
 
@@ -76,18 +80,44 @@ func (r *TenantRepository) Create(_ context.Context, tenant *domain.Tenant) erro
 	if _, exists := r.tenants[tenant.TenantID]; exists {
 		return apperr.Conflict("El identificador de la empresa ya existe")
 	}
+	uLow := strings.ToLower(strings.TrimSpace(tenant.AdminUsername))
 	for _, id := range r.order {
 		ex := r.tenants[id]
-		if ex.AdminUsername == tenant.AdminUsername {
+		if ex.AdminUsername == uLow {
 			return apperr.Conflict("El correo administrador ya se encuentra registrado")
 		}
 		if ex.DBName == tenant.DBName {
 			return apperr.Conflict("El nombre de base de datos ya está asignado a otra empresa")
 		}
 	}
-	r.tenants[tenant.TenantID] = tenant.Clone()
-	r.order = append(r.order, tenant.TenantID)
-	r.dbs[tenant.DBName] = true
+	for _, uid := range r.userKeys {
+		if r.users[uid].Username == uLow {
+			return apperr.Conflict("El usuario administrador ya está en uso")
+		}
+	}
+
+	cp := tenant.Clone()
+	cp.AdminUsername = uLow
+	r.tenants[cp.TenantID] = cp
+	r.order = append(r.order, cp.TenantID)
+	r.dbs[cp.DBName] = true
+
+	rootUserID := "usr_" + cp.TenantID
+	r.users[rootUserID] = &domain.TenantUser{
+		UserID:          rootUserID,
+		TenantID:        cp.TenantID,
+		Username:        uLow,
+		Email:           uLow,
+		FullName:        "Administrador " + cp.CompanyName,
+		PasswordHash:    cp.PasswordHash,
+		InternalRole:    "admin_empresa",
+		IsCompanyAdmin:  true,
+		AllowedServices: []string{"*"},
+		AllowedModules:  []string{"*"},
+		Status:          "ACTIVE",
+		CreatedAt:       cp.CreatedAt,
+	}
+	r.userKeys = append(r.userKeys, rootUserID)
 	return nil
 }
 
@@ -109,5 +139,16 @@ func (r *TenantRepository) UpdateStatus(_ context.Context, tenantID, status stri
 		return apperr.NotFound("Empresa no encontrada")
 	}
 	rec.Status = status
+	return nil
+}
+
+func (r *TenantRepository) UpdateQuotas(_ context.Context, tenantID string, maxUsersAllowed int) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	rec, exists := r.tenants[tenantID]
+	if !exists {
+		return apperr.NotFound("Empresa no encontrada")
+	}
+	rec.MaxUsersAllowed = maxUsersAllowed
 	return nil
 }

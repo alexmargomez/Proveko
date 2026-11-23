@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { usePlatform, useAsyncAction, TenantSummary, PkModal } from '@platform/ui-sdk';
+import { PkIcon } from '../components/ServiceIcons';
 
 export const SuperAdminPanel: React.FC<{
   onEnterWorkstation: (tenantId: string) => void;
@@ -211,16 +212,54 @@ export const SuperAdminPanel: React.FC<{
   };
 
   const isSuspended = selectedTenant?.status === 'SUSPENDED';
+  const totalMrr = tenantsList
+    .filter((t) => t.status !== 'SUSPENDED' && !t.isDemo)
+    .reduce((acc, t) => acc + (t.monthlyCop || 169000), 0);
+
+  const handleAdjustQuota = (delta: number) => {
+    if (!selectedTenant) return;
+    const nextMax = Math.min(5000, Math.max(1, (selectedTenant.maxUsersAllowed || 15) + delta));
+    void run(async () => {
+      await apiPut(`/api/v1/core/tenants/${encodeURIComponent(selectedTenant.tenantId)}/quotas`, {
+        maxUsersAllowed: nextMax,
+      });
+      await refreshBootstrap();
+      toast(`Cupo actualizado a ${nextMax} usuarios para ${selectedTenant.companyName}`);
+    });
+  };
 
   return (
-    <div>
+    <div className="pk-stack">
+      <div className="pk-kpi-row">
+        <div className="pk-kpi-card">
+          <div className="pk-kpi-label">Empresas Registradas</div>
+          <div className="pk-kpi-value">{tenantsList.length}</div>
+        </div>
+        <div className="pk-kpi-card">
+          <div className="pk-kpi-label">Empresas Activas</div>
+          <div className="pk-kpi-value" style={{ color: 'var(--pk-emerald)' }}>
+            {tenantsList.filter((t) => t.status !== 'SUSPENDED').length}
+          </div>
+        </div>
+        <div className="pk-kpi-card">
+          <div className="pk-kpi-label">Áreas del Catálogo</div>
+          <div className="pk-kpi-value">{catalog.length}</div>
+        </div>
+        <div className="pk-kpi-card">
+          <div className="pk-kpi-label">Suscripciones Mensuales Estimadas</div>
+          <div className="pk-kpi-value" style={{ color: 'var(--pk-primary)' }}>
+            ${totalMrr.toLocaleString('es-CO')} COP
+          </div>
+        </div>
+      </div>
+
       <div className="pk-card">
         <div className="pk-card-head">
           <div>
-            <div className="pk-card-title">Gobierno Multi-Empresa y Licenciamiento Jerárquico de 4 Niveles</div>
+            <div className="pk-card-title">Gobierno Multi-Empresa y Control de Capacidades por Cliente</div>
             <div style={{ fontSize: 12, color: 'var(--pk-muted)', marginTop: 3 }}>
-              Jerarquía contractual por empresa: <strong>1. Microservicio</strong> → <strong>2. Módulo</strong> →{' '}
-              <strong>3. Submódulo</strong> → <strong>4. Funcionalidad</strong>.
+              Configura la estructura de cada empresa: <strong>1. Área Operativa</strong> → <strong>2. Sección</strong> →{' '}
+              <strong>3. Sub-sección</strong> → <strong>4. Función</strong>.
             </div>
           </div>
           <div className="pk-row-actions">
@@ -276,26 +315,41 @@ export const SuperAdminPanel: React.FC<{
             </div>
             {selectedTenant && (
               <div className="pk-field">
-                <label>Estado Operativo y Aislamiento de Datos</label>
+                <label>Estado Operativo y Cupo de Usuarios</label>
                 <div
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     gap: 10,
-                    padding: '8px 12px',
+                    padding: '7px 12px',
                     borderRadius: 8,
                     border: '1px solid #cbd5e1',
                     background: isSuspended ? '#fef2f2' : '#f0fdf4',
                   }}
                 >
-                  <span style={{ fontWeight: 800, fontSize: 12.5, color: isSuspended ? '#991b1b' : '#166534' }}>
-                    {isSuspended ? 'SUSPENDIDA (Acceso Bloqueado)' : 'ACTIVA (En Operación)'} • Administrador:{' '}
-                    {selectedTenant.adminUsername}
+                  <span style={{ fontWeight: 700, fontSize: 12.5, color: isSuspended ? '#991b1b' : '#166534' }}>
+                    {isSuspended ? 'SUSPENDIDA' : 'ACTIVA'} · Admin: {selectedTenant.adminUsername} · Cupo:{' '}
+                    {selectedTenant.maxUsersAllowed || 15} usuarios
                   </span>
-                  <span className={`pk-badge ${isSuspended ? 'pk-badge-rose' : 'pk-badge-emerald'}`}>
-                    {isSuspended ? 'Bloqueada' : 'Al Día'}
-                  </span>
+                  <div className="pk-row-actions">
+                    <button
+                      type="button"
+                      className="pk-btn pk-btn-outline pk-btn-sm"
+                      disabled={busy}
+                      onClick={() => handleAdjustQuota(-5)}
+                    >
+                      -5
+                    </button>
+                    <button
+                      type="button"
+                      className="pk-btn pk-btn-outline pk-btn-sm"
+                      disabled={busy}
+                      onClick={() => handleAdjustQuota(5)}
+                    >
+                      +5 Usuarios
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -303,7 +357,7 @@ export const SuperAdminPanel: React.FC<{
         </div>
       </div>
 
-      <div className="pk-cards-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(440px, 1fr))' }}>
+      <div className="pk-plan-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 420px), 1fr))' }}>
         {catalog.map((svc) => {
           const svcOn = services.includes(svc.serviceKey);
           return (
@@ -320,8 +374,9 @@ export const SuperAdminPanel: React.FC<{
                   }}
                 >
                   <input type="checkbox" checked={svcOn} onChange={() => toggleService(svc.serviceKey)} />
-                  <span>
-                    {svc.icon} 1. {svc.displayName}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                    <PkIcon name={svc.serviceKey} size={17} />
+                    <span>1. {svc.displayName}</span>
                   </span>
                 </label>
                 <span className={`pk-badge ${svcOn ? 'pk-badge-emerald' : 'pk-badge-slate'}`}>
@@ -578,11 +633,15 @@ export const SuperAdminPanel: React.FC<{
                 value={newPreset}
                 onChange={(e) => setNewPreset(e.target.value)}
               >
-                <option value="full">Suite Empresarial Completa (Todos los Servicios)</option>
-                <option value="comercio">Comercio, Inventario y Facturación</option>
+                <option value="full">Suite Empresarial Completa (Todas las Áreas)</option>
+                <option value="comercio">Comercio, Tienda y Ferretería</option>
+                <option value="restaurante">Restaurante, Gastrobar y Cafetería</option>
+                <option value="bares">Bares, Discotecas y Eventos</option>
                 <option value="automotriz">Centro Automotriz y Taller</option>
-                <option value="hospitalidad">Hotelería y Gastronomía</option>
-                <option value="logistica">Logística Pesada y Báscula</option>
+                <option value="hotel">Hoteles y Alojamiento</option>
+                <option value="citas">Consultorios, Spa y Servicios por Cita</option>
+                <option value="mayorista">Distribuidora Mayorista</option>
+                <option value="logistica">Agroindustria y Báscula Camionera</option>
               </select>
             </div>
           </div>
