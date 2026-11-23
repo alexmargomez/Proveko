@@ -271,17 +271,13 @@ func (g *GatewayServer) Router() http.Handler {
 
 	if g.staticFS != nil {
 		fileServer := http.FileServer(http.FS(g.staticFS))
-		etagByPath := make(map[string]string)
-		_ = fs.WalkDir(g.staticFS, ".", func(p string, d fs.DirEntry, err error) error {
-			if err != nil || d.IsDir() {
-				return nil
-			}
-			if raw, readErr := fs.ReadFile(g.staticFS, p); readErr == nil {
+		computePathETag := func(p string) string {
+			if raw, readErr := fs.ReadFile(g.staticFS, p); readErr == nil && len(raw) > 0 {
 				sum := sha256.Sum256(raw)
-				etagByPath[p] = `"` + hex.EncodeToString(sum[:8]) + `"`
+				return `"` + hex.EncodeToString(sum[:8]) + `"`
 			}
-			return nil
-		})
+			return ""
+		}
 		matchesETag := func(headerVal, etag string) bool {
 			for _, part := range strings.Split(headerVal, ",") {
 				cand := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(part), "W/"))
@@ -298,7 +294,7 @@ func (g *GatewayServer) Router() http.Handler {
 			}
 			if f, err := g.staticFS.Open(cleanPath); err == nil {
 				_ = f.Close()
-				if etag := etagByPath[cleanPath]; etag != "" {
+				if etag := computePathETag(cleanPath); etag != "" {
 					w.Header().Set("ETag", etag)
 					if cleanPath != "index.html" && matchesETag(req.Header.Get("If-None-Match"), etag) {
 						w.Header().Set("Cache-Control", "no-cache, must-revalidate")
@@ -315,7 +311,7 @@ func (g *GatewayServer) Router() http.Handler {
 				fileServer.ServeHTTP(w, req)
 				return
 			}
-			if etag := etagByPath["index.html"]; etag != "" {
+			if etag := computePathETag("index.html"); etag != "" {
 				w.Header().Set("ETag", etag)
 			}
 			w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")

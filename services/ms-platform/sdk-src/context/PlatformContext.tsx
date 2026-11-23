@@ -140,12 +140,20 @@ const SandboxedPrintModal: React.FC<{
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  const triggerFramePrint = (win: Window) => {
+    win.focus();
+    win.print();
+  };
+
   const handlePrint = () => {
-    const win = frameRef.current?.contentWindow;
-    if (win) {
-      win.focus();
-      win.print();
+    const iframe = frameRef.current;
+    const win = iframe?.contentWindow;
+    if (!iframe || !win) return;
+    if (win.document.readyState !== 'complete') {
+      iframe.addEventListener('load', () => triggerFramePrint(win), { once: true });
+      return;
     }
+    triggerFramePrint(win);
   };
 
   return (
@@ -171,7 +179,7 @@ const SandboxedPrintModal: React.FC<{
             ref={frameRef}
             title={title || 'Documento imprimible'}
             srcDoc={html}
-            sandbox="allow-modals"
+            sandbox="allow-same-origin allow-modals"
             style={{ width: '100%', height: '100%', border: '1px solid #cbd5e1', borderRadius: 8, background: '#fff' }}
           />
         </div>

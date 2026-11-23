@@ -69,6 +69,7 @@ var letterTmpl = template.Must(template.New("letter").Parse(`<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:;">
 <title>{{.Title}}</title>
 <style>
 {{if .Compact}}
@@ -78,8 +79,6 @@ var letterTmpl = template.Must(template.New("letter").Parse(`<!DOCTYPE html>
 {{end}}
 * { box-sizing: border-box; }
 body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #e2e8f0; color: #0f172a; margin: 0; padding: {{if .Compact}}12px{{else}}20px{{end}}; }
-.toolbar { max-width: {{if .Compact}}680px{{else}}820px{{end}}; margin: 0 auto 10px; display: flex; justify-content: flex-end; gap: 8px; }
-.btn-print { background-color: {{.PrimaryColor}}; color: #ffffff; border: none; border-radius: 8px; padding: 9px 18px; font-weight: 700; font-size: 13px; cursor: pointer; }
 .sheet { max-width: {{if .Compact}}680px{{else}}820px{{end}}; margin: 0 auto; background-color: #ffffff; padding: {{if .Compact}}18px 22px{{else}}28px 32px{{end}}; border-radius: 12px; box-shadow: 0 10px 25px rgba(15,23,42,0.12); }
 .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; border-bottom-width: 3px; border-bottom-style: solid; border-bottom-color: {{.PrimaryColor}}; padding-bottom: {{if .Compact}}10px{{else}}14px{{end}}; }
 .company-name { font-size: {{if .Compact}}17px{{else}}21px{{end}}; font-weight: 800; color: {{.PrimaryColor}}; margin: 0 0 4px 0; }
@@ -107,15 +106,11 @@ table.items td { padding: {{if .Compact}}6px 8px{{else}}8px 10px{{end}}; border-
 .warranty { margin-top: {{if .Compact}}12px{{else}}20px{{end}}; padding-top: 9px; border-top: 1px solid #cbd5e1; font-size: 10.5px; color: #475569; text-align: center; }
 @media print {
   body { background-color: #ffffff; padding: 0; }
-  .no-print { display: none !important; }
   .sheet { box-shadow: none; border-radius: 0; padding: 0; max-width: 100%; }
 }
 </style>
 </head>
 <body>
-<div class="toolbar no-print">
-  <button type="button" class="btn-print" onclick="window.print()">Imprimir / Guardar PDF</button>
-</div>
 <div class="sheet">
   <div class="header">
     <div>
@@ -210,13 +205,12 @@ var workshopTmpl = template.Must(template.New("workshop").Parse(`<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:;">
 <title>{{.Title}}</title>
 <style>
 @page { size: letter; margin: 12mm; }
 * { box-sizing: border-box; }
 body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #e2e8f0; color: #0f172a; margin: 0; padding: 20px; }
-.toolbar { max-width: 820px; margin: 0 auto 12px; display: flex; justify-content: flex-end; gap: 8px; }
-.btn-print { background-color: {{.PrimaryColor}}; color: #ffffff; border: none; border-radius: 8px; padding: 9px 18px; font-weight: 700; font-size: 13px; cursor: pointer; }
 .sheet { max-width: 820px; margin: 0 auto; background-color: #ffffff; padding: 28px 32px; border-radius: 12px; box-shadow: 0 10px 25px rgba(15,23,42,0.12); }
 .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; border-bottom-width: 3px; border-bottom-style: solid; border-bottom-color: {{.PrimaryColor}}; padding-bottom: 14px; }
 .company-name { font-size: 21px; font-weight: 800; color: {{.PrimaryColor}}; margin: 0 0 4px 0; }
@@ -249,15 +243,11 @@ table.items td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; }
 .warranty { margin-top: 20px; padding-top: 10px; border-top: 1px solid #cbd5e1; font-size: 11px; color: #475569; text-align: center; }
 @media print {
   body { background-color: #ffffff; padding: 0; }
-  .no-print { display: none !important; }
   .sheet { box-shadow: none; border-radius: 0; padding: 0; max-width: 100%; }
 }
 </style>
 </head>
 <body>
-<div class="toolbar no-print">
-  <button type="button" class="btn-print" onclick="window.print()">Imprimir / Guardar PDF</button>
-</div>
 <div class="sheet">
   <div class="header">
     <div>
@@ -365,17 +355,16 @@ var thermal80mmTmpl = template.Must(template.New("thermal80mm").Parse(`<!DOCTYPE
 <html lang="es">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:;">
 <title>{{.Title}}</title>
 <style>
 @page { size: 80mm auto; margin: 2mm; }
 * { box-sizing: border-box; }
 body { font-family: 'Courier New', Courier, monospace; background-color: #f1f5f9; color: #0f172a; margin: 0; padding: 12px; }
-.toolbar { max-width: 310px; margin: 0 auto 10px; text-align: center; }
-.btn-print { background-color: {{.PrimaryColor}}; color: #ffffff; border: none; border-radius: 6px; padding: 9px 16px; font-weight: 700; font-size: 13px; cursor: pointer; width: 100%; }
 .ticket { width: 302px; margin: 0 auto; background-color: #ffffff; padding: 12px 10px; border: 1px dashed #94a3b8; font-size: 12px; line-height: 1.35; }
 .center { text-align: center; }
 .bold { font-weight: 700; }
-.title-line { font-size: 14px; font-weight: 700; text-align: center; }
+.title-line { font-size: 14px; font-weight: 700; text-align: center; color: {{.PrimaryColor}}; }
 .small-meta { font-size: 10.5px; margin-top: 4px; text-align: center; word-break: break-word; }
 .sep { border-top: 1px dashed #334155; margin: 8px 0; }
 table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
@@ -386,15 +375,11 @@ th, td { padding: 3px 0; vertical-align: top; }
 .total-row { font-size: 13.5px; font-weight: 700; }
 @media print {
   body { background-color: #ffffff; padding: 0; }
-  .no-print { display: none !important; }
   .ticket { border: none; width: 100%; padding: 2px; }
 }
 </style>
 </head>
 <body>
-<div class="toolbar no-print">
-  <button type="button" class="btn-print" onclick="window.print()">Imprimir Tirilla 80mm</button>
-</div>
 <div class="ticket">
   <div class="title-line">{{.Branding.CompanyName}}</div>
   {{if .Branding.Nit}}<div class="center">NIT: {{.Branding.Nit}}</div>{{end}}

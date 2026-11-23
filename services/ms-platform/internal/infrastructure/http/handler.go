@@ -6,6 +6,8 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -51,6 +53,18 @@ func computeETag(body []byte) string {
 	return `"` + hex.EncodeToString(sum[:8]) + `"`
 }
 
+func resolvePlatformAsset(filename string, fallbackBody []byte, fallbackETag string) ([]byte, string) {
+	liveDir := strings.TrimSpace(os.Getenv("LIVE_ASSETS_DIR"))
+	if liveDir == "" {
+		liveDir = "/app/assets"
+	}
+	raw, err := os.ReadFile(filepath.Join(liveDir, filepath.Base(filename)))
+	if err == nil && len(raw) > 0 {
+		return raw, computeETag(raw)
+	}
+	return fallbackBody, fallbackETag
+}
+
 type Handler struct {
 	app *application.Service
 	cfg config.ServiceConfig
@@ -86,22 +100,28 @@ func (h *Handler) mountRoutes(r chi.Router) {
 		writeAsset(w, req, "application/json; charset=utf-8", msplatform.ManifestJSON, etagManifest)
 	})
 	r.Get("/ui-sdk.js", func(w http.ResponseWriter, req *http.Request) {
-		writeAsset(w, req, "application/javascript; charset=utf-8", uiSdkJS, etagUiSdkJS)
+		body, etag := resolvePlatformAsset("ui-sdk.js", uiSdkJS, etagUiSdkJS)
+		writeAsset(w, req, "application/javascript; charset=utf-8", body, etag)
 	})
 	r.Get("/react-shim.js", func(w http.ResponseWriter, req *http.Request) {
-		writeAsset(w, req, "application/javascript; charset=utf-8", reactShimJS, etagReactShim)
+		body, etag := resolvePlatformAsset("react-shim.js", reactShimJS, etagReactShim)
+		writeAsset(w, req, "application/javascript; charset=utf-8", body, etag)
 	})
 	r.Get("/react-dom-shim.js", func(w http.ResponseWriter, req *http.Request) {
-		writeAsset(w, req, "application/javascript; charset=utf-8", reactDomShimJS, etagReactDom)
+		body, etag := resolvePlatformAsset("react-dom-shim.js", reactDomShimJS, etagReactDom)
+		writeAsset(w, req, "application/javascript; charset=utf-8", body, etag)
 	})
 	r.Get("/jsx-runtime-shim.js", func(w http.ResponseWriter, req *http.Request) {
-		writeAsset(w, req, "application/javascript; charset=utf-8", jsxRuntimeShimJS, etagJsxRuntime)
+		body, etag := resolvePlatformAsset("jsx-runtime-shim.js", jsxRuntimeShimJS, etagJsxRuntime)
+		writeAsset(w, req, "application/javascript; charset=utf-8", body, etag)
 	})
 	r.Get("/theme.css", func(w http.ResponseWriter, req *http.Request) {
-		writeAsset(w, req, "text/css; charset=utf-8", themeCSS, etagThemeCSS)
+		body, etag := resolvePlatformAsset("theme.css", themeCSS, etagThemeCSS)
+		writeAsset(w, req, "text/css; charset=utf-8", body, etag)
 	})
 	r.Get("/ui-sdk.d.ts", func(w http.ResponseWriter, req *http.Request) {
-		writeAsset(w, req, "text/plain; charset=utf-8", uiSdkDTS, etagUiSdkDTS)
+		body, etag := resolvePlatformAsset("ui-sdk.d.ts", uiSdkDTS, etagUiSdkDTS)
+		writeAsset(w, req, "text/plain; charset=utf-8", body, etag)
 	})
 	r.Get("/contracts", func(w http.ResponseWriter, _ *http.Request) {
 		httpx.JSON(w, http.StatusOK, map[string]any{
