@@ -2,8 +2,11 @@ package httpadapter
 
 import (
 	"crypto/ed25519"
+	"crypto/sha256"
 	_ "embed"
+	"encoding/hex"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -32,6 +35,21 @@ var themeCSS []byte
 
 //go:embed assets/ui-sdk.d.ts
 var uiSdkDTS []byte
+
+var (
+	etagManifest   = computeETag(msplatform.ManifestJSON)
+	etagUiSdkJS    = computeETag(uiSdkJS)
+	etagReactShim  = computeETag(reactShimJS)
+	etagReactDom   = computeETag(reactDomShimJS)
+	etagJsxRuntime = computeETag(jsxRuntimeShimJS)
+	etagThemeCSS   = computeETag(themeCSS)
+	etagUiSdkDTS   = computeETag(uiSdkDTS)
+)
+
+func computeETag(body []byte) string {
+	sum := sha256.Sum256(body)
+	return `"` + hex.EncodeToString(sum[:8]) + `"`
+}
 
 type Handler struct {
 	app *application.Service
@@ -64,26 +82,26 @@ func (h *Handler) Router() http.Handler {
 }
 
 func (h *Handler) mountRoutes(r chi.Router) {
-	r.Get("/manifest", func(w http.ResponseWriter, _ *http.Request) {
-		writeAsset(w, "application/json; charset=utf-8", msplatform.ManifestJSON)
+	r.Get("/manifest", func(w http.ResponseWriter, req *http.Request) {
+		writeAsset(w, req, "application/json; charset=utf-8", msplatform.ManifestJSON, etagManifest)
 	})
-	r.Get("/ui-sdk.js", func(w http.ResponseWriter, _ *http.Request) {
-		writeAsset(w, "application/javascript; charset=utf-8", uiSdkJS)
+	r.Get("/ui-sdk.js", func(w http.ResponseWriter, req *http.Request) {
+		writeAsset(w, req, "application/javascript; charset=utf-8", uiSdkJS, etagUiSdkJS)
 	})
-	r.Get("/react-shim.js", func(w http.ResponseWriter, _ *http.Request) {
-		writeAsset(w, "application/javascript; charset=utf-8", reactShimJS)
+	r.Get("/react-shim.js", func(w http.ResponseWriter, req *http.Request) {
+		writeAsset(w, req, "application/javascript; charset=utf-8", reactShimJS, etagReactShim)
 	})
-	r.Get("/react-dom-shim.js", func(w http.ResponseWriter, _ *http.Request) {
-		writeAsset(w, "application/javascript; charset=utf-8", reactDomShimJS)
+	r.Get("/react-dom-shim.js", func(w http.ResponseWriter, req *http.Request) {
+		writeAsset(w, req, "application/javascript; charset=utf-8", reactDomShimJS, etagReactDom)
 	})
-	r.Get("/jsx-runtime-shim.js", func(w http.ResponseWriter, _ *http.Request) {
-		writeAsset(w, "application/javascript; charset=utf-8", jsxRuntimeShimJS)
+	r.Get("/jsx-runtime-shim.js", func(w http.ResponseWriter, req *http.Request) {
+		writeAsset(w, req, "application/javascript; charset=utf-8", jsxRuntimeShimJS, etagJsxRuntime)
 	})
-	r.Get("/theme.css", func(w http.ResponseWriter, _ *http.Request) {
-		writeAsset(w, "text/css; charset=utf-8", themeCSS)
+	r.Get("/theme.css", func(w http.ResponseWriter, req *http.Request) {
+		writeAsset(w, req, "text/css; charset=utf-8", themeCSS, etagThemeCSS)
 	})
-	r.Get("/ui-sdk.d.ts", func(w http.ResponseWriter, _ *http.Request) {
-		writeAsset(w, "text/plain; charset=utf-8", uiSdkDTS)
+	r.Get("/ui-sdk.d.ts", func(w http.ResponseWriter, req *http.Request) {
+		writeAsset(w, req, "text/plain; charset=utf-8", uiSdkDTS, etagUiSdkDTS)
 	})
 	r.Get("/contracts", func(w http.ResponseWriter, _ *http.Request) {
 		httpx.JSON(w, http.StatusOK, map[string]any{
@@ -128,10 +146,22 @@ func (h *Handler) mountRoutes(r chi.Router) {
 	})
 }
 
-func writeAsset(w http.ResponseWriter, contentType string, body []byte) {
+func writeAsset(w http.ResponseWriter, r *http.Request, contentType string, body []byte, etag string) {
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Cache-Control", "public, max-age=300")
+	w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+	w.Header().Set("ETag", etag)
+	if r != nil {
+		if inm := r.Header.Get("If-None-Match"); inm != "" {
+			for _, candidate := range strings.Split(inm, ",") {
+				c := strings.TrimPrefix(strings.TrimSpace(candidate), "W/")
+				if c == etag || c == "*" {
+					w.WriteHeader(http.StatusNotModified)
+					return
+				}
+			}
+		}
+	}
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(body)
 }

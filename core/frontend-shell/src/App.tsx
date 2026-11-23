@@ -4,6 +4,9 @@ import { SidebarMenu } from './layout/SidebarMenu';
 import { TopModuleTabs } from './layout/TopModuleTabs';
 import { LandingAndAuth } from './pages/LandingAndAuth';
 import { SuperAdminPanel } from './pages/SuperAdminPanel';
+import { WorkstationHome } from './pages/WorkstationHome';
+import { CompanyUsersPanel } from './pages/CompanyUsersPanel';
+import { CompanyModulesPanel } from './pages/CompanyModulesPanel';
 
 const remoteComponentCache = new Map<string, React.ComponentType>();
 
@@ -83,16 +86,29 @@ class RemoteErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBound
 }
 
 const RemoteServiceStage: React.FC = () => {
-  const { activeServiceKey, catalog, tenant, apiGetText, refreshBootstrap } = usePlatform();
+  const {
+    activeServiceKey,
+    catalog,
+    tenant,
+    username,
+    role,
+    userProfile,
+    isCompanyAdmin,
+    hasModule,
+    setWorkstationView,
+    apiGetText,
+    refreshBootstrap,
+  } = usePlatform();
   const [RemoteView, setRemoteView] = useState<React.ComponentType | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [attempt, setAttempt] = useState<number>(0);
 
   const svc = catalog.find((item) => item.serviceKey === activeServiceKey);
+  const enabledModules = (svc?.modules || []).filter((m) => hasModule(m.moduleKey));
 
   useEffect(() => {
-    if (!svc) return;
+    if (!svc || enabledModules.length === 0) return;
     const version = svc.bundleHash || 'rev-1';
     const cacheKey = `${svc.serviceKey}:${svc.uiBundlePath}:${version}`;
     if (attempt === 0 && remoteComponentCache.has(cacheKey)) {
@@ -147,7 +163,7 @@ const RemoteServiceStage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [svc, apiGetText, attempt]);
+  }, [svc, enabledModules.length, apiGetText, attempt]);
 
   const handleRetryRemote = () => {
     void (async () => {
@@ -167,10 +183,33 @@ const RemoteServiceStage: React.FC = () => {
     );
   }
 
+  if (enabledModules.length === 0) {
+    return (
+      <div className="pk-card">
+        <div className="pk-card-head">
+          <div className="pk-card-title">{svc.displayName} — Sin Secciones Habilitadas</div>
+          {isCompanyAdmin && (
+            <button
+              type="button"
+              className="pk-btn pk-btn-primary pk-btn-sm"
+              onClick={() => setWorkstationView('activate-modules')}
+            >
+              Activar Secciones
+            </button>
+          )}
+        </div>
+        <div className="pk-card-body" style={{ color: 'var(--pk-muted)' }}>
+          Tu perfil actual no cuenta con secciones habilitadas dentro de {svc.displayName}. Solicita al administrador de
+          tu empresa asignar los permisos correspondientes o activa módulos adicionales.
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="pk-card">
-        <div className="pk-card-body">Cargando componente {svc.displayName}...</div>
+        <div className="pk-card-body">Cargando módulo {svc.displayName}...</div>
       </div>
     );
   }
@@ -179,7 +218,7 @@ const RemoteServiceStage: React.FC = () => {
     return (
       <div className="pk-card">
         <div className="pk-card-head">
-          <div className="pk-card-title">{svc.displayName} — Servicio No Disponible</div>
+          <div className="pk-card-title">{svc.displayName} — Área Temporalmente No Disponible</div>
           <button
             type="button"
             className="pk-btn pk-btn-primary pk-btn-sm"
@@ -189,13 +228,13 @@ const RemoteServiceStage: React.FC = () => {
           </button>
         </div>
         <div className="pk-card-body" style={{ color: 'var(--pk-muted)' }}>
-          {errorMsg || 'Verifica la disponibilidad de red del microservicio configurado.'}
+          {errorMsg || 'Verifica la conectividad del servicio y vuelve a intentarlo.'}
         </div>
       </div>
     );
   }
 
-  const stageKey = `${svc.serviceKey}:${tenant?.tenantId || 'none'}`;
+  const stageKey = `${svc.serviceKey}:${tenant?.tenantId || 'none'}:${userProfile?.userId || username}:${userProfile?.internalRole || role}`;
   return (
     <RemoteErrorBoundary
       serviceTitle={svc.displayName}
@@ -208,61 +247,131 @@ const RemoteServiceStage: React.FC = () => {
 };
 
 export const App: React.FC = () => {
-  const { publicView, token, tenant, role, username, logout, impersonateTenant } = usePlatform();
-  const [impersonatingWorkstation, setImpersonatingWorkstation] = useState<boolean>(false);
+  const {
+    publicView,
+    setPublicView,
+    workstationView,
+    isBootstrapping,
+    token,
+    tenant,
+    role,
+    username,
+    userProfile,
+    isDemo,
+    logout,
+    impersonateTenant,
+    startDemoSession,
+  } = usePlatform();
+
+  const [impersonatingWorkstation, setImpersonatingWorkstation] = useState<boolean>(
+    () => typeof window !== 'undefined' && sessionStorage.getItem('pk_impersonating') === '1',
+  );
+  const [railPinned, setRailPinned] = useState<boolean>(() => localStorage.getItem('pk_rail_pinned') === '1');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
 
   const isSuperAdmin = role === 'superadmin';
 
-  useEffect(() => {
-    if (publicView !== 'app' || !isSuperAdmin) {
-      setImpersonatingWorkstation(false);
+  const setImpersonation = (active: boolean) => {
+    setImpersonatingWorkstation(active);
+    if (typeof window !== 'undefined') {
+      if (active) {
+        sessionStorage.setItem('pk_impersonating', '1');
+      } else {
+        sessionStorage.removeItem('pk_impersonating');
+      }
     }
-  }, [publicView, isSuperAdmin]);
+  };
+
+  useEffect(() => {
+    if (publicView !== 'app' || (!isBootstrapping && !isSuperAdmin)) {
+      setImpersonation(false);
+    }
+  }, [publicView, isBootstrapping, isSuperAdmin]);
+
+  const handleLogout = async () => {
+    remoteComponentCache.clear();
+    setImpersonation(false);
+    setMobileMenuOpen(false);
+    await logout();
+  };
+
+  const toggleRailPin = () => {
+    setRailPinned((prev) => {
+      const next = !prev;
+      localStorage.setItem('pk_rail_pinned', next ? '1' : '0');
+      return next;
+    });
+  };
 
   const hasActiveSession =
     Boolean(token || tenant) ||
     (typeof window !== 'undefined' && localStorage.getItem('pk_has_session') === '1');
 
+  useEffect(() => {
+    if (!hasActiveSession) {
+      remoteComponentCache.clear();
+    }
+  }, [hasActiveSession]);
+
   if (publicView !== 'app' || !hasActiveSession) {
     return <LandingAndAuth />;
   }
 
+  if (isBootstrapping && !tenant && !isSuperAdmin) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--pk-bg)', display: 'flex', flexDirection: 'column' }}>
+        <header className="pk-topbar">
+          <div className="pk-brand">
+            <span className="pk-logo-box">PK</span>
+            <div className="pk-brand-meta">
+              <div className="pk-brand-title">
+                <span>PROVEKO</span>
+              </div>
+              <div className="pk-brand-sub">Preparando estación empresarial</div>
+            </div>
+          </div>
+        </header>
+        <main className="pk-stage" style={{ maxWidth: 680, width: '100%', margin: '48px auto' }}>
+          <div className="pk-card">
+            <div className="pk-card-body" style={{ textAlign: 'center', padding: 28, color: 'var(--pk-muted)' }}>
+              Cargando tu entorno empresarial...
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   if (isSuperAdmin && !impersonatingWorkstation) {
     return (
-      <div style={{ minHeight: '100vh', background: '#f1f5f9', display: 'flex', flexDirection: 'column' }}>
-        <header className="pk-topbar" style={{ background: '#0f172a', borderBottom: '1px solid #1e293b' }}>
+      <div style={{ minHeight: '100vh', background: 'var(--pk-bg)', display: 'flex', flexDirection: 'column' }}>
+        <header className="pk-topbar">
           <div className="pk-brand">
-            <span style={{ background: '#2563eb', padding: '4px 9px', borderRadius: 7, fontSize: 14 }}>◆</span>
-            <span>PROVEKO — CONSOLA CORPORATIVA SUPERADMIN</span>
-            <span className="pk-badge pk-badge-emerald" style={{ marginLeft: 8 }}>
-              Gobierno Global
-            </span>
+            <span className="pk-logo-box">PK</span>
+            <div className="pk-brand-meta">
+              <div className="pk-brand-title">
+                <span>PROVEKO</span>
+                <span style={{ color: '#cbd5e1', fontWeight: 400 }}>|</span>
+                <span style={{ color: 'var(--pk-primary)', fontWeight: 700, fontSize: 14 }}>
+                  Administración Central de Empresas
+                </span>
+              </div>
+              <div className="pk-brand-sub">Gobierno Global de Suscripciones, Licencias y Cupos</div>
+            </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span
-              style={{
-                background: '#1e293b',
-                color: '#e2e8f0',
-                border: '1px solid #334155',
-                borderRadius: 7,
-                padding: '5px 10px',
-                fontSize: 12,
-                fontWeight: 700,
-              }}
-            >
-              {username || 'SuperAdmin'}
-            </span>
-            <button type="button" className="pk-btn pk-btn-danger pk-btn-sm" onClick={() => void logout()}>
+          <div className="pk-row-actions">
+            <span className="pk-badge pk-badge-blue">{username || 'SuperAdmin'}</span>
+            <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={() => void handleLogout()}>
               Cerrar Sesión
             </button>
           </div>
         </header>
-        <main className="pk-stage" style={{ maxWidth: 1520, width: '100%', margin: '0 auto' }}>
+        <main className="pk-stage" style={{ maxWidth: 1540, width: '100%', margin: '0 auto' }}>
           <SuperAdminPanel
             onEnterWorkstation={(targetTenantId) => {
               void (async () => {
                 await impersonateTenant(targetTenantId);
-                setImpersonatingWorkstation(true);
+                setImpersonation(true);
               })();
             }}
           />
@@ -278,49 +387,132 @@ export const App: React.FC = () => {
           role="region"
           aria-label="Modo Impersonación Corporativa"
           style={{
-            background: '#1e3a8a',
+            background: '#023047',
             color: '#ffffff',
-            padding: '8px 20px',
+            padding: '7px 20px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             gap: 12,
             fontSize: 12.5,
             fontWeight: 700,
-            borderBottom: '1px solid #1d4ed8',
           }}
         >
           <span>
-            Modo Impersonación Corporativa Activo: Operando en{' '}
-            <strong>{tenant?.companyName || 'Empresa'}</strong> (NIT {tenant?.nit || 'N/A'})
+            Modo Soporte Corporativo Activo en <strong>{tenant?.companyName || 'Empresa'}</strong> (NIT{' '}
+            {tenant?.nit || 'N/A'})
           </span>
           <button
             type="button"
-            className="pk-btn pk-btn-sm"
-            style={{ background: '#ffffff', color: '#0f172a', fontWeight: 800 }}
-            onClick={() => setImpersonatingWorkstation(false)}
+            className="pk-btn pk-btn-amber-brand pk-btn-sm"
+            onClick={() => setImpersonation(false)}
           >
-            Salir de Impersonación / Volver al Panel Corporativo
+            Volver al Panel Corporativo Global
+          </button>
+        </div>
+      )}
+
+      {isDemo && !isSuperAdmin && (
+        <div
+          role="region"
+          aria-label="Modo Demostración Interactiva"
+          style={{
+            background: 'linear-gradient(90deg, #023047 0%, #0b4f78 100%)',
+            color: '#ffffff',
+            padding: '8px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            flexWrap: 'wrap',
+            fontSize: 12.5,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span className="pk-badge pk-badge-amber">DEMO EN VIVO</span>
+            <span>
+              Explora facturación, inventario, comandas, taller y roles libremente. Simular vista de empleado:
+            </span>
+            <select
+              aria-label="Simular rol en modo demostración"
+              value={userProfile?.internalRole || 'admin_empresa'}
+              onChange={(e) => {
+                const nextRole = e.target.value;
+                void startDemoSession(nextRole);
+              }}
+              style={{
+                background: 'rgba(255,255,255,0.14)',
+                color: '#ffffff',
+                border: '1px solid rgba(255,255,255,0.35)',
+                borderRadius: 7,
+                padding: '4px 9px',
+                fontSize: 12,
+                fontWeight: 700,
+              }}
+            >
+              <option value="admin_empresa" style={{ color: '#0f172a' }}>Vista: Administrador (Todo)</option>
+              <option value="cajero" style={{ color: '#0f172a' }}>Vista: Cajero y Facturador</option>
+              <option value="vendedor" style={{ color: '#0f172a' }}>Vista: Asesor Comercial y Ventas</option>
+              <option value="mesero" style={{ color: '#0f172a' }}>Vista: Mesero de Salón</option>
+              <option value="cocina" style={{ color: '#0f172a' }}>Vista: Cocina y Despacho</option>
+              <option value="bodega" style={{ color: '#0f172a' }}>Vista: Jefe de Bodega</option>
+              <option value="tecnico" style={{ color: '#0f172a' }}>Vista: Técnico de Taller</option>
+              <option value="recepcion" style={{ color: '#0f172a' }}>Vista: Recepción Hotelera</option>
+              <option value="contador" style={{ color: '#0f172a' }}>Vista: Contador y Nómina</option>
+            </select>
+          </div>
+
+          <button
+            type="button"
+            className="pk-btn pk-btn-emerald pk-btn-sm"
+            onClick={() => {
+              void (async () => {
+                await handleLogout();
+                setPublicView('register');
+              })();
+            }}
+          >
+            Crear Cuenta para mi Empresa →
           </button>
         </div>
       )}
 
       <TopModuleTabs
-        showAdminPanel={false}
-        onOpenAdmin={() => setImpersonatingWorkstation(false)}
+        onOpenAdmin={() => setImpersonation(false)}
+        onToggleMobileMenu={() => setMobileMenuOpen((v) => !v)}
       />
 
-      <div className="pk-workstation" style={{ flex: 1 }}>
-        <SidebarMenu
-          showAdminPanel={false}
-          onToggleAdminPanel={(show) => {
-            if (show) setImpersonatingWorkstation(false);
-          }}
-        />
+      <div className="pk-app-frame">
+        {mobileMenuOpen && (
+          <div
+            aria-hidden="true"
+            onClick={() => setMobileMenuOpen(false)}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(15, 23, 42, 0.45)',
+              zIndex: 80,
+            }}
+          />
+        )}
+        <div className={`pk-rail-host ${railPinned ? 'pinned' : ''}`}>
+          <SidebarMenu
+            pinned={railPinned}
+            mobileOpen={mobileMenuOpen}
+            onCloseMobile={() => setMobileMenuOpen(false)}
+            onTogglePin={toggleRailPin}
+            onOpenSuperAdmin={isSuperAdmin ? () => setImpersonation(false) : undefined}
+          />
+        </div>
         <main className="pk-main">
-          <div className="pk-stage">
-            <RemoteServiceStage />
-          </div>
+          {workstationView === 'home' && <WorkstationHome />}
+          {workstationView === 'users' && <CompanyUsersPanel />}
+          {workstationView === 'activate-modules' && <CompanyModulesPanel />}
+          {workstationView === 'service' && (
+            <div className="pk-stage">
+              <RemoteServiceStage />
+            </div>
+          )}
         </main>
       </div>
     </div>

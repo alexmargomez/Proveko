@@ -12,16 +12,20 @@ type SealedEnvelope struct {
 }
 
 type Tenant struct {
-	ID             string         `json:"id"`
-	TenantID       string         `json:"tenantId"`
-	CompanyName    string         `json:"companyName"`
-	Nit            string         `json:"nit"`
-	AdminUsername  string         `json:"adminUsername"`
-	PasswordHash   string         `json:"-"`
-	Role           string         `json:"-"`
-	DBName         string         `json:"dbName"`
-	SealedDSN      SealedEnvelope `json:"-"`
-	BusinessPreset string         `json:"businessPreset"`
+	ID               string         `json:"id"`
+	TenantID         string         `json:"tenantId"`
+	CompanyName      string         `json:"companyName"`
+	Nit              string         `json:"nit"`
+	AdminUsername    string         `json:"adminUsername"`
+	PasswordHash     string         `json:"-"`
+	Role             string         `json:"-"`
+	DBName           string         `json:"dbName"`
+	SealedDSN        SealedEnvelope `json:"-"`
+	BusinessPreset   string         `json:"businessPreset"`
+	PaymentStatus    string         `json:"paymentStatus"`
+	MonthlyCop       int64          `json:"monthlyCop"`
+	MaxUsersAllowed  int            `json:"maxUsersAllowed"`
+	IsDemo           bool           `json:"isDemo"`
 	Status           string         `json:"status"`
 	ActiveServices   []string       `json:"activeServices"`
 	ActiveModules    []string       `json:"activeModules"`
@@ -41,6 +45,12 @@ func (t *Tenant) Clone() *Tenant {
 	if cp.TenantID == "" {
 		cp.TenantID = cp.ID
 	}
+	if cp.PaymentStatus == "" {
+		cp.PaymentStatus = "ACTIVA_VERIFICADA"
+	}
+	if cp.MaxUsersAllowed <= 0 {
+		cp.MaxUsersAllowed = 15
+	}
 	cp.ActiveServices = cloneStrings(t.ActiveServices)
 	cp.ActiveModules = cloneStrings(t.ActiveModules)
 	cp.ActiveSubmodules = cloneStrings(t.ActiveSubmodules)
@@ -52,11 +62,14 @@ type CreateTenantInput struct {
 	TenantID       string   `json:"tenantId"`
 	CompanyName    string   `json:"companyName"`
 	Nit            string   `json:"nit"`
+	AdminFullName  string   `json:"adminFullName"`
 	AdminUsername  string   `json:"adminUsername"`
 	AdminEmail     string   `json:"adminEmail"`
 	Password       string   `json:"password"`
 	BusinessPreset string   `json:"businessPreset"`
 	Industry       string   `json:"industry"`
+	PaymentMethod  string   `json:"paymentMethod"`
+	IsDemo         bool     `json:"-"`
 	Services       []string `json:"activeServices"`
 	Modules        []string `json:"activeModules"`
 	Submodules     []string `json:"activeSubmodules"`

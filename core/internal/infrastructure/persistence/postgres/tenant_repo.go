@@ -53,11 +53,15 @@ func (r *TenantRepository) fetchOne(ctx context.Context, p *pgxpool.Pool, whereC
 	var envRaw []byte
 	err := p.QueryRow(ctx, `
 		SELECT tenant_id, company_name, nit, admin_username, password_hash, role,
-		       db_name, encrypted_dsn_envelope::text, business_preset, status, created_at
+		       db_name, encrypted_dsn_envelope::text, business_preset,
+		       payment_status, monthly_cop, max_users_allowed, is_demo,
+		       status, created_at
 		FROM core_control.tenants
 		`+whereClause, arg).Scan(
 		&t.TenantID, &t.CompanyName, &t.Nit, &t.AdminUsername, &t.PasswordHash, &t.Role,
-		&t.DBName, &envRaw, &t.BusinessPreset, &t.Status, &t.CreatedAt,
+		&t.DBName, &envRaw, &t.BusinessPreset,
+		&t.PaymentStatus, &t.MonthlyCop, &t.MaxUsersAllowed, &t.IsDemo,
+		&t.Status, &t.CreatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, apperr.NotFound("Empresa o usuario no encontrado")
@@ -74,7 +78,7 @@ func (r *TenantRepository) fetchOne(ctx context.Context, p *pgxpool.Pool, whereC
 	if err := r.loadSubscriptions(ctx, p, &t); err != nil {
 		return nil, err
 	}
-	return &t, nil
+	return t.Clone(), nil
 }
 
 func (r *TenantRepository) List(ctx context.Context) ([]*domain.Tenant, error) {
@@ -84,7 +88,9 @@ func (r *TenantRepository) List(ctx context.Context) ([]*domain.Tenant, error) {
 	}
 	rows, err := p.Query(ctx, `
 		SELECT tenant_id, company_name, nit, admin_username, password_hash, role,
-		       db_name, encrypted_dsn_envelope::text, business_preset, status, created_at
+		       db_name, encrypted_dsn_envelope::text, business_preset,
+		       payment_status, monthly_cop, max_users_allowed, is_demo,
+		       status, created_at
 		FROM core_control.tenants
 		ORDER BY created_at ASC, tenant_id ASC
 	`)
@@ -99,7 +105,9 @@ func (r *TenantRepository) List(ctx context.Context) ([]*domain.Tenant, error) {
 		var envRaw []byte
 		if err := rows.Scan(
 			&t.TenantID, &t.CompanyName, &t.Nit, &t.AdminUsername, &t.PasswordHash, &t.Role,
-			&t.DBName, &envRaw, &t.BusinessPreset, &t.Status, &t.CreatedAt,
+			&t.DBName, &envRaw, &t.BusinessPreset,
+			&t.PaymentStatus, &t.MonthlyCop, &t.MaxUsersAllowed, &t.IsDemo,
+			&t.Status, &t.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -114,10 +122,11 @@ func (r *TenantRepository) List(ctx context.Context) ([]*domain.Tenant, error) {
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	for _, t := range list {
+	for i, t := range list {
 		if err := r.loadSubscriptions(ctx, p, t); err != nil {
 			return nil, err
 		}
+		list[i] = t.Clone()
 	}
 	return list, nil
 }
@@ -174,21 +183,49 @@ func (r *TenantRepository) Create(ctx context.Context, tenant *domain.Tenant) er
 	if err != nil {
 		return err
 	}
+	paymentStatus := tenant.PaymentStatus
+	if paymentStatus == "" {
+		paymentStatus = "ACTIVA_VERIFICADA"
+	}
+	maxUsers := tenant.MaxUsersAllowed
+	if maxUsers <= 0 {
+		maxUsers = 15
+	}
+	uLow := strings.ToLower(strings.TrimSpace(tenant.AdminUsername))
+
 	_, err = tx.Exec(ctx, `
 		INSERT INTO core_control.tenants (
 			tenant_id, company_name, nit, admin_username, password_hash, role,
-			db_name, encrypted_dsn_envelope, business_preset, status, created_at
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11)
+			db_name, encrypted_dsn_envelope, business_preset,
+			payment_status, monthly_cop, max_users_allowed, is_demo,
+			status, created_at
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12,$13,$14,$15)
 	`,
-		tenant.TenantID, tenant.CompanyName, tenant.Nit, tenant.AdminUsername, tenant.PasswordHash, tenant.Role,
-		tenant.DBName, string(envRaw), tenant.BusinessPreset, tenant.Status, tenant.CreatedAt,
+		tenant.TenantID, tenant.CompanyName, tenant.Nit, uLow, tenant.PasswordHash, tenant.Role,
+		tenant.DBName, string(envRaw), tenant.BusinessPreset,
+		paymentStatus, tenant.MonthlyCop, maxUsers, tenant.IsDemo,
+		tenant.Status, tenant.CreatedAt,
 	)
 	if err != nil {
-		if strings.Contains(err.Error(), "duplicate key") {
+		if isUniqueViolation(err) {
 			return apperr.Conflict("La empresa o el correo administrador ya existe")
 		}
 		return err
 	}
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO core_control.tenant_users (
+			user_id, tenant_id, username, email, full_name, password_hash,
+			internal_role, is_company_admin, allowed_services, allowed_modules, status, created_at
+		) VALUES ($1,$2,$3,$4,$5,$6,'admin_empresa',TRUE,'["*"]'::jsonb,'["*"]'::jsonb,'ACTIVE',$7)
+	`, "usr_"+tenant.TenantID, tenant.TenantID, uLow, uLow, "Administrador "+tenant.CompanyName, tenant.PasswordHash, tenant.CreatedAt)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return apperr.Conflict("El usuario o correo administrador ya está registrado")
+		}
+		return err
+	}
+
 	if err := r.writeSubscriptionsTx(ctx, tx, tenant); err != nil {
 		return err
 	}
@@ -206,7 +243,11 @@ func (r *TenantRepository) UpdateSubscriptions(ctx context.Context, tenant *doma
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	tag, err := tx.Exec(ctx, `UPDATE core_control.tenants SET status = $1 WHERE tenant_id = $2`, tenant.Status, tenant.TenantID)
+	tag, err := tx.Exec(ctx, `
+		UPDATE core_control.tenants
+		SET status = $1, monthly_cop = $2, payment_status = $3
+		WHERE tenant_id = $4
+	`, tenant.Status, tenant.MonthlyCop, tenant.PaymentStatus, tenant.TenantID)
 	if err != nil {
 		return err
 	}
@@ -225,6 +266,21 @@ func (r *TenantRepository) UpdateStatus(ctx context.Context, tenantID, status st
 		return err
 	}
 	tag, err := p.Exec(ctx, `UPDATE core_control.tenants SET status = $1 WHERE tenant_id = $2`, status, tenantID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return apperr.NotFound("Empresa no encontrada")
+	}
+	return nil
+}
+
+func (r *TenantRepository) UpdateQuotas(ctx context.Context, tenantID string, maxUsersAllowed int) error {
+	p, err := r.pool(ctx)
+	if err != nil {
+		return err
+	}
+	tag, err := p.Exec(ctx, `UPDATE core_control.tenants SET max_users_allowed = $1 WHERE tenant_id = $2`, maxUsersAllowed, tenantID)
 	if err != nil {
 		return err
 	}

@@ -2,6 +2,7 @@ package httpadapter
 
 import (
 	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/hex"
 	"io/fs"
 	"net"
@@ -223,6 +224,8 @@ func (g *GatewayServer) Router() http.Handler {
 	})
 
 	r.Route("/api/v1/core", func(cr chi.Router) {
+		cr.Get("/public-catalog", g.handlePublicCatalog)
+		cr.Post("/demo-session", g.handleDemoSession)
 		cr.Post("/login", g.handleLogin)
 		cr.Post("/register", g.handleRegister)
 		cr.Post("/logout", g.handleLogout)
@@ -231,6 +234,19 @@ func (g *GatewayServer) Router() http.Handler {
 		cr.Post("/tenants", g.handleAdminCreateTenant)
 		cr.Put("/tenants/{tenantId}/subscriptions", g.handleUpdateSubscriptions)
 		cr.Put("/tenants/{tenantId}/status", g.handleUpdateTenantStatus)
+		cr.Put("/tenants/{tenantId}/quotas", g.handleUpdateTenantQuotas)
+		cr.Get("/tenants/{tenantId}/users", g.handleAdminListTenantUsers)
+		cr.Post("/tenants/{tenantId}/users", g.handleAdminCreateTenantUser)
+		cr.Get("/activation-requests", g.handleListActivationRequests)
+
+		cr.Route("/company", func(cc chi.Router) {
+			cc.Get("/users", g.handleListCompanyUsers)
+			cc.Post("/users", g.handleCreateCompanyUser)
+			cc.Put("/users/{userId}", g.handleUpdateCompanyUser)
+			cc.Delete("/users/{userId}", g.handleDeleteCompanyUser)
+			cc.Post("/activate-modules", g.handleSelfActivateModules)
+			cc.Get("/activation-requests", g.handleListActivationRequests)
+		})
 	})
 
 	r.Route("/api/v1/auth", func(ar chi.Router) {
@@ -255,6 +271,26 @@ func (g *GatewayServer) Router() http.Handler {
 
 	if g.staticFS != nil {
 		fileServer := http.FileServer(http.FS(g.staticFS))
+		etagByPath := make(map[string]string)
+		_ = fs.WalkDir(g.staticFS, ".", func(p string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return nil
+			}
+			if raw, readErr := fs.ReadFile(g.staticFS, p); readErr == nil {
+				sum := sha256.Sum256(raw)
+				etagByPath[p] = `"` + hex.EncodeToString(sum[:8]) + `"`
+			}
+			return nil
+		})
+		matchesETag := func(headerVal, etag string) bool {
+			for _, part := range strings.Split(headerVal, ",") {
+				cand := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(part), "W/"))
+				if cand == "*" || (etag != "" && cand == etag) {
+					return true
+				}
+			}
+			return false
+		}
 		r.Get("/*", func(w http.ResponseWriter, req *http.Request) {
 			cleanPath := strings.TrimPrefix(req.URL.Path, "/")
 			if cleanPath == "" {
@@ -262,9 +298,28 @@ func (g *GatewayServer) Router() http.Handler {
 			}
 			if f, err := g.staticFS.Open(cleanPath); err == nil {
 				_ = f.Close()
+				if etag := etagByPath[cleanPath]; etag != "" {
+					w.Header().Set("ETag", etag)
+					if cleanPath != "index.html" && matchesETag(req.Header.Get("If-None-Match"), etag) {
+						w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+						w.WriteHeader(http.StatusNotModified)
+						return
+					}
+				}
+				if cleanPath == "index.html" {
+					w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+					w.Header().Set("Pragma", "no-cache")
+				} else {
+					w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+				}
 				fileServer.ServeHTTP(w, req)
 				return
 			}
+			if etag := etagByPath["index.html"]; etag != "" {
+				w.Header().Set("ETag", etag)
+			}
+			w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+			w.Header().Set("Pragma", "no-cache")
 			req.URL.Path = "/"
 			fileServer.ServeHTTP(w, req)
 		})
@@ -337,11 +392,18 @@ func (g *GatewayServer) handleSystemLicense(w http.ResponseWriter, r *http.Reque
 }
 
 func (g *GatewayServer) handlePlatformProxy(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		tc, authErr := g.authenticateRequest(r)
+		if authErr != nil || tc.Role != domain.RoleSuperAdmin {
+			httpx.Error(w, http.StatusForbidden, "Operación de escritura reservada a la administración de plataforma")
+			return
+		}
+	}
 	g.mu.RLock()
 	entry, ok := g.byServiceID["ms-platform"]
 	g.mu.RUnlock()
 	if !ok || entry.proxy == nil {
-		httpx.Error(w, http.StatusBadGateway, "El servicio estandarizado ms-platform no está enlazado al Gateway")
+		httpx.Error(w, http.StatusBadGateway, "El servicio de plataforma no está disponible temporalmente")
 		return
 	}
 	passportTok, err := security.SignPassport(g.privKey, security.PassportClaims{
@@ -349,7 +411,7 @@ func (g *GatewayServer) handlePlatformProxy(w http.ResponseWriter, r *http.Reque
 		Scope:    "platform_public",
 	}, passportTTL)
 	if err != nil {
-		httpx.Error(w, http.StatusInternalServerError, "Error al firmar pasaporte hacia ms-platform")
+		httpx.Error(w, http.StatusInternalServerError, "Error al firmar pasaporte interno")
 		return
 	}
 	r.Header.Del(security.PassportHeader)
@@ -455,17 +517,22 @@ func (g *GatewayServer) handleLogin(w http.ResponseWriter, r *http.Request) {
 		httpx.RespondError(w, err)
 		return
 	}
-	tok, err := g.issueSession(w, r, out.Tenant, out.Username, out.Role)
+	tok, err := g.issueAuthSession(w, r, out)
 	if err != nil {
 		httpx.Error(w, http.StatusInternalServerError, "No fue posible emitir la sesión")
 		return
 	}
 	httpx.JSON(w, http.StatusOK, map[string]any{
-		"ok":       true,
-		"token":    tok,
-		"role":     out.Role,
-		"username": out.Username,
-		"tenant":   out.Tenant,
+		"ok":             true,
+		"token":          tok,
+		"role":           out.Role,
+		"internalRole":   out.InternalRole,
+		"username":       out.Username,
+		"fullName":       out.FullName,
+		"isCompanyAdmin": out.IsCompanyAdmin,
+		"isDemo":         out.IsDemo,
+		"tenant":         out.Tenant,
+		"companyTenant":  out.CompanyTenant,
 	})
 }
 
@@ -488,16 +555,36 @@ func (g *GatewayServer) handleRegister(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	tok, err := g.issueSession(w, r, ten, ten.AdminUsername, domain.RoleCliente)
+	fullName := strings.TrimSpace(in.AdminFullName)
+	if fullName == "" {
+		fullName = "Administrador " + ten.CompanyName
+	}
+	out := application.AuthOutput{
+		Tenant:         ten,
+		CompanyTenant:  ten.Clone(),
+		UserID:         "usr_" + ten.TenantID,
+		Role:           domain.RoleCliente,
+		InternalRole:   "admin_empresa",
+		Username:       ten.AdminUsername,
+		FullName:       fullName,
+		IsCompanyAdmin: true,
+		IsDemo:         ten.IsDemo,
+	}
+	tok, err := g.issueAuthSession(w, r, out)
 	if err != nil {
 		httpx.Error(w, http.StatusInternalServerError, "No fue posible emitir la sesión")
 		return
 	}
 	httpx.JSON(w, http.StatusCreated, map[string]any{
-		"ok":     true,
-		"token":  tok,
-		"role":   domain.RoleCliente,
-		"tenant": ten,
+		"ok":             true,
+		"token":          tok,
+		"role":           domain.RoleCliente,
+		"internalRole":   "admin_empresa",
+		"username":       ten.AdminUsername,
+		"fullName":       fullName,
+		"isCompanyAdmin": true,
+		"tenant":         ten,
+		"companyTenant":  ten.Clone(),
 	})
 }
 
@@ -542,18 +629,23 @@ func (g *GatewayServer) handleBootstrap(w http.ResponseWriter, r *http.Request) 
 		httpx.RespondError(w, err)
 		return
 	}
-	out, err := g.svc.Bootstrap(r.Context(), tc.TenantID, tc.Role)
+	out, err := g.svc.Bootstrap(r.Context(), tc)
 	if err != nil {
 		httpx.RespondError(w, err)
 		return
 	}
 	httpx.JSON(w, http.StatusOK, map[string]any{
-		"ok":       true,
-		"catalog":  out.Catalog,
-		"tenant":   out.Tenant,
-		"tenants":  out.Tenants,
-		"userRole": out.UserRole,
-		"username": tc.Username,
+		"ok":            true,
+		"catalog":       out.Catalog,
+		"tenant":        out.Tenant,
+		"companyTenant": out.CompanyTenant,
+		"tenants":       out.Tenants,
+		"userRole":      out.UserRole,
+		"username":      tc.Username,
+		"userProfile":   out.UserProfile,
+		"presets":       out.Presets,
+		"pricing":       out.Pricing,
+		"roleTemplates": out.RoleTemplates,
 	})
 }
 
@@ -588,17 +680,31 @@ func (g *GatewayServer) finishImpersonate(w http.ResponseWriter, r *http.Request
 		httpx.RespondError(w, err)
 		return
 	}
-	tok, err := g.issueSession(w, r, ten, tc.Username, tc.Role)
+	out := application.AuthOutput{
+		Tenant:         ten,
+		CompanyTenant:  ten.Clone(),
+		UserID:         "superadmin",
+		Role:           tc.Role,
+		InternalRole:   "superadmin",
+		Username:       tc.Username,
+		FullName:       "SuperAdministrador Corporativo",
+		IsCompanyAdmin: true,
+		IsDemo:         ten.IsDemo,
+	}
+	tok, err := g.issueAuthSession(w, r, out)
 	if err != nil {
 		httpx.Error(w, http.StatusInternalServerError, "No fue posible actualizar la sesión")
 		return
 	}
 	httpx.JSON(w, http.StatusOK, map[string]any{
-		"ok":       true,
-		"token":    tok,
-		"role":     tc.Role,
-		"username": tc.Username,
-		"tenant":   ten,
+		"ok":             true,
+		"token":          tok,
+		"role":           tc.Role,
+		"internalRole":   "superadmin",
+		"username":       tc.Username,
+		"isCompanyAdmin": true,
+		"tenant":         ten,
+		"companyTenant":  ten.Clone(),
 	})
 }
 
@@ -674,11 +780,11 @@ func (g *GatewayServer) handleServiceProxy(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if !containsExact(tc.ActiveServices, serviceKey) {
-		httpx.Error(w, http.StatusForbidden, "El microservicio "+serviceKey+" está desactivado en la suscripción de esta empresa")
+		httpx.Error(w, http.StatusForbidden, "No tienes acceso habilitado al área de "+g.svc.ServiceDisplayName(serviceKey))
 		return
 	}
 	if entry.proxy == nil {
-		httpx.Error(w, http.StatusBadGateway, "Dirección de red no configurada para "+serviceKey+" ("+prefix+")")
+		httpx.Error(w, http.StatusBadGateway, "Servicio temporalmente no disponible ("+prefix+")")
 		return
 	}
 
@@ -720,16 +826,21 @@ func (g *GatewayServer) matchServiceRoute(reqPath string) (string, string, upstr
 	return "", "", upstreamEntry{}, false
 }
 
-func (g *GatewayServer) issueSession(w http.ResponseWriter, r *http.Request, ten *domain.Tenant, username, role string) (string, error) {
+func (g *GatewayServer) issueAuthSession(w http.ResponseWriter, r *http.Request, out application.AuthOutput) (string, error) {
 	claims := authguard.TenantContext{
-		TenantID:         ten.TenantID,
-		DBName:           ten.DBName,
-		Username:         username,
-		Role:             role,
-		ActiveServices:   ten.ActiveServices,
-		ActiveModules:    ten.ActiveModules,
-		ActiveSubmodules: ten.ActiveSubmodules,
-		ActiveFeatures:   ten.ActiveFeatures,
+		TenantID:         out.Tenant.TenantID,
+		UserID:           out.UserID,
+		DBName:           out.Tenant.DBName,
+		Username:         out.Username,
+		FullName:         out.FullName,
+		Role:             out.Role,
+		InternalRole:     out.InternalRole,
+		IsCompanyAdmin:   out.IsCompanyAdmin,
+		IsDemo:           out.IsDemo,
+		ActiveServices:   out.Tenant.ActiveServices,
+		ActiveModules:    out.Tenant.ActiveModules,
+		ActiveSubmodules: out.Tenant.ActiveSubmodules,
+		ActiveFeatures:   out.Tenant.ActiveFeatures,
 	}
 	tok, err := authguard.SignJWT(g.cfg.JWTSecret, claims, sessionTTL)
 	if err != nil {
@@ -763,19 +874,11 @@ func (g *GatewayServer) authenticateRequest(r *http.Request) (authguard.TenantCo
 	if err != nil {
 		return authguard.TenantContext{}, apperr.Unauthorized("Sesión inválida o expirada")
 	}
-	liveTenant, err := g.svc.GetTenant(r.Context(), tc.TenantID)
+	resolved, _, err := g.svc.ResolveLiveSession(r.Context(), tc)
 	if err != nil {
-		return authguard.TenantContext{}, apperr.Unauthorized("Empresa asociada a la sesión no encontrada")
+		return authguard.TenantContext{}, err
 	}
-	if tc.Role != domain.RoleSuperAdmin && strings.EqualFold(strings.TrimSpace(liveTenant.Status), "SUSPENDED") {
-		return authguard.TenantContext{}, apperr.Forbidden("La suscripción de esta empresa se encuentra suspendida")
-	}
-	tc.DBName = liveTenant.DBName
-	tc.ActiveServices = liveTenant.ActiveServices
-	tc.ActiveModules = liveTenant.ActiveModules
-	tc.ActiveSubmodules = liveTenant.ActiveSubmodules
-	tc.ActiveFeatures = liveTenant.ActiveFeatures
-	return tc, nil
+	return resolved, nil
 }
 
 func containsExact(list []string, target string) bool {

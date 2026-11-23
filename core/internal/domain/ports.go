@@ -13,6 +13,17 @@ type TenantRepository interface {
 	Create(ctx context.Context, tenant *Tenant) error
 	UpdateSubscriptions(ctx context.Context, tenant *Tenant) error
 	UpdateStatus(ctx context.Context, tenantID, status string) error
+	UpdateQuotas(ctx context.Context, tenantID string, maxUsersAllowed int) error
+
+	GetUserByUsername(ctx context.Context, username string) (*TenantUser, error)
+	GetUserByID(ctx context.Context, tenantID, userID string) (*TenantUser, error)
+	ListUsersByTenant(ctx context.Context, tenantID string) ([]*TenantUser, error)
+	CreateUser(ctx context.Context, user *TenantUser) error
+	UpdateUser(ctx context.Context, user *TenantUser) error
+	DeleteUser(ctx context.Context, tenantID, userID string) error
+
+	RecordActivationRequest(ctx context.Context, req *ModuleActivationRequest) error
+	ListActivationRequests(ctx context.Context, tenantID string) ([]*ModuleActivationRequest, error)
 }
 
 type DatabaseProvisioner interface {
