@@ -13,6 +13,7 @@ type TenantRepository interface {
 	Create(ctx context.Context, tenant *Tenant) error
 	UpdateSubscriptions(ctx context.Context, tenant *Tenant) error
 	UpdateStatus(ctx context.Context, tenantID, status string) error
+	UpdatePaymentStatus(ctx context.Context, tenantID, paymentStatus string) error
 	UpdateQuotas(ctx context.Context, tenantID string, maxUsersAllowed int) error
 	UpdateCustomMonthlyCop(ctx context.Context, tenantID string, customMonthlyCop int64) error
 	UpdateMaintenance(ctx context.Context, tenantID string, enabled bool, message string) error

@@ -463,6 +463,42 @@ func (s *CoreService) SetTenantMaintenance(ctx context.Context, tenantID string,
 	return s.GetTenant(ctx, cleanID)
 }
 
+func (s *CoreService) SetTenantPaymentStatus(ctx context.Context, tenantID, paymentStatus string) (*domain.Tenant, error) {
+	cleanID := strings.TrimSpace(tenantID)
+	norm := strings.ToUpper(strings.TrimSpace(paymentStatus))
+	if cleanID == "" || norm == "" {
+		return nil, apperr.Validation("Estado de facturación inválido")
+	}
+	if err := s.repo.UpdatePaymentStatus(ctx, cleanID, norm); err != nil {
+		return nil, err
+	}
+	s.invalidateTenantCache(cleanID)
+	return s.GetTenant(ctx, cleanID)
+}
+
+func (s *CoreService) ChangeOwnPlatformPassword(ctx context.Context, userID, currentPassword, newPassword string) error {
+	if s.staffRepo == nil {
+		return apperr.Internal("Repositorio de personal interno no disponible")
+	}
+	if len(strings.TrimSpace(newPassword)) < 8 {
+		return apperr.Validation("La nueva contraseña debe tener al menos 8 caracteres")
+	}
+	u, err := s.staffRepo.GetPlatformUserByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if !authguard.VerifyPassword(currentPassword, u.PasswordHash) {
+		return apperr.Unauthorized("La contraseña actual ingresada es incorrecta")
+	}
+	hash, err := authguard.HashPassword(newPassword)
+	if err != nil {
+		return apperr.Internal("Error procesando nueva contraseña")
+	}
+	u.PasswordHash = hash
+	u.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	return s.staffRepo.UpdatePlatformUser(ctx, u)
+}
+
 func (s *CoreService) SetTenantCustomMonthlyCop(ctx context.Context, tenantID string, customCop int64) (*domain.Tenant, error) {
 	cleanID := strings.TrimSpace(tenantID)
 	if cleanID == "" || customCop < 0 {

@@ -146,11 +146,11 @@ export const PkModal: React.FC<{
   return (
     <div className="pk-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby={titleId}>
       <div className="pk-modal" style={{ maxWidth }} onClick={(e) => e.stopPropagation()}>
-        <div className="pk-card-head" style={{ background: '#023047', color: '#fff' }}>
-          <div className="pk-card-title" id={titleId}>
+        <div className="pk-card-head" style={{ background: '#023047', color: '#ffffff' }}>
+          <div className="pk-card-title" id={titleId} style={{ color: '#ffffff' }}>
             {title}
           </div>
-          <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={onClose}>
+          <button type="button" className="pk-btn pk-btn-hero-outline pk-btn-sm" onClick={onClose}>
             Cerrar
           </button>
         </div>
