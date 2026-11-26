@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { usePlatform } from '@platform/ui-sdk';
+import { PkConfirmModal, PkModal, TenantSummary, useAsyncAction, usePlatform } from '@platform/ui-sdk';
+import { generateSecurePassword } from '../../utils/password';
+import { AdminSwitch } from './AdminSwitch';
 
 interface PermissionSpec {
   key: string;
@@ -32,55 +34,82 @@ interface PlatformUser {
   lastLoginAt: string;
 }
 
-export const AdminStaffAndRolesTab: React.FC = () => {
-  const { apiGet, apiPost, apiPut, apiDelete, hasPlatformPermission, toast } = usePlatform();
-  const [subTab, setSubTab] = useState<'roles' | 'users'>('roles');
+export const AdminStaffAndRolesTab: React.FC<{
+  mode: 'roles' | 'staff';
+}> = ({ mode }) => {
+  const { apiGet, apiPost, apiPut, apiDelete, tenantsList, hasPlatformPermission, toast } = usePlatform();
+  const { busy, run } = useAsyncAction();
+
   const [permissions, setPermissions] = useState<PermissionSpec[]>([]);
   const [roles, setRoles] = useState<PlatformRole[]>([]);
   const [users, setUsers] = useState<PlatformUser[]>([]);
+  const [tenants, setTenants] = useState<TenantSummary[]>(tenantsList || []);
+
+  // Roles editor state
   const [selectedRoleKey, setSelectedRoleKey] = useState<string>('soporte_n1');
   const [draftRole, setDraftRole] = useState<PlatformRole | null>(null);
+  const [permSearch, setPermSearch] = useState('');
+  const [showNewRoleModal, setShowNewRoleModal] = useState(false);
   const [newRoleForm, setNewRoleForm] = useState({ roleKey: '', displayName: '', description: '' });
-  const [newUserForm, setNewUserForm] = useState({ email: '', fullName: '', password: '', roleKey: 'soporte_n1', mfaRequired: false, allowedTenants: '*' });
+  const [deleteRoleTarget, setDeleteRoleTarget] = useState<PlatformRole | null>(null);
+
+  // Staff modal state
+  const [staffModalOpen, setStaffModalOpen] = useState(false);
+  const [editingStaff, setEditingStaff] = useState<PlatformUser | null>(null);
+  const [staffEmail, setStaffEmail] = useState('');
+  const [staffFullName, setStaffFullName] = useState('');
+  const [staffPassword, setStaffPassword] = useState('');
+  const [staffRoleKey, setStaffRoleKey] = useState('soporte_n1');
+  const [staffMfaRequired, setStaffMfaRequired] = useState(false);
+  const [staffAllTenants, setStaffAllTenants] = useState(true);
+  const [staffAllowedTenants, setStaffAllowedTenants] = useState<string[]>([]);
   const [totpReveal, setTotpReveal] = useState<{ email: string; secret: string; otpauthUri: string } | null>(null);
 
   const canManageRoles = hasPlatformPermission('plataforma.roles_gestionar');
   const canManageUsers = hasPlatformPermission('plataforma.usuarios_gestionar');
 
   const load = useCallback(async () => {
-    const [pResp, rResp, uResp] = await Promise.all([
+    const [pResp, rResp, uResp, tResp] = await Promise.all([
       apiGet<{ permissions: PermissionSpec[] }>('/api/v1/admin/staff/permissions'),
       apiGet<{ roles: PlatformRole[] }>('/api/v1/admin/staff/roles'),
       apiGet<{ users: PlatformUser[] }>('/api/v1/admin/staff/users'),
+      hasPlatformPermission('empresas.ver')
+        ? apiGet<{ tenants: TenantSummary[] }>('/api/v1/admin/tenants').catch(() => ({ tenants: tenantsList || [] }))
+        : Promise.resolve({ tenants: tenantsList || [] }),
     ]);
     setPermissions(pResp.permissions || []);
     const nextRoles = rResp.roles || [];
     setRoles(nextRoles);
     setUsers(uResp.users || []);
+    setTenants(tResp.tenants || []);
     const found = nextRoles.find((r) => r.roleKey === selectedRoleKey) || nextRoles[0] || null;
     if (found) {
       setSelectedRoleKey(found.roleKey);
       setDraftRole({ ...found, permissions: [...found.permissions] });
     }
-  }, [apiGet, selectedRoleKey]);
+  }, [apiGet, hasPlatformPermission, selectedRoleKey, tenantsList]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   const groupedPermissions = useMemo(() => {
+    const q = permSearch.trim().toLowerCase();
     const groups: Record<string, PermissionSpec[]> = {};
     for (const p of permissions) {
+      if (
+        q &&
+        !p.label.toLowerCase().includes(q) &&
+        !p.description.toLowerCase().includes(q) &&
+        !p.key.toLowerCase().includes(q)
+      ) {
+        continue;
+      }
       if (!groups[p.category]) groups[p.category] = [];
       groups[p.category].push(p);
     }
     return groups;
-  }, [permissions]);
-
-  const selectRole = (r: PlatformRole) => {
-    setSelectedRoleKey(r.roleKey);
-    setDraftRole({ ...r, permissions: [...r.permissions] });
-  };
+  }, [permissions, permSearch]);
 
   const togglePerm = (permKey: string) => {
     if (!draftRole || draftRole.roleKey === 'superadmin' || !canManageRoles) return;
@@ -89,328 +118,551 @@ export const AdminStaffAndRolesTab: React.FC = () => {
     setDraftRole({ ...draftRole, permissions: next });
   };
 
-  const saveDraftRole = async () => {
-    if (!draftRole) return;
-    await apiPut(`/api/v1/admin/staff/roles/${encodeURIComponent(draftRole.roleKey)}`, {
-      displayName: draftRole.displayName,
-      description: draftRole.description,
-      requireMfa: draftRole.requireMfa,
-      requireDataReason: draftRole.requireDataReason,
-      permissions: draftRole.permissions,
-    });
-    toast(`Permisos del rol "${draftRole.displayName}" guardados`);
-    await load();
-  };
-
-  const handleCreateRole = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const resp = await apiPost<{ role: PlatformRole }>('/api/v1/admin/staff/roles', {
-      roleKey: newRoleForm.roleKey,
-      displayName: newRoleForm.displayName,
-      description: newRoleForm.description,
-      requireMfa: false,
-      requireDataReason: true,
-      permissions: ['empresas.ver'],
-    });
-    setNewRoleForm({ roleKey: '', displayName: '', description: '' });
-    if (resp.role) {
-      setSelectedRoleKey(resp.role.roleKey);
+  const toggleCategoryAll = (list: PermissionSpec[], enable: boolean) => {
+    if (!draftRole || draftRole.roleKey === 'superadmin' || !canManageRoles) return;
+    const catKeys = new Set(list.map((s) => s.key));
+    if (enable) {
+      setDraftRole({
+        ...draftRole,
+        permissions: Array.from(new Set([...draftRole.permissions, ...list.map((s) => s.key)])),
+      });
+    } else {
+      setDraftRole({
+        ...draftRole,
+        permissions: draftRole.permissions.filter((k) => !catKeys.has(k)),
+      });
     }
-    toast('Rol personalizado creado');
-    await load();
   };
 
-  const handleCreateUser = async (e: React.FormEvent) => {
+  const openCreateStaffModal = () => {
+    setEditingStaff(null);
+    setStaffEmail('');
+    setStaffFullName('');
+    setStaffPassword(generateSecurePassword());
+    setStaffRoleKey(roles.find((r) => r.roleKey === 'soporte_n1')?.roleKey || roles[0]?.roleKey || 'soporte_n1');
+    setStaffMfaRequired(false);
+    setStaffAllTenants(true);
+    setStaffAllowedTenants([]);
+    setStaffModalOpen(true);
+  };
+
+  const openEditStaffModal = (u: PlatformUser) => {
+    setEditingStaff(u);
+    setStaffEmail(u.email);
+    setStaffFullName(u.fullName);
+    setStaffPassword('');
+    setStaffRoleKey(u.roleKey);
+    setStaffMfaRequired(u.mfaRequired);
+    const isAll = !u.allowedTenants || u.allowedTenants.length === 0 || u.allowedTenants.includes('*');
+    setStaffAllTenants(isAll);
+    setStaffAllowedTenants(isAll ? [] : [...u.allowedTenants]);
+    setStaffModalOpen(true);
+  };
+
+  const handleSaveStaff = (e: React.FormEvent) => {
     e.preventDefault();
-    await apiPost('/api/v1/admin/staff/users', {
-      email: newUserForm.email.trim(),
-      fullName: newUserForm.fullName.trim(),
-      password: newUserForm.password,
-      roleKey: newUserForm.roleKey,
-      mfaRequired: newUserForm.mfaRequired,
-      allowedTenants: newUserForm.allowedTenants.split(',').map((s) => s.trim()).filter(Boolean),
+    void run(async () => {
+      const allowed = staffAllTenants ? ['*'] : staffAllowedTenants;
+      if (editingStaff) {
+        await apiPut(`/api/v1/admin/staff/users/${encodeURIComponent(editingStaff.userId)}`, {
+          fullName: staffFullName.trim(),
+          password: staffPassword.trim(),
+          roleKey: staffRoleKey,
+          mfaRequired: staffMfaRequired,
+          allowedTenants: allowed,
+          status: editingStaff.status,
+        });
+        toast(`Operador ${staffFullName} actualizado`);
+      } else {
+        await apiPost('/api/v1/admin/staff/users', {
+          email: staffEmail.trim(),
+          fullName: staffFullName.trim(),
+          password: staffPassword,
+          roleKey: staffRoleKey,
+          mfaRequired: staffMfaRequired,
+          allowedTenants: allowed,
+        });
+        toast(`Operador ${staffEmail} creado`);
+      }
+      setStaffModalOpen(false);
+      await load();
     });
-    setNewUserForm({ email: '', fullName: '', password: '', roleKey: 'soporte_n1', mfaRequired: false, allowedTenants: '*' });
-    toast('Operador interno creado');
-    await load();
   };
 
-  const handleSetupTOTP = async (u: PlatformUser) => {
-    const resp = await apiPost<{ totp: { secret: string; otpauthUri: string } }>(
-      `/api/v1/admin/staff/users/${encodeURIComponent(u.userId)}/totp/setup`,
-      {}
-    );
-    setTotpReveal({ email: u.email, secret: resp.totp.secret, otpauthUri: resp.totp.otpauthUri });
-    toast(`2FA TOTP activado para ${u.email}`);
-    await load();
-  };
+  if (mode === 'roles') {
+    return (
+      <div className="pk-split-layout">
+        <div className="pk-card">
+          <div className="pk-card-head">
+            <div className="pk-card-title">Roles Internos ({roles.length})</div>
+            {canManageRoles && (
+              <button type="button" className="pk-btn pk-btn-primary pk-btn-sm" onClick={() => setShowNewRoleModal(true)}>
+                + Crear Rol
+              </button>
+            )}
+          </div>
+          <div className="pk-card-body" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 7 }}>
+            {roles.map((r) => (
+              <button
+                key={r.roleKey}
+                type="button"
+                className={`pk-entity-item ${selectedRoleKey === r.roleKey ? 'active' : ''}`}
+                onClick={() => {
+                  setSelectedRoleKey(r.roleKey);
+                  setDraftRole({ ...r, permissions: [...r.permissions] });
+                }}
+              >
+                <div className="pk-row-between">
+                  <strong style={{ fontSize: 13.5, color: 'var(--pk-navy)' }}>{r.displayName}</strong>
+                  <span className={`pk-badge ${r.permissions.includes('*') ? 'pk-badge-amber' : 'pk-badge-blue'}`}>
+                    {r.permissions.includes('*') ? 'TOTAL (*)' : `${r.permissions.length} switches`}
+                  </span>
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--pk-muted)', marginTop: 3 }}>
+                  <code>{r.roleKey}</code> {r.isSystem ? '· Base del sistema' : '· Personalizado'}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
 
-  const handleDisableTOTP = async (u: PlatformUser) => {
-    await apiDelete(`/api/v1/admin/staff/users/${encodeURIComponent(u.userId)}/totp`);
-    toast(`2FA TOTP desactivado para ${u.email}`);
-    await load();
-  };
-
-  const toggleUserStatus = async (u: PlatformUser) => {
-    const nextStatus = u.status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED';
-    await apiPut(`/api/v1/admin/staff/users/${encodeURIComponent(u.userId)}`, { status: nextStatus });
-    toast(`Operador ${u.email} ahora está ${nextStatus}`);
-    await load();
-  };
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div className="pk-row-actions">
-        <button type="button" className={`pk-btn ${subTab === 'roles' ? 'pk-btn-primary' : 'pk-btn-outline'}`} onClick={() => setSubTab('roles')}>
-          Matriz de Roles y Switches ({roles.length})
-        </button>
-        <button type="button" className={`pk-btn ${subTab === 'users' ? 'pk-btn-primary' : 'pk-btn-outline'}`} onClick={() => setSubTab('users')}>
-          Personal Interno de Plataforma ({users.length})
-        </button>
-      </div>
-
-      {subTab === 'roles' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 320px) 1fr', gap: 16, alignItems: 'start' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div className="pk-card">
-              <div className="pk-card-head"><div className="pk-card-title">Roles de Plataforma</div></div>
-              <div className="pk-card-body" style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 10 }}>
-                {roles.map((r) => (
-                  <button
-                    key={r.roleKey}
-                    type="button"
-                    onClick={() => selectRole(r)}
-                    style={{
-                      textAlign: 'left',
-                      padding: '10px 12px',
-                      borderRadius: 8,
-                      border: selectedRoleKey === r.roleKey ? '1.5px solid #023047' : '1px solid #e2e8f0',
-                      background: selectedRoleKey === r.roleKey ? '#f0f9ff' : '#fff',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <strong style={{ fontSize: 13.5 }}>{r.displayName}</strong>
-                      <span className="pk-badge pk-badge-slate">{r.permissions.includes('*') ? 'TOTAL' : `${r.permissions.length}`}</span>
-                    </div>
-                    <div style={{ fontSize: 11.5, color: 'var(--pk-muted)', marginTop: 2 }}>{r.roleKey}</div>
-                  </button>
-                ))}
+        {draftRole && (
+          <div className="pk-card">
+            <div className="pk-card-head">
+              <div>
+                <div className="pk-card-title" style={{ fontSize: 16 }}>
+                  {draftRole.displayName} <code style={{ fontSize: 12, fontWeight: 500 }}>({draftRole.roleKey})</code>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--pk-muted)', marginTop: 2 }}>{draftRole.description}</div>
               </div>
+              {canManageRoles && (
+                <div className="pk-row-actions">
+                  {!draftRole.isSystem && (
+                    <button type="button" className="pk-btn pk-btn-danger pk-btn-sm" onClick={() => setDeleteRoleTarget(draftRole)}>
+                      Eliminar Rol
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="pk-btn pk-btn-primary"
+                    disabled={busy}
+                    onClick={() =>
+                      void run(async () => {
+                        await apiPut(`/api/v1/admin/staff/roles/${encodeURIComponent(draftRole.roleKey)}`, {
+                          displayName: draftRole.displayName,
+                          description: draftRole.description,
+                          requireMfa: draftRole.requireMfa,
+                          requireDataReason: draftRole.requireDataReason,
+                          permissions: draftRole.permissions,
+                        });
+                        toast(`Switches del rol "${draftRole.displayName}" actualizados`);
+                        await load();
+                      })
+                    }
+                  >
+                    {busy ? 'Guardando...' : 'Guardar Cambios del Rol'}
+                  </button>
+                </div>
+              )}
             </div>
 
-            {canManageRoles && (
-              <div className="pk-card">
-                <div className="pk-card-head"><div className="pk-card-title">Crear Rol Personalizado</div></div>
-                <div className="pk-card-body">
-                  <form onSubmit={(e) => void handleCreateRole(e)} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <input className="pk-input" required placeholder="clave_rol (ej: soporte_vip)" value={newRoleForm.roleKey}
-                      onChange={(e) => setNewRoleForm({ ...newRoleForm, roleKey: e.target.value })} />
-                    <input className="pk-input" required placeholder="Nombre visible (ej: Soporte VIP)" value={newRoleForm.displayName}
-                      onChange={(e) => setNewRoleForm({ ...newRoleForm, displayName: e.target.value })} />
-                    <input className="pk-input" placeholder="Descripción breve" value={newRoleForm.description}
-                      onChange={(e) => setNewRoleForm({ ...newRoleForm, description: e.target.value })} />
-                    <button type="submit" className="pk-btn pk-btn-primary pk-btn-sm">Crear Rol</button>
-                  </form>
+            <div className="pk-card-body pk-stack">
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 16,
+                  padding: '12px 16px',
+                  background: '#f8fafc',
+                  borderRadius: 10,
+                  border: '1px solid var(--pk-border)',
+                }}
+              >
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 22 }}>
+                  <AdminSwitch
+                    checked={draftRole.requireMfa}
+                    disabled={!canManageRoles}
+                    tone="amber"
+                    onChange={(next) => setDraftRole({ ...draftRole, requireMfa: next })}
+                    label="Exigir 2FA (TOTP) obligatorio al iniciar sesión"
+                  />
+                  <AdminSwitch
+                    checked={draftRole.requireDataReason}
+                    disabled={!canManageRoles}
+                    onChange={(next) => setDraftRole({ ...draftRole, requireDataReason: next })}
+                    label="Exigir motivo/ticket obligatorio para ver o exportar datos de clientes"
+                  />
+                </div>
+                <div className="pk-field" style={{ minWidth: 220 }}>
+                  <input
+                    placeholder="Filtrar permisos..."
+                    value={permSearch}
+                    onChange={(e) => setPermSearch(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {Object.entries(groupedPermissions).map(([category, list]) => {
+                const locked = draftRole.roleKey === 'superadmin' || !canManageRoles;
+                const allActive = list.every((s) => draftRole.permissions.includes('*') || draftRole.permissions.includes(s.key));
+                return (
+                  <div key={category} className="pk-card" style={{ boxShadow: 'none' }}>
+                    <div className="pk-card-head" style={{ padding: '10px 14px' }}>
+                      <div className="pk-card-title" style={{ fontSize: 13.5 }}>{category}</div>
+                      {!locked && (
+                        <button
+                          type="button"
+                          className="pk-btn pk-btn-outline pk-btn-sm"
+                          onClick={() => toggleCategoryAll(list, !allActive)}
+                        >
+                          {allActive ? 'Desactivar Categoría' : 'Activar Toda la Categoría'}
+                        </button>
+                      )}
+                    </div>
+                    <div className="pk-card-body" style={{ padding: 12 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: 10 }}>
+                        {list.map((spec) => {
+                          const checked = draftRole.permissions.includes('*') || draftRole.permissions.includes(spec.key);
+                          return (
+                            <div
+                              key={spec.key}
+                              style={{
+                                padding: '11px 13px',
+                                borderRadius: 9,
+                                border: checked ? '1px solid #93c5fd' : '1px solid var(--pk-border)',
+                                background: checked ? '#f8fbff' : '#ffffff',
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                justifyContent: 'space-between',
+                                gap: 10,
+                              }}
+                            >
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--pk-navy)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                  <span>{spec.label}</span>
+                                  {spec.sensitive && <span className="pk-badge pk-badge-amber">Sensible</span>}
+                                </div>
+                                <div style={{ fontSize: 11.5, color: 'var(--pk-muted)', marginTop: 3, lineHeight: 1.4 }}>
+                                  {spec.description}
+                                </div>
+                                <code style={{ fontSize: 10.5, color: '#64748b' }}>{spec.key}</code>
+                              </div>
+                              <AdminSwitch
+                                checked={checked}
+                                disabled={locked}
+                                tone="emerald"
+                                onChange={() => togglePerm(spec.key)}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <PkModal open={showNewRoleModal} title="Crear Nuevo Rol Personalizado de Plataforma" onClose={() => setShowNewRoleModal(false)} maxWidth={480}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void run(async () => {
+                const resp = await apiPost<{ role: PlatformRole }>('/api/v1/admin/staff/roles', {
+                  ...newRoleForm,
+                  requireMfa: false,
+                  requireDataReason: true,
+                  permissions: ['empresas.ver'],
+                });
+                setShowNewRoleModal(false);
+                setNewRoleForm({ roleKey: '', displayName: '', description: '' });
+                if (resp.role) setSelectedRoleKey(resp.role.roleKey);
+                await load();
+                toast('Rol personalizado creado. Configura ahora sus switches.');
+              });
+            }}
+            className="pk-stack"
+          >
+            <div className="pk-field">
+              <label>Clave Técnica del Rol</label>
+              <input required value={newRoleForm.roleKey} onChange={(e) => setNewRoleForm({ ...newRoleForm, roleKey: e.target.value })} placeholder="ej: lider_implantacion" />
+            </div>
+            <div className="pk-field">
+              <label>Nombre Visible</label>
+              <input required value={newRoleForm.displayName} onChange={(e) => setNewRoleForm({ ...newRoleForm, displayName: e.target.value })} placeholder="Ej. Líder de Implantación" />
+            </div>
+            <div className="pk-field">
+              <label>Descripción de Responsabilidades</label>
+              <input value={newRoleForm.description} onChange={(e) => setNewRoleForm({ ...newRoleForm, description: e.target.value })} placeholder="Alcance operativo del rol..." />
+            </div>
+            <div className="pk-row-actions" style={{ justifyContent: 'flex-end' }}>
+              <button type="button" className="pk-btn pk-btn-outline" onClick={() => setShowNewRoleModal(false)}>Cancelar</button>
+              <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>Crear Rol</button>
+            </div>
+          </form>
+        </PkModal>
+
+        <PkConfirmModal
+          open={Boolean(deleteRoleTarget)}
+          title="Eliminar Rol de Plataforma"
+          message={`¿Confirmas eliminar el rol personalizado "${deleteRoleTarget?.displayName || ''}"?`}
+          confirmLabel="Eliminar Rol"
+          busy={busy}
+          onCancel={() => setDeleteRoleTarget(null)}
+          onConfirm={() => {
+            if (!deleteRoleTarget) return;
+            void run(async () => {
+              await apiDelete(`/api/v1/admin/staff/roles/${encodeURIComponent(deleteRoleTarget.roleKey)}`);
+              setDeleteRoleTarget(null);
+              setSelectedRoleKey('superadmin');
+              await load();
+              toast('Rol eliminado');
+            });
+          }}
+        />
+      </div>
+    );
+  }
+
+  // STAFF DIRECTORY VIEW
+  return (
+    <div className="pk-stack">
+      <div className="pk-card">
+        <div className="pk-card-head">
+          <div>
+            <div className="pk-card-title">Directorio de Personal Interno de Plataforma ({users.length})</div>
+            <div style={{ fontSize: 12, color: 'var(--pk-muted)', marginTop: 2 }}>
+              Cuentas corporativas independientes de las empresas clientes (SuperAdmin, Operaciones, Soporte, Desarrollo, Comercial y Auditoría).
+            </div>
+          </div>
+          {canManageUsers && (
+            <button type="button" className="pk-btn pk-btn-primary" onClick={openCreateStaffModal}>
+              + Crear Operador Interno
+            </button>
+          )}
+        </div>
+
+        <div className="pk-table-wrap">
+          <table className="pk-table">
+            <thead>
+              <tr>
+                <th>Operador</th>
+                <th>Rol Asignado</th>
+                <th>Seguridad 2FA TOTP</th>
+                <th>Alcance de Empresas</th>
+                <th>Último Acceso</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((u) => {
+                const roleTitle = roles.find((r) => r.roleKey === u.roleKey)?.displayName || u.roleKey;
+                return (
+                  <tr key={u.userId}>
+                    <td>
+                      <strong>{u.fullName}</strong>
+                      <div style={{ fontSize: 11.5, color: 'var(--pk-muted)' }}>{u.email}</div>
+                    </td>
+                    <td>
+                      <span className="pk-badge pk-badge-blue">{roleTitle}</span>
+                    </td>
+                    <td>
+                      <span className={`pk-badge ${u.mfaEnabled ? 'pk-badge-emerald' : u.mfaRequired ? 'pk-badge-amber' : 'pk-badge-slate'}`}>
+                        {u.mfaEnabled ? '2FA Activo' : u.mfaRequired ? 'Exigido al entrar' : 'Opcional'}
+                      </span>
+                    </td>
+                    <td>
+                      {!u.allowedTenants || u.allowedTenants.includes('*')
+                        ? 'Todas las empresas (*)'
+                        : `${u.allowedTenants.length} empresa(s) asignadas`}
+                    </td>
+                    <td style={{ fontSize: 12, color: 'var(--pk-muted)' }}>
+                      {u.lastLoginAt ? u.lastLoginAt.slice(0, 19).replace('T', ' ') : 'Sin ingresos'}
+                    </td>
+                    <td>
+                      <span className={`pk-badge ${u.status === 'SUSPENDED' ? 'pk-badge-rose' : 'pk-badge-emerald'}`}>
+                        {u.status === 'SUSPENDED' ? 'Suspendido' : 'Activo'}
+                      </span>
+                    </td>
+                    <td>
+                      {canManageUsers && (
+                        <div className="pk-row-actions">
+                          <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={() => openEditStaffModal(u)}>
+                            Editar
+                          </button>
+                          {!u.mfaEnabled ? (
+                            <button
+                              type="button"
+                              className="pk-btn pk-btn-outline pk-btn-sm"
+                              onClick={() =>
+                                void run(async () => {
+                                  const resp = await apiPost<{ totp: { secret: string; otpauthUri: string } }>(
+                                    `/api/v1/admin/staff/users/${encodeURIComponent(u.userId)}/totp/setup`,
+                                    {}
+                                  );
+                                  setTotpReveal({ email: u.email, secret: resp.totp.secret, otpauthUri: resp.totp.otpauthUri });
+                                  await load();
+                                })
+                              }
+                            >
+                              Activar 2FA
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="pk-btn pk-btn-outline pk-btn-sm"
+                              onClick={() =>
+                                void run(async () => {
+                                  await apiDelete(`/api/v1/admin/staff/users/${encodeURIComponent(u.userId)}/totp`);
+                                  await load();
+                                  toast(`2FA desactivado para ${u.email}`);
+                                })
+                              }
+                            >
+                              Quitar 2FA
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="pk-btn pk-btn-outline pk-btn-sm"
+                            onClick={() =>
+                              void apiPost(`/api/v1/admin/staff/users/${encodeURIComponent(u.userId)}/revoke-sessions`, {}).then(() =>
+                                toast(`Sesiones revocadas para ${u.email}`)
+                              )
+                            }
+                          >
+                            Cerrar Sesiones
+                          </button>
+                          {u.userId !== 'usr_platform_superadmin' && (
+                            <button
+                              type="button"
+                              className={`pk-btn pk-btn-sm ${u.status === 'SUSPENDED' ? 'pk-btn-emerald' : 'pk-btn-danger'}`}
+                              onClick={() =>
+                                void run(async () => {
+                                  const next = u.status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED';
+                                  await apiPut(`/api/v1/admin/staff/users/${encodeURIComponent(u.userId)}`, { status: next });
+                                  await load();
+                                  toast(`Estado actualizado a ${next}`);
+                                })
+                              }
+                            >
+                              {u.status === 'SUSPENDED' ? 'Reactivar' : 'Suspender'}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* MODAL: CREATE / EDIT PLATFORM OPERATOR */}
+      <PkModal
+        open={staffModalOpen}
+        title={editingStaff ? `Editar Operador: ${editingStaff.fullName}` : 'Crear Nuevo Operador Interno de Plataforma'}
+        onClose={() => setStaffModalOpen(false)}
+        maxWidth={660}
+      >
+        <form onSubmit={handleSaveStaff} className="pk-stack">
+          <div className="pk-form-grid">
+            <div className="pk-field">
+              <label>Nombre Completo</label>
+              <input required value={staffFullName} onChange={(e) => setStaffFullName(e.target.value)} placeholder="Ej. Camila Rojas" />
+            </div>
+            <div className="pk-field">
+              <label>Correo Corporativo</label>
+              <input type="email" required disabled={Boolean(editingStaff)} value={staffEmail} onChange={(e) => setStaffEmail(e.target.value)} placeholder="soporte@plataforma.local" />
+            </div>
+            <div className="pk-field">
+              <label>
+                <span>{editingStaff ? 'Nueva Contraseña (opcional)' : 'Contraseña Inicial'}</span>
+                <button type="button" onClick={() => setStaffPassword(generateSecurePassword())} style={{ border: 'none', background: 'none', color: 'var(--pk-primary)', fontWeight: 800, fontSize: 11, cursor: 'pointer', padding: 0 }}>
+                  Generar segura
+                </button>
+              </label>
+              <input type="text" required={!editingStaff} value={staffPassword} onChange={(e) => setStaffPassword(e.target.value)} placeholder={editingStaff ? 'Dejar vacío para mantener' : ''} />
+            </div>
+            <div className="pk-field">
+              <label>Rol en Plataforma</label>
+              <select
+                disabled={editingStaff?.userId === 'usr_platform_superadmin'}
+                value={staffRoleKey}
+                onChange={(e) => setStaffRoleKey(e.target.value)}
+              >
+                {roles.map((r) => (
+                  <option key={r.roleKey} value={r.roleKey}>{r.displayName}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 12, borderRadius: 10, background: '#f8fafc', border: '1px solid var(--pk-border)' }}>
+            <AdminSwitch
+              checked={staffMfaRequired}
+              tone="amber"
+              onChange={setStaffMfaRequired}
+              label="Exigir configuración de 2FA (TOTP) al próximo inicio de sesión"
+            />
+            <AdminSwitch
+              checked={staffAllTenants}
+              tone="emerald"
+              onChange={setStaffAllTenants}
+              label="Alcance Global: Puede atender todas las empresas registradas (*)"
+            />
+            {!staffAllTenants && (
+              <div style={{ maxHeight: 180, overflowY: 'auto', background: '#fff', padding: 10, borderRadius: 8, border: '1px solid var(--pk-border)' }}>
+                <div className="pk-label">Selecciona las empresas asignadas a este operador</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 6 }}>
+                  {tenants.map((t) => (
+                    <label key={t.tenantId} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}>
+                      <input
+                        type="checkbox"
+                        checked={staffAllowedTenants.includes(t.tenantId)}
+                        onChange={(e) =>
+                          setStaffAllowedTenants((prev) =>
+                            e.target.checked ? [...prev, t.tenantId] : prev.filter((id) => id !== t.tenantId)
+                          )
+                        }
+                      />
+                      <span>{t.companyName}</span>
+                    </label>
+                  ))}
                 </div>
               </div>
             )}
           </div>
 
-          {draftRole && (
-            <div className="pk-card">
-              <div className="pk-card-head">
-                <div>
-                  <div className="pk-card-title">{draftRole.displayName} <code>({draftRole.roleKey})</code></div>
-                  <div style={{ fontSize: 12, color: 'var(--pk-muted)' }}>{draftRole.description}</div>
-                </div>
-                {canManageRoles && (
-                  <div className="pk-row-actions">
-                    {!draftRole.isSystem && (
-                      <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={() => void apiDelete(`/api/v1/admin/staff/roles/${encodeURIComponent(draftRole.roleKey)}`).then(load)}>
-                        Eliminar Rol
-                      </button>
-                    )}
-                    <button type="button" className="pk-btn pk-btn-primary pk-btn-sm" onClick={() => void saveDraftRole()}>
-                      Guardar Permisos
-                    </button>
-                  </div>
-                )}
-              </div>
-              <div className="pk-card-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', padding: 12, background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 600, fontSize: 13 }}>
-                    <input type="checkbox" disabled={!canManageRoles} checked={draftRole.requireMfa}
-                      onChange={(e) => setDraftRole({ ...draftRole, requireMfa: e.target.checked })} />
-                    <span>Exigir 2FA (TOTP) obligatorio para este rol</span>
-                  </label>
-                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 600, fontSize: 13 }}>
-                    <input type="checkbox" disabled={!canManageRoles} checked={draftRole.requireDataReason}
-                      onChange={(e) => setDraftRole({ ...draftRole, requireDataReason: e.target.checked })} />
-                    <span>Exigir motivo/ticket obligatorio al ver o exportar datos de clientes</span>
-                  </label>
-                </div>
+          <div className="pk-row-actions" style={{ justifyContent: 'flex-end' }}>
+            <button type="button" className="pk-btn pk-btn-outline" onClick={() => setStaffModalOpen(false)}>Cancelar</button>
+            <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
+              {busy ? 'Guardando...' : editingStaff ? 'Guardar Cambios' : 'Crear Operador'}
+            </button>
+          </div>
+        </form>
+      </PkModal>
 
-                {Object.entries(groupedPermissions).map(([category, list]) => (
-                  <div key={category}>
-                    <div style={{ fontWeight: 700, fontSize: 13, color: '#023047', marginBottom: 8, borderBottom: '1px solid #e2e8f0', paddingBottom: 4 }}>
-                      {category}
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 8 }}>
-                      {list.map((spec) => {
-                        const checked = draftRole.permissions.includes('*') || draftRole.permissions.includes(spec.key);
-                        const locked = draftRole.roleKey === 'superadmin' || !canManageRoles;
-                        return (
-                          <label
-                            key={spec.key}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'flex-start',
-                              gap: 10,
-                              padding: '10px 12px',
-                              borderRadius: 8,
-                              border: checked ? '1px solid #0284c7' : '1px solid #e2e8f0',
-                              background: checked ? '#f0f9ff' : '#ffffff',
-                              cursor: locked ? 'default' : 'pointer',
-                            }}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              disabled={locked}
-                              onChange={() => togglePerm(spec.key)}
-                              style={{ marginTop: 3 }}
-                            />
-                            <div>
-                              <div style={{ fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span>{spec.label}</span>
-                                {spec.sensitive && <span className="pk-badge pk-badge-amber" style={{ fontSize: 10 }}>SENSIBLE</span>}
-                              </div>
-                              <div style={{ fontSize: 11.5, color: 'var(--pk-muted)', marginTop: 2 }}>{spec.description}</div>
-                            </div>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {subTab === 'users' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {totpReveal && (
-            <div className="pk-card" style={{ border: '1.5px solid #0284c7', background: '#f0f9ff' }}>
-              <div className="pk-card-head">
-                <div className="pk-card-title">Clave 2FA TOTP Generada para {totpReveal.email}</div>
-                <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={() => setTotpReveal(null)}>Cerrar</button>
-              </div>
-              <div className="pk-card-body" style={{ fontSize: 13 }}>
-                <div><strong>Secreto Base32:</strong> <code>{totpReveal.secret}</code></div>
-                <div style={{ marginTop: 6, wordBreak: 'break-all' }}><strong>URI otpauth:</strong> <code>{totpReveal.otpauthUri}</code></div>
-              </div>
-            </div>
-          )}
-
-          {canManageUsers && (
-            <div className="pk-card">
-              <div className="pk-card-head"><div className="pk-card-title">Crear Operador Interno de Plataforma</div></div>
-              <div className="pk-card-body">
-                <form onSubmit={(e) => void handleCreateUser(e)} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 10, alignItems: 'end' }}>
-                  <div>
-                    <label className="pk-label">Correo corporativo</label>
-                    <input type="email" className="pk-input" required value={newUserForm.email}
-                      onChange={(e) => setNewUserForm({ ...newUserForm, email: e.target.value })} placeholder="soporte@plataforma.local" />
-                  </div>
-                  <div>
-                    <label className="pk-label">Nombre completo</label>
-                    <input className="pk-input" required value={newUserForm.fullName}
-                      onChange={(e) => setNewUserForm({ ...newUserForm, fullName: e.target.value })} placeholder="Laura Gómez" />
-                  </div>
-                  <div>
-                    <label className="pk-label">Contraseña inicial</label>
-                    <input type="password" className="pk-input" required minLength={8} value={newUserForm.password}
-                      onChange={(e) => setNewUserForm({ ...newUserForm, password: e.target.value })} placeholder="Mínimo 8 caracteres" />
-                  </div>
-                  <div>
-                    <label className="pk-label">Rol de plataforma</label>
-                    <select className="pk-input" value={newUserForm.roleKey}
-                      onChange={(e) => setNewUserForm({ ...newUserForm, roleKey: e.target.value })}>
-                      {roles.map((r) => <option key={r.roleKey} value={r.roleKey}>{r.displayName}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="pk-label">Alcance de Empresas (* = todas)</label>
-                    <input className="pk-input" value={newUserForm.allowedTenants}
-                      onChange={(e) => setNewUserForm({ ...newUserForm, allowedTenants: e.target.value })} placeholder="*" />
-                  </div>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, height: 38 }}>
-                    <input type="checkbox" checked={newUserForm.mfaRequired}
-                      onChange={(e) => setNewUserForm({ ...newUserForm, mfaRequired: e.target.checked })} />
-                    <span>Exigir 2FA</span>
-                  </label>
-                  <button type="submit" className="pk-btn pk-btn-primary">Crear Operador</button>
-                </form>
-              </div>
-            </div>
-          )}
-
-          <div className="pk-card">
-            <div className="pk-card-head"><div className="pk-card-title">Directorio de Personal Interno</div></div>
-            <div className="pk-card-body" style={{ padding: 0, overflowX: 'auto' }}>
-              <table className="pk-table">
-                <thead>
-                  <tr>
-                    <th>Operador</th>
-                    <th>Rol</th>
-                    <th>2FA TOTP</th>
-                    <th>Alcance</th>
-                    <th>Estado</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((u) => (
-                    <tr key={u.userId}>
-                      <td><strong>{u.fullName}</strong><div style={{ fontSize: 12, color: 'var(--pk-muted)' }}>{u.email}</div></td>
-                      <td><code>{u.roleKey}</code></td>
-                      <td>
-                        <span className={`pk-badge ${u.mfaEnabled ? 'pk-badge-emerald' : u.mfaRequired ? 'pk-badge-amber' : 'pk-badge-slate'}`}>
-                          {u.mfaEnabled ? 'ACTIVO' : u.mfaRequired ? 'PENDIENTE' : 'OPCIONAL'}
-                        </span>
-                      </td>
-                      <td>{(u.allowedTenants || ['*']).join(', ')}</td>
-                      <td><span className={`pk-badge ${u.status === 'ACTIVE' ? 'pk-badge-emerald' : 'pk-badge-red'}`}>{u.status}</span></td>
-                      <td>
-                        {canManageUsers && (
-                          <div className="pk-row-actions">
-                            {!u.mfaEnabled ? (
-                              <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={() => void handleSetupTOTP(u)}>Activar 2FA</button>
-                            ) : (
-                              <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={() => void handleDisableTOTP(u)}>Desactivar 2FA</button>
-                            )}
-                            <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={() => void apiPost(`/api/v1/admin/staff/users/${encodeURIComponent(u.userId)}/revoke-sessions`, {}).then(() => toast('Sesiones revocadas'))}>
-                              Revocar Sesiones
-                            </button>
-                            {u.userId !== 'usr_platform_superadmin' && (
-                              <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={() => void toggleUserStatus(u)}>
-                                {u.status === 'SUSPENDED' ? 'Reactivar' : 'Suspender'}
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+      {/* MODAL: TOTP SECRET REVEAL */}
+      <PkModal open={Boolean(totpReveal)} title={`Secreto 2FA Generado: ${totpReveal?.email || ''}`} onClose={() => setTotpReveal(null)} maxWidth={500}>
+        <div className="pk-stack">
+          <div style={{ fontSize: 13, color: 'var(--pk-text-secondary)' }}>
+            Entrega esta clave Base32 de forma segura al operador para registrarla en su aplicación autenticadora:
+          </div>
+          <div className="pk-cred-box" style={{ wordBreak: 'break-all' }}>{totpReveal?.secret}</div>
+          <div style={{ fontSize: 11.5, color: 'var(--pk-muted)', wordBreak: 'break-all' }}>{totpReveal?.otpauthUri}</div>
+          <div className="pk-row-actions" style={{ justifyContent: 'flex-end' }}>
+            <button type="button" className="pk-btn pk-btn-primary" onClick={() => setTotpReveal(null)}>Entendido</button>
           </div>
         </div>
-      )}
+      </PkModal>
     </div>
   );
 };

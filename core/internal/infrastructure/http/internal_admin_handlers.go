@@ -167,6 +167,7 @@ func (g *GatewayServer) mountInternalAdminRoutes(r chi.Router) {
 		ir.Post("/tenants", g.handleInternalCreateTenant)
 		ir.Put("/tenants/{tenantId}/subscriptions", g.handleInternalUpdateSubscriptions)
 		ir.Put("/tenants/{tenantId}/status", g.handleInternalUpdateStatus)
+		ir.Put("/tenants/{tenantId}/billing", g.handleInternalUpdateBilling)
 		ir.Put("/tenants/{tenantId}/quotas", g.handleInternalUpdateQuotas)
 		ir.Put("/tenants/{tenantId}/maintenance", g.handleInternalUpdateMaintenance)
 		ir.Post("/tenants/{tenantId}/revoke-sessions", g.handleInternalRevokeTenantSessions)
@@ -174,6 +175,7 @@ func (g *GatewayServer) mountInternalAdminRoutes(r chi.Router) {
 		ir.Get("/tenants/{tenantId}/users", g.handleInternalListTenantUsers)
 		ir.Post("/tenants/{tenantId}/users", g.handleInternalCreateTenantUser)
 		ir.Put("/tenants/{tenantId}/users/{userId}", g.handleInternalUpdateTenantUser)
+		ir.Delete("/tenants/{tenantId}/users/{userId}", g.handleInternalDeleteTenantUser)
 		ir.Post("/tenants/{tenantId}/users/{userId}/reset-password", g.handleInternalResetTenantUserPassword)
 		ir.Post("/tenants/{tenantId}/users/{userId}/revoke-sessions", g.handleInternalRevokeTenantUserSessions)
 
@@ -186,6 +188,7 @@ func (g *GatewayServer) mountInternalAdminRoutes(r chi.Router) {
 		ir.Get("/platform/users", g.handleInternalListPlatformUsers)
 		ir.Post("/platform/users", g.handleInternalCreatePlatformUser)
 		ir.Put("/platform/users/{userId}", g.handleInternalUpdatePlatformUser)
+		ir.Put("/platform/users/{userId}/self-password", g.handleInternalChangeOwnPlatformPassword)
 		ir.Post("/platform/users/{userId}/revoke-sessions", g.handleInternalRevokePlatformUserSessions)
 		ir.Post("/platform/users/{userId}/totp/setup", g.handleInternalSetupPlatformUserTOTP)
 		ir.Delete("/platform/users/{userId}/totp", g.handleInternalDisablePlatformUserTOTP)
@@ -692,4 +695,48 @@ func (g *GatewayServer) issueChallengeToken(out application.AuthOutput) (string,
 		ChallengePurpose: "platform_totp_verify",
 	}
 	return authguard.SignJWT(g.cfg.JWTSecret, claims, 5*time.Minute)
+}
+
+func (g *GatewayServer) handleInternalUpdateBilling(w http.ResponseWriter, r *http.Request) {
+	tID := chi.URLParam(r, "tenantId")
+	var body struct {
+		PaymentStatus string `json:"paymentStatus"`
+	}
+	if err := httpx.Decode(w, r, &body); err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+	ten, err := g.svc.SetTenantPaymentStatus(r.Context(), tID, body.PaymentStatus)
+	if err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{"ok": true, "tenant": ten})
+}
+
+func (g *GatewayServer) handleInternalDeleteTenantUser(w http.ResponseWriter, r *http.Request) {
+	tID := chi.URLParam(r, "tenantId")
+	uID := chi.URLParam(r, "userId")
+	if err := g.svc.DeleteCompanyUser(r.Context(), authguard.TenantContext{Role: domain.RoleSuperAdmin}, tID, uID); err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (g *GatewayServer) handleInternalChangeOwnPlatformPassword(w http.ResponseWriter, r *http.Request) {
+	uID := chi.URLParam(r, "userId")
+	var body struct {
+		CurrentPassword string `json:"currentPassword"`
+		NewPassword     string `json:"newPassword"`
+	}
+	if err := httpx.Decode(w, r, &body); err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+	if err := g.svc.ChangeOwnPlatformPassword(r.Context(), uID, body.CurrentPassword, body.NewPassword); err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{"ok": true})
 }

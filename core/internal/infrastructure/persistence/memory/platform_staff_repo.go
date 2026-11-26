@@ -9,6 +9,17 @@ import (
 	"ms-core/internal/platform/apperr"
 )
 
+func (r *TenantRepository) UpdatePaymentStatus(_ context.Context, tenantID, paymentStatus string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	rec, exists := r.tenants[tenantID]
+	if !exists {
+		return apperr.NotFound("Empresa no encontrada")
+	}
+	rec.PaymentStatus = strings.TrimSpace(paymentStatus)
+	return nil
+}
+
 func (r *TenantRepository) UpdateCustomMonthlyCop(_ context.Context, tenantID string, customMonthlyCop int64) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

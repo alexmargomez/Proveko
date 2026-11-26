@@ -1,5 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { TenantSummary, TenantUserRecord, usePlatform } from '@platform/ui-sdk';
+import {
+  PkConfirmModal,
+  PkModal,
+  RoleTemplateSpec,
+  TenantSummary,
+  TenantUserRecord,
+  formatCop,
+  useAsyncAction,
+  usePlatform,
+} from '@platform/ui-sdk';
+import { PkIcon } from '../../components/ServiceIcons';
+import { generateSecurePassword } from '../../utils/password';
+import { AdminSwitch } from './AdminSwitch';
 
 interface ExportJobSummary {
   jobId: string;
@@ -21,84 +33,152 @@ interface TenantMeta {
 }
 
 interface Props {
+  focusTenantId?: string;
+  createModalRequested?: boolean;
+  onConsumeCreateModal?: () => void;
   onStartSupport: (tenantId: string, mode: 'readonly' | 'readwrite', reason: string, durationMinutes: number) => Promise<void>;
 }
 
-const cop = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
+export const AdminTenants360Tab: React.FC<Props> = ({
+  focusTenantId,
+  createModalRequested,
+  onConsumeCreateModal,
+  onStartSupport,
+}) => {
+  const {
+    apiGet,
+    apiPost,
+    apiPut,
+    apiDelete,
+    catalog,
+    roleTemplates,
+    hasPlatformPermission,
+    requireDataReason,
+    refreshBootstrap,
+    toast,
+  } = usePlatform();
+  const { busy, run } = useAsyncAction();
 
-export const AdminTenants360Tab: React.FC<Props> = ({ onStartSupport }) => {
-  const { apiGet, apiPost, apiPut, catalog, hasPlatformPermission, requireDataReason, toast } = usePlatform();
   const [tenants, setTenants] = useState<TenantSummary[]>([]);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'SUSPENDED' | 'MAINT'>('ALL');
   const [selectedId, setSelectedId] = useState('');
-  const [detailTab, setDetailTab] = useState<'general' | 'licenses' | 'users' | 'support_export'>('general');
+  const [detailTab, setDetailTab] = useState<'general' | 'licenses' | 'users' | 'support' | 'exports'>('general');
+
   const [tenantUsers, setTenantUsers] = useState<TenantUserRecord[]>([]);
   const [exportJobs, setExportJobs] = useState<ExportJobSummary[]>([]);
   const [meta, setMeta] = useState<TenantMeta>({ tenantId: '', billingNotes: '', supportTier: 'STANDARD', accountManager: '' });
-  const [showCreateModal, setShowCreateModal] = useState(false);
 
+  // Create Tenant Modal
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [createForm, setCreateForm] = useState({
-    companyName: '', nit: '', adminFullName: '', adminUsername: '', password: '', businessPreset: 'comercio',
+    companyName: '',
+    nit: '',
+    adminFullName: '',
+    adminUsername: '',
+    password: generateSecurePassword(),
+    businessPreset: 'comercio',
   });
+
+  // General & Billing state
+  const [paymentStatus, setPaymentStatus] = useState('ACTIVA_VERIFICADA');
   const [quotaMaxUsers, setQuotaMaxUsers] = useState(15);
   const [quotaCustomCop, setQuotaCustomCop] = useState(0);
   const [maintMode, setMaintMode] = useState(false);
   const [maintMsg, setMaintMsg] = useState('');
+
+  // 4-Level Licensing state
   const [draftServices, setDraftServices] = useState<string[]>([]);
   const [draftModules, setDraftModules] = useState<string[]>([]);
-  const [newUserForm, setNewUserForm] = useState({ fullName: '', username: '', email: '', password: '', internalRole: 'cajero', isCompanyAdmin: false });
+  const [draftSubmodules, setDraftSubmodules] = useState<string[]>([]);
+  const [draftFeatures, setDraftFeatures] = useState<string[]>([]);
+
+  // Client User Modal state
+  const [userModalOpen, setUserModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<TenantUserRecord | null>(null);
+  const [userFullName, setUserFullName] = useState('');
+  const [userUsername, setUserUsername] = useState('');
+  const [userPassword, setUserPassword] = useState('');
+  const [userRole, setUserRole] = useState('cajero');
+  const [userIsAdmin, setUserIsAdmin] = useState(false);
+  const [userServices, setUserServices] = useState<string[]>([]);
+  const [userModules, setUserModules] = useState<string[]>([]);
+  const [resetPassTarget, setResetPassTarget] = useState<TenantUserRecord | null>(null);
+  const [resetPassValue, setResetPassValue] = useState('');
+  const [deleteUserTarget, setDeleteUserTarget] = useState<TenantUserRecord | null>(null);
+
+  // Support & Export state
   const [supportMode, setSupportMode] = useState<'readonly' | 'readwrite'>('readonly');
   const [supportReason, setSupportReason] = useState('');
   const [supportDuration, setSupportDuration] = useState(30);
   const [exportReason, setExportReason] = useState('');
-  const [exporting, setExporting] = useState(false);
 
   const loadTenants = useCallback(async () => {
     const resp = await apiGet<{ tenants: TenantSummary[] }>('/api/v1/admin/tenants');
     const list = resp.tenants || [];
     setTenants(list);
-    if (!selectedId && list.length > 0) {
-      setSelectedId(list[0].tenantId);
-    }
-  }, [apiGet, selectedId]);
+    setSelectedId((prev) => {
+      if (focusTenantId && list.some((t) => t.tenantId === focusTenantId)) return focusTenantId;
+      if (prev && list.some((t) => t.tenantId === prev)) return prev;
+      return list[0]?.tenantId || '';
+    });
+  }, [apiGet, focusTenantId]);
 
   useEffect(() => {
     void loadTenants();
   }, [loadTenants]);
 
+  useEffect(() => {
+    if (focusTenantId) setSelectedId(focusTenantId);
+  }, [focusTenantId]);
+
+  useEffect(() => {
+    if (createModalRequested) {
+      setCreateForm((prev) => ({ ...prev, password: generateSecurePassword() }));
+      setShowCreateModal(true);
+      onConsumeCreateModal?.();
+    }
+  }, [createModalRequested, onConsumeCreateModal]);
+
   const selected = useMemo(() => tenants.find((t) => t.tenantId === selectedId) || null, [tenants, selectedId]);
 
-  const loadTenantDetails = useCallback(async (t: TenantSummary) => {
-    setQuotaMaxUsers(t.maxUsersAllowed || 15);
-    setQuotaCustomCop(t.customMonthlyCop || 0);
-    setMaintMode(Boolean(t.maintenanceMode));
-    setMaintMsg(t.maintenanceMessage || '');
-    setDraftServices([...(t.activeServices || [])]);
-    setDraftModules([...(t.activeModules || [])]);
+  const loadTenantDetails = useCallback(
+    async (t: TenantSummary) => {
+      setPaymentStatus(t.paymentStatus || 'ACTIVA_VERIFICADA');
+      setQuotaMaxUsers(t.maxUsersAllowed || 15);
+      setQuotaCustomCop(t.customMonthlyCop || 0);
+      setMaintMode(Boolean(t.maintenanceMode));
+      setMaintMsg(t.maintenanceMessage || '');
+      setDraftServices([...(t.activeServices || [])]);
+      setDraftModules([...(t.activeModules || [])]);
+      setDraftSubmodules([...(t.activeSubmodules || [])]);
+      setDraftFeatures([...(t.activeFeatures || [])]);
 
-    if (hasPlatformPermission('usuarios_cliente.ver')) {
-      try {
-        const uResp = await apiGet<{ users: TenantUserRecord[] }>(`/api/v1/admin/tenants/${encodeURIComponent(t.tenantId)}/users`);
-        setTenantUsers(uResp.users || []);
-      } catch {
-        setTenantUsers([]);
+      if (hasPlatformPermission('usuarios_cliente.ver')) {
+        try {
+          const uResp = await apiGet<{ users: TenantUserRecord[] }>(`/api/v1/admin/tenants/${encodeURIComponent(t.tenantId)}/users`);
+          setTenantUsers(uResp.users || []);
+        } catch {
+          setTenantUsers([]);
+        }
       }
-    }
-    try {
-      const mResp = await apiGet<{ metadata: TenantMeta }>(`/api/v1/admin/tenants/${encodeURIComponent(t.tenantId)}/metadata`);
-      if (mResp.metadata) setMeta(mResp.metadata);
-    } catch {
-      // Ignore metadata read errors
-    }
-    if (hasPlatformPermission('datos_negocio.exportar_csv')) {
       try {
-        const eResp = await apiGet<{ jobs: ExportJobSummary[] }>(`/api/v1/admin/tenants/${encodeURIComponent(t.tenantId)}/exports`);
-        setExportJobs(eResp.jobs || []);
+        const mResp = await apiGet<{ metadata: TenantMeta }>(`/api/v1/admin/tenants/${encodeURIComponent(t.tenantId)}/metadata`);
+        if (mResp.metadata) setMeta(mResp.metadata);
       } catch {
-        setExportJobs([]);
+        setMeta({ tenantId: t.tenantId, billingNotes: '', supportTier: 'STANDARD', accountManager: '' });
       }
-    }
-  }, [apiGet, hasPlatformPermission]);
+      if (hasPlatformPermission('datos_negocio.exportar_csv')) {
+        try {
+          const eResp = await apiGet<{ jobs: ExportJobSummary[] }>(`/api/v1/admin/tenants/${encodeURIComponent(t.tenantId)}/exports`);
+          setExportJobs(eResp.jobs || []);
+        } catch {
+          setExportJobs([]);
+        }
+      }
+    },
+    [apiGet, hasPlatformPermission]
+  );
 
   useEffect(() => {
     if (selected) {
@@ -108,330 +188,816 @@ export const AdminTenants360Tab: React.FC<Props> = ({ onStartSupport }) => {
 
   const filteredTenants = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return tenants;
-    return tenants.filter((t) =>
-      t.companyName.toLowerCase().includes(q) || t.nit.toLowerCase().includes(q) || t.tenantId.toLowerCase().includes(q)
-    );
-  }, [tenants, search]);
-
-  const handleCreateTenant = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const resp = await apiPost<{ tenant: TenantSummary }>('/api/v1/admin/tenants', createForm);
-    setShowCreateModal(false);
-    setCreateForm({ companyName: '', nit: '', adminFullName: '', adminUsername: '', password: '', businessPreset: 'comercio' });
-    toast(`Empresa "${resp.tenant.companyName}" aprovisionada`);
-    await loadTenants();
-    setSelectedId(resp.tenant.tenantId);
-  };
-
-  const handleSaveQuotas = async () => {
-    if (!selected) return;
-    await apiPut(`/api/v1/admin/tenants/${encodeURIComponent(selected.tenantId)}/quotas`, {
-      maxUsersAllowed: quotaMaxUsers,
-      customMonthlyCop: quotaCustomCop,
+    return tenants.filter((t) => {
+      if (statusFilter === 'ACTIVE' && t.status === 'SUSPENDED') return false;
+      if (statusFilter === 'SUSPENDED' && t.status !== 'SUSPENDED') return false;
+      if (statusFilter === 'MAINT' && !t.maintenanceMode) return false;
+      if (!q) return true;
+      return (
+        t.companyName.toLowerCase().includes(q) ||
+        t.nit.toLowerCase().includes(q) ||
+        t.tenantId.toLowerCase().includes(q) ||
+        (t.adminUsername || '').toLowerCase().includes(q)
+      );
     });
-    toast('Cuotas y tarifa actualizadas');
-    await loadTenants();
-  };
+  }, [tenants, search, statusFilter]);
 
-  const handleSaveMaintenance = async () => {
-    if (!selected) return;
-    await apiPut(`/api/v1/admin/tenants/${encodeURIComponent(selected.tenantId)}/maintenance`, {
-      maintenanceMode: maintMode,
-      maintenanceMessage: maintMsg,
-    });
-    toast(maintMode ? 'Modo mantenimiento activado' : 'Modo mantenimiento desactivado');
-    await loadTenants();
-  };
-
-  const handleToggleStatus = async () => {
-    if (!selected) return;
-    const next = selected.status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED';
-    await apiPut(`/api/v1/admin/tenants/${encodeURIComponent(selected.tenantId)}/status`, { status: next });
-    toast(`Empresa ahora está ${next}`);
-    await loadTenants();
-  };
-
-  const handleRevokeTenantSessions = async () => {
-    if (!selected) return;
-    await apiPost(`/api/v1/admin/tenants/${encodeURIComponent(selected.tenantId)}/revoke-sessions`, {});
-    toast('Todas las sesiones activas de esta empresa fueron revocadas');
-    await loadTenants();
-  };
-
-  const toggleServiceLicense = (serviceKey: string) => {
+  // 4-Level Cascading Toggle Helpers
+  const toggleService = (serviceKey: string) => {
     const svc = catalog.find((s) => s.serviceKey === serviceKey);
-    const has = draftServices.includes(serviceKey);
-    if (has) {
-      const svcModKeys = new Set((svc?.modules || []).map((m) => m.moduleKey));
-      setDraftServices(draftServices.filter((s) => s !== serviceKey));
-      setDraftModules(draftModules.filter((m) => !svcModKeys.has(m)));
+    if (!svc) return;
+    const svcModKeys = svc.modules.map((m) => m.moduleKey);
+    const svcSubKeys = (svc.submodules || []).map((sm) => sm.submoduleKey);
+    const svcFeatKeys = (svc.features || []).map((f) => f.featureKey);
+
+    if (draftServices.includes(serviceKey)) {
+      setDraftServices((prev) => prev.filter((k) => k !== serviceKey));
+      setDraftModules((prev) => prev.filter((k) => !svcModKeys.includes(k)));
+      setDraftSubmodules((prev) => prev.filter((k) => !svcSubKeys.includes(k)));
+      setDraftFeatures((prev) => prev.filter((k) => !svcFeatKeys.includes(k)));
     } else {
-      const defaultMods = (svc?.modules || []).filter((m) => m.defaultActive).map((m) => m.moduleKey);
-      setDraftServices([...draftServices, serviceKey]);
-      setDraftModules(Array.from(new Set([...draftModules, ...defaultMods])));
+      setDraftServices((prev) => [...prev, serviceKey]);
+      setDraftModules((prev) => Array.from(new Set([...prev, ...svcModKeys])));
+      setDraftSubmodules((prev) => Array.from(new Set([...prev, ...svcSubKeys])));
+      setDraftFeatures((prev) => Array.from(new Set([...prev, ...svcFeatKeys])));
     }
   };
 
-  const handleSaveSubscriptions = async () => {
-    if (!selected) return;
-    await apiPut(`/api/v1/admin/tenants/${encodeURIComponent(selected.tenantId)}/subscriptions`, {
-      activeServices: draftServices,
-      activeModules: draftModules,
-      activeFeatures: selected.activeFeatures || [],
-    });
-    toast('Licencias de empresa actualizadas');
-    await loadTenants();
+  const toggleModule = (serviceKey: string, moduleKey: string) => {
+    if (!draftServices.includes(serviceKey)) return;
+    const svc = catalog.find((s) => s.serviceKey === serviceKey);
+    const modSubKeys = (svc?.submodules || []).filter((sm) => sm.dependsOnModule === moduleKey).map((sm) => sm.submoduleKey);
+    const dependentFeats = (svc?.features || [])
+      .filter((f) => f.dependsOnModule === moduleKey || (f.dependsOnSubmodule && modSubKeys.includes(f.dependsOnSubmodule)))
+      .map((f) => f.featureKey);
+
+    if (draftModules.includes(moduleKey)) {
+      setDraftModules((prev) => prev.filter((m) => m !== moduleKey));
+      setDraftSubmodules((prev) => prev.filter((sm) => !modSubKeys.includes(sm)));
+      setDraftFeatures((prev) => prev.filter((f) => !dependentFeats.includes(f)));
+    } else {
+      setDraftModules((prev) => [...prev, moduleKey]);
+      setDraftSubmodules((prev) => Array.from(new Set([...prev, ...modSubKeys])));
+      setDraftFeatures((prev) => Array.from(new Set([...prev, ...dependentFeats])));
+    }
   };
 
-  const handleCreateTenantUser = async (e: React.FormEvent) => {
+  const toggleSubmodule = (serviceKey: string, dependsOnModule: string, submoduleKey: string) => {
+    if (!draftServices.includes(serviceKey) || (dependsOnModule && !draftModules.includes(dependsOnModule))) return;
+    const svc = catalog.find((s) => s.serviceKey === serviceKey);
+    const dependentFeats = (svc?.features || []).filter((f) => f.dependsOnSubmodule === submoduleKey).map((f) => f.featureKey);
+    if (draftSubmodules.includes(submoduleKey)) {
+      setDraftSubmodules((prev) => prev.filter((sm) => sm !== submoduleKey));
+      setDraftFeatures((prev) => prev.filter((f) => !dependentFeats.includes(f)));
+    } else {
+      setDraftSubmodules((prev) => [...prev, submoduleKey]);
+      setDraftFeatures((prev) => Array.from(new Set([...prev, ...dependentFeats])));
+    }
+  };
+
+  const toggleFeature = (serviceKey: string, dependsOnModule: string, dependsOnSubmodule: string | undefined, featureKey: string) => {
+    if (!draftServices.includes(serviceKey)) return;
+    if (dependsOnModule && !draftModules.includes(dependsOnModule)) return;
+    if (dependsOnSubmodule && !draftSubmodules.includes(dependsOnSubmodule)) return;
+    setDraftFeatures((prev) => (prev.includes(featureKey) ? prev.filter((f) => f !== featureKey) : [...prev, featureKey]));
+  };
+
+  const handleSaveSubscriptions = () => {
+    if (!selected) return;
+    void run(async () => {
+      await apiPut(`/api/v1/admin/tenants/${encodeURIComponent(selected.tenantId)}/subscriptions`, {
+        activeServices: draftServices,
+        activeModules: draftModules,
+        activeSubmodules: draftSubmodules,
+        activeFeatures: draftFeatures,
+      });
+      await refreshBootstrap();
+      await loadTenants();
+      toast(`Licenciamiento de 4 niveles guardado para ${selected.companyName}`);
+    });
+  };
+
+  const handleCreateTenant = (e: React.FormEvent) => {
+    e.preventDefault();
+    void run(async () => {
+      const resp = await apiPost<{ tenant: TenantSummary }>('/api/v1/admin/tenants', createForm);
+      setShowCreateModal(false);
+      setCreateForm({
+        companyName: '',
+        nit: '',
+        adminFullName: '',
+        adminUsername: '',
+        password: generateSecurePassword(),
+        businessPreset: 'comercio',
+      });
+      await refreshBootstrap();
+      await loadTenants();
+      setSelectedId(resp.tenant.tenantId);
+      toast(`Empresa "${resp.tenant.companyName}" aprovisionada con base de datos aislada`);
+    });
+  };
+
+  // Client User Modal helpers
+  const applyUserTemplate = (roleKey: string, tpls: RoleTemplateSpec[]) => {
+    setUserRole(roleKey);
+    if (!selected) return;
+    const tpl = tpls.find((t) => t.roleKey === roleKey);
+    if (tpl?.isCompanyAdmin || roleKey === 'admin_empresa') {
+      setUserIsAdmin(true);
+      setUserServices([...selected.activeServices]);
+      setUserModules([...selected.activeModules]);
+      return;
+    }
+    setUserIsAdmin(false);
+    const recSvcs = (tpl?.recommendedServices || []).filter((sk) => selected.activeServices.includes(sk));
+    const chosenSvcs = recSvcs.length > 0 ? recSvcs : selected.activeServices.slice(0, 1);
+    setUserServices(chosenSvcs);
+    const recMods = tpl?.recommendedModules || [];
+    const mods: string[] = [];
+    for (const svc of catalog) {
+      if (!chosenSvcs.includes(svc.serviceKey)) continue;
+      for (const m of svc.modules) {
+        if (selected.activeModules.includes(m.moduleKey) && (recMods.length === 0 || recMods.includes(m.moduleKey))) {
+          mods.push(m.moduleKey);
+        }
+      }
+    }
+    setUserModules(Array.from(new Set(mods)));
+  };
+
+  const openCreateClientUser = () => {
+    setEditingUser(null);
+    setUserFullName('');
+    setUserUsername('');
+    setUserPassword(generateSecurePassword());
+    applyUserTemplate('cajero', roleTemplates);
+    setUserModalOpen(true);
+  };
+
+  const openEditClientUser = (u: TenantUserRecord) => {
+    setEditingUser(u);
+    setUserFullName(u.fullName);
+    setUserUsername(u.username);
+    setUserPassword('');
+    setUserRole(u.internalRole);
+    setUserIsAdmin(u.isCompanyAdmin);
+    setUserServices(u.isCompanyAdmin || u.allowedServices.includes('*') ? [...(selected?.activeServices || [])] : [...u.allowedServices]);
+    setUserModules(u.isCompanyAdmin || u.allowedModules.includes('*') ? [...(selected?.activeModules || [])] : [...u.allowedModules]);
+    setUserModalOpen(true);
+  };
+
+  const handleSaveClientUser = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selected) return;
-    await apiPost(`/api/v1/admin/tenants/${encodeURIComponent(selected.tenantId)}/users`, newUserForm);
-    setNewUserForm({ fullName: '', username: '', email: '', password: '', internalRole: 'cajero', isCompanyAdmin: false });
-    toast('Usuario de cliente creado');
-    await loadTenantDetails(selected);
-  };
-
-  const handleResetUserPass = async (u: TenantUserRecord) => {
-    if (!selected) return;
-    const pwd = window.prompt(`Nueva contraseña temporal para ${u.username} (mínimo 8 caracteres):`);
-    if (!pwd || pwd.trim().length < 8) return;
-    await apiPost(`/api/v1/admin/tenants/${encodeURIComponent(selected.tenantId)}/users/${encodeURIComponent(u.userId)}/reset-password`, {
-      password: pwd.trim(),
-    });
-    toast(`Contraseña restablecida y sesiones revocadas para ${u.username}`);
-  };
-
-  const handleGenerateExport = async () => {
-    if (!selected) return;
-    setExporting(true);
-    try {
-      await apiPost(`/api/v1/admin/tenants/${encodeURIComponent(selected.tenantId)}/exports`, { reason: exportReason });
-      setExportReason('');
-      toast('Paquete ZIP CSV generado y listo para descargar');
+    void run(async () => {
+      if (editingUser) {
+        await apiPut(`/api/v1/admin/tenants/${encodeURIComponent(selected.tenantId)}/users/${encodeURIComponent(editingUser.userId)}`, {
+          fullName: userFullName,
+          email: userUsername,
+          password: userPassword,
+          internalRole: userRole,
+          isCompanyAdmin: userIsAdmin,
+          allowedServices: userIsAdmin ? ['*'] : userServices,
+          allowedModules: userIsAdmin ? ['*'] : userModules,
+          status: editingUser.status,
+        });
+        toast(`Usuario ${userFullName} actualizado`);
+      } else {
+        await apiPost(`/api/v1/admin/tenants/${encodeURIComponent(selected.tenantId)}/users`, {
+          fullName: userFullName,
+          username: userUsername,
+          email: userUsername,
+          password: userPassword,
+          internalRole: userRole,
+          isCompanyAdmin: userIsAdmin,
+          allowedServices: userIsAdmin ? ['*'] : userServices,
+          allowedModules: userIsAdmin ? ['*'] : userModules,
+        });
+        toast(`Usuario ${userUsername} creado en ${selected.companyName}`);
+      }
+      setUserModalOpen(false);
       await loadTenantDetails(selected);
-    } finally {
-      setExporting(false);
-    }
+    });
   };
+
+  const activeCompanyCatalog = useMemo(
+    () => catalog.filter((s) => selected?.activeServices.includes(s.serviceKey) && s.serviceKey !== 'ms-impresiones'),
+    [catalog, selected]
+  );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {showCreateModal && (
-        <div className="pk-card" style={{ border: '1.5px solid #023047' }}>
-          <div className="pk-card-head">
-            <div className="pk-card-title">Aprovisionar Nueva Empresa Cliente</div>
-            <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={() => setShowCreateModal(false)}>Cancelar</button>
+    <div className="pk-split-layout">
+      {/* LEFT PANE: TENANT DIRECTORY */}
+      <div className="pk-card">
+        <div className="pk-card-head">
+          <div className="pk-card-title">Empresas ({filteredTenants.length})</div>
+          {hasPlatformPermission('empresas.crear') && (
+            <button
+              type="button"
+              className="pk-btn pk-btn-emerald pk-btn-sm"
+              onClick={() => {
+                setCreateForm((prev) => ({ ...prev, password: generateSecurePassword() }));
+                setShowCreateModal(true);
+              }}
+            >
+              + Aprovisionar
+            </button>
+          )}
+        </div>
+        <div className="pk-card-body" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div className="pk-field">
+            <input
+              placeholder="Buscar razón social, NIT o correo..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
-          <div className="pk-card-body">
-            <form onSubmit={(e) => void handleCreateTenant(e)} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 10 }}>
-              <input className="pk-input" required placeholder="Razón social" value={createForm.companyName} onChange={(e) => setCreateForm({ ...createForm, companyName: e.target.value })} />
-              <input className="pk-input" required placeholder="NIT" value={createForm.nit} onChange={(e) => setCreateForm({ ...createForm, nit: e.target.value })} />
-              <input className="pk-input" required placeholder="Nombre administrador" value={createForm.adminFullName} onChange={(e) => setCreateForm({ ...createForm, adminFullName: e.target.value })} />
-              <input type="email" className="pk-input" required placeholder="Correo administrador" value={createForm.adminUsername} onChange={(e) => setCreateForm({ ...createForm, adminUsername: e.target.value })} />
-              <input type="password" className="pk-input" required minLength={8} placeholder="Contraseña (mín 8)" value={createForm.password} onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })} />
-              <select className="pk-input" value={createForm.businessPreset} onChange={(e) => setCreateForm({ ...createForm, businessPreset: e.target.value })}>
-                <option value="comercio">Comercio</option>
-                <option value="restaurante">Restaurante</option>
-                <option value="taller">Taller</option>
-                <option value="hotel">Hotelería</option>
-                <option value="full">Suite Completa</option>
-              </select>
-              <button type="submit" className="pk-btn pk-btn-primary">Crear Empresa</button>
-            </form>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            {(
+              [
+                ['ALL', 'Todas'],
+                ['ACTIVE', 'Activas'],
+                ['SUSPENDED', 'Suspendidas'],
+                ['MAINT', 'Mantenimiento'],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                className={`pk-tab-pill ${statusFilter === key ? 'active' : ''}`}
+                style={{ padding: '4px 9px', fontSize: 11 }}
+                onClick={() => setStatusFilter(key)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ maxHeight: 'calc(100vh - 285px)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 7 }}>
+            {filteredTenants.map((t) => (
+              <button
+                key={t.tenantId}
+                type="button"
+                className={`pk-entity-item ${selectedId === t.tenantId ? 'active' : ''}`}
+                onClick={() => setSelectedId(t.tenantId)}
+              >
+                <div className="pk-row-between" style={{ gap: 6 }}>
+                  <strong style={{ fontSize: 13, color: 'var(--pk-navy)' }}>{t.companyName}</strong>
+                  <span className={`pk-badge ${t.status === 'SUSPENDED' ? 'pk-badge-rose' : 'pk-badge-emerald'}`}>
+                    {t.status === 'SUSPENDED' ? 'Suspendida' : 'Activa'}
+                  </span>
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--pk-muted)', marginTop: 4 }}>
+                  NIT {t.nit} · {t.activeServices.length} áreas · {t.maxUsersAllowed || 15} cupos
+                </div>
+                {(t.maintenanceMode || t.isDemo) && (
+                  <div style={{ display: 'flex', gap: 6, marginTop: 5 }}>
+                    {t.isDemo && <span className="pk-badge pk-badge-blue">DEMO</span>}
+                    {t.maintenanceMode && <span className="pk-badge pk-badge-amber">MANTENIMIENTO</span>}
+                  </div>
+                )}
+              </button>
+            ))}
           </div>
         </div>
-      )}
+      </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(270px, 330px) 1fr', gap: 16, alignItems: 'start' }}>
+      {/* RIGHT PANE: 360° WORKSPACE */}
+      {selected ? (
         <div className="pk-card">
-          <div className="pk-card-head">
-            <div className="pk-card-title">Empresas ({filteredTenants.length})</div>
-            {hasPlatformPermission('empresas.crear') && (
-              <button type="button" className="pk-btn pk-btn-primary pk-btn-sm" onClick={() => setShowCreateModal(true)}>+ Nueva</button>
-            )}
-          </div>
-          <div className="pk-card-body" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10 }}>
-            <input className="pk-input" placeholder="Buscar razón social o NIT..." value={search} onChange={(e) => setSearch(e.target.value)} />
-            <div style={{ maxHeight: 540, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {filteredTenants.map((t) => (
-                <button
-                  key={t.tenantId}
-                  type="button"
-                  onClick={() => setSelectedId(t.tenantId)}
-                  style={{
-                    textAlign: 'left',
-                    padding: '10px 12px',
-                    borderRadius: 8,
-                    border: selectedId === t.tenantId ? '1.5px solid #023047' : '1px solid #e2e8f0',
-                    background: selectedId === t.tenantId ? '#f0f9ff' : '#fff',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
-                    <strong style={{ fontSize: 13 }}>{t.companyName}</strong>
-                    <span className={`pk-badge ${t.status === 'ACTIVE' ? 'pk-badge-emerald' : 'pk-badge-red'}`}>{t.status}</span>
-                  </div>
-                  <div style={{ fontSize: 11.5, color: 'var(--pk-muted)', marginTop: 2 }}>
-                    NIT {t.nit} · {t.activeServices.length} servicios {t.maintenanceMode ? '· MANTENIMIENTO' : ''}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {selected && (
-          <div className="pk-card">
-            <div className="pk-card-head" style={{ flexWrap: 'wrap', gap: 10 }}>
+          <div className="pk-ws-header" style={{ paddingTop: 16 }}>
+            <div className="pk-ws-title-row">
               <div>
-                <div className="pk-card-title">{selected.companyName}</div>
-                <div style={{ fontSize: 12, color: 'var(--pk-muted)' }}>
-                  ID: <code>{selected.tenantId}</code> · BD: <code>{selected.dbName}</code> · Tarifa: <strong>{cop.format(selected.customMonthlyCop || selected.monthlyCop || 0)}/mes</strong>
+                <h2 className="pk-ws-title" style={{ fontSize: 18 }}>
+                  <PkIcon name="building" size={20} />
+                  <span>{selected.companyName}</span>
+                  <span className={`pk-badge ${selected.status === 'SUSPENDED' ? 'pk-badge-rose' : 'pk-badge-emerald'}`}>
+                    {selected.status === 'SUSPENDED' ? 'SUSPENDIDA' : 'ACTIVA'}
+                  </span>
+                </h2>
+                <div style={{ fontSize: 12, color: 'var(--pk-muted)', marginTop: 4 }}>
+                  NIT <strong>{selected.nit}</strong> · ID <code>{selected.tenantId}</code> · Base <code>{selected.dbName}</code> · Mensualidad:{' '}
+                  <strong style={{ color: 'var(--pk-primary)' }}>
+                    {formatCop(selected.customMonthlyCop || selected.monthlyCop || 0)} COP
+                  </strong>
                 </div>
               </div>
               <div className="pk-row-actions">
-                <button type="button" className={`pk-btn pk-btn-sm ${detailTab === 'general' ? 'pk-btn-primary' : 'pk-btn-outline'}`} onClick={() => setDetailTab('general')}>Estado y Cuotas</button>
-                <button type="button" className={`pk-btn pk-btn-sm ${detailTab === 'licenses' ? 'pk-btn-primary' : 'pk-btn-outline'}`} onClick={() => setDetailTab('licenses')}>Licencias</button>
-                <button type="button" className={`pk-btn pk-btn-sm ${detailTab === 'users' ? 'pk-btn-primary' : 'pk-btn-outline'}`} onClick={() => setDetailTab('users')}>Usuarios ({tenantUsers.length})</button>
-                <button type="button" className={`pk-btn pk-btn-sm ${detailTab === 'support_export' ? 'pk-btn-primary' : 'pk-btn-outline'}`} onClick={() => setDetailTab('support_export')}>Soporte y CSV</button>
+                {hasPlatformPermission('datos_negocio.ver') && selected.status !== 'SUSPENDED' && (
+                  <button
+                    type="button"
+                    className="pk-btn pk-btn-primary pk-btn-sm"
+                    onClick={() => setDetailTab('support')}
+                  >
+                    Abrir Soporte Cliente
+                  </button>
+                )}
+                {hasPlatformPermission('empresas.suspender') && (
+                  <button
+                    type="button"
+                    className={`pk-btn pk-btn-sm ${selected.status === 'SUSPENDED' ? 'pk-btn-emerald' : 'pk-btn-danger'}`}
+                    disabled={busy}
+                    onClick={() =>
+                      void run(async () => {
+                        const next = selected.status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED';
+                        await apiPut(`/api/v1/admin/tenants/${encodeURIComponent(selected.tenantId)}/status`, { status: next });
+                        await refreshBootstrap();
+                        await loadTenants();
+                        toast(next === 'SUSPENDED' ? 'Empresa suspendida' : 'Empresa reactivada');
+                      })
+                    }
+                  >
+                    {selected.status === 'SUSPENDED' ? 'Reactivar Empresa' : 'Suspender Empresa'}
+                  </button>
+                )}
               </div>
             </div>
 
-            <div className="pk-card-body">
-              {detailTab === 'general' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                    {hasPlatformPermission('empresas.suspender') && (
-                      <button type="button" className="pk-btn pk-btn-outline" onClick={() => void handleToggleStatus()}>
-                        {selected.status === 'SUSPENDED' ? 'Reactivar Empresa' : 'Suspender Empresa'}
-                      </button>
-                    )}
-                    {hasPlatformPermission('usuarios_cliente.revocar_sesiones') && (
-                      <button type="button" className="pk-btn pk-btn-outline" onClick={() => void handleRevokeTenantSessions()}>
-                        Revocar Todas las Sesiones (v{selected.sessionVersion || 1})
-                      </button>
-                    )}
+            <div className="pk-folder-tabs">
+              <button type="button" className={`pk-folder-tab ${detailTab === 'general' ? 'active' : ''}`} onClick={() => setDetailTab('general')}>
+                Ficha, Cartera y Cuotas
+              </button>
+              <button type="button" className={`pk-folder-tab ${detailTab === 'licenses' ? 'active' : ''}`} onClick={() => setDetailTab('licenses')}>
+                Licenciamiento 4 Niveles ({draftServices.length})
+              </button>
+              <button type="button" className={`pk-folder-tab ${detailTab === 'users' ? 'active' : ''}`} onClick={() => setDetailTab('users')}>
+                Usuarios del Cliente ({tenantUsers.length})
+              </button>
+              <button type="button" className={`pk-folder-tab ${detailTab === 'support' ? 'active' : ''}`} onClick={() => setDetailTab('support')}>
+                Soporte e Impersonación
+              </button>
+              <button type="button" className={`pk-folder-tab ${detailTab === 'exports' ? 'active' : ''}`} onClick={() => setDetailTab('exports')}>
+                Exportación CSV ({exportJobs.length})
+              </button>
+            </div>
+          </div>
+
+          <div className="pk-card-body">
+            {/* TAB 1: GENERAL, BILLING, QUOTAS & MAINTENANCE */}
+            {detailTab === 'general' && (
+              <div className="pk-stack">
+                <div className="pk-grid-2">
+                  <div className="pk-card" style={{ boxShadow: 'none' }}>
+                    <div className="pk-card-head">
+                      <div className="pk-card-title">Cupos de Usuarios y Facturación Mensual</div>
+                    </div>
+                    <div className="pk-card-body pk-stack">
+                      <div className="pk-form-grid">
+                        <div className="pk-field">
+                          <label>
+                            <span>Cupo Máximo de Usuarios</span>
+                            <span style={{ display: 'inline-flex', gap: 4 }}>
+                              <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" style={{ padding: '1px 6px' }} onClick={() => setQuotaMaxUsers((v) => Math.max(1, v - 5))}>-5</button>
+                              <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" style={{ padding: '1px 6px' }} onClick={() => setQuotaMaxUsers((v) => v + 5)}>+5</button>
+                            </span>
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={5000}
+                            value={quotaMaxUsers}
+                            onChange={(e) => setQuotaMaxUsers(Number(e.target.value) || 1)}
+                          />
+                        </div>
+                        <div className="pk-field">
+                          <label>Tarifa Personalizada COP (0 = Automática)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={quotaCustomCop}
+                            onChange={(e) => setQuotaCustomCop(Number(e.target.value) || 0)}
+                          />
+                        </div>
+                        <div className="pk-field">
+                          <label>Estado de Cartera / Pago</label>
+                          <select value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value)}>
+                            <option value="ACTIVA_VERIFICADA">Activa Verificada</option>
+                            <option value="PENDIENTE_PAGO">Pendiente de Pago</option>
+                            <option value="CORTESIA">Cortesía / Convenio</option>
+                            <option value="EN_MORA">En Mora</option>
+                          </select>
+                        </div>
+                      </div>
+                      {hasPlatformPermission('empresas.editar_cuotas') && (
+                        <div className="pk-row-actions" style={{ justifyContent: 'flex-end' }}>
+                          <button
+                            type="button"
+                            className="pk-btn pk-btn-primary"
+                            disabled={busy}
+                            onClick={() =>
+                              void run(async () => {
+                                await apiPut(`/api/v1/admin/tenants/${encodeURIComponent(selected.tenantId)}/quotas`, {
+                                  maxUsersAllowed: quotaMaxUsers,
+                                  customMonthlyCop: quotaCustomCop,
+                                });
+                                await apiPut(`/api/v1/admin/tenants/${encodeURIComponent(selected.tenantId)}/billing`, {
+                                  paymentStatus,
+                                });
+                                await refreshBootstrap();
+                                await loadTenants();
+                                toast('Cupos, tarifa y estado de cartera actualizados');
+                              })
+                            }
+                          >
+                            Guardar Cupos y Cartera
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, padding: 14, background: '#f8fafc', borderRadius: 8 }}>
-                    <div>
-                      <label className="pk-label">Cupo Máximo de Usuarios</label>
-                      <input type="number" className="pk-input" min={1} max={1000} value={quotaMaxUsers} onChange={(e) => setQuotaMaxUsers(Number(e.target.value) || 1)} />
+                  <div className="pk-card" style={{ boxShadow: 'none' }}>
+                    <div className="pk-card-head">
+                      <div className="pk-card-title">Ventana de Mantenimiento y Seguridad de Sesiones</div>
                     </div>
-                    <div>
-                      <label className="pk-label">Tarifa Mensual Personalizada COP (0 = automática)</label>
-                      <input type="number" className="pk-input" min={0} value={quotaCustomCop} onChange={(e) => setQuotaCustomCop(Number(e.target.value) || 0)} />
-                    </div>
-                    {hasPlatformPermission('empresas.editar_cuotas') && (
-                      <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                        <button type="button" className="pk-btn pk-btn-primary" onClick={() => void handleSaveQuotas()}>Guardar Cuotas</button>
+                    <div className="pk-card-body pk-stack">
+                      <AdminSwitch
+                        checked={maintMode}
+                        tone="amber"
+                        disabled={!hasPlatformPermission('empresas.mantenimiento')}
+                        onChange={setMaintMode}
+                        label="Modo Mantenimiento Individual (bloquea clientes, permite soporte)"
+                      />
+                      <div className="pk-field">
+                        <label>Mensaje mostrado a los usuarios de la empresa</label>
+                        <input
+                          value={maintMsg}
+                          onChange={(e) => setMaintMsg(e.target.value)}
+                          placeholder="Estamos aplicando una actualización técnica programada..."
+                        />
                       </div>
-                    )}
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, padding: 14, background: '#fffbeb', borderRadius: 8, border: '1px solid #fde68a' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 700 }}>
-                        <input type="checkbox" checked={maintMode} onChange={(e) => setMaintMode(e.target.checked)} />
-                        <span>Activar Modo Mantenimiento Individual (bloquea acceso del cliente, permite soporte)</span>
-                      </label>
-                      <input className="pk-input" value={maintMsg} onChange={(e) => setMaintMsg(e.target.value)} placeholder="Mensaje mostrado al cliente durante el mantenimiento..." />
-                    </div>
-                    {hasPlatformPermission('empresas.mantenimiento') && (
-                      <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                        <button type="button" className="pk-btn pk-btn-amber-brand" onClick={() => void handleSaveMaintenance()}>Aplicar</button>
+                      <div className="pk-row-between">
+                        {hasPlatformPermission('usuarios_cliente.revocar_sesiones') && (
+                          <button
+                            type="button"
+                            className="pk-btn pk-btn-outline pk-btn-sm"
+                            disabled={busy}
+                            onClick={() =>
+                              void run(async () => {
+                                await apiPost(`/api/v1/admin/tenants/${encodeURIComponent(selected.tenantId)}/revoke-sessions`, {});
+                                await loadTenants();
+                                toast('Todas las sesiones activas de esta empresa fueron cerradas (v' + ((selected.sessionVersion || 1) + 1) + ')');
+                              })
+                            }
+                          >
+                            Cerrar Todas las Sesiones Activas (v{selected.sessionVersion || 1})
+                          </button>
+                        )}
+                        {hasPlatformPermission('empresas.mantenimiento') && (
+                          <button
+                            type="button"
+                            className="pk-btn pk-btn-amber"
+                            disabled={busy}
+                            onClick={() =>
+                              void run(async () => {
+                                await apiPut(`/api/v1/admin/tenants/${encodeURIComponent(selected.tenantId)}/maintenance`, {
+                                  maintenanceMode: maintMode,
+                                  maintenanceMessage: maintMsg,
+                                });
+                                await loadTenants();
+                                toast(maintMode ? 'Modo mantenimiento activado' : 'Modo mantenimiento desactivado');
+                              })
+                            }
+                          >
+                            Guardar Mantenimiento
+                          </button>
+                        )}
                       </div>
-                    )}
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
-                    <div>
-                      <label className="pk-label">Nivel de Soporte</label>
-                      <select className="pk-input" value={meta.supportTier} onChange={(e) => setMeta({ ...meta, supportTier: e.target.value })}>
-                        <option value="STANDARD">Estándar</option>
-                        <option value="PRIORITY">Prioritario</option>
-                        <option value="ENTERPRISE">Corporativo 24/7</option>
-                      </select>
                     </div>
-                    <div>
-                      <label className="pk-label">Ejecutivo de Cuenta</label>
-                      <input className="pk-input" value={meta.accountManager} onChange={(e) => setMeta({ ...meta, accountManager: e.target.value })} placeholder="Nombre ejecutivo" />
-                    </div>
-                    <div>
-                      <label className="pk-label">Notas Internas de Cartera</label>
-                      <input className="pk-input" value={meta.billingNotes} onChange={(e) => setMeta({ ...meta, billingNotes: e.target.value })} placeholder="Acuerdo anual / descuentos..." />
-                    </div>
-                    {hasPlatformPermission('empresas.editar_cuotas') && (
-                      <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                        <button type="button" className="pk-btn pk-btn-outline" onClick={() => void apiPut(`/api/v1/admin/tenants/${encodeURIComponent(selected.tenantId)}/metadata`, meta).then(() => toast('Ficha interna guardada'))}>
-                          Guardar Ficha
-                        </button>
-                      </div>
-                    )}
                   </div>
                 </div>
-              )}
 
-              {detailTab === 'licenses' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 10 }}>
-                    {catalog.map((svc) => {
-                      const active = draftServices.includes(svc.serviceKey);
-                      return (
-                        <label key={svc.serviceKey} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: 10, borderRadius: 8, border: active ? '1px solid #0284c7' : '1px solid #e2e8f0', background: active ? '#f0f9ff' : '#fff' }}>
-                          <input type="checkbox" checked={active} disabled={!hasPlatformPermission('empresas.editar_suscripcion')} onChange={() => toggleServiceLicense(svc.serviceKey)} />
-                          <div>
-                            <div style={{ fontWeight: 700, fontSize: 13 }}>{svc.displayName}</div>
-                            <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>{svc.modules.length} módulos</div>
-                          </div>
-                        </label>
-                      );
-                    })}
+                <div className="pk-card" style={{ boxShadow: 'none' }}>
+                  <div className="pk-card-head">
+                    <div className="pk-card-title">Ficha Interna de Cuenta y Atención Comercial</div>
+                  </div>
+                  <div className="pk-card-body">
+                    <div className="pk-form-grid">
+                      <div className="pk-field">
+                        <label>Nivel de Soporte SLA</label>
+                        <select value={meta.supportTier} onChange={(e) => setMeta({ ...meta, supportTier: e.target.value })}>
+                          <option value="STANDARD">Estándar</option>
+                          <option value="PRIORITY">Prioritario</option>
+                          <option value="ENTERPRISE">Corporativo Dedicado 24/7</option>
+                        </select>
+                      </div>
+                      <div className="pk-field">
+                        <label>Ejecutivo Comercial / Líder Asignado</label>
+                        <input
+                          value={meta.accountManager}
+                          onChange={(e) => setMeta({ ...meta, accountManager: e.target.value })}
+                          placeholder="Ej. Dirección Comercial"
+                        />
+                      </div>
+                      <div className="pk-field">
+                        <label>Notas Internas de Facturación y Acuerdos</label>
+                        <input
+                          value={meta.billingNotes}
+                          onChange={(e) => setMeta({ ...meta, billingNotes: e.target.value })}
+                          placeholder="Contrato anual, descuentos aprobados, observaciones..."
+                        />
+                      </div>
+                      {hasPlatformPermission('empresas.editar_cuotas') && (
+                        <div>
+                          <button
+                            type="button"
+                            className="pk-btn pk-btn-outline"
+                            disabled={busy}
+                            onClick={() =>
+                              void run(async () => {
+                                await apiPut(`/api/v1/admin/tenants/${encodeURIComponent(selected.tenantId)}/metadata`, meta);
+                                toast('Ficha interna guardada');
+                              })
+                            }
+                          >
+                            Guardar Ficha Interna
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: FULL 4-LEVEL HIERARCHICAL LICENSING */}
+            {detailTab === 'licenses' && (
+              <div className="pk-stack">
+                <div className="pk-row-between" style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: 10, border: '1px solid var(--pk-border)' }}>
+                  <div style={{ fontSize: 12.5, color: 'var(--pk-text-secondary)' }}>
+                    <strong>Árbol Jerárquico de 4 Niveles:</strong> 1. Microservicio → 2. Módulo → 3. Submódulo → 4. Funcionalidad.
+                    Activas ahora: <strong>{draftServices.length} áreas</strong> · <strong>{draftModules.length} módulos</strong> · <strong>{draftFeatures.length} funciones</strong>.
                   </div>
                   {hasPlatformPermission('empresas.editar_suscripcion') && (
-                    <div>
-                      <button type="button" className="pk-btn pk-btn-primary" onClick={() => void handleSaveSubscriptions()}>Guardar Licencias de la Empresa</button>
+                    <div className="pk-row-actions">
+                      <button
+                        type="button"
+                        className="pk-btn pk-btn-outline pk-btn-sm"
+                        onClick={() => {
+                          setDraftServices(catalog.map((s) => s.serviceKey));
+                          setDraftModules(catalog.flatMap((s) => s.modules.map((m) => m.moduleKey)));
+                          setDraftSubmodules(catalog.flatMap((s) => (s.submodules || []).map((sm) => sm.submoduleKey)));
+                          setDraftFeatures(catalog.flatMap((s) => (s.features || []).map((f) => f.featureKey)));
+                        }}
+                      >
+                        Marcar Suite Completa
+                      </button>
+                      <button type="button" className="pk-btn pk-btn-primary" disabled={busy} onClick={handleSaveSubscriptions}>
+                        {busy ? 'Guardando...' : 'Guardar Licencias de 4 Niveles'}
+                      </button>
                     </div>
                   )}
                 </div>
-              )}
 
-              {detailTab === 'users' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div className="pk-plan-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 390px), 1fr))' }}>
+                  {catalog.map((svc) => {
+                    const svcOn = draftServices.includes(svc.serviceKey);
+                    const canEdit = hasPlatformPermission('empresas.editar_suscripcion');
+                    return (
+                      <div className="pk-card" key={svc.serviceKey} style={{ opacity: svcOn ? 1 : 0.78 }}>
+                        <div className="pk-card-head" style={{ background: svcOn ? '#eff6ff' : '#f8fafc' }}>
+                          <AdminSwitch
+                            checked={svcOn}
+                            disabled={!canEdit}
+                            tone="emerald"
+                            onChange={() => toggleService(svc.serviceKey)}
+                            label={
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontWeight: 800 }}>
+                                <PkIcon name={svc.serviceKey} size={17} />
+                                <span>1. {svc.displayName}</span>
+                              </span>
+                            }
+                          />
+                          <span className={`pk-badge ${svcOn ? 'pk-badge-emerald' : 'pk-badge-slate'}`}>
+                            {svcOn ? 'Activo' : 'Inactivo'}
+                          </span>
+                        </div>
+
+                        <div className="pk-card-body" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12 }}>
+                          {svc.modules.map((mod) => {
+                            const modOn = svcOn && draftModules.includes(mod.moduleKey);
+                            const modSubs = (svc.submodules || []).filter((sm) => sm.dependsOnModule === mod.moduleKey);
+                            const directFeats = (svc.features || []).filter(
+                              (f) => f.dependsOnModule === mod.moduleKey && !f.dependsOnSubmodule
+                            );
+                            return (
+                              <div
+                                key={mod.moduleKey}
+                                style={{
+                                  borderRadius: 8,
+                                  border: '1px solid var(--pk-border)',
+                                  background: modOn ? '#ffffff' : '#f8fafc',
+                                  padding: 9,
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: 6,
+                                }}
+                              >
+                                <div className="pk-row-between">
+                                  <AdminSwitch
+                                    checked={modOn}
+                                    disabled={!canEdit || !svcOn}
+                                    onChange={() => toggleModule(svc.serviceKey, mod.moduleKey)}
+                                    label={<span>{mod.tabIcon} 2. {mod.displayName}</span>}
+                                  />
+                                  <span className={`pk-badge ${modOn ? 'pk-badge-blue' : 'pk-badge-slate'}`}>Módulo</span>
+                                </div>
+
+                                {modSubs.map((sm) => {
+                                  const subOn = modOn && draftSubmodules.includes(sm.submoduleKey);
+                                  const subFeats = (svc.features || []).filter((f) => f.dependsOnSubmodule === sm.submoduleKey);
+                                  return (
+                                    <div
+                                      key={sm.submoduleKey}
+                                      style={{
+                                        marginLeft: 14,
+                                        padding: '6px 9px',
+                                        borderRadius: 7,
+                                        borderLeft: subOn ? '3px solid var(--pk-primary)' : '3px solid #cbd5e1',
+                                        background: '#f8fafc',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: 5,
+                                      }}
+                                    >
+                                      <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 700, cursor: modOn && canEdit ? 'pointer' : 'not-allowed' }}>
+                                        <input
+                                          type="checkbox"
+                                          disabled={!canEdit || !modOn}
+                                          checked={subOn}
+                                          onChange={() => toggleSubmodule(svc.serviceKey, mod.moduleKey, sm.submoduleKey)}
+                                        />
+                                        <span>3. {sm.displayName}</span>
+                                      </label>
+                                      {subFeats.map((feat) => {
+                                        const featOn = subOn && draftFeatures.includes(feat.featureKey);
+                                        return (
+                                          <label
+                                            key={feat.featureKey}
+                                            style={{
+                                              marginLeft: 16,
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              gap: 7,
+                                              fontSize: 11.5,
+                                              color: 'var(--pk-text-secondary)',
+                                              cursor: subOn && canEdit ? 'pointer' : 'not-allowed',
+                                            }}
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              disabled={!canEdit || !subOn}
+                                              checked={featOn}
+                                              onChange={() => toggleFeature(svc.serviceKey, feat.dependsOnModule, feat.dependsOnSubmodule, feat.featureKey)}
+                                            />
+                                            <span>4. {feat.displayName}</span>
+                                          </label>
+                                        );
+                                      })}
+                                    </div>
+                                  );
+                                })}
+
+                                {directFeats.map((feat) => {
+                                  const featOn = modOn && draftFeatures.includes(feat.featureKey);
+                                  return (
+                                    <label
+                                      key={feat.featureKey}
+                                      style={{
+                                        marginLeft: 16,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 7,
+                                        fontSize: 11.5,
+                                        color: 'var(--pk-text-secondary)',
+                                        cursor: modOn && canEdit ? 'pointer' : 'not-allowed',
+                                      }}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        disabled={!canEdit || !modOn}
+                                        checked={featOn}
+                                        onChange={() => toggleFeature(svc.serviceKey, feat.dependsOnModule, feat.dependsOnSubmodule, feat.featureKey)}
+                                      />
+                                      <span>4. {feat.displayName}</span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: CLIENT USERS DIRECTORY & GRANULAR RBAC */}
+            {detailTab === 'users' && (
+              <div className="pk-stack">
+                <div className="pk-row-between">
+                  <div style={{ fontSize: 13, color: 'var(--pk-muted)' }}>
+                    Usuarios activos: <strong>{tenantUsers.filter((u) => u.status !== 'SUSPENDED').length}</strong> de{' '}
+                    <strong>{selected.maxUsersAllowed || 15}</strong> permitidos en el plan.
+                  </div>
                   {hasPlatformPermission('usuarios_cliente.crear') && (
-                    <form onSubmit={(e) => void handleCreateTenantUser(e)} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8, alignItems: 'end' }}>
-                      <input className="pk-input" required placeholder="Nombre completo" value={newUserForm.fullName} onChange={(e) => setNewUserForm({ ...newUserForm, fullName: e.target.value })} />
-                      <input className="pk-input" required placeholder="Usuario / Correo" value={newUserForm.username} onChange={(e) => setNewUserForm({ ...newUserForm, username: e.target.value, email: e.target.value })} />
-                      <input type="password" className="pk-input" required minLength={8} placeholder="Contraseña" value={newUserForm.password} onChange={(e) => setNewUserForm({ ...newUserForm, password: e.target.value })} />
-                      <select className="pk-input" value={newUserForm.internalRole} onChange={(e) => setNewUserForm({ ...newUserForm, internalRole: e.target.value })}>
-                        <option value="admin_empresa">Admin Empresa</option>
-                        <option value="cajero">Cajero</option>
-                        <option value="vendedor">Vendedor</option>
-                        <option value="bodega">Bodega</option>
-                        <option value="contador">Contador</option>
-                      </select>
-                      <button type="submit" className="pk-btn pk-btn-primary">Crear Usuario</button>
-                    </form>
+                    <button type="button" className="pk-btn pk-btn-primary" onClick={openCreateClientUser}>
+                      + Crear Usuario en esta Empresa
+                    </button>
                   )}
+                </div>
+
+                <div className="pk-table-wrap">
                   <table className="pk-table">
                     <thead>
-                      <tr><th>Usuario</th><th>Rol</th><th>Estado</th><th>Acciones</th></tr>
+                      <tr>
+                        <th>Empleado</th>
+                        <th>Rol Operativo</th>
+                        <th>Áreas Asignadas</th>
+                        <th>Estado</th>
+                        <th>Acciones Administrativas</th>
+                      </tr>
                     </thead>
                     <tbody>
                       {tenantUsers.map((u) => (
                         <tr key={u.userId}>
-                          <td><strong>{u.fullName}</strong><div style={{ fontSize: 12, color: 'var(--pk-muted)' }}>{u.username}</div></td>
-                          <td><code>{u.internalRole}</code></td>
-                          <td><span className={`pk-badge ${u.status === 'ACTIVE' ? 'pk-badge-emerald' : 'pk-badge-red'}`}>{u.status}</span></td>
+                          <td>
+                            <strong>{u.fullName}</strong>
+                            <div style={{ fontSize: 11.5, color: 'var(--pk-muted)' }}>{u.username}</div>
+                          </td>
+                          <td>
+                            <span className={`pk-badge ${u.isCompanyAdmin ? 'pk-badge-blue' : 'pk-badge-slate'}`}>
+                              {u.internalRole}
+                            </span>
+                          </td>
+                          <td>
+                            {u.isCompanyAdmin || u.allowedServices.includes('*')
+                              ? 'Todas las contratadas'
+                              : `${u.allowedServices.length} servicios · ${u.allowedModules.length} módulos`}
+                          </td>
+                          <td>
+                            <span className={`pk-badge ${u.status === 'SUSPENDED' ? 'pk-badge-rose' : 'pk-badge-emerald'}`}>
+                              {u.status === 'SUSPENDED' ? 'Suspendido' : 'Activo'}
+                            </span>
+                          </td>
                           <td>
                             <div className="pk-row-actions">
+                              {hasPlatformPermission('usuarios_cliente.editar') && (
+                                <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={() => openEditClientUser(u)}>
+                                  Editar / Módulos
+                                </button>
+                              )}
                               {hasPlatformPermission('usuarios_cliente.reset_password') && (
-                                <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={() => void handleResetUserPass(u)}>Reset Clave</button>
+                                <button
+                                  type="button"
+                                  className="pk-btn pk-btn-outline pk-btn-sm"
+                                  onClick={() => {
+                                    setResetPassTarget(u);
+                                    setResetPassValue(generateSecurePassword());
+                                  }}
+                                >
+                                  Cambiar Clave
+                                </button>
                               )}
                               {hasPlatformPermission('usuarios_cliente.revocar_sesiones') && (
-                                <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={() => void apiPost(`/api/v1/admin/tenants/${encodeURIComponent(selected.tenantId)}/users/${encodeURIComponent(u.userId)}/revoke-sessions`, {}).then(() => toast('Sesión de usuario revocada'))}>Revocar Sesión</button>
+                                <button
+                                  type="button"
+                                  className="pk-btn pk-btn-outline pk-btn-sm"
+                                  onClick={() =>
+                                    void apiPost(
+                                      `/api/v1/admin/tenants/${encodeURIComponent(selected.tenantId)}/users/${encodeURIComponent(u.userId)}/revoke-sessions`,
+                                      {}
+                                    ).then(() => toast(`Sesiones cerradas para ${u.username}`))
+                                  }
+                                >
+                                  Cerrar Sesiones
+                                </button>
+                              )}
+                              {hasPlatformPermission('usuarios_cliente.editar') && u.userId !== `usr_${selected.tenantId}` && (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="pk-btn pk-btn-outline pk-btn-sm"
+                                    onClick={() =>
+                                      void run(async () => {
+                                        const next = u.status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED';
+                                        await apiPut(
+                                          `/api/v1/admin/tenants/${encodeURIComponent(selected.tenantId)}/users/${encodeURIComponent(u.userId)}`,
+                                          { fullName: u.fullName, email: u.email, internalRole: u.internalRole, status: next }
+                                        );
+                                        await loadTenantDetails(selected);
+                                        toast(next === 'SUSPENDED' ? 'Usuario suspendido' : 'Usuario reactivado');
+                                      })
+                                    }
+                                  >
+                                    {u.status === 'SUSPENDED' ? 'Reactivar' : 'Suspender'}
+                                  </button>
+                                  <button type="button" className="pk-btn pk-btn-danger pk-btn-sm" onClick={() => setDeleteUserTarget(u)}>
+                                    Eliminar
+                                  </button>
+                                </>
                               )}
                             </div>
                           </td>
@@ -440,81 +1006,380 @@ export const AdminTenants360Tab: React.FC<Props> = ({ onStartSupport }) => {
                     </tbody>
                   </table>
                 </div>
-              )}
+              </div>
+            )}
 
-              {detailTab === 'support_export' && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
-                  <div style={{ padding: 14, borderRadius: 10, border: '1px solid #cbd5e1', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14 }}>Ingreso de Soporte Controlado (Impersonación)</div>
-                    {!hasPlatformPermission('datos_negocio.ver') ? (
-                      <div style={{ fontSize: 12.5, color: '#991b1b' }}>Tu rol no tiene habilitado el permiso <code>datos_negocio.ver</code>.</div>
-                    ) : (
-                      <>
-                        <select className="pk-input" value={supportMode} onChange={(e) => setSupportMode(e.target.value as 'readonly' | 'readwrite')}>
-                          <option value="readonly">Solo Lectura (bloquea escrituras)</option>
-                          {hasPlatformPermission('soporte.impersonar_escritura') && (
-                            <option value="readwrite">Lectura y Escritura (corrección operativa)</option>
-                          )}
-                        </select>
-                        <select className="pk-input" value={supportDuration} onChange={(e) => setSupportDuration(Number(e.target.value))}>
-                          <option value={15}>Duración: 15 minutos</option>
-                          <option value={30}>Duración: 30 minutos</option>
-                          <option value={60}>Duración: 60 minutos</option>
-                        </select>
+            {/* TAB 4: CONTROLLED SUPPORT IMPERSONATION */}
+            {detailTab === 'support' && (
+              <div className="pk-card" style={{ maxWidth: 680, boxShadow: 'none' }}>
+                <div className="pk-card-head">
+                  <div className="pk-card-title">Ingreso de Soporte Auditado a la Estación del Cliente</div>
+                </div>
+                <div className="pk-card-body pk-stack">
+                  {!hasPlatformPermission('datos_negocio.ver') ? (
+                    <div style={{ color: '#991b1b', fontSize: 13, fontWeight: 600 }}>
+                      Tu rol actual no tiene activado el switch <code>datos_negocio.ver</code>. Solicítalo a un SuperAdministrador si requieres asistir datos operativos.
+                    </div>
+                  ) : (
+                    <>
+                      <div className="pk-form-grid">
+                        <div className="pk-field">
+                          <label>Modo de Intervención</label>
+                          <select value={supportMode} onChange={(e) => setSupportMode(e.target.value as 'readonly' | 'readwrite')}>
+                            <option value="readonly">Solo Lectura (bloquea escrituras en Gateway)</option>
+                            {hasPlatformPermission('soporte.impersonar_escritura') && (
+                              <option value="readwrite">Lectura y Escritura (corrección operativa)</option>
+                            )}
+                          </select>
+                        </div>
+                        <div className="pk-field">
+                          <label>Vigencia Temporal de la Sesión</label>
+                          <select value={supportDuration} onChange={(e) => setSupportDuration(Number(e.target.value))}>
+                            <option value={15}>15 minutos</option>
+                            <option value={30}>30 minutos</option>
+                            <option value={60}>60 minutos</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="pk-field">
+                        <label>
+                          <span>Motivo o Número de Ticket de Soporte</span>
+                          {requireDataReason && <span style={{ color: 'var(--pk-rose)' }}>Obligatorio</span>}
+                        </label>
                         <input
-                          className="pk-input"
                           value={supportReason}
                           onChange={(e) => setSupportReason(e.target.value)}
-                          placeholder={requireDataReason ? 'Motivo o # ticket (obligatorio)...' : 'Motivo o # ticket (recomendado)...'}
+                          placeholder="Ej. Ticket #1042 — Verificación de cuadre de caja reportado por el cliente"
                         />
+                      </div>
+                      <div className="pk-row-actions" style={{ justifyContent: 'flex-end' }}>
                         <button
                           type="button"
                           className="pk-btn pk-btn-primary"
+                          disabled={selected.status === 'SUSPENDED'}
                           onClick={() => void onStartSupport(selected.tenantId, supportMode, supportReason, supportDuration)}
                         >
-                          Abrir Estación del Cliente
+                          Entrar a Estación de {selected.companyName} →
                         </button>
-                      </>
-                    )}
-                  </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
 
-                  <div style={{ padding: 14, borderRadius: 10, border: '1px solid #cbd5e1', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14 }}>Exportación de Datos del Cliente (ZIP CSV Excel)</div>
+            {/* TAB 5: EXCEL-COMPATIBLE CSV ZIP EXPORTS */}
+            {detailTab === 'exports' && (
+              <div className="pk-stack">
+                <div className="pk-card" style={{ boxShadow: 'none' }}>
+                  <div className="pk-card-head">
+                    <div>
+                      <div className="pk-card-title">Generar Paquete de Datos del Cliente (.ZIP con CSVs para Excel)</div>
+                      <div style={{ fontSize: 12, color: 'var(--pk-muted)', marginTop: 2 }}>
+                        Extrae las tablas de todos los microservicios activos de {selected.companyName} con codificación UTF-8 BOM y separador punto y coma (;).
+                      </div>
+                    </div>
+                  </div>
+                  <div className="pk-card-body">
                     {!hasPlatformPermission('datos_negocio.exportar_csv') ? (
-                      <div style={{ fontSize: 12.5, color: '#991b1b' }}>Tu rol no tiene habilitado el permiso <code>datos_negocio.exportar_csv</code>.</div>
+                      <div style={{ color: '#991b1b', fontSize: 13 }}>Tu rol no tiene habilitado el permiso <code>datos_negocio.exportar_csv</code>.</div>
                     ) : (
-                      <>
-                        <input
-                          className="pk-input"
-                          value={exportReason}
-                          onChange={(e) => setExportReason(e.target.value)}
-                          placeholder={requireDataReason ? 'Motivo o solicitud del cliente (obligatorio)...' : 'Motivo de exportación...'}
-                        />
-                        <button type="button" className="pk-btn pk-btn-emerald" disabled={exporting} onClick={() => void handleGenerateExport()}>
-                          {exporting ? 'Generando paquete ZIP...' : 'Generar ZIP CSV Compatible con Excel'}
-                        </button>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
-                          {exportJobs.map((j) => (
-                            <div key={j.jobId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, padding: '6px 8px', background: '#fff', borderRadius: 6, border: '1px solid #e2e8f0' }}>
-                              <div>
-                                <strong>{j.jobId}</strong> · {(j.fileSizeBytes / 1024).toFixed(1)} KB
-                                <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>{j.createdAt.slice(0, 19).replace('T', ' ')}</div>
-                              </div>
-                              <a className="pk-btn pk-btn-outline pk-btn-sm" href={`/api/v1/admin/exports/${encodeURIComponent(j.jobId)}/download`} download>
-                                Descargar ZIP
-                              </a>
-                            </div>
-                          ))}
+                      <div className="pk-form-grid">
+                        <div className="pk-field" style={{ gridColumn: 'span 2' }}>
+                          <label>Motivo / Solicitud de Descarga {requireDataReason ? '(Obligatorio)' : ''}</label>
+                          <input
+                            value={exportReason}
+                            onChange={(e) => setExportReason(e.target.value)}
+                            placeholder="Ej. Solicitud formal de respaldo contable mensual del cliente"
+                          />
                         </div>
-                      </>
+                        <div>
+                          <button
+                            type="button"
+                            className="pk-btn pk-btn-emerald"
+                            disabled={busy}
+                            onClick={() =>
+                              void run(async () => {
+                                await apiPost(`/api/v1/admin/tenants/${encodeURIComponent(selected.tenantId)}/exports`, {
+                                  reason: exportReason,
+                                });
+                                setExportReason('');
+                                await loadTenantDetails(selected);
+                                toast('Paquete ZIP CSV generado correctamente');
+                              })
+                            }
+                          >
+                            {busy ? 'Generando ZIP...' : 'Generar Paquete ZIP CSV'}
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>
-              )}
+
+                <div className="pk-table-wrap">
+                  <table className="pk-table">
+                    <thead>
+                      <tr>
+                        <th>ID Trabajo</th>
+                        <th>Fecha UTC</th>
+                        <th>Solicitado Por</th>
+                        <th>Motivo</th>
+                        <th>Servicios Incluidos</th>
+                        <th className="pk-num">Tamaño</th>
+                        <th>Descarga</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {exportJobs.map((j) => (
+                        <tr key={j.jobId}>
+                          <td><code>{j.jobId}</code></td>
+                          <td style={{ fontSize: 12 }}>{j.createdAt.slice(0, 19).replace('T', ' ')}</td>
+                          <td>{j.requestedBy}</td>
+                          <td>{j.reason || '—'}</td>
+                          <td>
+                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                              {(j.servicesIncluded || []).map((s) => (
+                                <span key={s} className="pk-badge pk-badge-slate">{s}</span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="pk-num">{(j.fileSizeBytes / 1024).toFixed(1)} KB</td>
+                          <td>
+                            <a
+                              className="pk-btn pk-btn-primary pk-btn-sm"
+                              style={{ textDecoration: 'none' }}
+                              href={`/api/v1/admin/exports/${encodeURIComponent(j.jobId)}/download`}
+                              download
+                            >
+                              Descargar .ZIP
+                            </a>
+                          </td>
+                        </tr>
+                      ))}
+                      {exportJobs.length === 0 && (
+                        <tr>
+                          <td colSpan={7} style={{ textAlign: 'center', padding: 20, color: 'var(--pk-muted)' }}>
+                            Aún no se han generado paquetes CSV para esta empresa.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="pk-card">
+          <div className="pk-card-body" style={{ color: 'var(--pk-muted)' }}>Selecciona una empresa del listado izquierdo.</div>
+        </div>
+      )}
+
+      {/* MODAL: PROVISION NEW TENANT */}
+      <PkModal open={showCreateModal} title="Aprovisionar Nueva Empresa y Base de Datos Aislada" onClose={() => setShowCreateModal(false)} maxWidth={680}>
+        <form onSubmit={handleCreateTenant} className="pk-stack">
+          <div className="pk-form-grid">
+            <div className="pk-field">
+              <label>Razón Social</label>
+              <input required value={createForm.companyName} onChange={(e) => setCreateForm({ ...createForm, companyName: e.target.value })} placeholder="Ej. Inversiones del Oriente S.A.S." />
+            </div>
+            <div className="pk-field">
+              <label>NIT Tributario</label>
+              <input required value={createForm.nit} onChange={(e) => setCreateForm({ ...createForm, nit: e.target.value })} placeholder="901.440.120-1" />
+            </div>
+            <div className="pk-field">
+              <label>Nombre Administrador Principal</label>
+              <input required value={createForm.adminFullName} onChange={(e) => setCreateForm({ ...createForm, adminFullName: e.target.value })} placeholder="Nombre y apellido" />
+            </div>
+            <div className="pk-field">
+              <label>Correo de Acceso</label>
+              <input type="email" required value={createForm.adminUsername} onChange={(e) => setCreateForm({ ...createForm, adminUsername: e.target.value })} placeholder="gerencia@empresa.co" />
+            </div>
+            <div className="pk-field">
+              <label>
+                <span>Contraseña Inicial</span>
+                <button type="button" onClick={() => setCreateForm({ ...createForm, password: generateSecurePassword() })} style={{ border: 'none', background: 'none', color: 'var(--pk-primary)', fontWeight: 800, fontSize: 11, cursor: 'pointer', padding: 0 }}>
+                  Generar otra
+                </button>
+              </label>
+              <input type="text" required minLength={8} value={createForm.password} onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })} />
+            </div>
+            <div className="pk-field">
+              <label>Paquete Operativo Inicial</label>
+              <select value={createForm.businessPreset} onChange={(e) => setCreateForm({ ...createForm, businessPreset: e.target.value })}>
+                <option value="full">Suite Empresarial Completa (Todas las Áreas)</option>
+                <option value="comercio">Comercio, Tienda y Ferretería</option>
+                <option value="restaurante">Restaurante, Gastrobar y Cafetería</option>
+                <option value="bares">Bares, Discotecas y Eventos</option>
+                <option value="automotriz">Centro Automotriz y Taller</option>
+                <option value="hotel">Hoteles y Alojamiento</option>
+                <option value="citas">Consultorios, Spa y Servicios por Cita</option>
+                <option value="mayorista">Distribuidora Mayorista</option>
+                <option value="logistica">Agroindustria y Báscula Camionera</option>
+              </select>
             </div>
           </div>
-        )}
-      </div>
+          <div className="pk-row-actions" style={{ justifyContent: 'flex-end' }}>
+            <button type="button" className="pk-btn pk-btn-outline" onClick={() => setShowCreateModal(false)}>Cancelar</button>
+            <button type="submit" className="pk-btn pk-btn-emerald" disabled={busy}>
+              {busy ? 'Aprovisionando...' : 'Crear Empresa'}
+            </button>
+          </div>
+        </form>
+      </PkModal>
+
+      {/* MODAL: CREATE / EDIT CLIENT USER */}
+      <PkModal
+        open={userModalOpen}
+        title={editingUser ? `Editar Empleado: ${editingUser.fullName}` : `Crear Empleado en ${selected?.companyName || ''}`}
+        onClose={() => setUserModalOpen(false)}
+        maxWidth={720}
+      >
+        <form onSubmit={handleSaveClientUser} className="pk-stack">
+          <div className="pk-form-grid">
+            <div className="pk-field">
+              <label>Nombre Completo</label>
+              <input required value={userFullName} onChange={(e) => setUserFullName(e.target.value)} placeholder="Nombre del empleado" />
+            </div>
+            <div className="pk-field">
+              <label>Usuario / Correo</label>
+              <input required disabled={Boolean(editingUser)} value={userUsername} onChange={(e) => setUserUsername(e.target.value)} placeholder="empleado@empresa.co" />
+            </div>
+            <div className="pk-field">
+              <label>
+                <span>{editingUser ? 'Nueva Contraseña (opcional)' : 'Contraseña Inicial'}</span>
+                <button type="button" onClick={() => setUserPassword(generateSecurePassword())} style={{ border: 'none', background: 'none', color: 'var(--pk-primary)', fontWeight: 800, fontSize: 11, cursor: 'pointer', padding: 0 }}>
+                  Generar clave
+                </button>
+              </label>
+              <input type="text" required={!editingUser} value={userPassword} onChange={(e) => setUserPassword(e.target.value)} placeholder={editingUser ? 'Dejar vacío para conservar' : ''} />
+            </div>
+            <div className="pk-field">
+              <label>Plantilla de Puesto</label>
+              <select value={userRole} onChange={(e) => applyUserTemplate(e.target.value, roleTemplates)}>
+                {roleTemplates.map((tpl) => (
+                  <option key={tpl.roleKey} value={tpl.roleKey}>{tpl.displayName}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <AdminSwitch
+            checked={userIsAdmin}
+            onChange={setUserIsAdmin}
+            label="Administrador de la Empresa (acceso total a todos los servicios contratados)"
+          />
+
+          {!userIsAdmin && (
+            <div style={{ maxHeight: 280, overflowY: 'auto', border: '1px solid var(--pk-border)', borderRadius: 10, padding: 12 }} className="pk-stack">
+              <div className="pk-label">Servicios y Módulos Permitidos para este Empleado</div>
+              {activeCompanyCatalog.map((svc) => {
+                const svcChecked = userServices.includes(svc.serviceKey);
+                const enabledMods = svc.modules.filter((m) => selected?.activeModules.includes(m.moduleKey));
+                return (
+                  <div key={svc.serviceKey} style={{ padding: 8, borderRadius: 8, background: svcChecked ? '#eff6ff' : '#f8fafc', border: '1px solid var(--pk-border)' }}>
+                    <AdminSwitch
+                      checked={svcChecked}
+                      onChange={(checked) => {
+                        if (checked) {
+                          setUserServices((prev) => Array.from(new Set([...prev, svc.serviceKey])));
+                          setUserModules((prev) => Array.from(new Set([...prev, ...enabledMods.map((m) => m.moduleKey)])));
+                        } else {
+                          setUserServices((prev) => prev.filter((k) => k !== svc.serviceKey));
+                          setUserModules((prev) => prev.filter((mk) => !enabledMods.some((m) => m.moduleKey === mk)));
+                        }
+                      }}
+                      label={<strong>{svc.displayName}</strong>}
+                    />
+                    {svcChecked && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 8, paddingLeft: 48 }}>
+                        {enabledMods.map((m) => (
+                          <label key={m.moduleKey} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12 }}>
+                            <input
+                              type="checkbox"
+                              checked={userModules.includes(m.moduleKey)}
+                              onChange={(e) =>
+                                setUserModules((prev) =>
+                                  e.target.checked ? [...prev, m.moduleKey] : prev.filter((k) => k !== m.moduleKey)
+                                )
+                              }
+                            />
+                            <span>{m.displayName}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="pk-row-actions" style={{ justifyContent: 'flex-end' }}>
+            <button type="button" className="pk-btn pk-btn-outline" onClick={() => setUserModalOpen(false)}>Cancelar</button>
+            <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
+              {busy ? 'Guardando...' : editingUser ? 'Guardar Cambios' : 'Crear Empleado'}
+            </button>
+          </div>
+        </form>
+      </PkModal>
+
+      {/* MODAL: RESET CLIENT USER PASSWORD */}
+      <PkModal open={Boolean(resetPassTarget)} title={`Restablecer Contraseña: ${resetPassTarget?.username || ''}`} onClose={() => setResetPassTarget(null)} maxWidth={440}>
+        <div className="pk-stack">
+          <div className="pk-field">
+            <label>
+              <span>Nueva Contraseña Segura</span>
+              <button type="button" onClick={() => setResetPassValue(generateSecurePassword())} style={{ border: 'none', background: 'none', color: 'var(--pk-primary)', fontWeight: 800, fontSize: 11, cursor: 'pointer', padding: 0 }}>
+                Regenerar
+              </button>
+            </label>
+            <input value={resetPassValue} onChange={(e) => setResetPassValue(e.target.value)} />
+          </div>
+          <div className="pk-row-actions" style={{ justifyContent: 'flex-end' }}>
+            <button type="button" className="pk-btn pk-btn-outline" onClick={() => setResetPassTarget(null)}>Cancelar</button>
+            <button
+              type="button"
+              className="pk-btn pk-btn-primary"
+              disabled={busy || resetPassValue.trim().length < 8}
+              onClick={() => {
+                if (!selected || !resetPassTarget) return;
+                void run(async () => {
+                  await apiPost(
+                    `/api/v1/admin/tenants/${encodeURIComponent(selected.tenantId)}/users/${encodeURIComponent(resetPassTarget.userId)}/reset-password`,
+                    { password: resetPassValue.trim() }
+                  );
+                  setResetPassTarget(null);
+                  toast('Contraseña actualizada y sesiones anteriores revocadas');
+                });
+              }}
+            >
+              Aplicar Nueva Contraseña
+            </button>
+          </div>
+        </div>
+      </PkModal>
+
+      {/* CONFIRM DELETE CLIENT USER */}
+      <PkConfirmModal
+        open={Boolean(deleteUserTarget)}
+        title="Eliminar Usuario de Empresa"
+        message={`¿Confirmas eliminar permanentemente la cuenta "${deleteUserTarget?.username || ''}" de ${selected?.companyName || ''}?`}
+        confirmLabel="Eliminar Usuario"
+        busy={busy}
+        onCancel={() => setDeleteUserTarget(null)}
+        onConfirm={() => {
+          if (!selected || !deleteUserTarget) return;
+          void run(async () => {
+            await apiDelete(`/api/v1/admin/tenants/${encodeURIComponent(selected.tenantId)}/users/${encodeURIComponent(deleteUserTarget.userId)}`);
+            setDeleteUserTarget(null);
+            await loadTenantDetails(selected);
+            toast('Usuario eliminado de la empresa');
+          });
+        }}
+      />
     </div>
   );
 };

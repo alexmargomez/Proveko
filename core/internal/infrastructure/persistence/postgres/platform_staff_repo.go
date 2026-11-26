@@ -12,6 +12,21 @@ import (
 	"ms-core/internal/platform/apperr"
 )
 
+func (r *TenantRepository) UpdatePaymentStatus(ctx context.Context, tenantID, paymentStatus string) error {
+	p, err := r.pool(ctx)
+	if err != nil {
+		return err
+	}
+	tag, err := p.Exec(ctx, `UPDATE core_control.tenants SET payment_status = $1 WHERE tenant_id = $2`, strings.TrimSpace(paymentStatus), tenantID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return apperr.NotFound("Empresa no encontrada")
+	}
+	return nil
+}
+
 func (r *TenantRepository) UpdateCustomMonthlyCop(ctx context.Context, tenantID string, customMonthlyCop int64) error {
 	p, err := r.pool(ctx)
 	if err != nil {

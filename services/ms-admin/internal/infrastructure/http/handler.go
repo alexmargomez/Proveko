@@ -60,6 +60,7 @@ func (h *Handler) Router() http.Handler {
 		ar.Get("/tenants/{tenantId}", h.handleGetTenant)
 		ar.Put("/tenants/{tenantId}/subscriptions", h.handleUpdateSubscriptions)
 		ar.Put("/tenants/{tenantId}/status", h.handleUpdateTenantStatus)
+		ar.Put("/tenants/{tenantId}/billing", h.handleUpdateTenantBilling)
 		ar.Put("/tenants/{tenantId}/quotas", h.handleUpdateTenantQuotas)
 		ar.Put("/tenants/{tenantId}/maintenance", h.handleUpdateTenantMaintenance)
 		ar.Post("/tenants/{tenantId}/revoke-sessions", h.handleRevokeTenantSessions)
@@ -69,9 +70,11 @@ func (h *Handler) Router() http.Handler {
 		ar.Get("/tenants/{tenantId}/users", h.handleListTenantUsers)
 		ar.Post("/tenants/{tenantId}/users", h.handleCreateTenantUser)
 		ar.Put("/tenants/{tenantId}/users/{userId}", h.handleUpdateTenantUser)
+		ar.Delete("/tenants/{tenantId}/users/{userId}", h.handleDeleteTenantUser)
 		ar.Post("/tenants/{tenantId}/users/{userId}/reset-password", h.handleResetTenantUserPassword)
 		ar.Post("/tenants/{tenantId}/users/{userId}/revoke-sessions", h.handleRevokeTenantUserSessions)
 
+		ar.Get("/exports", h.handleListAllExports)
 		ar.Post("/tenants/{tenantId}/exports", h.handleCreateExport)
 		ar.Get("/tenants/{tenantId}/exports", h.handleListExports)
 		ar.Get("/exports/{jobId}/download", h.handleDownloadExport)
@@ -100,6 +103,11 @@ func (h *Handler) Router() http.Handler {
 		ar.Post("/staff/users/{userId}/revoke-sessions", h.handleRevokeStaffUserSessions)
 		ar.Post("/staff/users/{userId}/totp/setup", h.handleSetupStaffUserTOTP)
 		ar.Delete("/staff/users/{userId}/totp", h.handleDisableStaffUserTOTP)
+
+		ar.Get("/me", h.handleGetMyAccount)
+		ar.Post("/me/totp/setup", h.handleSetupMyTOTP)
+		ar.Delete("/me/totp", h.handleDisableMyTOTP)
+		ar.Put("/me/password", h.handleChangeMyPassword)
 
 		ar.Get("/audit", h.handleListAudit)
 		ar.Get("/audit/export-csv", h.handleExportAuditCSV)
@@ -942,4 +950,156 @@ func nestedString(m map[string]any, outer, inner string) string {
 	}
 	s, _ := sub[inner].(string)
 	return s
+}
+
+func (h *Handler) handleUpdateTenantBilling(w http.ResponseWriter, r *http.Request) {
+	actor := actorFrom(r)
+	tID := chi.URLParam(r, "tenantId")
+	if err := h.svc.RequirePermission(actor, "empresas.editar_cuotas"); err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+	if err := h.svc.RequireTenantScope(actor, tID); err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+	var body map[string]any
+	if err := decodeMap(w, r, &body); err != nil {
+		return
+	}
+	status, payload, err := h.svc.ForwardCore(r.Context(), "PUT", "/api/v1/core/internal-admin/tenants/"+tID+"/billing", body)
+	if err != nil {
+		httpx.Error(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	if status < 400 {
+		h.svc.Audit(r.Context(), actor, "empresas.editar_facturacion", "tenant", tID, tID, "", nil, body, "SUCCESS")
+	}
+	httpx.JSON(w, status, payload)
+}
+
+func (h *Handler) handleDeleteTenantUser(w http.ResponseWriter, r *http.Request) {
+	actor := actorFrom(r)
+	tID := chi.URLParam(r, "tenantId")
+	uID := chi.URLParam(r, "userId")
+	if err := h.svc.RequirePermission(actor, "usuarios_cliente.editar"); err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+	if err := h.svc.RequireTenantScope(actor, tID); err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+	status, payload, err := h.svc.ForwardCore(r.Context(), "DELETE", "/api/v1/core/internal-admin/tenants/"+tID+"/users/"+uID, nil)
+	if err != nil {
+		httpx.Error(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	if status < 400 {
+		h.svc.Audit(r.Context(), actor, "usuarios_cliente.eliminar", "tenant_user", uID, tID, "", nil, nil, "SUCCESS")
+	}
+	httpx.JSON(w, status, payload)
+}
+
+func (h *Handler) handleListAllExports(w http.ResponseWriter, r *http.Request) {
+	jobs, err := h.svc.ListExportJobs(r.Context(), actorFrom(r), "")
+	if err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{"ok": true, "jobs": jobs})
+}
+
+func (h *Handler) handleGetMyAccount(w http.ResponseWriter, r *http.Request) {
+	actor := actorFrom(r)
+	if actor.Plane != "platform" && actor.Role != "superadmin" {
+		httpx.Error(w, http.StatusForbidden, "Sesión de plataforma requerida")
+		return
+	}
+	status, payload, err := h.svc.ForwardCore(r.Context(), "GET", "/api/v1/core/internal-admin/platform/users", nil)
+	if err != nil || status >= 400 {
+		httpx.JSON(w, http.StatusOK, map[string]any{
+			"ok": true,
+			"me": map[string]any{
+				"userId":            actor.UserID,
+				"email":             actor.Email,
+				"roleKey":           actor.PlatformRole,
+				"permissions":       actor.PlatformPermissions,
+				"requireDataReason": actor.RequireDataReason,
+			},
+		})
+		return
+	}
+	var myRecord map[string]any
+	if list, ok := payload["users"].([]any); ok {
+		for _, raw := range list {
+			if m, ok := raw.(map[string]any); ok {
+				if m["userId"] == actor.UserID || strings.EqualFold(strFromMap(m, "email"), actor.Email) {
+					myRecord = m
+					break
+				}
+			}
+		}
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"ok":                true,
+		"me":                myRecord,
+		"permissions":       actor.PlatformPermissions,
+		"requireDataReason": actor.RequireDataReason,
+	})
+}
+
+func (h *Handler) handleSetupMyTOTP(w http.ResponseWriter, r *http.Request) {
+	actor := actorFrom(r)
+	if strings.TrimSpace(actor.UserID) == "" {
+		httpx.Error(w, http.StatusBadRequest, "Identificador de operador no disponible")
+		return
+	}
+	status, payload, err := h.svc.ForwardCore(r.Context(), "POST", "/api/v1/core/internal-admin/platform/users/"+actor.UserID+"/totp/setup", nil)
+	if err != nil {
+		httpx.Error(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	if status < 400 {
+		h.svc.Audit(r.Context(), actor, "plataforma.mi_totp_activar", "platform_user", actor.UserID, "", "", nil, map[string]any{"mfaEnabled": true}, "SUCCESS")
+	}
+	httpx.JSON(w, status, payload)
+}
+
+func (h *Handler) handleDisableMyTOTP(w http.ResponseWriter, r *http.Request) {
+	actor := actorFrom(r)
+	if strings.TrimSpace(actor.UserID) == "" {
+		httpx.Error(w, http.StatusBadRequest, "Identificador de operador no disponible")
+		return
+	}
+	status, payload, err := h.svc.ForwardCore(r.Context(), "DELETE", "/api/v1/core/internal-admin/platform/users/"+actor.UserID+"/totp", nil)
+	if err != nil {
+		httpx.Error(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	if status < 400 {
+		h.svc.Audit(r.Context(), actor, "plataforma.mi_totp_desactivar", "platform_user", actor.UserID, "", "", nil, map[string]any{"mfaEnabled": false}, "SUCCESS")
+	}
+	httpx.JSON(w, status, payload)
+}
+
+func (h *Handler) handleChangeMyPassword(w http.ResponseWriter, r *http.Request) {
+	actor := actorFrom(r)
+	if strings.TrimSpace(actor.UserID) == "" {
+		httpx.Error(w, http.StatusBadRequest, "Identificador de operador no disponible")
+		return
+	}
+	var body map[string]any
+	if err := decodeMap(w, r, &body); err != nil {
+		return
+	}
+	status, payload, err := h.svc.ForwardCore(r.Context(), "PUT", "/api/v1/core/internal-admin/platform/users/"+actor.UserID+"/self-password", body)
+	if err != nil {
+		httpx.Error(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	if status < 400 {
+		h.svc.Audit(r.Context(), actor, "plataforma.mi_clave_cambiar", "platform_user", actor.UserID, "", "", nil, map[string]any{"passwordChanged": true}, "SUCCESS")
+	}
+	httpx.JSON(w, status, payload)
 }
