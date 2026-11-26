@@ -41,6 +41,7 @@ var reservedAPIPrefixes = []string{
 	"/api/v1/s2s",
 	"/api/v1/system",
 	"/api/v1/platform",
+	"/api/v1/admin",
 	"/api/v1/bootstrap",
 	"/api/v1/tenants",
 	"/api/v1/health",
@@ -125,6 +126,9 @@ func NewGatewayServer(
 	if cfg.PlatformUpstreamURL != "" {
 		g.RegisterUpstream("ms-platform", "/api/v1/platform", cfg.PlatformUpstreamURL)
 	}
+	if cfg.AdminUpstreamURL != "" {
+		g.RegisterUpstream("ms-admin", "/api/v1/admin", cfg.AdminUpstreamURL)
+	}
 	for _, m := range cat.Catalog() {
 		envName := catalog.ServiceEnvVar(m.ServiceKey)
 		if rawURL := strings.TrimSpace(os.Getenv(envName)); rawURL != "" {
@@ -174,6 +178,10 @@ func validateDynamicRegistration(manifest licensegate.ServiceManifest, rawServic
 	if svcKey == "ms-platform" {
 		if prefix != "/api/v1/platform" {
 			return apperr.Validation("El servicio ms-platform debe utilizar /api/v1/platform")
+		}
+	} else if svcKey == "ms-admin" {
+		if prefix != "/api/v1/admin" {
+			return apperr.Validation("El servicio ms-admin debe utilizar /api/v1/admin")
 		}
 	} else {
 		if !strings.HasPrefix(prefix, "/api/v1/") || prefix == "/api/v1" {
@@ -227,10 +235,12 @@ func (g *GatewayServer) Router() http.Handler {
 		cr.Get("/public-catalog", g.handlePublicCatalog)
 		cr.Post("/demo-session", g.handleDemoSession)
 		cr.Post("/login", g.handleLogin)
+		cr.Post("/verify-totp", g.handleVerifyTOTP)
 		cr.Post("/register", g.handleRegister)
 		cr.Post("/logout", g.handleLogout)
 		cr.Get("/bootstrap", g.handleBootstrap)
 		cr.Post("/impersonate", g.handleImpersonate)
+		cr.Post("/stop-impersonation", g.handleStopImpersonation)
 		cr.Post("/tenants", g.handleAdminCreateTenant)
 		cr.Put("/tenants/{tenantId}/subscriptions", g.handleUpdateSubscriptions)
 		cr.Put("/tenants/{tenantId}/status", g.handleUpdateTenantStatus)
@@ -248,12 +258,15 @@ func (g *GatewayServer) Router() http.Handler {
 			cc.Get("/activation-requests", g.handleListActivationRequests)
 		})
 	})
+	g.mountInternalAdminRoutes(r)
 
 	r.Route("/api/v1/auth", func(ar chi.Router) {
 		ar.Post("/login", g.handleLogin)
+		ar.Post("/verify-totp", g.handleVerifyTOTP)
 		ar.Post("/register-tenant", g.handleRegister)
 		ar.Post("/logout", g.handleLogout)
 		ar.Post("/impersonate/{tenantId}", g.handleImpersonateByURL)
+		ar.Post("/stop-impersonation", g.handleStopImpersonation)
 	})
 	r.Get("/api/v1/bootstrap", g.handleBootstrap)
 	r.Post("/api/v1/tenants", g.handleAdminCreateTenant)
@@ -266,6 +279,8 @@ func (g *GatewayServer) Router() http.Handler {
 
 	r.HandleFunc("/api/v1/platform", g.handlePlatformProxy)
 	r.HandleFunc("/api/v1/platform/*", g.handlePlatformProxy)
+	r.HandleFunc("/api/v1/admin", g.handleAdminProxy)
+	r.HandleFunc("/api/v1/admin/*", g.handleAdminProxy)
 	r.HandleFunc("/api/v1/s2s/{targetService}/*", g.handleS2SBus)
 	r.HandleFunc("/api/v1/*", g.handleServiceProxy)
 
@@ -360,7 +375,7 @@ func (g *GatewayServer) handleGatewayRegister(w http.ResponseWriter, r *http.Req
 		httpx.RespondError(w, err)
 		return
 	}
-	if body.Manifest.ServiceKey != "ms-platform" {
+	if body.Manifest.ServiceKey != "ms-platform" && body.Manifest.ServiceKey != "ms-admin" {
 		g.cat.Upsert(body.Manifest)
 	}
 	g.RegisterUpstream(body.Manifest.ServiceKey, body.Manifest.APIPrefix, body.ServiceURL)
@@ -513,22 +528,47 @@ func (g *GatewayServer) handleLogin(w http.ResponseWriter, r *http.Request) {
 		httpx.RespondError(w, err)
 		return
 	}
+	if out.RequiresTOTP {
+		challengeTok, cErr := g.issueChallengeToken(out)
+		if cErr != nil {
+			httpx.Error(w, http.StatusInternalServerError, "No fue posible emitir desafío 2FA")
+			return
+		}
+		httpx.JSON(w, http.StatusOK, map[string]any{
+			"ok":                true,
+			"plane":             out.Plane,
+			"requiresTotp":      true,
+			"requiresTotpSetup": out.RequiresTOTPSetup,
+			"challengeToken":    challengeTok,
+			"totpSetupSecret":   out.TOTPSetupSecret,
+			"totpSetupUri":      out.TOTPSetupURI,
+			"username":          out.Username,
+			"fullName":          out.FullName,
+			"platformRole":      out.PlatformRole,
+		})
+		return
+	}
 	tok, err := g.issueAuthSession(w, r, out)
 	if err != nil {
 		httpx.Error(w, http.StatusInternalServerError, "No fue posible emitir la sesión")
 		return
 	}
 	httpx.JSON(w, http.StatusOK, map[string]any{
-		"ok":             true,
-		"token":          tok,
-		"role":           out.Role,
-		"internalRole":   out.InternalRole,
-		"username":       out.Username,
-		"fullName":       out.FullName,
-		"isCompanyAdmin": out.IsCompanyAdmin,
-		"isDemo":         out.IsDemo,
-		"tenant":         out.Tenant,
-		"companyTenant":  out.CompanyTenant,
+		"ok":                  true,
+		"plane":               out.Plane,
+		"token":               tok,
+		"role":                out.Role,
+		"internalRole":        out.InternalRole,
+		"platformRole":        out.PlatformRole,
+		"platformPermissions": out.PlatformPermissions,
+		"allowedTenants":      out.AllowedTenants,
+		"requireDataReason":   out.RequireDataReason,
+		"username":            out.Username,
+		"fullName":            out.FullName,
+		"isCompanyAdmin":      out.IsCompanyAdmin,
+		"isDemo":              out.IsDemo,
+		"tenant":              out.Tenant,
+		"companyTenant":       out.CompanyTenant,
 	})
 }
 
@@ -556,15 +596,18 @@ func (g *GatewayServer) handleRegister(w http.ResponseWriter, r *http.Request) {
 		fullName = "Administrador " + ten.CompanyName
 	}
 	out := application.AuthOutput{
-		Tenant:         ten,
-		CompanyTenant:  ten.Clone(),
-		UserID:         "usr_" + ten.TenantID,
-		Role:           domain.RoleCliente,
-		InternalRole:   "admin_empresa",
-		Username:       ten.AdminUsername,
-		FullName:       fullName,
-		IsCompanyAdmin: true,
-		IsDemo:         ten.IsDemo,
+		Plane:                domain.PlaneTenant,
+		Tenant:               ten,
+		CompanyTenant:        ten.Clone(),
+		UserID:               "usr_" + ten.TenantID,
+		Role:                 domain.RoleCliente,
+		InternalRole:         "admin_empresa",
+		Username:             ten.AdminUsername,
+		FullName:             fullName,
+		IsCompanyAdmin:       true,
+		IsDemo:               ten.IsDemo,
+		SessionVersion:       1,
+		TenantSessionVersion: ten.SessionVersion,
 	}
 	tok, err := g.issueAuthSession(w, r, out)
 	if err != nil {
@@ -632,6 +675,7 @@ func (g *GatewayServer) handleBootstrap(w http.ResponseWriter, r *http.Request) 
 	}
 	httpx.JSON(w, http.StatusOK, map[string]any{
 		"ok":            true,
+		"plane":         out.Plane,
 		"catalog":       out.Catalog,
 		"tenant":        out.Tenant,
 		"companyTenant": out.CompanyTenant,
@@ -652,13 +696,16 @@ func (g *GatewayServer) handleImpersonate(w http.ResponseWriter, r *http.Request
 		return
 	}
 	var body struct {
-		TenantID string `json:"tenantId"`
+		TenantID        string `json:"tenantId"`
+		Mode            string `json:"mode"`
+		Reason          string `json:"reason"`
+		DurationMinutes int    `json:"durationMinutes"`
 	}
 	if err := httpx.Decode(w, r, &body); err != nil {
 		httpx.RespondError(w, err)
 		return
 	}
-	g.finishImpersonate(w, r, tc, body.TenantID)
+	g.finishImpersonate(w, r, tc, body.TenantID, body.Mode, body.Reason, body.DurationMinutes)
 }
 
 func (g *GatewayServer) handleImpersonateByURL(w http.ResponseWriter, r *http.Request) {
@@ -667,25 +714,17 @@ func (g *GatewayServer) handleImpersonateByURL(w http.ResponseWriter, r *http.Re
 		httpx.RespondError(w, err)
 		return
 	}
-	g.finishImpersonate(w, r, tc, chi.URLParam(r, "tenantId"))
+	g.finishImpersonate(w, r, tc, chi.URLParam(r, "tenantId"), "", "", 0)
 }
 
-func (g *GatewayServer) finishImpersonate(w http.ResponseWriter, r *http.Request, tc authguard.TenantContext, targetTenantID string) {
-	ten, err := g.svc.Impersonate(r.Context(), tc.Role, targetTenantID)
+func (g *GatewayServer) finishImpersonate(w http.ResponseWriter, r *http.Request, tc authguard.TenantContext, targetTenantID, mode, reason string, durationMinutes int) {
+	if strings.TrimSpace(mode) == "" && tc.Role == domain.RoleSuperAdmin {
+		mode = "readwrite"
+	}
+	out, err := g.svc.StartSupportImpersonation(r.Context(), tc, targetTenantID, mode, reason, durationMinutes)
 	if err != nil {
 		httpx.RespondError(w, err)
 		return
-	}
-	out := application.AuthOutput{
-		Tenant:         ten,
-		CompanyTenant:  ten.Clone(),
-		UserID:         "superadmin",
-		Role:           tc.Role,
-		InternalRole:   "superadmin",
-		Username:       tc.Username,
-		FullName:       "SuperAdministrador Corporativo",
-		IsCompanyAdmin: true,
-		IsDemo:         ten.IsDemo,
 	}
 	tok, err := g.issueAuthSession(w, r, out)
 	if err != nil {
@@ -693,14 +732,20 @@ func (g *GatewayServer) finishImpersonate(w http.ResponseWriter, r *http.Request
 		return
 	}
 	httpx.JSON(w, http.StatusOK, map[string]any{
-		"ok":             true,
-		"token":          tok,
-		"role":           tc.Role,
-		"internalRole":   "superadmin",
-		"username":       tc.Username,
-		"isCompanyAdmin": true,
-		"tenant":         ten,
-		"companyTenant":  ten.Clone(),
+		"ok":                  true,
+		"plane":               out.Plane,
+		"token":               tok,
+		"role":                out.Role,
+		"internalRole":        out.InternalRole,
+		"platformRole":        out.PlatformRole,
+		"platformPermissions": out.PlatformPermissions,
+		"impersonating":       out.Impersonating,
+		"impersonationMode":   out.ImpersonationMode,
+		"impersonationReason": out.ImpersonationReason,
+		"username":            out.Username,
+		"isCompanyAdmin":      out.IsCompanyAdmin,
+		"tenant":              out.Tenant,
+		"companyTenant":       out.CompanyTenant,
 	})
 }
 
@@ -764,6 +809,12 @@ func (g *GatewayServer) handleServiceProxy(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	if tc.Impersonating && strings.EqualFold(tc.ImpersonationMode, "readonly") &&
+		r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {
+		httpx.Error(w, http.StatusForbidden, "Sesión de soporte en modo SOLO LECTURA: las operaciones de escritura están bloqueadas")
+		return
+	}
+
 	cleanPath := path.Clean("/" + strings.TrimLeft(r.URL.Path, "/"))
 	if strings.Contains(cleanPath, "/internal-s2s") {
 		httpx.Error(w, http.StatusForbidden, "Ruta reservada exclusivamente al bus interno S2S")
@@ -785,15 +836,19 @@ func (g *GatewayServer) handleServiceProxy(w http.ResponseWriter, r *http.Reques
 	}
 
 	passportTok, err := security.SignPassport(g.privKey, security.PassportClaims{
-		TenantID:         tc.TenantID,
-		DBName:           tc.DBName,
-		Username:         tc.Username,
-		Role:             tc.Role,
-		Audience:         serviceKey,
-		ActiveServices:   tc.ActiveServices,
-		ActiveModules:    tc.ActiveModules,
-		ActiveSubmodules: tc.ActiveSubmodules,
-		ActiveFeatures:   tc.ActiveFeatures,
+		Plane:             tc.Plane,
+		TenantID:          tc.TenantID,
+		UserID:            tc.UserID,
+		DBName:            tc.DBName,
+		Username:          tc.Username,
+		Role:              tc.Role,
+		Impersonating:     tc.Impersonating,
+		ImpersonationMode: tc.ImpersonationMode,
+		Audience:          serviceKey,
+		ActiveServices:    tc.ActiveServices,
+		ActiveModules:     tc.ActiveModules,
+		ActiveSubmodules:  tc.ActiveSubmodules,
+		ActiveFeatures:    tc.ActiveFeatures,
 	}, passportTTL)
 	if err != nil {
 		httpx.Error(w, http.StatusInternalServerError, "Error al firmar pasaporte S2S")
@@ -823,22 +878,46 @@ func (g *GatewayServer) matchServiceRoute(reqPath string) (string, string, upstr
 }
 
 func (g *GatewayServer) issueAuthSession(w http.ResponseWriter, r *http.Request, out application.AuthOutput) (string, error) {
-	claims := authguard.TenantContext{
-		TenantID:         out.Tenant.TenantID,
-		UserID:           out.UserID,
-		DBName:           out.Tenant.DBName,
-		Username:         out.Username,
-		FullName:         out.FullName,
-		Role:             out.Role,
-		InternalRole:     out.InternalRole,
-		IsCompanyAdmin:   out.IsCompanyAdmin,
-		IsDemo:           out.IsDemo,
-		ActiveServices:   out.Tenant.ActiveServices,
-		ActiveModules:    out.Tenant.ActiveModules,
-		ActiveSubmodules: out.Tenant.ActiveSubmodules,
-		ActiveFeatures:   out.Tenant.ActiveFeatures,
+	plane := out.Plane
+	if plane == "" {
+		if out.Role == domain.RoleSuperAdmin {
+			plane = domain.PlanePlatform
+		} else {
+			plane = domain.PlaneTenant
+		}
 	}
-	tok, err := authguard.SignJWT(g.cfg.JWTSecret, claims, sessionTTL)
+	claims := authguard.TenantContext{
+		Plane:                plane,
+		UserID:               out.UserID,
+		Username:             out.Username,
+		FullName:             out.FullName,
+		Role:                 out.Role,
+		InternalRole:         out.InternalRole,
+		IsCompanyAdmin:       out.IsCompanyAdmin,
+		IsDemo:               out.IsDemo,
+		SessionVersion:       out.SessionVersion,
+		TenantSessionVersion: out.TenantSessionVersion,
+		PlatformRole:         out.PlatformRole,
+		PlatformPermissions:  out.PlatformPermissions,
+		AllowedTenants:       out.AllowedTenants,
+		RequireDataReason:    out.RequireDataReason,
+		Impersonating:        out.Impersonating,
+		ImpersonationMode:    out.ImpersonationMode,
+		ImpersonationReason:  out.ImpersonationReason,
+	}
+	if out.Tenant != nil {
+		claims.TenantID = out.Tenant.TenantID
+		claims.DBName = out.Tenant.DBName
+		claims.ActiveServices = out.Tenant.ActiveServices
+		claims.ActiveModules = out.Tenant.ActiveModules
+		claims.ActiveSubmodules = out.Tenant.ActiveSubmodules
+		claims.ActiveFeatures = out.Tenant.ActiveFeatures
+	}
+	ttl := sessionTTL
+	if out.SessionTTL > 0 {
+		ttl = out.SessionTTL
+	}
+	tok, err := authguard.SignJWT(g.cfg.JWTSecret, claims, ttl)
 	if err != nil {
 		return "", err
 	}
@@ -846,7 +925,7 @@ func (g *GatewayServer) issueAuthSession(w http.ResponseWriter, r *http.Request,
 		Name:     sessionCookieName,
 		Value:    tok,
 		Path:     "/",
-		MaxAge:   int(sessionTTL.Seconds()),
+		MaxAge:   int(ttl.Seconds()),
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
 		Secure:   r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https"),

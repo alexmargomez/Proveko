@@ -11,6 +11,9 @@ var subscriptionsSQL string
 //go:embed 003_tenant_users_and_commercial.sql
 var tenantUsersAndCommercialSQL string
 
+//go:embed 004_platform_staff_roles_and_sessions.sql
+var platformStaffSQL string
+
 func SchemaSQL() string {
-	return tenantsSQL + "\n" + subscriptionsSQL + "\n" + tenantUsersAndCommercialSQL
+	return tenantsSQL + "\n" + subscriptionsSQL + "\n" + tenantUsersAndCommercialSQL + "\n" + platformStaffSQL
 }

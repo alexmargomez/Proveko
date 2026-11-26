@@ -49,6 +49,7 @@ type CoreConfig struct {
 	SuperAdminEmail     string
 	SuperAdminPassword  string
 	PlatformUpstreamURL string
+	AdminUpstreamURL    string
 }
 
 type ServiceConfig struct {
@@ -147,6 +148,7 @@ func LoadCore() (CoreConfig, error) {
 		SuperAdminEmail:     strings.ToLower(EnvOr("SUPERADMIN_EMAIL", "superadmin@plataforma.local")),
 		SuperAdminPassword:  EnvOr("SUPERADMIN_PASSWORD", devAdminPassInit),
 		PlatformUpstreamURL: strings.TrimRight(EnvOr("MS_PLATFORM_URL", ""), "/"),
+		AdminUpstreamURL:    strings.TrimRight(EnvOr("MS_ADMIN_URL", ""), "/"),
 	}
 	if cfg.IsProduction() {
 		if cfg.S2SSharedKey == "" || cfg.S2SSharedKey == devS2SDefault {

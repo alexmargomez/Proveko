@@ -40,12 +40,13 @@ func (r *TenantRepository) GetUserByID(ctx context.Context, tenantID, userID str
 	var svcRaw, modRaw []byte
 	err = p.QueryRow(ctx, `
 		SELECT user_id, tenant_id, username, email, full_name, password_hash,
-		       internal_role, is_company_admin, allowed_services::text, allowed_modules::text, status, created_at
+		       internal_role, is_company_admin, allowed_services::text, allowed_modules::text,
+		       status, COALESCE(session_version, 1), created_at
 		FROM core_control.tenant_users
 		WHERE tenant_id = $1 AND user_id = $2
 	`, tenantID, userID).Scan(
 		&u.UserID, &u.TenantID, &u.Username, &u.Email, &u.FullName, &u.PasswordHash,
-		&u.InternalRole, &u.IsCompanyAdmin, &svcRaw, &modRaw, &u.Status, &u.CreatedAt,
+		&u.InternalRole, &u.IsCompanyAdmin, &svcRaw, &modRaw, &u.Status, &u.SessionVersion, &u.CreatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, apperr.NotFound("Usuario de empresa no encontrado")
@@ -73,11 +74,12 @@ func (r *TenantRepository) fetchOneUser(ctx context.Context, p interface {
 	var svcRaw, modRaw []byte
 	err := p.QueryRow(ctx, `
 		SELECT user_id, tenant_id, username, email, full_name, password_hash,
-		       internal_role, is_company_admin, allowed_services::text, allowed_modules::text, status, created_at
+		       internal_role, is_company_admin, allowed_services::text, allowed_modules::text,
+		       status, COALESCE(session_version, 1), created_at
 		FROM core_control.tenant_users
 		`+whereClause, arg).Scan(
 		&u.UserID, &u.TenantID, &u.Username, &u.Email, &u.FullName, &u.PasswordHash,
-		&u.InternalRole, &u.IsCompanyAdmin, &svcRaw, &modRaw, &u.Status, &u.CreatedAt,
+		&u.InternalRole, &u.IsCompanyAdmin, &svcRaw, &modRaw, &u.Status, &u.SessionVersion, &u.CreatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, apperr.NotFound("Usuario no registrado")
@@ -105,7 +107,8 @@ func (r *TenantRepository) ListUsersByTenant(ctx context.Context, tenantID strin
 	}
 	rows, err := p.Query(ctx, `
 		SELECT user_id, tenant_id, username, email, full_name, password_hash,
-		       internal_role, is_company_admin, allowed_services::text, allowed_modules::text, status, created_at
+		       internal_role, is_company_admin, allowed_services::text, allowed_modules::text,
+		       status, COALESCE(session_version, 1), created_at
 		FROM core_control.tenant_users
 		WHERE tenant_id = $1
 		ORDER BY is_company_admin DESC, created_at ASC, username ASC
@@ -121,7 +124,7 @@ func (r *TenantRepository) ListUsersByTenant(ctx context.Context, tenantID strin
 		var svcRaw, modRaw []byte
 		if err := rows.Scan(
 			&u.UserID, &u.TenantID, &u.Username, &u.Email, &u.FullName, &u.PasswordHash,
-			&u.InternalRole, &u.IsCompanyAdmin, &svcRaw, &modRaw, &u.Status, &u.CreatedAt,
+			&u.InternalRole, &u.IsCompanyAdmin, &svcRaw, &modRaw, &u.Status, &u.SessionVersion, &u.CreatedAt,
 		); err != nil {
 			return nil, err
 		}

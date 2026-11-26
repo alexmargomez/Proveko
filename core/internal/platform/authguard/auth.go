@@ -22,22 +22,33 @@ const expectedJWTHeaderB64 = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
 type ctxKey struct{}
 
 type TenantContext struct {
-	TenantID         string   `json:"tenant_id"`
-	UserID           string   `json:"user_id,omitempty"`
-	DBName           string   `json:"db_name"`
-	Username         string   `json:"username"`
-	FullName         string   `json:"full_name,omitempty"`
-	Role             string   `json:"role"`
-	InternalRole     string   `json:"internal_role,omitempty"`
-	IsCompanyAdmin   bool     `json:"is_company_admin,omitempty"`
-	IsDemo           bool     `json:"is_demo,omitempty"`
-	ActiveServices   []string `json:"active_services"`
-	ActiveModules    []string `json:"active_modules"`
-	ActiveSubmodules []string `json:"active_submodules"`
-	ActiveFeatures   []string `json:"active_features"`
-	IdempotencyKey   string   `json:"-"`
-	RawPassport      string   `json:"-"`
-	Exp              int64    `json:"exp"`
+	Plane                string   `json:"plane,omitempty"`
+	TenantID             string   `json:"tenant_id"`
+	UserID               string   `json:"user_id,omitempty"`
+	DBName               string   `json:"db_name"`
+	Username             string   `json:"username"`
+	FullName             string   `json:"full_name,omitempty"`
+	Role                 string   `json:"role"`
+	InternalRole         string   `json:"internal_role,omitempty"`
+	IsCompanyAdmin       bool     `json:"is_company_admin,omitempty"`
+	IsDemo               bool     `json:"is_demo,omitempty"`
+	SessionVersion       int      `json:"sv,omitempty"`
+	TenantSessionVersion int      `json:"tsv,omitempty"`
+	PlatformRole         string   `json:"platform_role,omitempty"`
+	PlatformPermissions  []string `json:"platform_permissions,omitempty"`
+	AllowedTenants       []string `json:"allowed_tenants,omitempty"`
+	RequireDataReason    bool     `json:"require_data_reason,omitempty"`
+	Impersonating        bool     `json:"impersonating,omitempty"`
+	ImpersonationMode    string   `json:"impersonation_mode,omitempty"`
+	ImpersonationReason  string   `json:"impersonation_reason,omitempty"`
+	ChallengePurpose     string   `json:"challenge_purpose,omitempty"`
+	ActiveServices       []string `json:"active_services"`
+	ActiveModules        []string `json:"active_modules"`
+	ActiveSubmodules     []string `json:"active_submodules"`
+	ActiveFeatures       []string `json:"active_features"`
+	IdempotencyKey       string   `json:"-"`
+	RawPassport          string   `json:"-"`
+	Exp                  int64    `json:"exp"`
 }
 
 func WithContext(ctx context.Context, tc TenantContext) context.Context {

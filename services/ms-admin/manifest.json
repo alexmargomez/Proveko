@@ -1,0 +1,12 @@
+{
+  "serviceKey": "ms-admin",
+  "displayName": "Consola de Administración de Plataforma",
+  "icon": "🛡️",
+  "apiPrefix": "/api/v1/admin",
+  "uiBundlePath": "/api/v1/admin/health",
+  "bundleHash": "admin-v1",
+  "category": "Infraestructura Transversal",
+  "summary": "Plano de gobierno multi-tenant, auditoría inmutable, catálogo comercial, feature flags, anuncios y exportación CSV.",
+  "modules": [],
+  "features": []
+}

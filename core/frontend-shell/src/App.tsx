@@ -3,7 +3,8 @@ import { usePlatform } from '@platform/ui-sdk';
 import { SidebarMenu } from './layout/SidebarMenu';
 import { TopModuleTabs, ServiceContextHeader } from './layout/TopModuleTabs';
 import { LandingAndAuth } from './pages/LandingAndAuth';
-import { SuperAdminPanel } from './pages/SuperAdminPanel';
+import { PlatformAdminLogin } from './pages/PlatformAdminLogin';
+import { PlatformAdminConsole } from './pages/admin/PlatformAdminConsole';
 import { WorkstationHome } from './pages/WorkstationHome';
 import { CompanyUsersPanel } from './pages/CompanyUsersPanel';
 import { CompanyModulesPanel } from './pages/CompanyModulesPanel';
@@ -253,14 +254,19 @@ export const App: React.FC = () => {
     workstationView,
     isBootstrapping,
     token,
+    plane,
     tenant,
     role,
-    username,
     userProfile,
+    impersonating,
+    impersonationMode,
+    impersonationReason,
     isDemo,
     logout,
     impersonateTenant,
+    stopImpersonation,
     startDemoSession,
+    apiGet,
   } = usePlatform();
 
   const [impersonatingWorkstation, setImpersonatingWorkstation] = useState<boolean>(
@@ -268,8 +274,14 @@ export const App: React.FC = () => {
   );
   const [railPinned, setRailPinned] = useState<boolean>(() => localStorage.getItem('pk_rail_pinned') === '1');
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
+  const [announcements, setAnnouncements] = useState<Array<{ announcementId: string; title: string; message: string; severity: string }>>([]);
 
-  const isSuperAdmin = role === 'superadmin';
+  const isAdminRoute =
+    typeof window !== 'undefined' &&
+    (window.location.pathname.startsWith('/consola-admin') || window.location.hostname.startsWith('admin.'));
+
+  const isPlatformStaff = plane === 'platform' || role === 'superadmin' || role === 'platform_staff';
+  const activeImpersonation = impersonating || impersonatingWorkstation;
 
   const setImpersonation = (active: boolean) => {
     setImpersonatingWorkstation(active);
@@ -283,10 +295,15 @@ export const App: React.FC = () => {
   };
 
   useEffect(() => {
-    if (publicView !== 'app' || (!isBootstrapping && !isSuperAdmin)) {
+    if (publicView !== 'app' || (!isBootstrapping && !isPlatformStaff)) {
       setImpersonation(false);
     }
-  }, [publicView, isBootstrapping, isSuperAdmin]);
+  }, [publicView, isBootstrapping, isPlatformStaff]);
+
+  const handleExitImpersonation = async () => {
+    await stopImpersonation();
+    setImpersonation(false);
+  };
 
   const handleLogout = async () => {
     remoteComponentCache.clear();
@@ -310,14 +327,26 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (!hasActiveSession) {
       remoteComponentCache.clear();
+      setAnnouncements([]);
+      return;
     }
-  }, [hasActiveSession]);
+    if (!isPlatformStaff || activeImpersonation) {
+      apiGet<{ announcements?: Array<{ announcementId: string; title: string; message: string; severity: string }> }>(
+        '/api/v1/admin/client-announcements'
+      )
+        .then((res) => setAnnouncements(res.announcements || []))
+        .catch(() => {});
+    }
+  }, [hasActiveSession, isPlatformStaff, activeImpersonation, apiGet]);
 
   if (publicView !== 'app' || !hasActiveSession) {
+    if (isAdminRoute) {
+      return <PlatformAdminLogin />;
+    }
     return <LandingAndAuth />;
   }
 
-  if (isBootstrapping && !tenant && !isSuperAdmin) {
+  if (isBootstrapping && !tenant && !isPlatformStaff) {
     return (
       <div style={{ minHeight: '100vh', background: 'var(--pk-bg)', display: 'flex', flexDirection: 'column' }}>
         <header className="pk-topbar">
@@ -342,54 +371,28 @@ export const App: React.FC = () => {
     );
   }
 
-  if (isSuperAdmin && !impersonatingWorkstation) {
+  if (isPlatformStaff && !activeImpersonation) {
     return (
-      <div style={{ minHeight: '100vh', background: 'var(--pk-bg)', display: 'flex', flexDirection: 'column' }}>
-        <header className="pk-topbar">
-          <div className="pk-brand">
-            <span className="pk-logo-box">PK</span>
-            <div className="pk-brand-meta">
-              <div className="pk-brand-title">
-                <span>PROVEKO</span>
-                <span style={{ color: '#cbd5e1', fontWeight: 400 }}>|</span>
-                <span style={{ color: 'var(--pk-primary)', fontWeight: 700, fontSize: 14 }}>
-                  Administración Central de Empresas
-                </span>
-              </div>
-              <div className="pk-brand-sub">Gobierno Global de Suscripciones, Licencias y Cupos</div>
-            </div>
-          </div>
-          <div className="pk-row-actions">
-            <span className="pk-badge pk-badge-blue">{username || 'SuperAdmin'}</span>
-            <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={() => void handleLogout()}>
-              Cerrar Sesión
-            </button>
-          </div>
-        </header>
-        <main className="pk-stage" style={{ maxWidth: 1540, width: '100%', margin: '0 auto' }}>
-          <SuperAdminPanel
-            onEnterWorkstation={(targetTenantId) => {
-              void (async () => {
-                await impersonateTenant(targetTenantId);
-                setImpersonation(true);
-              })();
-            }}
-          />
-        </main>
-      </div>
+      <PlatformAdminConsole
+        onLogout={handleLogout}
+        onStartSupport={async (targetTenantId, mode, reason, durationMinutes) => {
+          await impersonateTenant(targetTenantId, { mode, reason, durationMinutes });
+          setImpersonation(true);
+        }}
+      />
     );
   }
 
   return (
     <div className="pk-workstation-shell">
-      {isSuperAdmin && impersonatingWorkstation && (
+      {isPlatformStaff && activeImpersonation && (
         <div
           role="region"
-          aria-label="Modo Impersonación Corporativa"
+          aria-label="Modo Soporte Corporativo"
           style={{
-            background: '#023047',
+            background: impersonationMode === 'readwrite' ? '#9a3412' : '#023047',
             color: '#ffffff',
-            padding: '7px 20px',
+            padding: '8px 20px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -397,23 +400,60 @@ export const App: React.FC = () => {
             fontSize: 12.5,
             fontWeight: 700,
             flexShrink: 0,
+            flexWrap: 'wrap',
           }}
         >
           <span>
-            Modo Soporte Corporativo Activo en <strong>{tenant?.companyName || 'Empresa'}</strong> (NIT{' '}
-            {tenant?.nit || 'N/A'})
+            <span className="pk-badge pk-badge-amber" style={{ marginRight: 8 }}>
+              {impersonationMode === 'readwrite' ? 'SOPORTE ESCRITURA' : 'SOPORTE SOLO LECTURA'}
+            </span>
+            Operando en <strong>{tenant?.companyName || 'Empresa'}</strong> (NIT {tenant?.nit || 'N/A'})
+            {impersonationReason ? ` · Motivo: ${impersonationReason}` : ''}
           </span>
           <button
             type="button"
             className="pk-btn pk-btn-amber-brand pk-btn-sm"
-            onClick={() => setImpersonation(false)}
+            onClick={() => void handleExitImpersonation()}
           >
-            Volver al Panel Corporativo Global
+            Salir de Soporte y Volver a Consola
           </button>
         </div>
       )}
 
-      {isDemo && !isSuperAdmin && (
+      {announcements.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {announcements.map((ann) => (
+            <div
+              key={ann.announcementId}
+              role="status"
+              style={{
+                background: ann.severity === 'CRITICAL' ? '#fef2f2' : ann.severity === 'WARNING' ? '#fffbeb' : '#eff6ff',
+                color: ann.severity === 'CRITICAL' ? '#991b1b' : ann.severity === 'WARNING' ? '#92400e' : '#1e40af',
+                borderBottom: '1px solid rgba(15,23,42,0.08)',
+                padding: '7px 20px',
+                fontSize: 12.5,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: 12,
+              }}
+            >
+              <span>
+                <strong>{ann.title}:</strong> {ann.message}
+              </span>
+              <button
+                type="button"
+                className="pk-btn pk-btn-outline pk-btn-sm"
+                onClick={() => setAnnouncements((prev) => prev.filter((x) => x.announcementId !== ann.announcementId))}
+              >
+                Ocultar
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {isDemo && !isPlatformStaff && (
         <div
           role="region"
           aria-label="Modo Demostración Interactiva"
@@ -480,7 +520,7 @@ export const App: React.FC = () => {
       )}
 
       <TopModuleTabs
-        onOpenAdmin={() => setImpersonation(false)}
+        onOpenAdmin={() => void handleExitImpersonation()}
         onToggleMobileMenu={() => setMobileMenuOpen((v) => !v)}
       />
 
@@ -503,7 +543,7 @@ export const App: React.FC = () => {
             mobileOpen={mobileMenuOpen}
             onCloseMobile={() => setMobileMenuOpen(false)}
             onTogglePin={toggleRailPin}
-            onOpenSuperAdmin={isSuperAdmin ? () => setImpersonation(false) : undefined}
+            onOpenSuperAdmin={isPlatformStaff ? () => void handleExitImpersonation() : undefined}
           />
         </div>
         <main className="pk-main">

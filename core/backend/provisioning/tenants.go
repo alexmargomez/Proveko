@@ -2,6 +2,8 @@ package provisioning
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 
 	"ms-core/internal/application"
 	"ms-core/internal/domain"
@@ -32,6 +34,30 @@ func (v vaultAdapter) SealTenantDSN(tenantID, plainDSN string) (domain.SealedEnv
 	}, nil
 }
 
+func (v vaultAdapter) SealSecret(scopeID, plaintext string) (string, error) {
+	env, err := v.inner.Seal(scopeID, plaintext)
+	if err != nil {
+		return "", err
+	}
+	raw, err := json.Marshal(env)
+	if err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(raw), nil
+}
+
+func (v vaultAdapter) OpenSecret(scopeID, encoded string) (string, error) {
+	raw, err := base64.RawURLEncoding.DecodeString(encoded)
+	if err != nil {
+		return "", err
+	}
+	var env cryptovault.Envelope
+	if err := json.Unmarshal(raw, &env); err != nil {
+		return "", err
+	}
+	return v.inner.Open(scopeID, env)
+}
+
 type Registry struct {
 	Service *application.CoreService
 	Catalog *catalog.Provider
@@ -55,6 +81,9 @@ func NewRegistry(cfg config.CoreConfig, dbMgr *dbpool.Manager) (*Registry, error
 
 	svc, err := application.NewCoreService(repo, prov, cat, vault, cfg.SuperAdminEmail, cfg.SuperAdminPassword)
 	if err != nil {
+		return nil, err
+	}
+	if err := svc.SeedPlatformDefaults(context.Background()); err != nil {
 		return nil, err
 	}
 	if err := svc.SeedDemoTenant(context.Background(), config.EnvOr("DEMO_ADMIN_PASSWORD", "AdminPlataforma2026*")); err != nil {

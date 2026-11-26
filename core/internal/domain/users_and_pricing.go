@@ -18,6 +18,7 @@ type TenantUser struct {
 	AllowedServices []string `json:"allowedServices"`
 	AllowedModules  []string `json:"allowedModules"`
 	Status          string   `json:"status"`
+	SessionVersion  int      `json:"sessionVersion"`
 	CreatedAt       string   `json:"createdAt"`
 }
 
@@ -26,6 +27,9 @@ func (u *TenantUser) Clone() *TenantUser {
 		return nil
 	}
 	cp := *u
+	if cp.SessionVersion <= 0 {
+		cp.SessionVersion = 1
+	}
 	cp.AllowedServices = cloneStrings(u.AllowedServices)
 	cp.AllowedModules = cloneStrings(u.AllowedModules)
 	return &cp

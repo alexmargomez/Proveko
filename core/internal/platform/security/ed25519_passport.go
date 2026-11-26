@@ -63,19 +63,27 @@ func GetDynamicVerifierKey() ed25519.PublicKey {
 }
 
 type PassportClaims struct {
-	TenantID       string   `json:"tid"`
-	DBName         string   `json:"db"`
-	Username       string   `json:"usr"`
-	Role           string   `json:"rol"`
-	Audience       string   `json:"aud"`
-	Scope          string   `json:"scp,omitempty"`
-	ActiveServices   []string `json:"svc"`
-	ActiveModules    []string `json:"mod"`
-	ActiveSubmodules []string `json:"sub,omitempty"`
-	ActiveFeatures   []string `json:"fea"`
-	IssuedAtUnix   int64    `json:"iat"`
-	ExpiresAtUnix  int64    `json:"exp"`
-	Nonce          string   `json:"jti"`
+	Plane               string   `json:"pln,omitempty"`
+	TenantID            string   `json:"tid"`
+	UserID              string   `json:"uid,omitempty"`
+	DBName              string   `json:"db"`
+	Username            string   `json:"usr"`
+	Role                string   `json:"rol"`
+	PlatformRole        string   `json:"prol,omitempty"`
+	PlatformPermissions []string `json:"pprm,omitempty"`
+	AllowedTenants      []string `json:"aten,omitempty"`
+	RequireDataReason   bool     `json:"rdr,omitempty"`
+	Impersonating       bool     `json:"imp,omitempty"`
+	ImpersonationMode   string   `json:"impm,omitempty"`
+	Audience            string   `json:"aud"`
+	Scope               string   `json:"scp,omitempty"`
+	ActiveServices      []string `json:"svc"`
+	ActiveModules       []string `json:"mod"`
+	ActiveSubmodules    []string `json:"sub,omitempty"`
+	ActiveFeatures      []string `json:"fea"`
+	IssuedAtUnix        int64    `json:"iat"`
+	ExpiresAtUnix       int64    `json:"exp"`
+	Nonce               string   `json:"jti"`
 }
 
 type ReplayGuard struct {
@@ -197,7 +205,7 @@ func LoadVerifierPublicKey(publicHex, devSeed string, isProd bool) (ed25519.Publ
 }
 
 func isSystemScope(scope string) bool {
-	return scope == "catalog_sync" || scope == "platform_public"
+	return scope == "catalog_sync" || scope == "platform_public" || scope == "platform_admin"
 }
 
 func SignPassport(priv ed25519.PrivateKey, claims PassportClaims, ttl time.Duration) (string, error) {

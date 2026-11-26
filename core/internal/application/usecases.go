@@ -27,12 +27,20 @@ type cachedUser struct {
 }
 
 type UserProfileDTO struct {
-	UserID         string `json:"userId"`
-	Username       string `json:"username"`
-	FullName       string `json:"fullName"`
-	InternalRole   string `json:"internalRole"`
-	IsCompanyAdmin bool   `json:"isCompanyAdmin"`
-	IsDemo         bool   `json:"isDemo"`
+	Plane               string   `json:"plane"`
+	UserID              string   `json:"userId"`
+	Username            string   `json:"username"`
+	FullName            string   `json:"fullName"`
+	InternalRole        string   `json:"internalRole"`
+	IsCompanyAdmin      bool     `json:"isCompanyAdmin"`
+	IsDemo              bool     `json:"isDemo"`
+	PlatformRole        string   `json:"platformRole,omitempty"`
+	PlatformPermissions []string `json:"platformPermissions,omitempty"`
+	AllowedTenants      []string `json:"allowedTenants,omitempty"`
+	RequireDataReason   bool     `json:"requireDataReason,omitempty"`
+	Impersonating       bool     `json:"impersonating,omitempty"`
+	ImpersonationMode   string   `json:"impersonationMode,omitempty"`
+	ImpersonationReason string   `json:"impersonationReason,omitempty"`
 }
 
 type PublicCatalogOutput struct {
@@ -43,6 +51,7 @@ type PublicCatalogOutput struct {
 }
 
 type BootstrapOutput struct {
+	Plane         string                        `json:"plane"`
 	Catalog       []licensegate.ServiceManifest `json:"catalog"`
 	Tenant        *domain.Tenant                `json:"tenant"`
 	CompanyTenant *domain.Tenant                `json:"companyTenant,omitempty"`
@@ -55,19 +64,35 @@ type BootstrapOutput struct {
 }
 
 type AuthOutput struct {
-	Tenant         *domain.Tenant
-	CompanyTenant  *domain.Tenant
-	UserID         string
-	Role           string
-	InternalRole   string
-	Username       string
-	FullName       string
-	IsCompanyAdmin bool
-	IsDemo         bool
+	Plane                string
+	Tenant               *domain.Tenant
+	CompanyTenant        *domain.Tenant
+	UserID               string
+	Role                 string
+	InternalRole         string
+	Username             string
+	FullName             string
+	IsCompanyAdmin       bool
+	IsDemo               bool
+	SessionVersion       int
+	TenantSessionVersion int
+	PlatformRole         string
+	PlatformPermissions  []string
+	AllowedTenants       []string
+	RequireDataReason    bool
+	Impersonating        bool
+	ImpersonationMode    string
+	ImpersonationReason  string
+	RequiresTOTP         bool
+	RequiresTOTPSetup    bool
+	TOTPSetupSecret      string
+	TOTPSetupURI         string
+	SessionTTL           time.Duration
 }
 
 type CoreService struct {
 	repo          domain.TenantRepository
+	staffRepo     domain.PlatformStaffRepository
 	provisioner   domain.DatabaseProvisioner
 	catalog       domain.CatalogProvider
 	vault         domain.SecretVault
@@ -96,8 +121,13 @@ func NewCoreService(
 	if err != nil {
 		return nil, err
 	}
+	var staffRepo domain.PlatformStaffRepository
+	if sr, ok := repo.(domain.PlatformStaffRepository); ok {
+		staffRepo = sr
+	}
 	return &CoreService{
 		repo:          repo,
+		staffRepo:     staffRepo,
 		provisioner:   provisioner,
 		catalog:       catalog,
 		vault:         vault,
@@ -189,10 +219,13 @@ func (s *CoreService) Catalog() []licensegate.ServiceManifest {
 
 func (s *CoreService) PublicCatalog() PublicCatalogOutput {
 	cat := s.catalog.Catalog()
+	presets := domain.OfficialBusinessPresets(cat)
+	pricing := domain.DefaultPricingMatrixCOP()
+	filteredCat, filteredPresets, effectivePricing := s.applyCatalogOverrides(context.Background(), cat, presets, pricing)
 	return PublicCatalogOutput{
-		Catalog:       cat,
-		Presets:       domain.OfficialBusinessPresets(cat),
-		Pricing:       domain.DefaultPricingMatrixCOP(),
+		Catalog:       filteredCat,
+		Presets:       filteredPresets,
+		Pricing:       effectivePricing,
 		RoleTemplates: domain.OfficialRoleTemplates(),
 	}
 }
@@ -258,15 +291,17 @@ func (s *CoreService) StartDemoSession(ctx context.Context, rolePreview string) 
 	}
 
 	return AuthOutput{
-		Tenant:         effectiveTenant,
-		CompanyTenant:  exposedCompany,
-		UserID:         "demo_visitor_" + selectedRole,
-		Role:           domain.RoleCliente,
-		InternalRole:   selectedRole,
-		Username:       "demo." + selectedRole + "@empresa.co",
-		FullName:       fullName,
-		IsCompanyAdmin: isAdmin,
-		IsDemo:         true,
+		Plane:                domain.PlaneTenant,
+		Tenant:               effectiveTenant,
+		CompanyTenant:        exposedCompany,
+		UserID:               "demo_visitor_" + selectedRole,
+		Role:                 domain.RoleCliente,
+		InternalRole:         selectedRole,
+		Username:             "demo." + selectedRole + "@empresa.co",
+		FullName:             fullName,
+		IsCompanyAdmin:       isAdmin,
+		IsDemo:               true,
+		TenantSessionVersion: ten.SessionVersion,
 	}, nil
 }
 
@@ -274,6 +309,10 @@ func (s *CoreService) Authenticate(ctx context.Context, rawUsername, password st
 	uLow := strings.ToLower(strings.TrimSpace(rawUsername))
 	if uLow == "" || password == "" {
 		return AuthOutput{}, apperr.Validation("Ingresa usuario y contraseña válidos")
+	}
+
+	if out, handled, err := s.authenticatePlatformUser(ctx, uLow, password); handled {
+		return out, err
 	}
 
 	if uLow == s.superEmail {
@@ -285,14 +324,19 @@ func (s *CoreService) Authenticate(ctx context.Context, rawUsername, password st
 			return AuthOutput{}, err
 		}
 		return AuthOutput{
-			Tenant:         ten,
-			CompanyTenant:  ten.Clone(),
-			UserID:         "superadmin",
-			Role:           domain.RoleSuperAdmin,
-			InternalRole:   "superadmin",
-			Username:       uLow,
-			FullName:       "SuperAdministrador Corporativo",
-			IsCompanyAdmin: true,
+			Plane:               domain.PlanePlatform,
+			Tenant:              ten,
+			CompanyTenant:       ten.Clone(),
+			UserID:              "usr_platform_superadmin",
+			Role:                domain.RoleSuperAdmin,
+			InternalRole:        "superadmin",
+			Username:            uLow,
+			FullName:            "SuperAdministrador Corporativo",
+			IsCompanyAdmin:      true,
+			PlatformRole:        domain.PlatformRoleSuperAdmin,
+			PlatformPermissions: []string{"*"},
+			AllowedTenants:      []string{"*"},
+			SessionVersion:      1,
 		}, nil
 	}
 
@@ -311,6 +355,13 @@ func (s *CoreService) Authenticate(ctx context.Context, rawUsername, password st
 		if strings.EqualFold(strings.TrimSpace(ten.Status), "SUSPENDED") {
 			return AuthOutput{}, apperr.Forbidden("La suscripción de esta empresa se encuentra suspendida")
 		}
+		if ten.MaintenanceMode {
+			msg := strings.TrimSpace(ten.MaintenanceMessage)
+			if msg == "" {
+				msg = "Tu empresa se encuentra en ventana de mantenimiento programado. Intenta nuevamente en unos minutos."
+			}
+			return AuthOutput{}, apperr.Forbidden(msg)
+		}
 		eff := domain.ComputeEffectiveLicense(ten, usr, domain.RoleCliente, cat)
 		effTenant := ten.Clone()
 		effTenant.ActiveServices = eff.ActiveServices
@@ -325,15 +376,18 @@ func (s *CoreService) Authenticate(ctx context.Context, rawUsername, password st
 			effTenant.PaymentStatus = ""
 		}
 		return AuthOutput{
-			Tenant:         effTenant,
-			CompanyTenant:  exposedCompany,
-			UserID:         usr.UserID,
-			Role:           domain.RoleCliente,
-			InternalRole:   usr.InternalRole,
-			Username:       usr.Username,
-			FullName:       usr.FullName,
-			IsCompanyAdmin: usr.IsCompanyAdmin,
-			IsDemo:         ten.IsDemo,
+			Plane:                domain.PlaneTenant,
+			Tenant:               effTenant,
+			CompanyTenant:        exposedCompany,
+			UserID:               usr.UserID,
+			Role:                 domain.RoleCliente,
+			InternalRole:         usr.InternalRole,
+			Username:             usr.Username,
+			FullName:             usr.FullName,
+			IsCompanyAdmin:       usr.IsCompanyAdmin,
+			IsDemo:               ten.IsDemo,
+			SessionVersion:       usr.SessionVersion,
+			TenantSessionVersion: ten.SessionVersion,
 		}, nil
 	}
 
@@ -347,20 +401,30 @@ func (s *CoreService) Authenticate(ctx context.Context, rawUsername, password st
 	if strings.EqualFold(strings.TrimSpace(ten.Status), "SUSPENDED") {
 		return AuthOutput{}, apperr.Forbidden("La suscripción de esta empresa se encuentra suspendida")
 	}
+	if ten.MaintenanceMode {
+		msg := strings.TrimSpace(ten.MaintenanceMessage)
+		if msg == "" {
+			msg = "Tu empresa se encuentra en ventana de mantenimiento programado. Intenta nuevamente en unos minutos."
+		}
+		return AuthOutput{}, apperr.Forbidden(msg)
+	}
 	role := ten.Role
 	if role != domain.RoleSuperAdmin {
 		role = domain.RoleCliente
 	}
 	return AuthOutput{
-		Tenant:         ten.Clone(),
-		CompanyTenant:  ten.Clone(),
-		UserID:         "usr_" + ten.TenantID,
-		Role:           role,
-		InternalRole:   "admin_empresa",
-		Username:       ten.AdminUsername,
-		FullName:       "Administrador " + ten.CompanyName,
-		IsCompanyAdmin: true,
-		IsDemo:         ten.IsDemo,
+		Plane:                domain.PlaneTenant,
+		Tenant:               ten.Clone(),
+		CompanyTenant:        ten.Clone(),
+		UserID:               "usr_" + ten.TenantID,
+		Role:                 role,
+		InternalRole:         "admin_empresa",
+		Username:             ten.AdminUsername,
+		FullName:             "Administrador " + ten.CompanyName,
+		IsCompanyAdmin:       true,
+		IsDemo:               ten.IsDemo,
+		SessionVersion:       1,
+		TenantSessionVersion: ten.SessionVersion,
 	}, nil
 }
 
@@ -514,27 +578,102 @@ func buildCandidateDBName(company string) string {
 }
 
 func (s *CoreService) ResolveLiveSession(ctx context.Context, tc authguard.TenantContext) (authguard.TenantContext, *domain.Tenant, error) {
+	if strings.TrimSpace(tc.ChallengePurpose) != "" {
+		return tc, nil, apperr.Unauthorized("Debes completar la verificación 2FA para acceder")
+	}
+
+	isPlatform := tc.Plane == domain.PlanePlatform || (tc.Plane == "" && tc.Role == domain.RoleSuperAdmin)
+	if isPlatform {
+		tc.Plane = domain.PlanePlatform
+		if s.staffRepo != nil && strings.TrimSpace(tc.UserID) != "" {
+			pu, err := s.staffRepo.GetPlatformUserByID(ctx, tc.UserID)
+			if err != nil {
+				if !strings.EqualFold(tc.Username, s.superEmail) {
+					return tc, nil, apperr.Unauthorized("Sesión de operador inválida o revocada")
+				}
+			} else {
+				if strings.EqualFold(strings.TrimSpace(pu.Status), "SUSPENDED") {
+					return tc, nil, apperr.Forbidden("Tu cuenta de operador interno ha sido suspendida")
+				}
+				if tc.SessionVersion > 0 && pu.SessionVersion > tc.SessionVersion {
+					return tc, nil, apperr.Unauthorized("Sesión revocada por seguridad; inicia sesión nuevamente")
+				}
+				role, rErr := s.staffRepo.GetPlatformRole(ctx, pu.RoleKey)
+				if rErr != nil {
+					return tc, nil, apperr.Forbidden("El rol de plataforma asignado ya no existe")
+				}
+				tc.UserID = pu.UserID
+				tc.Username = pu.Email
+				tc.FullName = pu.FullName
+				tc.Role = platformJWTCompatRole(role.RoleKey)
+				tc.InternalRole = role.RoleKey
+				tc.PlatformRole = role.RoleKey
+				tc.PlatformPermissions = role.Permissions
+				tc.AllowedTenants = pu.AllowedTenants
+				tc.RequireDataReason = role.RequireDataReason
+				tc.SessionVersion = pu.SessionVersion
+			}
+		} else if tc.Role == domain.RoleSuperAdmin {
+			tc.PlatformRole = domain.PlatformRoleSuperAdmin
+			tc.PlatformPermissions = []string{"*"}
+			tc.AllowedTenants = []string{"*"}
+		}
+
+		var liveTenant *domain.Tenant
+		if strings.TrimSpace(tc.TenantID) != "" {
+			if ten, err := s.GetTenant(ctx, tc.TenantID); err == nil && ten != nil {
+				liveTenant = ten
+			}
+		}
+		if liveTenant == nil {
+			liveTenant, _ = s.defaultSuperAdminTenant(ctx)
+		}
+		if liveTenant != nil {
+			tc.TenantID = liveTenant.TenantID
+			tc.DBName = liveTenant.DBName
+			tc.IsDemo = liveTenant.IsDemo
+			if tc.Impersonating {
+				tc.IsCompanyAdmin = tc.ImpersonationMode == "readwrite"
+			} else {
+				tc.IsCompanyAdmin = tc.PlatformRole == domain.PlatformRoleSuperAdmin
+			}
+			tc.ActiveServices = liveTenant.ActiveServices
+			tc.ActiveModules = liveTenant.ActiveModules
+			tc.ActiveSubmodules = liveTenant.ActiveSubmodules
+			tc.ActiveFeatures = liveTenant.ActiveFeatures
+		}
+		return tc, liveTenant, nil
+	}
+
+	tc.Plane = domain.PlaneTenant
 	liveTenant, err := s.GetTenant(ctx, tc.TenantID)
 	if err != nil {
 		return tc, nil, apperr.Unauthorized("Empresa asociada a la sesión no encontrada")
 	}
-	if tc.Role != domain.RoleSuperAdmin && strings.EqualFold(strings.TrimSpace(liveTenant.Status), "SUSPENDED") {
+	if strings.EqualFold(strings.TrimSpace(liveTenant.Status), "SUSPENDED") {
 		return tc, nil, apperr.Forbidden("La suscripción de esta empresa se encuentra suspendida")
 	}
+	if liveTenant.MaintenanceMode {
+		msg := strings.TrimSpace(liveTenant.MaintenanceMessage)
+		if msg == "" {
+			msg = "Tu empresa se encuentra en ventana de mantenimiento programado. Intenta nuevamente en unos minutos."
+		}
+		return tc, nil, apperr.Forbidden(msg)
+	}
+	tokenTenantVer := tc.TenantSessionVersion
+	if tokenTenantVer <= 0 {
+		tokenTenantVer = 1
+	}
+	if liveTenant.SessionVersion > tokenTenantVer {
+		return tc, nil, apperr.Unauthorized("Sesión revocada por el administrador de plataforma; inicia sesión nuevamente")
+	}
+
 	tc.DBName = liveTenant.DBName
 	if liveTenant.IsDemo {
 		tc.IsDemo = true
 	}
 
 	cat := s.catalog.Catalog()
-	if tc.Role == domain.RoleSuperAdmin {
-		tc.IsCompanyAdmin = true
-		tc.ActiveServices = liveTenant.ActiveServices
-		tc.ActiveModules = liveTenant.ActiveModules
-		tc.ActiveSubmodules = liveTenant.ActiveSubmodules
-		tc.ActiveFeatures = liveTenant.ActiveFeatures
-		return tc, liveTenant, nil
-	}
 
 	// Demo visitor sessions NEVER touch tenant_users and validate strictly against OfficialRoleTemplates
 	if strings.HasPrefix(tc.UserID, "demo_visitor_") || (tc.IsDemo && !strings.EqualFold(tc.Username, liveTenant.AdminUsername)) {
@@ -580,6 +719,9 @@ func (s *CoreService) ResolveLiveSession(ctx context.Context, tc authguard.Tenan
 			}
 			if strings.EqualFold(strings.TrimSpace(liveUser.Status), "SUSPENDED") {
 				return tc, nil, apperr.Forbidden("Tu cuenta de usuario se encuentra suspendida")
+			}
+			if tc.SessionVersion > 0 && liveUser.SessionVersion > tc.SessionVersion {
+				return tc, nil, apperr.Unauthorized("Tu sesión fue revocada; inicia sesión nuevamente")
 			}
 			tc.UserID = liveUser.UserID
 			tc.FullName = liveUser.FullName
@@ -630,6 +772,9 @@ func (s *CoreService) ResolveLiveSession(ctx context.Context, tc authguard.Tenan
 	if strings.EqualFold(strings.TrimSpace(liveUser.Status), "SUSPENDED") {
 		return tc, nil, apperr.Forbidden("Tu cuenta de usuario se encuentra suspendida")
 	}
+	if tc.SessionVersion > 0 && liveUser.SessionVersion > tc.SessionVersion {
+		return tc, nil, apperr.Unauthorized("Tu sesión fue revocada; inicia sesión nuevamente")
+	}
 	tc.UserID = liveUser.UserID
 	tc.FullName = liveUser.FullName
 	tc.InternalRole = liveUser.InternalRole
@@ -643,7 +788,7 @@ func (s *CoreService) ResolveLiveSession(ctx context.Context, tc authguard.Tenan
 }
 
 func (s *CoreService) Bootstrap(ctx context.Context, tc authguard.TenantContext) (BootstrapOutput, error) {
-	if strings.TrimSpace(tc.TenantID) == "" {
+	if strings.TrimSpace(tc.TenantID) == "" && tc.Plane != domain.PlanePlatform && tc.Role != domain.RoleSuperAdmin {
 		return BootstrapOutput{}, apperr.Unauthorized("Sesión no autenticada")
 	}
 	resolvedTC, companyTenant, err := s.ResolveLiveSession(ctx, tc)
@@ -651,30 +796,40 @@ func (s *CoreService) Bootstrap(ctx context.Context, tc authguard.TenantContext)
 		return BootstrapOutput{}, err
 	}
 
-	effTenant := companyTenant.Clone()
-	effTenant.ActiveServices = resolvedTC.ActiveServices
-	effTenant.ActiveModules = resolvedTC.ActiveModules
-	effTenant.ActiveSubmodules = resolvedTC.ActiveSubmodules
-	effTenant.ActiveFeatures = resolvedTC.ActiveFeatures
-	if resolvedTC.IsDemo {
-		effTenant.IsDemo = true
-	}
-
+	var effTenant *domain.Tenant
 	var exposedCompanyTenant *domain.Tenant
-	if resolvedTC.IsCompanyAdmin || resolvedTC.Role == domain.RoleSuperAdmin {
-		exposedCompanyTenant = companyTenant.Clone()
-	} else {
-		effTenant.MonthlyCop = 0
-		effTenant.PaymentStatus = ""
+	if companyTenant != nil {
+		effTenant = companyTenant.Clone()
+		effTenant.ActiveServices = resolvedTC.ActiveServices
+		effTenant.ActiveModules = resolvedTC.ActiveModules
+		effTenant.ActiveSubmodules = resolvedTC.ActiveSubmodules
+		effTenant.ActiveFeatures = resolvedTC.ActiveFeatures
+		if resolvedTC.IsDemo {
+			effTenant.IsDemo = true
+		}
+		if resolvedTC.IsCompanyAdmin || resolvedTC.Role == domain.RoleSuperAdmin || resolvedTC.Plane == domain.PlanePlatform {
+			exposedCompanyTenant = companyTenant.Clone()
+		} else {
+			effTenant.MonthlyCop = 0
+			effTenant.PaymentStatus = ""
+		}
 	}
 
 	var tenantsList []*domain.Tenant
-	if resolvedTC.Role == domain.RoleSuperAdmin {
-		tenantsList, err = s.repo.List(ctx)
-		if err != nil {
-			return BootstrapOutput{}, err
+	if resolvedTC.Plane == domain.PlanePlatform || resolvedTC.Role == domain.RoleSuperAdmin {
+		allTenants, listErr := s.repo.List(ctx)
+		if listErr != nil {
+			return BootstrapOutput{}, listErr
 		}
-	} else {
+		for _, t := range allTenants {
+			if domain.CanAccessTenant(resolvedTC.AllowedTenants, t.TenantID) {
+				tenantsList = append(tenantsList, t)
+			}
+		}
+		if tenantsList == nil {
+			tenantsList = []*domain.Tenant{}
+		}
+	} else if effTenant != nil {
 		tenantsList = []*domain.Tenant{effTenant.Clone()}
 	}
 
@@ -687,20 +842,33 @@ func (s *CoreService) Bootstrap(ctx context.Context, tc authguard.TenantContext)
 	if internalRole == "" {
 		internalRole = "admin_empresa"
 	}
+	plane := resolvedTC.Plane
+	if plane == "" {
+		plane = domain.PlaneTenant
+	}
 
 	return BootstrapOutput{
+		Plane:         plane,
 		Catalog:       cat,
 		Tenant:        effTenant,
 		CompanyTenant: exposedCompanyTenant,
 		Tenants:       tenantsList,
 		UserRole:      resolvedTC.Role,
 		UserProfile: UserProfileDTO{
-			UserID:         resolvedTC.UserID,
-			Username:       resolvedTC.Username,
-			FullName:       fullName,
-			InternalRole:   internalRole,
-			IsCompanyAdmin: resolvedTC.IsCompanyAdmin,
-			IsDemo:         resolvedTC.IsDemo,
+			Plane:               plane,
+			UserID:              resolvedTC.UserID,
+			Username:            resolvedTC.Username,
+			FullName:            fullName,
+			InternalRole:        internalRole,
+			IsCompanyAdmin:      resolvedTC.IsCompanyAdmin,
+			IsDemo:              resolvedTC.IsDemo,
+			PlatformRole:        resolvedTC.PlatformRole,
+			PlatformPermissions: resolvedTC.PlatformPermissions,
+			AllowedTenants:      resolvedTC.AllowedTenants,
+			RequireDataReason:   resolvedTC.RequireDataReason,
+			Impersonating:       resolvedTC.Impersonating,
+			ImpersonationMode:   resolvedTC.ImpersonationMode,
+			ImpersonationReason: resolvedTC.ImpersonationReason,
 		},
 		Presets:       domain.OfficialBusinessPresets(cat),
 		Pricing:       domain.DefaultPricingMatrixCOP(),
