@@ -54,14 +54,16 @@ func (r *TenantRepository) fetchOne(ctx context.Context, p *pgxpool.Pool, whereC
 	err := p.QueryRow(ctx, `
 		SELECT tenant_id, company_name, nit, admin_username, password_hash, role,
 		       db_name, encrypted_dsn_envelope::text, business_preset,
-		       payment_status, monthly_cop, max_users_allowed, is_demo,
-		       status, created_at
+		       payment_status, monthly_cop, COALESCE(custom_monthly_cop, 0), max_users_allowed,
+		       COALESCE(session_version, 1), COALESCE(maintenance_mode, FALSE), COALESCE(maintenance_message, ''),
+		       is_demo, status, created_at
 		FROM core_control.tenants
 		`+whereClause, arg).Scan(
 		&t.TenantID, &t.CompanyName, &t.Nit, &t.AdminUsername, &t.PasswordHash, &t.Role,
 		&t.DBName, &envRaw, &t.BusinessPreset,
-		&t.PaymentStatus, &t.MonthlyCop, &t.MaxUsersAllowed, &t.IsDemo,
-		&t.Status, &t.CreatedAt,
+		&t.PaymentStatus, &t.MonthlyCop, &t.CustomMonthlyCop, &t.MaxUsersAllowed,
+		&t.SessionVersion, &t.MaintenanceMode, &t.MaintenanceMessage,
+		&t.IsDemo, &t.Status, &t.CreatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, apperr.NotFound("Empresa o usuario no encontrado")
@@ -89,8 +91,9 @@ func (r *TenantRepository) List(ctx context.Context) ([]*domain.Tenant, error) {
 	rows, err := p.Query(ctx, `
 		SELECT tenant_id, company_name, nit, admin_username, password_hash, role,
 		       db_name, encrypted_dsn_envelope::text, business_preset,
-		       payment_status, monthly_cop, max_users_allowed, is_demo,
-		       status, created_at
+		       payment_status, monthly_cop, COALESCE(custom_monthly_cop, 0), max_users_allowed,
+		       COALESCE(session_version, 1), COALESCE(maintenance_mode, FALSE), COALESCE(maintenance_message, ''),
+		       is_demo, status, created_at
 		FROM core_control.tenants
 		ORDER BY created_at ASC, tenant_id ASC
 	`)
@@ -106,8 +109,9 @@ func (r *TenantRepository) List(ctx context.Context) ([]*domain.Tenant, error) {
 		if err := rows.Scan(
 			&t.TenantID, &t.CompanyName, &t.Nit, &t.AdminUsername, &t.PasswordHash, &t.Role,
 			&t.DBName, &envRaw, &t.BusinessPreset,
-			&t.PaymentStatus, &t.MonthlyCop, &t.MaxUsersAllowed, &t.IsDemo,
-			&t.Status, &t.CreatedAt,
+			&t.PaymentStatus, &t.MonthlyCop, &t.CustomMonthlyCop, &t.MaxUsersAllowed,
+			&t.SessionVersion, &t.MaintenanceMode, &t.MaintenanceMessage,
+			&t.IsDemo, &t.Status, &t.CreatedAt,
 		); err != nil {
 			return nil, err
 		}

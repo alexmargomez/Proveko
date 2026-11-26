@@ -22,16 +22,20 @@ type Tenant struct {
 	DBName           string         `json:"dbName"`
 	SealedDSN        SealedEnvelope `json:"-"`
 	BusinessPreset   string         `json:"businessPreset"`
-	PaymentStatus    string         `json:"paymentStatus"`
-	MonthlyCop       int64          `json:"monthlyCop"`
-	MaxUsersAllowed  int            `json:"maxUsersAllowed"`
-	IsDemo           bool           `json:"isDemo"`
-	Status           string         `json:"status"`
-	ActiveServices   []string       `json:"activeServices"`
-	ActiveModules    []string       `json:"activeModules"`
-	ActiveSubmodules []string       `json:"activeSubmodules"`
-	ActiveFeatures   []string       `json:"activeFeatures"`
-	CreatedAt        string         `json:"createdAt"`
+	PaymentStatus      string         `json:"paymentStatus"`
+	MonthlyCop         int64          `json:"monthlyCop"`
+	CustomMonthlyCop   int64          `json:"customMonthlyCop,omitempty"`
+	MaxUsersAllowed    int            `json:"maxUsersAllowed"`
+	SessionVersion     int            `json:"sessionVersion"`
+	MaintenanceMode    bool           `json:"maintenanceMode"`
+	MaintenanceMessage string         `json:"maintenanceMessage,omitempty"`
+	IsDemo             bool           `json:"isDemo"`
+	Status             string         `json:"status"`
+	ActiveServices     []string       `json:"activeServices"`
+	ActiveModules      []string       `json:"activeModules"`
+	ActiveSubmodules   []string       `json:"activeSubmodules"`
+	ActiveFeatures     []string       `json:"activeFeatures"`
+	CreatedAt          string         `json:"createdAt"`
 }
 
 func (t *Tenant) Clone() *Tenant {
@@ -50,6 +54,9 @@ func (t *Tenant) Clone() *Tenant {
 	}
 	if cp.MaxUsersAllowed <= 0 {
 		cp.MaxUsersAllowed = 15
+	}
+	if cp.SessionVersion <= 0 {
+		cp.SessionVersion = 1
 	}
 	cp.ActiveServices = cloneStrings(t.ActiveServices)
 	cp.ActiveModules = cloneStrings(t.ActiveModules)

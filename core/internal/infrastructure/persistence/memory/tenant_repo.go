@@ -11,20 +11,28 @@ import (
 )
 
 type TenantRepository struct {
-	mu       sync.RWMutex
-	tenants  map[string]*domain.Tenant
-	order    []string
-	dbs      map[string]bool
-	users    map[string]*domain.TenantUser
-	userKeys []string
-	requests []*domain.ModuleActivationRequest
+	mu               sync.RWMutex
+	tenants          map[string]*domain.Tenant
+	order            []string
+	dbs              map[string]bool
+	users            map[string]*domain.TenantUser
+	userKeys         []string
+	requests         []*domain.ModuleActivationRequest
+	platformRoles    map[string]*domain.PlatformRole
+	platformRoleKeys []string
+	platformUsers    map[string]*domain.PlatformUser
+	platformUserKeys []string
+	catalogOverrides domain.CatalogOverrideConfig
 }
 
 func NewTenantRepository() *TenantRepository {
 	return &TenantRepository{
-		tenants: make(map[string]*domain.Tenant),
-		dbs:     make(map[string]bool),
-		users:   make(map[string]*domain.TenantUser),
+		tenants:          make(map[string]*domain.Tenant),
+		dbs:              make(map[string]bool),
+		users:            make(map[string]*domain.TenantUser),
+		platformRoles:    make(map[string]*domain.PlatformRole),
+		platformUsers:    make(map[string]*domain.PlatformUser),
+		catalogOverrides: domain.DefaultCatalogOverrideConfig(),
 	}
 }
 

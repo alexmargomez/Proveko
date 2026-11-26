@@ -21,9 +21,17 @@ export type WorkstationViewMode = 'home' | 'service' | 'users' | 'activate-modul
 
 export interface SessionContextValue {
   token: string;
+  plane: string;
   role: string;
   username: string;
   userProfile: UserProfileSummary | null;
+  platformRole: string;
+  platformPermissions: string[];
+  requireDataReason: boolean;
+  impersonating: boolean;
+  impersonationMode: string;
+  impersonationReason: string;
+  hasPlatformPermission: (perm: string) => boolean;
   isCompanyAdmin: boolean;
   isDemo: boolean;
   isBootstrapping: boolean;
@@ -39,17 +47,26 @@ export interface SessionContextValue {
     tok: string,
     role: string,
     username: string,
-    ten: TenantSummary,
+    ten: TenantSummary | null,
     extra?: {
+      plane?: string;
       fullName?: string;
       internalRole?: string;
+      platformRole?: string;
+      platformPermissions?: string[];
+      allowedTenants?: string[];
+      requireDataReason?: boolean;
       isCompanyAdmin?: boolean;
       isDemo?: boolean;
       companyTenant?: TenantSummary | null;
     }
   ) => void;
   startDemoSession: (rolePreview?: string) => Promise<void>;
-  impersonateTenant: (tenantId: string) => Promise<void>;
+  impersonateTenant: (
+    tenantId: string,
+    opts?: { mode?: 'readonly' | 'readwrite'; reason?: string; durationMinutes?: number }
+  ) => Promise<void>;
+  stopImpersonation: () => Promise<void>;
   logout: () => Promise<void>;
   refreshBootstrap: () => Promise<void>;
   apiGet: <T>(path: string) => Promise<T>;
@@ -545,19 +562,26 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       tok: string,
       r: string,
       u: string,
-      ten: TenantSummary,
+      ten: TenantSummary | null,
       extra?: {
+        plane?: string;
         fullName?: string;
         internalRole?: string;
+        platformRole?: string;
+        platformPermissions?: string[];
+        allowedTenants?: string[];
+        requireDataReason?: boolean;
         isCompanyAdmin?: boolean;
         isDemo?: boolean;
         companyTenant?: TenantSummary | null;
       }
     ) => {
+      const resolvedPlane = extra?.plane || (r === 'superadmin' || r === 'platform_staff' ? 'platform' : 'tenant');
       localStorage.removeItem('pk_jwt');
       localStorage.setItem('pk_has_session', '1');
       localStorage.setItem('pk_role', r);
       localStorage.setItem('pk_user', u);
+      localStorage.setItem('pk_plane', resolvedPlane);
       setToken(tok);
       setHasSession(true);
       setIsBootstrapping(false);
@@ -566,12 +590,18 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setTenant(ten);
       setCompanyTenant(extra?.companyTenant || ten);
       setUserProfile({
+        plane: resolvedPlane,
         userId: '',
         username: u,
         fullName: extra?.fullName || u,
         internalRole: extra?.internalRole || (r === 'superadmin' ? 'superadmin' : 'admin_empresa'),
         isCompanyAdmin: extra?.isCompanyAdmin ?? true,
-        isDemo: Boolean(extra?.isDemo || ten.isDemo),
+        isDemo: Boolean(extra?.isDemo || ten?.isDemo),
+        platformRole: extra?.platformRole,
+        platformPermissions: extra?.platformPermissions,
+        allowedTenants: extra?.allowedTenants,
+        requireDataReason: extra?.requireDataReason,
+        impersonating: false,
       });
       setWorkstationView('home');
       setIncomingPayload(null);
@@ -595,6 +625,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         companyTenant?: TenantSummary;
       }>('/api/v1/core/demo-session', { rolePreview });
       loginWithToken(resp.token, resp.role, resp.username, resp.tenant, {
+        plane: 'tenant',
         fullName: resp.fullName,
         internalRole: resp.internalRole,
         isCompanyAdmin: resp.isCompanyAdmin,
@@ -610,18 +641,33 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   );
 
   const impersonateTenant = useCallback(
-    async (tenantId: string) => {
+    async (
+      tenantId: string,
+      opts?: { mode?: 'readonly' | 'readwrite'; reason?: string; durationMinutes?: number }
+    ) => {
       const resp = await apiPost<{
         token: string;
+        plane?: string;
         role: string;
+        platformRole?: string;
+        platformPermissions?: string[];
+        impersonating?: boolean;
+        impersonationMode?: string;
+        impersonationReason?: string;
         username: string;
         tenant: TenantSummary;
         companyTenant?: TenantSummary;
-      }>('/api/v1/core/impersonate', { tenantId });
+      }>('/api/v1/core/impersonate', {
+        tenantId,
+        mode: opts?.mode || 'readonly',
+        reason: opts?.reason || '',
+        durationMinutes: opts?.durationMinutes || 30,
+      });
       localStorage.removeItem('pk_jwt');
       localStorage.setItem('pk_has_session', '1');
       localStorage.setItem('pk_role', resp.role);
       localStorage.setItem('pk_user', resp.username);
+      localStorage.setItem('pk_plane', resp.plane || 'platform');
       writeStoredNav('pk_impersonating', '1');
       setToken(resp.token);
       setHasSession(true);
@@ -629,14 +675,63 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setUsername(resp.username);
       setTenant(resp.tenant);
       setCompanyTenant(resp.companyTenant || resp.tenant);
+      setUserProfile((prev) => ({
+        ...(prev || {
+          userId: '',
+          username: resp.username,
+          fullName: resp.username,
+          internalRole: resp.platformRole || resp.role,
+          isCompanyAdmin: resp.impersonationMode === 'readwrite',
+          isDemo: Boolean(resp.tenant?.isDemo),
+        }),
+        plane: resp.plane || 'platform',
+        platformRole: resp.platformRole || prev?.platformRole,
+        platformPermissions: resp.platformPermissions || prev?.platformPermissions,
+        impersonating: true,
+        impersonationMode: resp.impersonationMode || opts?.mode || 'readonly',
+        impersonationReason: resp.impersonationReason || opts?.reason || '',
+      }));
       setWorkstationView('home');
       setIncomingPayload(null);
       setPrintPreview(null);
       applyCatalogSelection(catalog, resp.tenant);
-      toast(`Operando en ${resp.tenant.companyName}`);
+      toast(
+        `Soporte ${resp.impersonationMode === 'readwrite' ? 'Lectura/Escritura' : 'Solo Lectura'} en ${resp.tenant.companyName}`
+      );
     },
     [apiPost, applyCatalogSelection, catalog, setWorkstationView, toast]
   );
+
+  const stopImpersonation = useCallback(async () => {
+    try {
+      const resp = await apiPost<{
+        token: string;
+        role: string;
+        platformRole?: string;
+        platformPermissions?: string[];
+        tenant?: TenantSummary | null;
+        companyTenant?: TenantSummary | null;
+      }>('/api/v1/core/stop-impersonation', {});
+      writeStoredNav('pk_impersonating', '');
+      setToken(resp.token);
+      if (resp.tenant !== undefined) {
+        setTenant(resp.tenant || null);
+        setCompanyTenant(resp.companyTenant || resp.tenant || null);
+      }
+      setUserProfile((prev) =>
+        prev
+          ? {
+              ...prev,
+              impersonating: false,
+              impersonationMode: '',
+              impersonationReason: '',
+            }
+          : prev
+      );
+    } catch {
+      writeStoredNav('pk_impersonating', '');
+    }
+  }, [apiPost]);
 
   const logout = useCallback(async () => {
     try {
@@ -644,6 +739,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } catch {
       // Ignore network errors during logout
     }
+    localStorage.removeItem('pk_plane');
     clearLocalSession();
   }, [clearLocalSession]);
 
@@ -691,15 +787,45 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [apiPost, hasPrintCapability, openHtmlPrintWindow, printService, toast]
   );
 
+  const plane =
+    userProfile?.plane ||
+    localStorage.getItem('pk_plane') ||
+    (role === 'superadmin' || role === 'platform_staff' ? 'platform' : 'tenant');
+  const platformRole = userProfile?.platformRole || (role === 'superadmin' ? 'superadmin' : '');
+  const platformPermissions = useMemo(
+    () => userProfile?.platformPermissions || (role === 'superadmin' ? ['*'] : []),
+    [role, userProfile?.platformPermissions]
+  );
+  const requireDataReason = Boolean(userProfile?.requireDataReason);
+  const impersonating = Boolean(userProfile?.impersonating);
+  const impersonationMode = userProfile?.impersonationMode || '';
+  const impersonationReason = userProfile?.impersonationReason || '';
+
+  const hasPlatformPermission = useCallback(
+    (perm: string) => {
+      if (!perm) return true;
+      return platformPermissions.includes('*') || platformPermissions.includes(perm);
+    },
+    [platformPermissions]
+  );
+
   const isCompanyAdmin = Boolean(role === 'superadmin' || userProfile?.isCompanyAdmin);
   const isDemo = Boolean(userProfile?.isDemo || tenant?.isDemo);
 
   const sessionValue = useMemo<SessionContextValue>(
     () => ({
       token,
+      plane,
       role,
       username,
       userProfile,
+      platformRole,
+      platformPermissions,
+      requireDataReason,
+      impersonating,
+      impersonationMode,
+      impersonationReason,
+      hasPlatformPermission,
       isCompanyAdmin,
       isDemo,
       isBootstrapping,
@@ -714,6 +840,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       loginWithToken,
       startDemoSession,
       impersonateTenant,
+      stopImpersonation,
       logout,
       refreshBootstrap,
       apiGet,
@@ -724,9 +851,17 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }),
     [
       token,
+      plane,
       role,
       username,
       userProfile,
+      platformRole,
+      platformPermissions,
+      requireDataReason,
+      impersonating,
+      impersonationMode,
+      impersonationReason,
+      hasPlatformPermission,
       isCompanyAdmin,
       isDemo,
       isBootstrapping,
@@ -741,6 +876,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       loginWithToken,
       startDemoSession,
       impersonateTenant,
+      stopImpersonation,
       logout,
       refreshBootstrap,
       apiGet,

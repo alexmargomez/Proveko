@@ -50,7 +50,11 @@ declare module '@platform/ui-sdk' {
     businessPreset: string;
     paymentStatus?: string;
     monthlyCop?: number;
+    customMonthlyCop?: number;
     maxUsersAllowed?: number;
+    sessionVersion?: number;
+    maintenanceMode?: boolean;
+    maintenanceMessage?: string;
     isDemo?: boolean;
     status: string;
     activeServices: string[];
@@ -86,12 +90,20 @@ declare module '@platform/ui-sdk' {
   }
 
   export interface UserProfileSummary {
+    plane?: string;
     userId: string;
     username: string;
     fullName: string;
     internalRole: string;
     isCompanyAdmin: boolean;
     isDemo: boolean;
+    platformRole?: string;
+    platformPermissions?: string[];
+    allowedTenants?: string[];
+    requireDataReason?: boolean;
+    impersonating?: boolean;
+    impersonationMode?: string;
+    impersonationReason?: string;
   }
 
   export interface TenantUserRecord {
@@ -105,6 +117,7 @@ declare module '@platform/ui-sdk' {
     allowedServices: string[];
     allowedModules: string[];
     status: string;
+    sessionVersion?: number;
     createdAt: string;
   }
 
@@ -127,9 +140,17 @@ declare module '@platform/ui-sdk' {
 
   export interface SessionContextValue {
     token: string;
+    plane: string;
     role: string;
     username: string;
     userProfile: UserProfileSummary | null;
+    platformRole: string;
+    platformPermissions: string[];
+    requireDataReason: boolean;
+    impersonating: boolean;
+    impersonationMode: string;
+    impersonationReason: string;
+    hasPlatformPermission: (perm: string) => boolean;
     isCompanyAdmin: boolean;
     isDemo: boolean;
     isBootstrapping: boolean;
@@ -145,17 +166,26 @@ declare module '@platform/ui-sdk' {
       tok: string,
       role: string,
       username: string,
-      ten: TenantSummary,
+      ten: TenantSummary | null,
       extra?: {
+        plane?: string;
         fullName?: string;
         internalRole?: string;
+        platformRole?: string;
+        platformPermissions?: string[];
+        allowedTenants?: string[];
+        requireDataReason?: boolean;
         isCompanyAdmin?: boolean;
         isDemo?: boolean;
         companyTenant?: TenantSummary | null;
       }
     ) => void;
     startDemoSession: (rolePreview?: string) => Promise<void>;
-    impersonateTenant: (tenantId: string) => Promise<void>;
+    impersonateTenant: (
+      tenantId: string,
+      opts?: { mode?: 'readonly' | 'readwrite'; reason?: string; durationMinutes?: number }
+    ) => Promise<void>;
+    stopImpersonation: () => Promise<void>;
     logout: () => Promise<void>;
     refreshBootstrap: () => Promise<void>;
     apiGet: <T>(path: string) => Promise<T>;

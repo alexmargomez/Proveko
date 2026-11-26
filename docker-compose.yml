@@ -50,6 +50,7 @@ services:
       SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL:-superadmin@plataforma.local}
       SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD:-ChangeMeSuperAdmin2026*}
       MS_PLATFORM_URL: http://ms-platform:4100
+      MS_ADMIN_URL: http://ms-admin:4116
     volumes:
       - ./core/embed_dist:/app/embed_dist:ro
       - ./core/internal/infrastructure/catalog:/app/catalog:ro
@@ -77,6 +78,24 @@ services:
     volumes:
       - ./services/ms-platform/internal/infrastructure/http/assets:/app/assets:ro
     depends_on:
+      core:
+        condition: service_started
+    networks:
+      - mesh
+
+  ms-admin:
+    build:
+      context: ./services/ms-admin
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *service-common-env
+      SERVICE_NAME: ms-admin
+      PORT: 4116
+      SERVICE_PUBLIC_URL: http://ms-admin:4116
+    depends_on:
+      db:
+        condition: service_healthy
       core:
         condition: service_started
     networks:

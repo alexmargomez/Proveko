@@ -47,7 +47,11 @@ export interface TenantSummary {
   businessPreset: string;
   paymentStatus?: string;
   monthlyCop?: number;
+  customMonthlyCop?: number;
   maxUsersAllowed?: number;
+  sessionVersion?: number;
+  maintenanceMode?: boolean;
+  maintenanceMessage?: string;
   isDemo?: boolean;
   status: string;
   activeServices: string[];
@@ -83,12 +87,20 @@ export interface RoleTemplateSpec {
 }
 
 export interface UserProfileSummary {
+  plane?: 'tenant' | 'platform' | string;
   userId: string;
   username: string;
   fullName: string;
   internalRole: string;
   isCompanyAdmin: boolean;
   isDemo: boolean;
+  platformRole?: string;
+  platformPermissions?: string[];
+  allowedTenants?: string[];
+  requireDataReason?: boolean;
+  impersonating?: boolean;
+  impersonationMode?: string;
+  impersonationReason?: string;
 }
 
 export interface TenantUserRecord {
@@ -102,6 +114,7 @@ export interface TenantUserRecord {
   allowedServices: string[];
   allowedModules: string[];
   status: string;
+  sessionVersion?: number;
   createdAt: string;
 }
 

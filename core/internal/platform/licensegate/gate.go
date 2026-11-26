@@ -58,7 +58,7 @@ func ValidateCatalog(catalog []ServiceManifest) error {
 			return apperr.Validation("serviceKey duplicado en catálogo: " + sk)
 		}
 		seen[sk] = true
-		if sk != "ms-platform" && len(s.Modules) == 0 {
+		if sk != "ms-platform" && sk != "ms-admin" && len(s.Modules) == 0 {
 			return apperr.Validation("el microservicio " + sk + " debe declarar al menos un módulo")
 		}
 		for _, m := range s.Modules {
