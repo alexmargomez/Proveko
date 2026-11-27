@@ -4,6 +4,8 @@ import {
   ModuleGate,
   PkAutoCodeInput,
   PkSelect,
+  PkSimpleSelect,
+  PkViewSwitcher,
   PkModal,
   PkConfirmModal,
   PkPrintButton,
@@ -62,6 +64,10 @@ interface ClientesAllResponse {
 export const AgendaView: React.FC = () => {
   const { hasService, apiGet, apiPost, apiDelete, toast } = usePlatform();
   const { busy, run } = useAsyncAction();
+
+  const [viewMode, setViewMode] = useState<'list' | 'create'>('list');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [resourceFilter, setResourceFilter] = useState('');
 
   const [nextCode, setNextCode] = useState('CIT-602');
   const [nextResourceCode, setNextResourceCode] = useState('RES-103');
@@ -193,6 +199,7 @@ export const AgendaView: React.FC = () => {
         setManualCustomerNit('');
         setManualCustomerPhone('');
       }
+      setViewMode('list');
       await reload();
     });
   };
@@ -259,235 +266,294 @@ export const AgendaView: React.FC = () => {
   const todayPrefix = new Date().toISOString().slice(0, 10);
   const todayCount = appointments.filter((a) => a.dateTime.startsWith(todayPrefix)).length;
 
+  const filteredAppointments = appointments.filter((apt) => {
+    if (resourceFilter && apt.resourceId !== resourceFilter) return false;
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      apt.code.toLowerCase().includes(q) ||
+      apt.customerName.toLowerCase().includes(q) ||
+      (apt.customerNit || '').toLowerCase().includes(q) ||
+      apt.resourceName.toLowerCase().includes(q) ||
+      apt.serviceName.toLowerCase().includes(q)
+    );
+  });
+
   return (
     <ModuleGate module="calendario_citas">
-      <PkKpiRow
-        items={[
-          { label: 'Citas Activas', value: String(appointments.length), color: 'var(--pk-primary)' },
-          { label: 'Citas para Hoy', value: String(todayCount), color: 'var(--pk-emerald)' },
-          { label: 'Profesionales / Recursos', value: String(resources.length), color: 'var(--pk-amber)' },
-          { label: 'Próximo Consecutivo', value: nextCode, color: '#0f172a' },
-        ]}
-      />
+      <div className="pk-stack">
+        <PkKpiRow
+          items={[
+            { label: 'Citas Activas', value: String(appointments.length), color: 'var(--pk-primary)' },
+            { label: 'Citas para Hoy', value: String(todayCount), color: 'var(--pk-emerald)' },
+            { label: 'Profesionales / Recursos', value: String(resources.length), color: 'var(--pk-amber)' },
+            { label: 'Próximo Consecutivo', value: nextCode, color: '#0f172a' },
+          ]}
+        />
 
-      <div className="pk-card">
-        <div className="pk-card-head">
-          <div className="pk-card-title">📅 Programar Cita o Reserva</div>
-          <div className="pk-row-actions">
-            {clientesEnabled && customers.length > 0 && (
+        <PkViewSwitcher
+          title="Agenda de Citas y Reservas"
+          subtitle="Administra el calendario de atención por profesional o sala y programa nuevas citas."
+          mode={viewMode}
+          onModeChange={setViewMode}
+          listLabel="📋 Agenda Programada"
+          createLabel="+ Programar Cita"
+          count={appointments.length}
+          extraActions={
+            <>
               <button
                 type="button"
-                className="pk-btn pk-btn-outline pk-btn-sm"
-                onClick={() => setUseManualClient((v) => !v)}
+                className="pk-btn pk-btn-outline"
+                onClick={() => setResourceModalOpen(true)}
               >
-                {useManualClient ? '👥 Elegir del Directorio' : '✍️ Ingreso Directo Paciente/Cliente'}
+                + Nuevo Profesional / Recurso
               </button>
-            )}
-            <button
-              type="button"
-              className="pk-btn pk-btn-outline pk-btn-sm"
-              onClick={() => setResourceModalOpen(true)}
-            >
-              + Nuevo Profesional / Recurso
-            </button>
-            <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={handleExportCsv}>
-              📥 Exportar CSV
-            </button>
-          </div>
-        </div>
-        <div className="pk-card-body">
-          <form onSubmit={handleSchedule} className="pk-form-grid">
-            <PkAutoCodeInput label="Código Cita" value={nextCode} />
+              {viewMode === 'list' && (
+                <button type="button" className="pk-btn pk-btn-outline" onClick={handleExportCsv}>
+                  📥 Exportar CSV
+                </button>
+              )}
+            </>
+          }
+        />
 
-            <PkSelect
-              label="Profesional / Recurso *"
-              items={resources}
-              value={resourceId}
-              onChange={setResourceId}
-              getValue={(r) => r.id}
-              getLabel={(r) => `${r.code} — ${r.name} (${r.specialty})`}
-              onCreateNew={() => setResourceModalOpen(true)}
-              createLabel="+ Nuevo Profesional / Recurso"
-              searchable
-            />
+        {viewMode === 'create' ? (
+          <div className="pk-card">
+            <div className="pk-card-head">
+              <div className="pk-card-title">📅 Programar Nueva Cita o Reserva</div>
+              <div className="pk-row-actions">
+                {clientesEnabled && customers.length > 0 && (
+                  <button
+                    type="button"
+                    className="pk-btn pk-btn-outline pk-btn-sm"
+                    onClick={() => setUseManualClient((v) => !v)}
+                  >
+                    {useManualClient ? '👥 Elegir del Directorio' : '✍️ Ingreso Directo Paciente/Cliente'}
+                  </button>
+                )}
+                <span className="pk-badge pk-badge-blue">{nextCode}</span>
+              </div>
+            </div>
+            <div className="pk-card-body">
+              <form onSubmit={handleSchedule} className="pk-form-grid cols-2">
+                <PkAutoCodeInput label="Código Cita" value={nextCode} />
 
-            {showClientDirectory ? (
-              <PkSelect
-                label="Cliente / Paciente *"
-                items={customers}
-                value={customerId}
-                onChange={setCustomerId}
-                getValue={(c) => c.id}
-                getLabel={(c) => `${c.name} (${c.nit})`}
-                searchable
-              />
-            ) : (
-              <>
                 <div className="pk-field">
-                  <label>Nombre Cliente / Paciente *</label>
+                  <label>Fecha y Hora Programada *</label>
                   <input
                     required
-                    value={manualCustomerName}
-                    onChange={(e) => setManualCustomerName(e.target.value)}
-                    placeholder="Ej: Mariana López Giraldo"
+                    type="datetime-local"
+                    value={dateTime}
+                    onChange={(e) => setDateTime(e.target.value)}
                   />
                 </div>
-                <div className="pk-field">
-                  <label>Documento / NIT</label>
-                  <input
-                    value={manualCustomerNit}
-                    onChange={(e) => setManualCustomerNit(e.target.value)}
-                    placeholder="Ej: 1020778410"
+
+                <PkSelect
+                  label="Profesional / Recurso *"
+                  items={resources}
+                  value={resourceId}
+                  onChange={setResourceId}
+                  getValue={(r) => r.id}
+                  getLabel={(r) => `${r.code} — ${r.name} (${r.specialty})`}
+                  onCreateNew={() => setResourceModalOpen(true)}
+                  createLabel="+ Nuevo Profesional / Recurso"
+                  searchable
+                />
+
+                {showClientDirectory ? (
+                  <PkSelect
+                    label="Cliente / Paciente *"
+                    items={customers}
+                    value={customerId}
+                    onChange={setCustomerId}
+                    getValue={(c) => c.id}
+                    getLabel={(c) => `${c.name} (${c.nit})`}
+                    searchable
                   />
-                </div>
-                <div className="pk-field">
-                  <label>Teléfono Contacto</label>
-                  <input
-                    value={manualCustomerPhone}
-                    onChange={(e) => setManualCustomerPhone(e.target.value)}
-                    placeholder="Ej: 3154409980"
-                  />
-                </div>
-              </>
-            )}
-
-            <div className="pk-field">
-              <label>Fecha y Hora *</label>
-              <input
-                required
-                type="datetime-local"
-                value={dateTime}
-                onChange={(e) => setDateTime(e.target.value)}
-              />
-            </div>
-
-            <div className="pk-field">
-              <label>Motivo / Servicio Solicitado *</label>
-              <input
-                required
-                value={serviceName}
-                onChange={(e) => setServiceName(e.target.value)}
-                placeholder="Ej: Valoración especializada"
-              />
-            </div>
-
-            <div className="pk-field">
-              <label>Observaciones</label>
-              <input
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Preparación previa o indicaciones"
-              />
-            </div>
-
-            <div className="pk-field">
-              <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
-                {busy ? 'Agendando...' : '🕒 Agendar Cita'}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-
-      <div className="pk-card">
-        <div className="pk-card-head">
-          <div className="pk-card-title">📋 Agenda de Citas Programadas ({appointments.length})</div>
-        </div>
-        <div className="pk-card-body">
-          <div className="pk-table-wrap">
-            <table className="pk-table">
-              <thead>
-                <tr>
-                  <th>Código</th>
-                  <th>Fecha y Hora</th>
-                  <th>Cliente / Paciente</th>
-                  <th>Teléfono</th>
-                  <th>Profesional / Recurso</th>
-                  <th>Servicio / Motivo</th>
-                  <th>Estado</th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {appointments.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} style={{ textAlign: 'center', color: 'var(--pk-muted)' }}>
-                      No hay citas programadas en la agenda actual.
-                    </td>
-                  </tr>
                 ) : (
-                  appointments.map((apt) => (
-                    <tr key={apt.id}>
-                      <td>
-                        <span className="pk-badge pk-badge-blue">{apt.code}</span>
-                      </td>
-                      <td style={{ fontWeight: 800 }}>{apt.dateTime}</td>
-                      <td>
-                        <div style={{ fontWeight: 700 }}>{apt.customerName}</div>
-                        {apt.customerNit && (
-                          <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>{apt.customerNit}</div>
-                        )}
-                      </td>
-                      <td>{apt.customerPhone || '—'}</td>
-                      <td>
-                        <div style={{ fontWeight: 700 }}>{apt.resourceName}</div>
-                        <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>{apt.resourceSpecialty}</div>
-                      </td>
-                      <td>
-                        <div>{apt.serviceName}</div>
-                        {apt.notes && (
-                          <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>{apt.notes}</div>
-                        )}
-                      </td>
-                      <td>
-                        <span className="pk-badge pk-badge-emerald">{apt.status}</span>
-                      </td>
-                      <td>
-                        <div className="pk-row-actions">
-                          <PkPrintButton label="🖨️ Comprobante" payload={buildAppointmentReceipt(apt)} />
-                          <button
-                            type="button"
-                            className="pk-btn pk-btn-danger pk-btn-sm"
-                            onClick={() => setCancelTarget(apt)}
-                            disabled={busy}
-                          >
-                            ✕ Cancelar
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                  <div className="pk-field">
+                    <label>Nombre Cliente / Paciente *</label>
+                    <input
+                      required
+                      value={manualCustomerName}
+                      onChange={(e) => setManualCustomerName(e.target.value)}
+                      placeholder="Ej: Mariana López Giraldo"
+                    />
+                  </div>
                 )}
-              </tbody>
-            </table>
+
+                {!showClientDirectory && (
+                  <>
+                    <div className="pk-field">
+                      <label>Documento / NIT</label>
+                      <input
+                        value={manualCustomerNit}
+                        onChange={(e) => setManualCustomerNit(e.target.value)}
+                        placeholder="Ej: 1020778410"
+                      />
+                    </div>
+                    <div className="pk-field">
+                      <label>Teléfono Contacto</label>
+                      <input
+                        value={manualCustomerPhone}
+                        onChange={(e) => setManualCustomerPhone(e.target.value)}
+                        placeholder="Ej: 3154409980"
+                      />
+                    </div>
+                  </>
+                )}
+
+                <div className="pk-field">
+                  <label>Motivo / Servicio Solicitado *</label>
+                  <input
+                    required
+                    value={serviceName}
+                    onChange={(e) => setServiceName(e.target.value)}
+                    placeholder="Ej: Valoración especializada"
+                  />
+                </div>
+
+                <div className="pk-field">
+                  <label>Observaciones e Indicaciones</label>
+                  <input
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Preparación previa o indicaciones"
+                  />
+                </div>
+
+                <div className="pk-form-actions">
+                  <button
+                    type="button"
+                    className="pk-btn pk-btn-outline"
+                    onClick={() => setViewMode('list')}
+                    disabled={busy}
+                  >
+                    Cancelar
+                  </button>
+                  <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
+                    {busy ? 'Agendando...' : '🕒 Confirmar y Agendar Cita'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="pk-card">
+            <div className="pk-card-head">
+              <div className="pk-card-title">📋 Agenda de Citas Programadas</div>
+            </div>
+            <div className="pk-datatable-toolbar">
+              <input
+                className="pk-input pk-datatable-search"
+                placeholder="🔎 Buscar por código, cliente, documento o motivo..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <div style={{ minWidth: 260 }}>
+                  <PkSimpleSelect
+                    ariaLabel="Filtrar por profesional o recurso"
+                    value={resourceFilter}
+                    onChange={setResourceFilter}
+                    allowClear
+                    placeholder="Todos los profesionales y recursos"
+                    options={[
+                      { value: '', label: 'Todos los profesionales y recursos' },
+                      ...resources.map((r) => ({
+                        value: r.id,
+                        label: `${r.code} — ${r.name}`,
+                        sublabel: r.specialty,
+                      })),
+                    ]}
+                  />
+                </div>
+                <span className="pk-badge pk-badge-slate">{filteredAppointments.length} citas</span>
+              </div>
+            </div>
+            <div className="pk-card-body">
+              <div className="pk-table-wrap">
+                <table className="pk-table">
+                  <thead>
+                    <tr>
+                      <th>Código</th>
+                      <th>Fecha y Hora</th>
+                      <th>Cliente / Paciente</th>
+                      <th>Teléfono</th>
+                      <th>Profesional / Recurso</th>
+                      <th>Servicio / Motivo</th>
+                      <th>Estado</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredAppointments.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} style={{ textAlign: 'center', color: 'var(--pk-muted)', padding: 28 }}>
+                          {appointments.length === 0
+                            ? 'No hay citas programadas todavía. Haz clic en "+ Programar Cita" para crear una nueva reserva.'
+                            : 'No se encontraron citas con el filtro seleccionado.'}
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredAppointments.map((apt) => (
+                        <tr key={apt.id}>
+                          <td>
+                            <span className="pk-badge pk-badge-blue">{apt.code}</span>
+                          </td>
+                          <td style={{ fontWeight: 800 }}>{apt.dateTime}</td>
+                          <td>
+                            <div style={{ fontWeight: 700 }}>{apt.customerName}</div>
+                            {apt.customerNit && (
+                              <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>{apt.customerNit}</div>
+                            )}
+                          </td>
+                          <td>{apt.customerPhone || '—'}</td>
+                          <td>
+                            <div style={{ fontWeight: 700 }}>{apt.resourceName}</div>
+                            <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>{apt.resourceSpecialty}</div>
+                          </td>
+                          <td>
+                            <div>{apt.serviceName}</div>
+                            {apt.notes && (
+                              <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>{apt.notes}</div>
+                            )}
+                          </td>
+                          <td>
+                            <span className="pk-badge pk-badge-emerald">{apt.status}</span>
+                          </td>
+                          <td>
+                            <div className="pk-row-actions">
+                              <PkPrintButton label="🖨️ Comprobante" payload={buildAppointmentReceipt(apt)} />
+                              <button
+                                type="button"
+                                className="pk-btn pk-btn-danger pk-btn-sm"
+                                onClick={() => setCancelTarget(apt)}
+                                disabled={busy}
+                              >
+                                ✕ Cancelar
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <PkModal
         open={resourceModalOpen}
         title="👨‍⚕️ Nuevo Profesional / Recurso de Agenda"
         onClose={() => setResourceModalOpen(false)}
+        maxWidth={640}
       >
-        <form onSubmit={handleCreateResource} className="pk-form-grid">
+        <form onSubmit={handleCreateResource} className="pk-form-grid cols-2">
           <PkAutoCodeInput label="Código Recurso" value={nextResourceCode} />
-          <div className="pk-field">
-            <label>Nombre Profesional / Sala / Recurso *</label>
-            <input
-              required
-              value={resName}
-              onChange={(e) => setResName(e.target.value)}
-              placeholder="Ej: Dr. Alejandro Vega / Consultorio 2"
-            />
-          </div>
-          <div className="pk-field">
-            <label>Especialidad / Área</label>
-            <input
-              value={resSpecialty}
-              onChange={(e) => setResSpecialty(e.target.value)}
-              placeholder="Ej: Odontología / Asesoría Técnica"
-            />
-          </div>
           <div className="pk-field">
             <label>Teléfono Directo</label>
             <input
@@ -496,7 +562,32 @@ export const AgendaView: React.FC = () => {
               placeholder="Ej: 3115508899"
             />
           </div>
-          <div className="pk-field">
+          <div className="pk-field pk-col-span-full">
+            <label>Nombre Profesional / Sala / Recurso *</label>
+            <input
+              required
+              value={resName}
+              onChange={(e) => setResName(e.target.value)}
+              placeholder="Ej: Dr. Alejandro Vega / Consultorio 2"
+            />
+          </div>
+          <div className="pk-field pk-col-span-full">
+            <label>Especialidad / Área</label>
+            <input
+              value={resSpecialty}
+              onChange={(e) => setResSpecialty(e.target.value)}
+              placeholder="Ej: Odontología / Asesoría Técnica"
+            />
+          </div>
+          <div className="pk-form-actions">
+            <button
+              type="button"
+              className="pk-btn pk-btn-outline"
+              onClick={() => setResourceModalOpen(false)}
+              disabled={busy}
+            >
+              Cancelar
+            </button>
             <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
               {busy ? 'Guardando...' : '💾 Guardar Recurso'}
             </button>

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   usePlatform,
   ModuleGate,
+  PkSimpleSelect,
   useAsyncAction,
   formatCop,
 } from '@platform/ui-sdk';
@@ -35,6 +36,24 @@ const DEFAULT_BRANDING: BrandingFormState = {
   primaryColor: '#023047',
   defaultFormat: 'carta_membrete',
 };
+
+const PRINT_FORMAT_OPTIONS = [
+  {
+    value: 'carta_membrete',
+    label: 'Carta con Membrete Corporativo (PDF / Láser)',
+    sublabel: 'Hoja completa institucional',
+  },
+  {
+    value: 'media_carta',
+    label: 'Media Carta Comercial (Horizontal / Compacto)',
+    sublabel: 'Ahorro de papel comercial',
+  },
+  {
+    value: 'tirilla_80mm',
+    label: 'Tirilla Térmica POS 80mm (Mostrador)',
+    sublabel: 'Impresoras térmicas de caja',
+  },
+];
 
 function sanitizePreviewColor(raw: string): string {
   return HEX_COLOR_PATTERN.test(raw.trim()) ? raw.trim() : '#023047';
@@ -162,226 +181,230 @@ export const ImpresionesView: React.FC = () => {
 
   return (
     <ModuleGate module="config_membretes">
-      <div className="pk-grid-2">
-        <div className="pk-card">
-          <div className="pk-card-head">
-            <div className="pk-card-title">Configuración de Membrete Oficial y Formatos PDF / POS</div>
-            <span className="pk-badge pk-badge-blue">Transversal</span>
-          </div>
-          <div className="pk-card-body">
-            <form onSubmit={(e) => void handleSave(e)} className="pk-form-grid">
-              <div className="pk-field">
-                <label>Razón Social / Nombre Comercial *</label>
-                <input
-                  required
-                  value={form.companyName}
-                  onChange={(e) => updateField('companyName', e.target.value)}
-                  placeholder="Ej: Inversiones y Servicios S.A.S."
-                />
-              </div>
-
-              <div className="pk-field">
-                <label>NIT Empresarial *</label>
-                <input
-                  required
-                  value={form.nit}
-                  onChange={(e) => updateField('nit', e.target.value)}
-                  placeholder="Ej: 901.482.190-4"
-                />
-              </div>
-
-              <div className="pk-field">
-                <label>Régimen Tributario</label>
-                <input
-                  value={form.taxRegime}
-                  onChange={(e) => updateField('taxRegime', e.target.value)}
-                  placeholder="Responsable de IVA — Régimen Ordinario"
-                />
-              </div>
-
-              <div className="pk-field">
-                <label>Dirección Principal</label>
-                <input
-                  value={form.address}
-                  onChange={(e) => updateField('address', e.target.value)}
-                  placeholder="Calle / Carrera y Ciudad"
-                />
-              </div>
-
-              <div className="pk-field">
-                <label>Teléfono / WhatsApp</label>
-                <input
-                  value={form.phone}
-                  onChange={(e) => updateField('phone', e.target.value)}
-                  placeholder="601 742 8890"
-                />
-              </div>
-
-              <div className="pk-field">
-                <label>Correo de Facturación</label>
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => updateField('email', e.target.value)}
-                  placeholder="facturacion@empresa.co"
-                />
-              </div>
-
-              <div className="pk-field" style={{ gridColumn: '1 / -1' }}>
-                <label>Resolución de Numeración DIAN</label>
-                <input
-                  value={form.dianResolution}
-                  onChange={(e) => updateField('dianResolution', e.target.value)}
-                  placeholder="Resolución DIAN N° 1876... Prefijo FEVP del 1 al 50.000"
-                />
-              </div>
-
-              <div className="pk-field" style={{ gridColumn: '1 / -1' }}>
-                <label>Pie de Página / Leyenda de Garantía</label>
-                <textarea
-                  rows={2}
-                  value={form.footerWarranty}
-                  onChange={(e) => updateField('footerWarranty', e.target.value)}
-                  placeholder="Condiciones de garantía, políticas de cambio o cuentas bancarias para pago."
-                />
-              </div>
-
-              <div className="pk-field">
-                <label>Color Institucional (#RRGGBB)</label>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+      <div className="pk-stack">
+        <div className="pk-grid-2">
+          <div className="pk-card">
+            <div className="pk-card-head">
+              <div className="pk-card-title">Configuración de Membrete Oficial y Formatos PDF / POS</div>
+              <span className="pk-badge pk-badge-blue">Transversal</span>
+            </div>
+            <div className="pk-card-body">
+              <form onSubmit={(e) => void handleSave(e)} className="pk-form-grid cols-2">
+                <div className="pk-field">
+                  <label>Razón Social / Nombre Comercial *</label>
                   <input
-                    type="color"
-                    value={safeColor}
-                    onChange={(e) => updateField('primaryColor', e.target.value)}
-                    style={{ width: 52, height: 38, padding: 2, cursor: 'pointer' }}
-                  />
-                  <input
-                    value={form.primaryColor}
-                    onChange={(e) => updateField('primaryColor', e.target.value)}
-                    placeholder="#023047"
+                    required
+                    value={form.companyName}
+                    onChange={(e) => updateField('companyName', e.target.value)}
+                    placeholder="Ej: Inversiones y Servicios S.A.S."
                   />
                 </div>
-              </div>
 
-              <div className="pk-field">
-                <label>Formato Predeterminado de Impresión</label>
-                <select
+                <div className="pk-field">
+                  <label>NIT Empresarial *</label>
+                  <input
+                    required
+                    value={form.nit}
+                    onChange={(e) => updateField('nit', e.target.value)}
+                    placeholder="Ej: 901.482.190-4"
+                  />
+                </div>
+
+                <div className="pk-field">
+                  <label>Régimen Tributario</label>
+                  <input
+                    value={form.taxRegime}
+                    onChange={(e) => updateField('taxRegime', e.target.value)}
+                    placeholder="Responsable de IVA — Régimen Ordinario"
+                  />
+                </div>
+
+                <div className="pk-field">
+                  <label>Dirección Principal</label>
+                  <input
+                    value={form.address}
+                    onChange={(e) => updateField('address', e.target.value)}
+                    placeholder="Calle / Carrera y Ciudad"
+                  />
+                </div>
+
+                <div className="pk-field">
+                  <label>Teléfono / WhatsApp</label>
+                  <input
+                    value={form.phone}
+                    onChange={(e) => updateField('phone', e.target.value)}
+                    placeholder="601 742 8890"
+                  />
+                </div>
+
+                <div className="pk-field">
+                  <label>Correo de Facturación</label>
+                  <input
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => updateField('email', e.target.value)}
+                    placeholder="facturacion@empresa.co"
+                  />
+                </div>
+
+                <div className="pk-field pk-col-span-full">
+                  <label>Resolución de Numeración DIAN</label>
+                  <input
+                    value={form.dianResolution}
+                    onChange={(e) => updateField('dianResolution', e.target.value)}
+                    placeholder="Resolución DIAN N° 1876... Prefijo FEVP del 1 al 50.000"
+                  />
+                </div>
+
+                <div className="pk-field pk-col-span-full">
+                  <label>Pie de Página / Leyenda de Garantía</label>
+                  <textarea
+                    rows={2}
+                    value={form.footerWarranty}
+                    onChange={(e) => updateField('footerWarranty', e.target.value)}
+                    placeholder="Condiciones de garantía, políticas de cambio o cuentas bancarias para pago."
+                  />
+                </div>
+
+                <div className="pk-field">
+                  <label>Color Institucional (#RRGGBB)</label>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input
+                      type="color"
+                      value={safeColor}
+                      onChange={(e) => updateField('primaryColor', e.target.value)}
+                      style={{ width: 52, height: 38, padding: 2, cursor: 'pointer' }}
+                    />
+                    <input
+                      value={form.primaryColor}
+                      onChange={(e) => updateField('primaryColor', e.target.value)}
+                      placeholder="#023047"
+                    />
+                  </div>
+                </div>
+
+                <PkSimpleSelect
+                  label="Formato Predeterminado de Impresión"
                   value={form.defaultFormat}
-                  onChange={(e) => updateField('defaultFormat', normalizeDefaultFormat(e.target.value))}
-                >
-                  <option value="carta_membrete">Carta con Membrete Corporativo (PDF / Láser)</option>
-                  <option value="media_carta">Media Carta Comercial (Horizontal / Compacto)</option>
-                  <option value="tirilla_80mm">Tirilla Térmica POS 80mm (Mostrador)</option>
-                </select>
-              </div>
+                  onChange={(val) => updateField('defaultFormat', normalizeDefaultFormat(val))}
+                  options={PRINT_FORMAT_OPTIONS}
+                />
 
-              <div className="pk-row-actions" style={{ gridColumn: '1 / -1', marginTop: 6 }}>
-                <button type="submit" className="pk-btn pk-btn-primary" disabled={saving}>
-                  {saving ? 'Guardando...' : 'Guardar Membrete Empresarial'}
-                </button>
-                <button
-                  type="button"
-                  className="pk-btn pk-btn-emerald"
-                  disabled={previewing}
-                  onClick={() => void handleSamplePrint()}
-                >
-                  Probar Formato Predeterminado
-                </button>
-                <button
-                  type="button"
-                  className="pk-btn pk-btn-outline"
-                  disabled={previewing}
-                  onClick={() => void handleSamplePrint('media_carta')}
-                >
-                  Muestra Media Carta
-                </button>
-                <button
-                  type="button"
-                  className="pk-btn pk-btn-outline"
-                  disabled={previewing}
-                  onClick={() => void handleSamplePrint('tirilla_80mm')}
-                >
-                  Muestra Tirilla 80mm
-                </button>
-                <button
-                  type="button"
-                  className="pk-btn pk-btn-outline"
-                  disabled={previewing}
-                  onClick={() => void handleSamplePrint('factura_taller')}
-                >
-                  Muestra Factura Taller
-                </button>
-              </div>
-            </form>
+                <div className="pk-form-actions">
+                  <button
+                    type="button"
+                    className="pk-btn pk-btn-emerald"
+                    disabled={previewing}
+                    onClick={() => void handleSamplePrint()}
+                  >
+                    Probar Formato Predeterminado
+                  </button>
+                  <button type="submit" className="pk-btn pk-btn-primary" disabled={saving}>
+                    {saving ? 'Guardando...' : 'Guardar Membrete Empresarial'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
 
-        <div className="pk-card">
-          <div className="pk-card-head">
-            <div className="pk-card-title">Vista Previa en Vivo del Encabezado</div>
-            <span className="pk-badge pk-badge-emerald">{formatLabel}</span>
-          </div>
-          <div className="pk-card-body">
-            <div
-              style={{
-                border: `2px solid ${safeColor}`,
-                borderRadius: 10,
-                padding: 18,
-                background: '#ffffff',
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  gap: 12,
-                  borderBottom: `3px solid ${safeColor}`,
-                  paddingBottom: 12,
-                  flexWrap: 'wrap',
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: safeColor }}>
-                    {form.companyName || 'Nombre de la Empresa'}
+          <div className="pk-stack">
+            <div className="pk-card">
+              <div className="pk-card-head">
+                <div className="pk-card-title">Vista Previa en Vivo del Encabezado</div>
+                <span className="pk-badge pk-badge-emerald">{formatLabel}</span>
+              </div>
+              <div className="pk-card-body">
+                <div className="pk-stack">
+                  <div
+                    style={{
+                      border: `2px solid ${safeColor}`,
+                      borderRadius: 10,
+                      padding: 18,
+                      background: '#ffffff',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        gap: 12,
+                        borderBottom: `3px solid ${safeColor}`,
+                        paddingBottom: 12,
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: safeColor }}>
+                          {form.companyName || 'Nombre de la Empresa'}
+                        </div>
+                        <div style={{ fontSize: 12, color: '#334155', marginTop: 4, lineHeight: 1.45 }}>
+                          <strong>NIT:</strong> {form.nit || '—'} • {form.taxRegime || '—'}
+                          <br />
+                          {form.address || 'Dirección principal'}
+                          <br />
+                          Tel: {form.phone || '—'} • {form.email || '—'}
+                        </div>
+                      </div>
+                      <div
+                        style={{
+                          border: `2px solid ${safeColor}`,
+                          borderRadius: 8,
+                          padding: '8px 12px',
+                          textAlign: 'right',
+                        }}
+                      >
+                        <div style={{ fontSize: 10.5, fontWeight: 800, color: safeColor }}>FACTURA DE VENTA</div>
+                        <div style={{ fontSize: 15, fontWeight: 900 }}>FEVP-9012</div>
+                        <div style={{ fontSize: 11, color: '#64748b' }}>Total: {formatCop(492240)}</div>
+                      </div>
+                    </div>
+
+                    {form.dianResolution && (
+                      <div style={{ fontSize: 11, color: '#475569', marginTop: 10 }}>{form.dianResolution}</div>
+                    )}
+
+                    <div
+                      style={{
+                        marginTop: 14,
+                        paddingTop: 10,
+                        borderTop: '1px dashed #cbd5e1',
+                        fontSize: 11.5,
+                        color: '#475569',
+                        textAlign: 'center',
+                      }}
+                    >
+                      {form.footerWarranty ||
+                        'Pie de garantía institucional aplicado automáticamente a facturas, cotizaciones y recibos.'}
+                    </div>
                   </div>
-                  <div style={{ fontSize: 12, color: '#334155', marginTop: 4, lineHeight: 1.45 }}>
-                    <strong>NIT:</strong> {form.nit || '—'} • {form.taxRegime || '—'}
-                    <br />
-                    {form.address || 'Dirección principal'}
-                    <br />
-                    Tel: {form.phone || '—'} • {form.email || '—'}
+
+                  <div className="pk-row-actions">
+                    <button
+                      type="button"
+                      className="pk-btn pk-btn-outline"
+                      disabled={previewing}
+                      onClick={() => void handleSamplePrint('media_carta')}
+                    >
+                      Muestra Media Carta
+                    </button>
+                    <button
+                      type="button"
+                      className="pk-btn pk-btn-outline"
+                      disabled={previewing}
+                      onClick={() => void handleSamplePrint('tirilla_80mm')}
+                    >
+                      Muestra Tirilla 80mm
+                    </button>
+                    <button
+                      type="button"
+                      className="pk-btn pk-btn-outline"
+                      disabled={previewing}
+                      onClick={() => void handleSamplePrint('factura_taller')}
+                    >
+                      Muestra Factura Taller
+                    </button>
                   </div>
                 </div>
-                <div
-                  style={{
-                    border: `2px solid ${safeColor}`,
-                    borderRadius: 8,
-                    padding: '8px 12px',
-                    textAlign: 'right',
-                  }}
-                >
-                  <div style={{ fontSize: 10.5, fontWeight: 800, color: safeColor }}>FACTURA DE VENTA</div>
-                  <div style={{ fontSize: 15, fontWeight: 900 }}>FEVP-9012</div>
-                  <div style={{ fontSize: 11, color: '#64748b' }}>Total: {formatCop(492240)}</div>
-                </div>
-              </div>
-
-              {form.dianResolution && (
-                <div style={{ fontSize: 11, color: '#475569', marginTop: 10 }}>{form.dianResolution}</div>
-              )}
-
-              <div
-                style={{
-                  marginTop: 14,
-                  paddingTop: 10,
-                  borderTop: '1px dashed #cbd5e1',
-                  fontSize: 11.5,
-                  color: '#475569',
-                  textAlign: 'center',
-                }}
-              >
-                {form.footerWarranty ||
-                  'Pie de garantía institucional aplicado automáticamente a facturas, cotizaciones y recibos.'}
               </div>
             </div>
           </div>

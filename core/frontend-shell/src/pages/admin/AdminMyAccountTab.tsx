@@ -171,7 +171,7 @@ export const AdminMyAccountTab: React.FC = () => {
                 placeholder="Nueva contraseña segura"
               />
             </div>
-            <div className="pk-row-actions" style={{ justifyContent: 'flex-end' }}>
+            <div className="pk-form-actions">
               <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
                 {busy ? 'Actualizando...' : 'Actualizar Contraseña'}
               </button>

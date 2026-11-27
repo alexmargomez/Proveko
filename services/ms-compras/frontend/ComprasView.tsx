@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   usePlatform,
   ModuleGate,
   PkAutoCodeInput,
   PkSelect,
+  PkSimpleSelect,
+  PkViewSwitcher,
   PkModal,
   PkConfirmModal,
   PkPrintButton,
@@ -83,9 +85,18 @@ export const ComprasView: React.FC = () => {
     apiGet,
     apiPost,
     apiDelete,
+    incomingPayload,
+    clearIncomingPayload,
     toast,
   } = usePlatform();
   const { busy, run } = useAsyncAction();
+
+  const [supplierViewMode, setSupplierViewMode] = useState<'list' | 'create'>('list');
+  const [orderViewMode, setOrderViewMode] = useState<'list' | 'create'>('list');
+
+  const [supplierSearch, setSupplierSearch] = useState('');
+  const [orderSearch, setOrderSearch] = useState('');
+  const [orderSupplierFilter, setOrderSupplierFilter] = useState('');
 
   const [nextSupplierCode, setNextSupplierCode] = useState('PRV-203');
   const [nextOrderCode, setNextOrderCode] = useState('OC-802');
@@ -114,6 +125,12 @@ export const ComprasView: React.FC = () => {
   const [unitCost, setUnitCost] = useState('25000');
 
   const inventoryEnabled = hasService('ms-inventario');
+
+  const validModules = ['directorio_proveedores', 'ordenes_compra'];
+  const currentTab =
+    validModules.includes(activeModuleKey) && hasModule(activeModuleKey)
+      ? activeModuleKey
+      : validModules.find((m) => hasModule(m)) || 'ordenes_compra';
 
   const reload = useCallback(async () => {
     try {
@@ -159,11 +176,21 @@ export const ComprasView: React.FC = () => {
     void reload();
   }, [reload]);
 
-  const validModules = ['directorio_proveedores', 'ordenes_compra'];
-  const currentTab =
-    validModules.includes(activeModuleKey) && hasModule(activeModuleKey)
-      ? activeModuleKey
-      : validModules.find((m) => hasModule(m)) || 'ordenes_compra';
+  useEffect(() => {
+    if (!incomingPayload) return;
+    if (typeof incomingPayload.supplierId === 'string' && incomingPayload.supplierId) {
+      setSupplierId(incomingPayload.supplierId);
+    }
+    if (typeof incomingPayload.productId === 'string' && incomingPayload.productId) {
+      setProductId(incomingPayload.productId);
+    }
+    if (currentTab === 'directorio_proveedores') {
+      setSupplierViewMode('create');
+    } else {
+      setOrderViewMode('create');
+    }
+    clearIncomingPayload();
+  }, [incomingPayload, currentTab, clearIncomingPayload]);
 
   const handleProductChange = (newProdId: string) => {
     setProductId(newProdId);
@@ -198,6 +225,8 @@ export const ComprasView: React.FC = () => {
       setSupEmail('');
       if (closeModalAfter) {
         setSupplierModalOpen(false);
+      } else {
+        setSupplierViewMode('list');
       }
       await reload();
       if (resp?.supplier?.id) {
@@ -239,7 +268,10 @@ export const ComprasView: React.FC = () => {
     const resolvedProductCode = useCatalogMode ? selectedProd?.code || '' : manualProductCode.trim() || 'INS';
     const resolvedProductName = useCatalogMode ? selectedProd?.name || '' : manualProductName.trim();
     const resolvedWhId = invWarehouses.length > 0 ? selectedWh?.id || '' : '';
-    const resolvedWhName = invWarehouses.length > 0 ? selectedWh?.name || 'Bodega Principal' : manualWarehouseName.trim() || 'Bodega Principal';
+    const resolvedWhName =
+      invWarehouses.length > 0
+        ? selectedWh?.name || 'Bodega Principal'
+        : manualWarehouseName.trim() || 'Bodega Principal';
 
     if (!resolvedProductName) {
       toast('Selecciona un producto o ingresa la descripción del artículo.');
@@ -265,6 +297,7 @@ export const ComprasView: React.FC = () => {
       setQty('10');
       setManualProductName('');
       setManualProductCode('');
+      setOrderViewMode('list');
       await reload();
     });
   };
@@ -302,6 +335,33 @@ export const ComprasView: React.FC = () => {
     );
     toast('Reporte CSV de órdenes de compra descargado.');
   };
+
+  const filteredSuppliers = useMemo(() => {
+    const q = supplierSearch.trim().toLowerCase();
+    if (!q) return suppliers;
+    return suppliers.filter(
+      (s) =>
+        s.code.toLowerCase().includes(q) ||
+        s.name.toLowerCase().includes(q) ||
+        s.nit.toLowerCase().includes(q) ||
+        (s.city || '').toLowerCase().includes(q)
+    );
+  }, [suppliers, supplierSearch]);
+
+  const filteredOrders = useMemo(() => {
+    return orders.filter((ord) => {
+      if (orderSupplierFilter && ord.supplierId !== orderSupplierFilter) return false;
+      const q = orderSearch.trim().toLowerCase();
+      if (!q) return true;
+      return (
+        ord.code.toLowerCase().includes(q) ||
+        ord.supplierName.toLowerCase().includes(q) ||
+        (ord.supplierNit || '').toLowerCase().includes(q) ||
+        ord.productName.toLowerCase().includes(q) ||
+        (ord.productCode || '').toLowerCase().includes(q)
+      );
+    });
+  }, [orders, orderSupplierFilter, orderSearch]);
 
   const totalPurchasesAmount = orders.reduce((acc, o) => acc + (Number(o.totalCost) || 0), 0);
   const previewTotalOrder = Math.max(0, (Number(qty) || 0) * (Number(unitCost) || 0));
@@ -358,7 +418,7 @@ export const ComprasView: React.FC = () => {
   };
 
   return (
-    <div>
+    <div className="pk-stack">
       <PkKpiRow
         items={[
           { label: 'Proveedores Homologados', value: String(suppliers.length), color: 'var(--pk-primary)' },
@@ -374,353 +434,443 @@ export const ComprasView: React.FC = () => {
 
       {currentTab === 'directorio_proveedores' && (
         <ModuleGate module="directorio_proveedores">
-          <div className="pk-card">
-            <div className="pk-card-head">
-              <div className="pk-card-title">🏢 Registro de Proveedor Nacional o Importador</div>
-              <PkPrintButton
-                label="🖨️ Imprimir Directorio"
-                payload={suppliersDirectoryPrintPayload}
-                variant="primary"
-              />
-            </div>
-            <div className="pk-card-body">
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void submitNewSupplier(false);
-                }}
-                className="pk-form-grid"
-              >
-                <PkAutoCodeInput label="Código Proveedor" value={nextSupplierCode} />
-                <div className="pk-field">
-                  <label>NIT / Identificación Tributaria *</label>
-                  <input
-                    required
-                    value={supNit}
-                    onChange={(e) => setSupNit(e.target.value)}
-                    placeholder="Ej: 860.025.147-1"
+          <div className="pk-stack">
+            <PkViewSwitcher
+              title="Directorio Oficial de Proveedores"
+              subtitle="Administra proveedores nacionales e importadores homologados para compras e insumos."
+              mode={supplierViewMode}
+              onModeChange={setSupplierViewMode}
+              listLabel="📋 Directorio de Proveedores"
+              createLabel="+ Nuevo Proveedor"
+              count={suppliers.length}
+              extraActions={
+                supplierViewMode === 'list' ? (
+                  <PkPrintButton
+                    label="🖨️ Imprimir Directorio"
+                    payload={suppliersDirectoryPrintPayload}
+                    variant="primary"
                   />
-                </div>
-                <div className="pk-field">
-                  <label>Razón Social / Nombre Comercial *</label>
-                  <input
-                    required
-                    value={supName}
-                    onChange={(e) => setSupName(e.target.value)}
-                    placeholder="Ej: Suministros Industriales S.A.S."
-                  />
-                </div>
-                <div className="pk-field">
-                  <label>Ciudad</label>
-                  <input
-                    value={supCity}
-                    onChange={(e) => setSupCity(e.target.value)}
-                    placeholder="Bogotá D.C."
-                  />
-                </div>
-                <div className="pk-field">
-                  <label>Teléfono Comercial</label>
-                  <input
-                    value={supPhone}
-                    onChange={(e) => setSupPhone(e.target.value)}
-                    placeholder="Ej: 3102223344"
-                  />
-                </div>
-                <div className="pk-field">
-                  <label>Correo Electrónico</label>
-                  <input
-                    type="email"
-                    value={supEmail}
-                    onChange={(e) => setSupEmail(e.target.value)}
-                    placeholder="ventas@proveedor.co"
-                  />
-                </div>
-                <div className="pk-field">
-                  <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
-                    {busy ? 'Guardando...' : '💾 Guardar Proveedor'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
+                ) : undefined
+              }
+            />
 
-          <div className="pk-card">
-            <div className="pk-card-head">
-              <div className="pk-card-title">📋 Directorio de Proveedores ({suppliers.length})</div>
-            </div>
-            <div className="pk-card-body">
-              <div className="pk-table-wrap">
-                <table className="pk-table">
-                  <thead>
-                    <tr>
-                      <th>Código</th>
-                      <th>NIT</th>
-                      <th>Razón Social</th>
-                      <th>Ciudad</th>
-                      <th>Contacto</th>
-                      <th>Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {suppliers.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} style={{ textAlign: 'center', color: 'var(--pk-muted)' }}>
-                          No existen proveedores registrados en el directorio.
-                        </td>
-                      </tr>
-                    ) : (
-                      suppliers.map((sup) => (
-                        <tr key={sup.id}>
-                          <td>
-                            <span className="pk-badge pk-badge-blue">{sup.code}</span>
-                          </td>
-                          <td>{sup.nit}</td>
-                          <td style={{ fontWeight: 700 }}>{sup.name}</td>
-                          <td>{sup.city}</td>
-                          <td>
-                            <div>{sup.phone || '—'}</div>
-                            {sup.email && (
-                              <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>{sup.email}</div>
-                            )}
-                          </td>
-                          <td>
-                            <div className="pk-row-actions">
-                              <PkPrintButton
-                                label="🖨️ Ficha"
-                                payload={{
-                                  document_type: 'FICHA DE HOMOLOGACIÓN DE PROVEEDOR',
-                                  layout_variant: 'carta_membrete',
-                                  document_number: sup.code,
-                                  issue_date: sup.createdAt,
-                                  customer_name: sup.name,
-                                  customer_nit: sup.nit,
-                                  customer_phone: sup.phone,
-                                  customer_address: sup.city,
-                                  items: [
-                                    {
-                                      code: sup.code,
-                                      description: `Proveedor activo — Ciudad: ${sup.city} — Contacto: ${sup.phone || 'N/A'} ${sup.email || ''}`,
-                                      quantity: 1,
-                                      unit_price: 0,
-                                      tax_pct: 0,
-                                      subtotal: 0,
-                                    },
-                                  ],
-                                  grand_total: 0,
-                                }}
-                              />
-                              <button
-                                type="button"
-                                className="pk-btn pk-btn-danger pk-btn-sm"
-                                onClick={() => setDeleteTarget(sup)}
-                                disabled={busy}
-                              >
-                                Eliminar
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+            {supplierViewMode === 'create' ? (
+              <div className="pk-card">
+                <div className="pk-card-head">
+                  <div className="pk-card-title">🏢 Registro de Proveedor Nacional o Importador</div>
+                  <span className="pk-badge pk-badge-blue">{nextSupplierCode}</span>
+                </div>
+                <div className="pk-card-body">
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void submitNewSupplier(false);
+                    }}
+                    className="pk-form-grid cols-2"
+                  >
+                    <PkAutoCodeInput label="Código Proveedor" value={nextSupplierCode} />
+                    <div className="pk-field">
+                      <label>NIT / Identificación Tributaria *</label>
+                      <input
+                        required
+                        value={supNit}
+                        onChange={(e) => setSupNit(e.target.value)}
+                        placeholder="Ej: 860.025.147-1"
+                      />
+                    </div>
+                    <div className="pk-field pk-col-span-full">
+                      <label>Razón Social / Nombre Comercial *</label>
+                      <input
+                        required
+                        value={supName}
+                        onChange={(e) => setSupName(e.target.value)}
+                        placeholder="Ej: Suministros Industriales S.A.S."
+                      />
+                    </div>
+                    <div className="pk-field">
+                      <label>Ciudad</label>
+                      <input
+                        value={supCity}
+                        onChange={(e) => setSupCity(e.target.value)}
+                        placeholder="Bogotá D.C."
+                      />
+                    </div>
+                    <div className="pk-field">
+                      <label>Teléfono Comercial</label>
+                      <input
+                        value={supPhone}
+                        onChange={(e) => setSupPhone(e.target.value)}
+                        placeholder="Ej: 3102223344"
+                      />
+                    </div>
+                    <div className="pk-field pk-col-span-full">
+                      <label>Correo Electrónico</label>
+                      <input
+                        type="email"
+                        value={supEmail}
+                        onChange={(e) => setSupEmail(e.target.value)}
+                        placeholder="ventas@proveedor.co"
+                      />
+                    </div>
+                    <div className="pk-form-actions">
+                      <button
+                        type="button"
+                        className="pk-btn pk-btn-outline"
+                        onClick={() => setSupplierViewMode('list')}
+                        disabled={busy}
+                      >
+                        Cancelar
+                      </button>
+                      <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
+                        {busy ? 'Guardando...' : '💾 Guardar Proveedor'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="pk-card">
+                <div className="pk-card-head">
+                  <div className="pk-card-title">📋 Directorio de Proveedores ({suppliers.length})</div>
+                </div>
+                <div className="pk-datatable-toolbar">
+                  <input
+                    type="search"
+                    className="pk-input pk-datatable-search"
+                    value={supplierSearch}
+                    onChange={(e) => setSupplierSearch(e.target.value)}
+                    placeholder="🔎 Buscar por código, razón social, NIT o ciudad..."
+                  />
+                  <span className="pk-badge pk-badge-slate">{filteredSuppliers.length} proveedores</span>
+                </div>
+                <div className="pk-card-body">
+                  <div className="pk-table-wrap">
+                    <table className="pk-table">
+                      <thead>
+                        <tr>
+                          <th>Código</th>
+                          <th>NIT</th>
+                          <th>Razón Social</th>
+                          <th>Ciudad</th>
+                          <th>Contacto</th>
+                          <th>Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredSuppliers.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} style={{ textAlign: 'center', color: 'var(--pk-muted)', padding: 28 }}>
+                              No existen proveedores registrados para el criterio consultado.
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredSuppliers.map((sup) => (
+                            <tr key={sup.id}>
+                              <td>
+                                <span className="pk-badge pk-badge-blue">{sup.code}</span>
+                              </td>
+                              <td>{sup.nit}</td>
+                              <td style={{ fontWeight: 700 }}>{sup.name}</td>
+                              <td>{sup.city}</td>
+                              <td>
+                                <div>{sup.phone || '—'}</div>
+                                {sup.email && (
+                                  <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>{sup.email}</div>
+                                )}
+                              </td>
+                              <td>
+                                <div className="pk-row-actions">
+                                  <PkPrintButton
+                                    label="🖨️ Ficha"
+                                    payload={{
+                                      document_type: 'FICHA DE HOMOLOGACIÓN DE PROVEEDOR',
+                                      layout_variant: 'carta_membrete',
+                                      document_number: sup.code,
+                                      issue_date: sup.createdAt,
+                                      customer_name: sup.name,
+                                      customer_nit: sup.nit,
+                                      customer_phone: sup.phone,
+                                      customer_address: sup.city,
+                                      items: [
+                                        {
+                                          code: sup.code,
+                                          description: `Proveedor activo — Ciudad: ${sup.city} — Contacto: ${sup.phone || 'N/A'} ${sup.email || ''}`,
+                                          quantity: 1,
+                                          unit_price: 0,
+                                          tax_pct: 0,
+                                          subtotal: 0,
+                                        },
+                                      ],
+                                      grand_total: 0,
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    className="pk-btn pk-btn-danger pk-btn-sm"
+                                    onClick={() => setDeleteTarget(sup)}
+                                    disabled={busy}
+                                  >
+                                    Eliminar
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </ModuleGate>
       )}
 
       {currentTab === 'ordenes_compra' && (
         <ModuleGate module="ordenes_compra">
-          <div className="pk-card">
-            <div className="pk-card-head">
-              <div className="pk-card-title">📦 Emitir Orden de Compra y Recepción de Mercancía</div>
-              <div className="pk-row-actions">
-                <span className="pk-badge pk-badge-emerald">
-                  Total Orden: {formatCop(previewTotalOrder)}
-                </span>
-                <button
-                  type="button"
-                  className="pk-btn pk-btn-outline pk-btn-sm"
-                  onClick={handleExportOrdersCsv}
-                >
-                  📥 Exportar CSV
-                </button>
-              </div>
-            </div>
-            <div className="pk-card-body">
-              <form onSubmit={handleCreateOrder} className="pk-form-grid">
-                <PkAutoCodeInput label="Consecutivo Orden" value={nextOrderCode} />
+          <div className="pk-stack">
+            <PkViewSwitcher
+              title="Órdenes de Compra y Abastecimiento"
+              subtitle="Emite órdenes de compra a proveedores y sincroniza ingresos de mercancía con almacén."
+              mode={orderViewMode}
+              onModeChange={setOrderViewMode}
+              listLabel="🚚 Historial de Órdenes"
+              createLabel="+ Emitir Orden de Compra"
+              count={orders.length}
+              extraActions={
+                orderViewMode === 'list' ? (
+                  <button type="button" className="pk-btn pk-btn-outline" onClick={handleExportOrdersCsv}>
+                    📥 Exportar CSV
+                  </button>
+                ) : undefined
+              }
+            />
 
-                <PkSelect
-                  label="Proveedor *"
-                  items={suppliers}
-                  value={supplierId}
-                  onChange={setSupplierId}
-                  getValue={(s) => s.id}
-                  getLabel={(s) => `${s.code} — ${s.name} (${s.nit})`}
-                  onCreateNew={
-                    hasModule('directorio_proveedores') ? () => setSupplierModalOpen(true) : undefined
-                  }
-                  createLabel="+ Nuevo Proveedor"
-                  searchable
-                />
+            {orderViewMode === 'create' ? (
+              <div className="pk-card">
+                <div className="pk-card-head">
+                  <div className="pk-card-title">📦 Emitir Orden de Compra y Recepción de Mercancía</div>
+                  <div className="pk-row-actions">
+                    <span className="pk-badge pk-badge-emerald">
+                      Total Orden: {formatCop(previewTotalOrder)}
+                    </span>
+                    <span className="pk-badge pk-badge-blue">{nextOrderCode}</span>
+                  </div>
+                </div>
+                <div className="pk-card-body">
+                  <form onSubmit={handleCreateOrder} className="pk-form-grid cols-2">
+                    <PkAutoCodeInput label="Consecutivo Orden" value={nextOrderCode} />
 
-                {useCatalogMode ? (
-                  <PkSelect
-                    label="Producto de Inventario *"
-                    items={invProducts}
-                    value={productId}
-                    onChange={handleProductChange}
-                    getValue={(p) => p.id}
-                    getLabel={(p) => `${p.code} — ${p.name} (Stock: ${p.stock})`}
-                    searchable
-                  />
-                ) : (
-                  <>
-                    <div className="pk-field">
-                      <label>Referencia / Código Artículo</label>
-                      <input
-                        value={manualProductCode}
-                        onChange={(e) => setManualProductCode(e.target.value)}
-                        placeholder="Ej: INS-010"
+                    <PkSelect
+                      label="Proveedor *"
+                      items={suppliers}
+                      value={supplierId}
+                      onChange={setSupplierId}
+                      getValue={(s) => s.id}
+                      getLabel={(s) => `${s.code} — ${s.name} (${s.nit})`}
+                      onCreateNew={
+                        hasModule('directorio_proveedores') ? () => setSupplierModalOpen(true) : undefined
+                      }
+                      createLabel="+ Nuevo Proveedor"
+                      searchable
+                    />
+
+                    {useCatalogMode ? (
+                      <PkSelect
+                        label="Producto de Inventario *"
+                        items={invProducts}
+                        value={productId}
+                        onChange={handleProductChange}
+                        getValue={(p) => p.id}
+                        getLabel={(p) => `${p.code} — ${p.name} (Stock: ${p.stock})`}
+                        searchable
                       />
-                    </div>
+                    ) : (
+                      <>
+                        <div className="pk-field">
+                          <label>Referencia / Código Artículo</label>
+                          <input
+                            value={manualProductCode}
+                            onChange={(e) => setManualProductCode(e.target.value)}
+                            placeholder="Ej: INS-010"
+                          />
+                        </div>
+                        <div className="pk-field">
+                          <label>Descripción del Producto o Insumo *</label>
+                          <input
+                            required
+                            value={manualProductName}
+                            onChange={(e) => setManualProductName(e.target.value)}
+                            placeholder="Ej: Caja de resmas corporativas carta"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {invWarehouses.length > 0 ? (
+                      <PkSelect
+                        label="Bodega de Recepción *"
+                        items={invWarehouses}
+                        value={warehouseId}
+                        onChange={setWarehouseId}
+                        getValue={(w) => w.id}
+                        getLabel={(w) => `${w.code} — ${w.name}${w.city ? ` (${w.city})` : ''}`}
+                        searchable
+                      />
+                    ) : (
+                      <div className="pk-field">
+                        <label>Bodega / Centro Destino</label>
+                        <input
+                          value={manualWarehouseName}
+                          onChange={(e) => setManualWarehouseName(e.target.value)}
+                          placeholder="Bodega Principal"
+                        />
+                      </div>
+                    )}
+
                     <div className="pk-field">
-                      <label>Descripción del Producto o Insumo *</label>
+                      <label>Cantidad Recibida *</label>
                       <input
                         required
-                        value={manualProductName}
-                        onChange={(e) => setManualProductName(e.target.value)}
-                        placeholder="Ej: Caja de resmas corporativas carta"
+                        type="number"
+                        min="0.01"
+                        step="any"
+                        value={qty}
+                        onChange={(e) => setQty(e.target.value)}
                       />
                     </div>
-                  </>
-                )}
 
-                {invWarehouses.length > 0 ? (
-                  <PkSelect
-                    label="Bodega de Recepción *"
-                    items={invWarehouses}
-                    value={warehouseId}
-                    onChange={setWarehouseId}
-                    getValue={(w) => w.id}
-                    getLabel={(w) => `${w.code} — ${w.name}${w.city ? ` (${w.city})` : ''}`}
-                  />
-                ) : (
-                  <div className="pk-field">
-                    <label>Bodega / Centro Destino</label>
-                    <input
-                      value={manualWarehouseName}
-                      onChange={(e) => setManualWarehouseName(e.target.value)}
-                      placeholder="Bodega Principal"
-                    />
-                  </div>
-                )}
+                    <div className="pk-field">
+                      <label>Costo Unitario Compra ($) *</label>
+                      <input
+                        required
+                        type="number"
+                        min="1"
+                        step="any"
+                        value={unitCost}
+                        onChange={(e) => setUnitCost(e.target.value)}
+                      />
+                    </div>
 
-                <div className="pk-field">
-                  <label>Cantidad Recibida *</label>
-                  <input
-                    required
-                    type="number"
-                    min="0.01"
-                    step="any"
-                    value={qty}
-                    onChange={(e) => setQty(e.target.value)}
-                  />
+                    <div className="pk-form-actions">
+                      <button
+                        type="button"
+                        className="pk-btn pk-btn-outline"
+                        onClick={() => setOrderViewMode('list')}
+                        disabled={busy}
+                      >
+                        Cancelar
+                      </button>
+                      <button type="submit" className="pk-btn pk-btn-emerald" disabled={busy}>
+                        {busy ? 'Procesando...' : '📥 Registrar Orden de Compra'}
+                      </button>
+                    </div>
+                  </form>
                 </div>
-
-                <div className="pk-field">
-                  <label>Costo Unitario Compra ($) *</label>
-                  <input
-                    required
-                    type="number"
-                    min="1"
-                    step="any"
-                    value={unitCost}
-                    onChange={(e) => setUnitCost(e.target.value)}
-                  />
-                </div>
-
-                <div className="pk-field">
-                  <button type="submit" className="pk-btn pk-btn-emerald" disabled={busy}>
-                    {busy ? 'Procesando...' : '📥 Registrar Orden de Compra'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-
-          <div className="pk-card">
-            <div className="pk-card-head">
-              <div className="pk-card-title">🚚 Historial de Órdenes de Compra ({orders.length})</div>
-            </div>
-            <div className="pk-card-body">
-              <div className="pk-table-wrap">
-                <table className="pk-table">
-                  <thead>
-                    <tr>
-                      <th>N° Orden</th>
-                      <th>Fecha</th>
-                      <th>Proveedor</th>
-                      <th>Producto / Descripción</th>
-                      <th>Bodega</th>
-                      <th className="num">Cant.</th>
-                      <th className="num">Costo Unit.</th>
-                      <th className="num">Total OC</th>
-                      <th>Kardex</th>
-                      <th>Imprimir</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {orders.length === 0 ? (
-                      <tr>
-                        <td colSpan={10} style={{ textAlign: 'center', color: 'var(--pk-muted)' }}>
-                          Aún no se han emitido órdenes de compra.
-                        </td>
-                      </tr>
-                    ) : (
-                      orders.map((ord) => (
-                        <tr key={ord.id}>
-                          <td>
-                            <span className="pk-badge pk-badge-emerald">{ord.code}</span>
-                          </td>
-                          <td>{ord.createdAt}</td>
-                          <td>
-                            <div style={{ fontWeight: 700 }}>{ord.supplierName}</div>
-                            <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>NIT {ord.supplierNit}</div>
-                          </td>
-                          <td>
-                            {ord.productCode ? `${ord.productCode} — ` : ''}
-                            {ord.productName}
-                          </td>
-                          <td>{ord.warehouseName}</td>
-                          <td className="num" style={{ fontWeight: 800 }}>
-                            +{ord.qty}
-                          </td>
-                          <td className="num">{formatCop(ord.unitCost)}</td>
-                          <td className="num" style={{ fontWeight: 800, color: 'var(--pk-primary)' }}>
-                            {formatCop(ord.totalCost)}
-                          </td>
-                          <td>
-                            <span
-                              className={`pk-badge ${
-                                ord.inventorySynced ? 'pk-badge-blue' : 'pk-badge-slate'
-                              }`}
-                            >
-                              {ord.inventorySynced ? 'Sincronizado' : 'Documental'}
-                            </span>
-                          </td>
-                          <td>
-                            <PkPrintButton label="🖨️ Orden" payload={buildOrderPrintPayload(ord)} />
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
               </div>
-            </div>
+            ) : (
+              <div className="pk-card">
+                <div className="pk-card-head">
+                  <div className="pk-card-title">🚚 Historial de Órdenes de Compra ({orders.length})</div>
+                </div>
+                <div className="pk-datatable-toolbar">
+                  <input
+                    type="search"
+                    className="pk-input pk-datatable-search"
+                    value={orderSearch}
+                    onChange={(e) => setOrderSearch(e.target.value)}
+                    placeholder="🔎 Buscar por N° de orden, proveedor, NIT o producto..."
+                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    <div style={{ minWidth: 250 }}>
+                      <PkSimpleSelect
+                        ariaLabel="Filtrar por proveedor"
+                        value={orderSupplierFilter}
+                        onChange={setOrderSupplierFilter}
+                        allowClear
+                        placeholder="Todos los proveedores"
+                        options={[
+                          { value: '', label: 'Todos los proveedores' },
+                          ...suppliers.map((s) => ({
+                            value: s.id,
+                            label: `${s.code} — ${s.name}`,
+                            sublabel: s.nit,
+                          })),
+                        ]}
+                      />
+                    </div>
+                    <span className="pk-badge pk-badge-slate">{filteredOrders.length} órdenes</span>
+                  </div>
+                </div>
+                <div className="pk-card-body">
+                  <div className="pk-table-wrap">
+                    <table className="pk-table">
+                      <thead>
+                        <tr>
+                          <th>N° Orden</th>
+                          <th>Fecha</th>
+                          <th>Proveedor</th>
+                          <th>Producto / Descripción</th>
+                          <th>Bodega</th>
+                          <th className="num">Cant.</th>
+                          <th className="num">Costo Unit.</th>
+                          <th className="num">Total OC</th>
+                          <th>Kardex</th>
+                          <th>Imprimir</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredOrders.length === 0 ? (
+                          <tr>
+                            <td colSpan={10} style={{ textAlign: 'center', color: 'var(--pk-muted)', padding: 28 }}>
+                              No se encontraron órdenes de compra para el criterio seleccionado.
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredOrders.map((ord) => (
+                            <tr key={ord.id}>
+                              <td>
+                                <span className="pk-badge pk-badge-emerald">{ord.code}</span>
+                              </td>
+                              <td>{ord.createdAt}</td>
+                              <td>
+                                <div style={{ fontWeight: 700 }}>{ord.supplierName}</div>
+                                <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>NIT {ord.supplierNit}</div>
+                              </td>
+                              <td>
+                                {ord.productCode ? `${ord.productCode} — ` : ''}
+                                {ord.productName}
+                              </td>
+                              <td>{ord.warehouseName}</td>
+                              <td className="num" style={{ fontWeight: 800 }}>
+                                +{ord.qty}
+                              </td>
+                              <td className="num">{formatCop(ord.unitCost)}</td>
+                              <td className="num" style={{ fontWeight: 800, color: 'var(--pk-primary)' }}>
+                                {formatCop(ord.totalCost)}
+                              </td>
+                              <td>
+                                <span
+                                  className={`pk-badge ${
+                                    ord.inventorySynced ? 'pk-badge-blue' : 'pk-badge-slate'
+                                  }`}
+                                >
+                                  {ord.inventorySynced ? 'Sincronizado' : 'Documental'}
+                                </span>
+                              </td>
+                              <td>
+                                <PkPrintButton label="🖨️ Orden" payload={buildOrderPrintPayload(ord)} />
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </ModuleGate>
       )}
@@ -735,7 +885,7 @@ export const ComprasView: React.FC = () => {
             e.preventDefault();
             void submitNewSupplier(true);
           }}
-          className="pk-form-grid"
+          className="pk-form-grid cols-2"
         >
           <PkAutoCodeInput label="Código Proveedor" value={nextSupplierCode} />
           <div className="pk-field">
@@ -747,7 +897,7 @@ export const ComprasView: React.FC = () => {
               placeholder="Ej: 901.334.550-8"
             />
           </div>
-          <div className="pk-field">
+          <div className="pk-field pk-col-span-full">
             <label>Razón Social *</label>
             <input
               required
@@ -764,7 +914,24 @@ export const ComprasView: React.FC = () => {
             <label>Teléfono</label>
             <input value={supPhone} onChange={(e) => setSupPhone(e.target.value)} />
           </div>
-          <div className="pk-field">
+          <div className="pk-field pk-col-span-full">
+            <label>Correo Electrónico</label>
+            <input
+              type="email"
+              value={supEmail}
+              onChange={(e) => setSupEmail(e.target.value)}
+              placeholder="ventas@proveedor.co"
+            />
+          </div>
+          <div className="pk-form-actions">
+            <button
+              type="button"
+              className="pk-btn pk-btn-outline"
+              onClick={() => setSupplierModalOpen(false)}
+              disabled={busy}
+            >
+              Cancelar
+            </button>
             <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
               {busy ? 'Guardando...' : '💾 Guardar Proveedor'}
             </button>

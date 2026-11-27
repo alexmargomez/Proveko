@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { PkConfirmModal, PkModal, TenantSummary, useAsyncAction, usePlatform } from '@platform/ui-sdk';
+import { PkConfirmModal, PkModal, PkSimpleSelect, TenantSummary, useAsyncAction, usePlatform } from '@platform/ui-sdk';
 import { AdminSwitch } from './AdminSwitch';
 
 interface AnnouncementItem {
@@ -192,19 +192,22 @@ export const AdminAnnouncementsTab: React.FC = () => {
         maxWidth={620}
       >
         <form onSubmit={handleSave} className="pk-stack">
-          <div className="pk-form-grid">
+          <div className="pk-form-grid cols-2">
             <div className="pk-field">
               <label>Título del Aviso</label>
               <input required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej. Ventana de Mantenimiento Programado" />
             </div>
-            <div className="pk-field">
-              <label>Nivel de Prioridad</label>
-              <select value={severity} onChange={(e) => setSeverity(e.target.value)}>
-                <option value="INFO">Informativo (Azul)</option>
-                <option value="WARNING">Advertencia (Ámbar)</option>
-                <option value="CRITICAL">Crítico (Rojo)</option>
-              </select>
-            </div>
+            <PkSimpleSelect
+              label="Nivel de Prioridad"
+              searchable={false}
+              value={severity}
+              onChange={(nextSev) => setSeverity(nextSev)}
+              options={[
+                { value: 'INFO', label: 'Informativo (Azul)' },
+                { value: 'WARNING', label: 'Advertencia (Ámbar)' },
+                { value: 'CRITICAL', label: 'Crítico (Rojo)' },
+              ]}
+            />
           </div>
 
           <div className="pk-field">
@@ -218,13 +221,16 @@ export const AdminAnnouncementsTab: React.FC = () => {
             />
           </div>
 
-          <div className="pk-field">
-            <label>Alcance de Publicación</label>
-            <select value={targetScope} onChange={(e) => setTargetScope(e.target.value)}>
-              <option value="ALL">Global — Todas las empresas clientes</option>
-              <option value="SPECIFIC">Dirigido — Solo empresas seleccionadas</option>
-            </select>
-          </div>
+          <PkSimpleSelect
+            label="Alcance de Publicación"
+            searchable={false}
+            value={targetScope}
+            onChange={(nextScope) => setTargetScope(nextScope)}
+            options={[
+              { value: 'ALL', label: 'Global — Todas las empresas clientes' },
+              { value: 'SPECIFIC', label: 'Dirigido — Solo empresas seleccionadas' },
+            ]}
+          />
 
           {targetScope === 'SPECIFIC' && (
             <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid var(--pk-border)', borderRadius: 8, padding: 10 }}>
@@ -248,7 +254,7 @@ export const AdminAnnouncementsTab: React.FC = () => {
             </div>
           )}
 
-          <div className="pk-row-actions" style={{ justifyContent: 'flex-end' }}>
+          <div className="pk-form-actions">
             <button type="button" className="pk-btn pk-btn-outline" onClick={() => setModalOpen(false)}>Cancelar</button>
             <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
               {busy ? 'Guardando...' : editing ? 'Guardar Cambios' : 'Publicar Comunicado'}

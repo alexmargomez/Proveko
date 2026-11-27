@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   PkConfirmModal,
   PkModal,
+  PkSimpleSelect,
+  PkViewSwitcher,
   RoleTemplateSpec,
   TenantSummary,
   TenantUserRecord,
@@ -112,6 +114,7 @@ export const AdminTenants360Tab: React.FC<Props> = ({
   const [supportReason, setSupportReason] = useState('');
   const [supportDuration, setSupportDuration] = useState(30);
   const [exportReason, setExportReason] = useState('');
+  const [exportsViewMode, setExportsViewMode] = useState<'list' | 'create'>('list');
 
   const loadTenants = useCallback(async () => {
     const resp = await apiGet<{ tenants: TenantSummary[] }>('/api/v1/admin/tenants');
@@ -542,7 +545,7 @@ export const AdminTenants360Tab: React.FC<Props> = ({
                       <div className="pk-card-title">Cupos de Usuarios y Facturación Mensual</div>
                     </div>
                     <div className="pk-card-body pk-stack">
-                      <div className="pk-form-grid">
+                      <div className="pk-form-grid cols-2">
                         <div className="pk-field">
                           <label>
                             <span>Cupo Máximo de Usuarios</span>
@@ -568,18 +571,23 @@ export const AdminTenants360Tab: React.FC<Props> = ({
                             onChange={(e) => setQuotaCustomCop(Number(e.target.value) || 0)}
                           />
                         </div>
-                        <div className="pk-field">
-                          <label>Estado de Cartera / Pago</label>
-                          <select value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value)}>
-                            <option value="ACTIVA_VERIFICADA">Activa Verificada</option>
-                            <option value="PENDIENTE_PAGO">Pendiente de Pago</option>
-                            <option value="CORTESIA">Cortesía / Convenio</option>
-                            <option value="EN_MORA">En Mora</option>
-                          </select>
+                        <div className="pk-col-span-full">
+                          <PkSimpleSelect
+                            label="Estado de Cartera / Pago"
+                            searchable={false}
+                            value={paymentStatus}
+                            onChange={(nextStatus) => setPaymentStatus(nextStatus)}
+                            options={[
+                              { value: 'ACTIVA_VERIFICADA', label: 'Activa Verificada' },
+                              { value: 'PENDIENTE_PAGO', label: 'Pendiente de Pago' },
+                              { value: 'CORTESIA', label: 'Cortesía / Convenio' },
+                              { value: 'EN_MORA', label: 'En Mora' },
+                            ]}
+                          />
                         </div>
                       </div>
                       {hasPlatformPermission('empresas.editar_cuotas') && (
-                        <div className="pk-row-actions" style={{ justifyContent: 'flex-end' }}>
+                        <div className="pk-form-actions">
                           <button
                             type="button"
                             className="pk-btn pk-btn-primary"
@@ -626,7 +634,7 @@ export const AdminTenants360Tab: React.FC<Props> = ({
                           placeholder="Estamos aplicando una actualización técnica programada..."
                         />
                       </div>
-                      <div className="pk-row-between">
+                      <div className="pk-form-actions" style={{ justifyContent: 'space-between' }}>
                         {hasPlatformPermission('usuarios_cliente.revocar_sesiones') && (
                           <button
                             type="button"
@@ -672,15 +680,18 @@ export const AdminTenants360Tab: React.FC<Props> = ({
                     <div className="pk-card-title">Ficha Interna de Cuenta y Atención Comercial</div>
                   </div>
                   <div className="pk-card-body">
-                    <div className="pk-form-grid">
-                      <div className="pk-field">
-                        <label>Nivel de Soporte SLA</label>
-                        <select value={meta.supportTier} onChange={(e) => setMeta({ ...meta, supportTier: e.target.value })}>
-                          <option value="STANDARD">Estándar</option>
-                          <option value="PRIORITY">Prioritario</option>
-                          <option value="ENTERPRISE">Corporativo Dedicado 24/7</option>
-                        </select>
-                      </div>
+                    <div className="pk-form-grid cols-2">
+                      <PkSimpleSelect
+                        label="Nivel de Soporte SLA"
+                        searchable={false}
+                        value={meta.supportTier}
+                        onChange={(nextTier) => setMeta({ ...meta, supportTier: nextTier })}
+                        options={[
+                          { value: 'STANDARD', label: 'Estándar' },
+                          { value: 'PRIORITY', label: 'Prioritario' },
+                          { value: 'ENTERPRISE', label: 'Corporativo Dedicado 24/7' },
+                        ]}
+                      />
                       <div className="pk-field">
                         <label>Ejecutivo Comercial / Líder Asignado</label>
                         <input
@@ -689,7 +700,7 @@ export const AdminTenants360Tab: React.FC<Props> = ({
                           placeholder="Ej. Dirección Comercial"
                         />
                       </div>
-                      <div className="pk-field">
+                      <div className="pk-field pk-col-span-full">
                         <label>Notas Internas de Facturación y Acuerdos</label>
                         <input
                           value={meta.billingNotes}
@@ -698,7 +709,7 @@ export const AdminTenants360Tab: React.FC<Props> = ({
                         />
                       </div>
                       {hasPlatformPermission('empresas.editar_cuotas') && (
-                        <div>
+                        <div className="pk-form-actions">
                           <button
                             type="button"
                             className="pk-btn pk-btn-outline"
@@ -1022,24 +1033,30 @@ export const AdminTenants360Tab: React.FC<Props> = ({
                     </div>
                   ) : (
                     <>
-                      <div className="pk-form-grid">
-                        <div className="pk-field">
-                          <label>Modo de Intervención</label>
-                          <select value={supportMode} onChange={(e) => setSupportMode(e.target.value as 'readonly' | 'readwrite')}>
-                            <option value="readonly">Solo Lectura (bloquea escrituras en Gateway)</option>
-                            {hasPlatformPermission('soporte.impersonar_escritura') && (
-                              <option value="readwrite">Lectura y Escritura (corrección operativa)</option>
-                            )}
-                          </select>
-                        </div>
-                        <div className="pk-field">
-                          <label>Vigencia Temporal de la Sesión</label>
-                          <select value={supportDuration} onChange={(e) => setSupportDuration(Number(e.target.value))}>
-                            <option value={15}>15 minutos</option>
-                            <option value={30}>30 minutos</option>
-                            <option value={60}>60 minutos</option>
-                          </select>
-                        </div>
+                      <div className="pk-form-grid cols-2">
+                        <PkSimpleSelect
+                          label="Modo de Intervención"
+                          searchable={false}
+                          value={supportMode}
+                          onChange={(nextMode) => setSupportMode(nextMode as 'readonly' | 'readwrite')}
+                          options={[
+                            { value: 'readonly', label: 'Solo Lectura (bloquea escrituras en Gateway)' },
+                            ...(hasPlatformPermission('soporte.impersonar_escritura')
+                              ? [{ value: 'readwrite', label: 'Lectura y Escritura (corrección operativa)' }]
+                              : []),
+                          ]}
+                        />
+                        <PkSimpleSelect
+                          label="Vigencia Temporal de la Sesión"
+                          searchable={false}
+                          value={String(supportDuration)}
+                          onChange={(nextDur) => setSupportDuration(Number(nextDur))}
+                          options={[
+                            { value: '15', label: '15 minutos' },
+                            { value: '30', label: '30 minutos' },
+                            { value: '60', label: '60 minutos' },
+                          ]}
+                        />
                       </div>
                       <div className="pk-field">
                         <label>
@@ -1052,7 +1069,7 @@ export const AdminTenants360Tab: React.FC<Props> = ({
                           placeholder="Ej. Ticket #1042 — Verificación de cuadre de caja reportado por el cliente"
                         />
                       </div>
-                      <div className="pk-row-actions" style={{ justifyContent: 'flex-end' }}>
+                      <div className="pk-form-actions">
                         <button
                           type="button"
                           className="pk-btn pk-btn-primary"
@@ -1071,102 +1088,130 @@ export const AdminTenants360Tab: React.FC<Props> = ({
             {/* TAB 5: EXCEL-COMPATIBLE CSV ZIP EXPORTS */}
             {detailTab === 'exports' && (
               <div className="pk-stack">
-                <div className="pk-card" style={{ boxShadow: 'none' }}>
-                  <div className="pk-card-head">
-                    <div>
-                      <div className="pk-card-title">Generar Paquete de Datos del Cliente (.ZIP con CSVs para Excel)</div>
-                      <div style={{ fontSize: 12, color: 'var(--pk-muted)', marginTop: 2 }}>
-                        Extrae las tablas de todos los microservicios activos de {selected.companyName} con codificación UTF-8 BOM y separador punto y coma (;).
-                      </div>
+                <PkViewSwitcher
+                  title="Paquetes de Exportación CSV (.ZIP para Excel)"
+                  subtitle={`Extrae las tablas de todos los microservicios activos de ${selected.companyName} con codificación UTF-8 BOM y separador punto y coma (;).`}
+                  mode={exportsViewMode}
+                  onModeChange={setExportsViewMode}
+                  listLabel="Historial de Paquetes"
+                  createLabel="+ Generar Paquete ZIP"
+                  count={exportJobs.length}
+                />
+
+                {exportsViewMode === 'list' ? (
+                  <div className="pk-card" style={{ boxShadow: 'none' }}>
+                    <div className="pk-card-head">
+                      <div className="pk-card-title">Paquetes Generados ({exportJobs.length})</div>
+                    </div>
+                    <div className="pk-table-wrap">
+                      <table className="pk-table">
+                        <thead>
+                          <tr>
+                            <th>ID Trabajo</th>
+                            <th>Fecha UTC</th>
+                            <th>Solicitado Por</th>
+                            <th>Motivo</th>
+                            <th>Servicios Incluidos</th>
+                            <th className="pk-num">Tamaño</th>
+                            <th>Descarga</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {exportJobs.map((j) => (
+                            <tr key={j.jobId}>
+                              <td><code>{j.jobId}</code></td>
+                              <td style={{ fontSize: 12 }}>{j.createdAt.slice(0, 19).replace('T', ' ')}</td>
+                              <td>{j.requestedBy}</td>
+                              <td>{j.reason || '—'}</td>
+                              <td>
+                                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                                  {(j.servicesIncluded || []).map((s) => (
+                                    <span key={s} className="pk-badge pk-badge-slate">{s}</span>
+                                  ))}
+                                </div>
+                              </td>
+                              <td className="pk-num">{(j.fileSizeBytes / 1024).toFixed(1)} KB</td>
+                              <td>
+                                <a
+                                  className="pk-btn pk-btn-primary pk-btn-sm"
+                                  style={{ textDecoration: 'none' }}
+                                  href={`/api/v1/admin/exports/${encodeURIComponent(j.jobId)}/download`}
+                                  download
+                                >
+                                  Descargar .ZIP
+                                </a>
+                              </td>
+                            </tr>
+                          ))}
+                          {exportJobs.length === 0 && (
+                            <tr>
+                              <td colSpan={7} style={{ textAlign: 'center', padding: 20, color: 'var(--pk-muted)' }}>
+                                Aún no se han generado paquetes CSV para esta empresa.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
-                  <div className="pk-card-body">
-                    {!hasPlatformPermission('datos_negocio.exportar_csv') ? (
-                      <div style={{ color: '#991b1b', fontSize: 13 }}>Tu rol no tiene habilitado el permiso <code>datos_negocio.exportar_csv</code>.</div>
-                    ) : (
-                      <div className="pk-form-grid">
-                        <div className="pk-field" style={{ gridColumn: 'span 2' }}>
-                          <label>Motivo / Solicitud de Descarga {requireDataReason ? '(Obligatorio)' : ''}</label>
-                          <input
-                            value={exportReason}
-                            onChange={(e) => setExportReason(e.target.value)}
-                            placeholder="Ej. Solicitud formal de respaldo contable mensual del cliente"
-                          />
-                        </div>
-                        <div>
-                          <button
-                            type="button"
-                            className="pk-btn pk-btn-emerald"
-                            disabled={busy}
-                            onClick={() =>
-                              void run(async () => {
-                                await apiPost(`/api/v1/admin/tenants/${encodeURIComponent(selected.tenantId)}/exports`, {
-                                  reason: exportReason,
-                                });
-                                setExportReason('');
-                                await loadTenantDetails(selected);
-                                toast('Paquete ZIP CSV generado correctamente');
-                              })
-                            }
-                          >
-                            {busy ? 'Generando ZIP...' : 'Generar Paquete ZIP CSV'}
-                          </button>
+                ) : (
+                  <div className="pk-card" style={{ boxShadow: 'none' }}>
+                    <div className="pk-card-head">
+                      <div>
+                        <div className="pk-card-title">Generar Nuevo Paquete de Datos del Cliente (.ZIP con CSVs)</div>
+                        <div style={{ fontSize: 12, color: 'var(--pk-muted)', marginTop: 2 }}>
+                          El paquete consolidará todos los microservicios activos de {selected.companyName} y quedará auditado en bitácora.
                         </div>
                       </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="pk-table-wrap">
-                  <table className="pk-table">
-                    <thead>
-                      <tr>
-                        <th>ID Trabajo</th>
-                        <th>Fecha UTC</th>
-                        <th>Solicitado Por</th>
-                        <th>Motivo</th>
-                        <th>Servicios Incluidos</th>
-                        <th className="pk-num">Tamaño</th>
-                        <th>Descarga</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {exportJobs.map((j) => (
-                        <tr key={j.jobId}>
-                          <td><code>{j.jobId}</code></td>
-                          <td style={{ fontSize: 12 }}>{j.createdAt.slice(0, 19).replace('T', ' ')}</td>
-                          <td>{j.requestedBy}</td>
-                          <td>{j.reason || '—'}</td>
-                          <td>
-                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                              {(j.servicesIncluded || []).map((s) => (
-                                <span key={s} className="pk-badge pk-badge-slate">{s}</span>
-                              ))}
-                            </div>
-                          </td>
-                          <td className="pk-num">{(j.fileSizeBytes / 1024).toFixed(1)} KB</td>
-                          <td>
-                            <a
-                              className="pk-btn pk-btn-primary pk-btn-sm"
-                              style={{ textDecoration: 'none' }}
-                              href={`/api/v1/admin/exports/${encodeURIComponent(j.jobId)}/download`}
-                              download
+                    </div>
+                    <div className="pk-card-body">
+                      {!hasPlatformPermission('datos_negocio.exportar_csv') ? (
+                        <div style={{ color: '#991b1b', fontSize: 13 }}>
+                          Tu rol no tiene habilitado el permiso <code>datos_negocio.exportar_csv</code>.
+                        </div>
+                      ) : (
+                        <div className="pk-form-grid cols-2">
+                          <div className="pk-field pk-col-span-full">
+                            <label>Motivo / Solicitud de Descarga {requireDataReason ? '(Obligatorio)' : ''}</label>
+                            <input
+                              value={exportReason}
+                              onChange={(e) => setExportReason(e.target.value)}
+                              placeholder="Ej. Solicitud formal de respaldo contable mensual del cliente"
+                            />
+                          </div>
+                          <div className="pk-form-actions">
+                            <button
+                              type="button"
+                              className="pk-btn pk-btn-outline"
+                              disabled={busy}
+                              onClick={() => setExportsViewMode('list')}
                             >
-                              Descargar .ZIP
-                            </a>
-                          </td>
-                        </tr>
-                      ))}
-                      {exportJobs.length === 0 && (
-                        <tr>
-                          <td colSpan={7} style={{ textAlign: 'center', padding: 20, color: 'var(--pk-muted)' }}>
-                            Aún no se han generado paquetes CSV para esta empresa.
-                          </td>
-                        </tr>
+                              Cancelar
+                            </button>
+                            <button
+                              type="button"
+                              className="pk-btn pk-btn-emerald"
+                              disabled={busy}
+                              onClick={() =>
+                                void run(async () => {
+                                  await apiPost(`/api/v1/admin/tenants/${encodeURIComponent(selected.tenantId)}/exports`, {
+                                    reason: exportReason,
+                                  });
+                                  setExportReason('');
+                                  await loadTenantDetails(selected);
+                                  setExportsViewMode('list');
+                                  toast('Paquete ZIP CSV generado correctamente');
+                                })
+                              }
+                            >
+                              {busy ? 'Generando ZIP...' : 'Generar Paquete ZIP CSV'}
+                            </button>
+                          </div>
+                        </div>
                       )}
-                    </tbody>
-                  </table>
-                </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1180,7 +1225,7 @@ export const AdminTenants360Tab: React.FC<Props> = ({
       {/* MODAL: PROVISION NEW TENANT */}
       <PkModal open={showCreateModal} title="Aprovisionar Nueva Empresa y Base de Datos Aislada" onClose={() => setShowCreateModal(false)} maxWidth={680}>
         <form onSubmit={handleCreateTenant} className="pk-stack">
-          <div className="pk-form-grid">
+          <div className="pk-form-grid cols-2">
             <div className="pk-field">
               <label>Razón Social</label>
               <input required value={createForm.companyName} onChange={(e) => setCreateForm({ ...createForm, companyName: e.target.value })} placeholder="Ej. Inversiones del Oriente S.A.S." />
@@ -1206,22 +1251,24 @@ export const AdminTenants360Tab: React.FC<Props> = ({
               </label>
               <input type="text" required minLength={8} value={createForm.password} onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })} />
             </div>
-            <div className="pk-field">
-              <label>Paquete Operativo Inicial</label>
-              <select value={createForm.businessPreset} onChange={(e) => setCreateForm({ ...createForm, businessPreset: e.target.value })}>
-                <option value="full">Suite Empresarial Completa (Todas las Áreas)</option>
-                <option value="comercio">Comercio, Tienda y Ferretería</option>
-                <option value="restaurante">Restaurante, Gastrobar y Cafetería</option>
-                <option value="bares">Bares, Discotecas y Eventos</option>
-                <option value="automotriz">Centro Automotriz y Taller</option>
-                <option value="hotel">Hoteles y Alojamiento</option>
-                <option value="citas">Consultorios, Spa y Servicios por Cita</option>
-                <option value="mayorista">Distribuidora Mayorista</option>
-                <option value="logistica">Agroindustria y Báscula Camionera</option>
-              </select>
-            </div>
+            <PkSimpleSelect
+              label="Paquete Operativo Inicial"
+              value={createForm.businessPreset}
+              onChange={(nextPreset) => setCreateForm({ ...createForm, businessPreset: nextPreset })}
+              options={[
+                { value: 'full', label: 'Suite Empresarial Completa (Todas las Áreas)' },
+                { value: 'comercio', label: 'Comercio, Tienda y Ferretería' },
+                { value: 'restaurante', label: 'Restaurante, Gastrobar y Cafetería' },
+                { value: 'bares', label: 'Bares, Discotecas y Eventos' },
+                { value: 'automotriz', label: 'Centro Automotriz y Taller' },
+                { value: 'hotel', label: 'Hoteles y Alojamiento' },
+                { value: 'citas', label: 'Consultorios, Spa y Servicios por Cita' },
+                { value: 'mayorista', label: 'Distribuidora Mayorista' },
+                { value: 'logistica', label: 'Agroindustria y Báscula Camionera' },
+              ]}
+            />
           </div>
-          <div className="pk-row-actions" style={{ justifyContent: 'flex-end' }}>
+          <div className="pk-form-actions">
             <button type="button" className="pk-btn pk-btn-outline" onClick={() => setShowCreateModal(false)}>Cancelar</button>
             <button type="submit" className="pk-btn pk-btn-emerald" disabled={busy}>
               {busy ? 'Aprovisionando...' : 'Crear Empresa'}
@@ -1238,7 +1285,7 @@ export const AdminTenants360Tab: React.FC<Props> = ({
         maxWidth={720}
       >
         <form onSubmit={handleSaveClientUser} className="pk-stack">
-          <div className="pk-form-grid">
+          <div className="pk-form-grid cols-2">
             <div className="pk-field">
               <label>Nombre Completo</label>
               <input required value={userFullName} onChange={(e) => setUserFullName(e.target.value)} placeholder="Nombre del empleado" />
@@ -1256,14 +1303,16 @@ export const AdminTenants360Tab: React.FC<Props> = ({
               </label>
               <input type="text" required={!editingUser} value={userPassword} onChange={(e) => setUserPassword(e.target.value)} placeholder={editingUser ? 'Dejar vacío para conservar' : ''} />
             </div>
-            <div className="pk-field">
-              <label>Plantilla de Puesto</label>
-              <select value={userRole} onChange={(e) => applyUserTemplate(e.target.value, roleTemplates)}>
-                {roleTemplates.map((tpl) => (
-                  <option key={tpl.roleKey} value={tpl.roleKey}>{tpl.displayName}</option>
-                ))}
-              </select>
-            </div>
+            <PkSimpleSelect
+              label="Plantilla de Puesto"
+              value={userRole}
+              onChange={(nextRole) => applyUserTemplate(nextRole, roleTemplates)}
+              options={roleTemplates.map((tpl) => ({
+                value: tpl.roleKey,
+                label: tpl.displayName,
+                sublabel: tpl.description,
+              }))}
+            />
           </div>
 
           <AdminSwitch
@@ -1317,7 +1366,7 @@ export const AdminTenants360Tab: React.FC<Props> = ({
             </div>
           )}
 
-          <div className="pk-row-actions" style={{ justifyContent: 'flex-end' }}>
+          <div className="pk-form-actions">
             <button type="button" className="pk-btn pk-btn-outline" onClick={() => setUserModalOpen(false)}>Cancelar</button>
             <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
               {busy ? 'Guardando...' : editingUser ? 'Guardar Cambios' : 'Crear Empleado'}
@@ -1338,7 +1387,7 @@ export const AdminTenants360Tab: React.FC<Props> = ({
             </label>
             <input value={resetPassValue} onChange={(e) => setResetPassValue(e.target.value)} />
           </div>
-          <div className="pk-row-actions" style={{ justifyContent: 'flex-end' }}>
+          <div className="pk-form-actions">
             <button type="button" className="pk-btn pk-btn-outline" onClick={() => setResetPassTarget(null)}>Cancelar</button>
             <button
               type="button"

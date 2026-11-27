@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { useLicensing, useNavigation, useSession } from '@platform/ui-sdk';
+import { PkSimpleSelect, useLicensing, useNavigation, useSession } from '@platform/ui-sdk';
 import { PkIcon } from '../components/ServiceIcons';
 
 export const TopModuleTabs: React.FC<{
@@ -248,33 +248,25 @@ export const TopModuleTabs: React.FC<{
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {role === 'superadmin' && tenantsList.filter((t) => t.status !== 'SUSPENDED').length > 1 && (
-            <select
-              aria-label="Cambiar empresa activa"
-              value={tenant?.tenantId || ''}
-              onChange={(e) => {
-                if (e.target.value && e.target.value !== tenant?.tenantId) {
-                  void impersonateTenant(e.target.value);
-                }
-              }}
-              style={{
-                height: 34,
-                borderRadius: 8,
-                border: '1px solid var(--pk-border-strong)',
-                background: '#f8fafc',
-                padding: '0 10px',
-                fontSize: 12,
-                fontWeight: 700,
-                color: 'var(--pk-navy)',
-              }}
-            >
-              {tenantsList
-                .filter((t) => t.status !== 'SUSPENDED')
-                .map((t) => (
-                  <option key={t.tenantId} value={t.tenantId}>
-                    {t.companyName}
-                  </option>
-                ))}
-            </select>
+            <div style={{ minWidth: 220, maxWidth: 260 }}>
+              <PkSimpleSelect
+                ariaLabel="Cambiar empresa activa"
+                compact
+                value={tenant?.tenantId || ''}
+                onChange={(nextTenantId) => {
+                  if (nextTenantId && nextTenantId !== tenant?.tenantId) {
+                    void impersonateTenant(nextTenantId);
+                  }
+                }}
+                options={tenantsList
+                  .filter((t) => t.status !== 'SUSPENDED')
+                  .map((t) => ({
+                    value: t.tenantId,
+                    label: t.companyName,
+                    sublabel: `NIT ${t.nit}`,
+                  }))}
+              />
+            </div>
           )}
 
           {(quickActions.length > 0 || isCompanyAdmin) && (

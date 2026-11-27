@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { usePlatform } from '@platform/ui-sdk';
+import { PkSimpleSelect, usePlatform } from '@platform/ui-sdk';
 import { SidebarMenu } from './layout/SidebarMenu';
 import { TopModuleTabs, ServiceContextHeader } from './layout/TopModuleTabs';
 import { LandingAndAuth } from './pages/LandingAndAuth';
@@ -475,33 +475,28 @@ export const App: React.FC = () => {
             <span>
               Explora facturación, inventario, comandas, taller y roles libremente. Simular vista de empleado:
             </span>
-            <select
-              aria-label="Simular rol en modo demostración"
-              value={userProfile?.internalRole || 'admin_empresa'}
-              onChange={(e) => {
-                const nextRole = e.target.value;
-                void startDemoSession(nextRole);
-              }}
-              style={{
-                background: 'rgba(255,255,255,0.14)',
-                color: '#ffffff',
-                border: '1px solid rgba(255,255,255,0.35)',
-                borderRadius: 7,
-                padding: '4px 9px',
-                fontSize: 12,
-                fontWeight: 700,
-              }}
-            >
-              <option value="admin_empresa" style={{ color: '#0f172a' }}>Vista: Administrador (Todo)</option>
-              <option value="cajero" style={{ color: '#0f172a' }}>Vista: Cajero y Facturador</option>
-              <option value="vendedor" style={{ color: '#0f172a' }}>Vista: Asesor Comercial y Ventas</option>
-              <option value="mesero" style={{ color: '#0f172a' }}>Vista: Mesero de Salón</option>
-              <option value="cocina" style={{ color: '#0f172a' }}>Vista: Cocina y Despacho</option>
-              <option value="bodega" style={{ color: '#0f172a' }}>Vista: Jefe de Bodega</option>
-              <option value="tecnico" style={{ color: '#0f172a' }}>Vista: Técnico de Taller</option>
-              <option value="recepcion" style={{ color: '#0f172a' }}>Vista: Recepción Hotelera</option>
-              <option value="contador" style={{ color: '#0f172a' }}>Vista: Contador y Nómina</option>
-            </select>
+            <div style={{ minWidth: 260, maxWidth: 300 }}>
+              <PkSimpleSelect
+                ariaLabel="Simular rol en modo demostración"
+                compact
+                searchable={false}
+                value={userProfile?.internalRole || 'admin_empresa'}
+                onChange={(nextRole) => {
+                  void startDemoSession(nextRole);
+                }}
+                options={[
+                  { value: 'admin_empresa', label: 'Vista: Administrador (Todo)' },
+                  { value: 'cajero', label: 'Vista: Cajero y Facturador' },
+                  { value: 'vendedor', label: 'Vista: Asesor Comercial y Ventas' },
+                  { value: 'mesero', label: 'Vista: Mesero de Salón' },
+                  { value: 'cocina', label: 'Vista: Cocina y Despacho' },
+                  { value: 'bodega', label: 'Vista: Jefe de Bodega' },
+                  { value: 'tecnico', label: 'Vista: Técnico de Taller' },
+                  { value: 'recepcion', label: 'Vista: Recepción Hotelera' },
+                  { value: 'contador', label: 'Vista: Contador y Nómina' },
+                ]}
+              />
+            </div>
           </div>
 
           <button

@@ -74,9 +74,22 @@ export const FacturacionDianTab: React.FC<FacturacionDianTabProps> = ({
   const totalTaxDian = dianInvoices.reduce((acc, inv) => acc + inv.taxTotal, 0);
   const totalBilledDian = dianInvoices.reduce((acc, inv) => acc + inv.total, 0);
 
+  const [dianSearch, setDianSearch] = React.useState('');
+  const filteredDian = dianSearch.trim()
+    ? invoices.filter((inv) => {
+        const q = dianSearch.trim().toLowerCase();
+        return (
+          inv.id.toLowerCase().includes(q) ||
+          inv.customerName.toLowerCase().includes(q) ||
+          (inv.customerNit || '').toLowerCase().includes(q) ||
+          (inv.cufe || '').toLowerCase().includes(q)
+        );
+      })
+    : invoices;
+
   return (
     <ModuleGate module="facturacion_dian">
-      <div>
+      <div className="pk-stack">
         <PkKpiRow
           items={[
             {
@@ -135,6 +148,15 @@ export const FacturacionDianTab: React.FC<FacturacionDianTabProps> = ({
               📥 Exportar Libro DIAN (.CSV)
             </button>
           </div>
+          <div className="pk-datatable-toolbar">
+            <input
+              className="pk-input pk-datatable-search"
+              placeholder="🔎 Filtrar por N° factura, adquiriente, NIT o huella CUFE..."
+              value={dianSearch}
+              onChange={(e) => setDianSearch(e.target.value)}
+            />
+            <span className="pk-badge pk-badge-slate">{filteredDian.length} documentos</span>
+          </div>
           <div className="pk-card-body">
             <div className="pk-table-wrap">
               <table className="pk-table">
@@ -151,7 +173,7 @@ export const FacturacionDianTab: React.FC<FacturacionDianTabProps> = ({
                   </tr>
                 </thead>
                 <tbody>
-                  {invoices.map((inv) => (
+                  {filteredDian.map((inv) => (
                     <tr key={inv.id}>
                       <td>
                         <strong>{inv.id}</strong>
@@ -199,13 +221,13 @@ export const FacturacionDianTab: React.FC<FacturacionDianTabProps> = ({
                       </td>
                     </tr>
                   ))}
-                  {invoices.length === 0 && (
+                  {filteredDian.length === 0 && (
                     <tr>
                       <td
                         colSpan={8}
                         style={{ textAlign: 'center', color: 'var(--pk-muted)' }}
                       >
-                        No se han emitido facturas electrónicas aún.
+                        No se encontraron documentos electrónicos para el criterio actual.
                       </td>
                     </tr>
                   )}

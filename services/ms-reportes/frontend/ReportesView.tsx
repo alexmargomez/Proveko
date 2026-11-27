@@ -3,6 +3,7 @@ import {
   usePlatform,
   ModuleGate,
   PkAutoCodeInput,
+  PkSimpleSelect,
   PkModal,
   PkPrintButton,
   PkKpiRow,
@@ -106,6 +107,18 @@ interface ConsolidatedState {
   products: RemoteProduct[];
 }
 
+const INVOICE_FILTER_OPTIONS = [
+  { value: '', label: 'Todas las facturas del periodo' },
+  { value: 'paid', label: 'Facturas pagadas (Saldo $0)' },
+  { value: 'pending', label: 'Con cartera pendiente por cobrar (CxC)' },
+];
+
+const STOCK_FILTER_OPTIONS = [
+  { value: '', label: 'Todo el catálogo valorizado' },
+  { value: 'low', label: 'Solo alertas de stock bajo mínimo' },
+  { value: 'optimal', label: 'Solo referencias en nivel óptimo' },
+];
+
 export const ReportesView: React.FC = () => {
   const { apiGet, apiPost, toast, hasService } = usePlatform();
   const { busy, run } = useAsyncAction();
@@ -114,6 +127,8 @@ export const ReportesView: React.FC = () => {
   const [snapshots, setSnapshots] = useState<ExecutiveSnapshot[]>([]);
   const [snapshotModalOpen, setSnapshotModalOpen] = useState(false);
   const [snapshotNotes, setSnapshotNotes] = useState('Cierre ejecutivo consolidado del turno');
+  const [invoiceFilter, setInvoiceFilter] = useState('');
+  const [stockFilter, setStockFilter] = useState('');
 
   const [report, setReport] = useState<ConsolidatedState>({
     totalSales: 0,
@@ -298,7 +313,7 @@ export const ReportesView: React.FC = () => {
         inv.amountPaid,
         inv.pendingBalance,
         inv.status || (inv.pendingBalance > 0 ? 'Pendiente' : 'Pagada'),
-      ]),
+      ])
     );
     toast('Archivo CSV UTF-8 de Ventas descargado correctamente');
   };
@@ -331,7 +346,7 @@ export const ReportesView: React.FC = () => {
         p.costPrice * p.stock,
         p.salePrice * p.stock,
         p.lotCode || '',
-      ]),
+      ])
     );
     toast('Archivo CSV UTF-8 de Inventario Valorizado descargado');
   };
@@ -348,7 +363,7 @@ export const ReportesView: React.FC = () => {
         exp.paymentSource || 'Caja',
         exp.responsible || 'Operación',
         exp.amount,
-      ]),
+      ])
     );
     toast('Archivo CSV UTF-8 de Egresos Operativos descargado');
   };
@@ -381,7 +396,7 @@ export const ReportesView: React.FC = () => {
         s.inventorySaleValue,
         s.lowStockCount,
         s.notes,
-      ]),
+      ])
     );
     toast('Archivo CSV UTF-8 de Cortes Ejecutivos descargado');
   };
@@ -399,7 +414,7 @@ export const ReportesView: React.FC = () => {
       inventorySaleValue: number;
       lowStockCount: number;
       notes?: string;
-    },
+    }
   ): Record<string, unknown> => ({
     document_type: 'BALANCE EJECUTIVO Y ESTADO GERENCIAL',
     layout_variant: 'carta_membrete',
@@ -439,193 +454,162 @@ export const ReportesView: React.FC = () => {
     notes:
       kpi.notes ||
       `Utilidad bruta potencial estimada sobre inventario valorizado: ${formatCop(
-        kpi.inventorySaleValue - kpi.inventoryCostValue,
+        kpi.inventorySaleValue - kpi.inventoryCostValue
       )}.`,
   });
 
   const livePrintPayload = buildBalancePrintPayload(
     `BAL-${todayStamp}`,
     new Date().toISOString().slice(0, 16).replace('T', ' '),
-    report,
+    report
   );
+
+  const filteredInvoices = report.invoices.filter((inv) => {
+    if (invoiceFilter === 'paid') return inv.pendingBalance <= 0;
+    if (invoiceFilter === 'pending') return inv.pendingBalance > 0;
+    return true;
+  });
+
+  const filteredProducts = report.products.filter((p) => {
+    const isLow = p.stock <= p.minStock;
+    if (stockFilter === 'low') return isLow;
+    if (stockFilter === 'optimal') return !isLow;
+    return true;
+  });
 
   return (
     <ModuleGate module="centro_reportes">
-      <PkKpiRow
-        items={[
-          { label: 'Ventas Totales', value: formatCop(report.totalSales), color: 'var(--pk-primary)' },
-          { label: 'Recaudo Efectivo', value: formatCop(report.totalCollected), color: 'var(--pk-emerald)' },
-          { label: 'Cartera por Cobrar', value: formatCop(report.totalPendingReceivables), color: 'var(--pk-amber)' },
-          { label: 'Egresos Operativos', value: formatCop(report.totalExpenses), color: 'var(--pk-rose)' },
-          {
-            label: 'Utilidad Operativa',
-            value: formatCop(report.netOperatingProfit),
-            color: report.netOperatingProfit >= 0 ? 'var(--pk-emerald)' : 'var(--pk-rose)',
-          },
-          { label: 'Inventario (Costo)', value: formatCop(report.inventoryCostValue), color: '#0f172a' },
-        ]}
-      />
+      <div className="pk-stack">
+        <PkKpiRow
+          items={[
+            { label: 'Ventas Totales', value: formatCop(report.totalSales), color: 'var(--pk-primary)' },
+            { label: 'Recaudo Efectivo', value: formatCop(report.totalCollected), color: 'var(--pk-emerald)' },
+            {
+              label: 'Cartera por Cobrar',
+              value: formatCop(report.totalPendingReceivables),
+              color: 'var(--pk-amber)',
+            },
+            { label: 'Egresos Operativos', value: formatCop(report.totalExpenses), color: 'var(--pk-rose)' },
+            {
+              label: 'Utilidad Operativa',
+              value: formatCop(report.netOperatingProfit),
+              color: report.netOperatingProfit >= 0 ? 'var(--pk-emerald)' : 'var(--pk-rose)',
+            },
+            { label: 'Inventario (Costo)', value: formatCop(report.inventoryCostValue), color: '#0f172a' },
+          ]}
+        />
 
-      <div className="pk-card">
-        <div className="pk-card-head">
-          <div>
-            <div className="pk-card-title">📊 Centro Gerencial — Consolidación Ejecutiva, CSV UTF-8 y Balance PDF</div>
-            <div style={{ fontSize: 12, color: 'var(--pk-muted)', marginTop: 2 }}>
-              Inventario a precio de venta: <strong>{formatCop(report.inventorySaleValue)}</strong> · Alertas bajo mínimo:{' '}
-              <strong>{report.lowStockCount}</strong> · Clientes activos: <strong>{report.customersCount}</strong>
-            </div>
-          </div>
-          <div className="pk-row-actions">
-            <button
-              type="button"
-              className="pk-btn pk-btn-outline pk-btn-sm"
-              onClick={() => setSnapshotModalOpen(true)}
-            >
-              💾 Guardar Corte ({nextSnapshotCode})
-            </button>
-            <button type="button" className="pk-btn pk-btn-emerald pk-btn-sm" onClick={handleExportSalesCsv}>
-              📥 CSV Ventas
-            </button>
-            <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={handleExportInventoryCsv}>
-              📥 CSV Inventario
-            </button>
-            <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={handleExportExpensesCsv}>
-              📥 CSV Egresos
-            </button>
-            <PkPrintButton
-              label="🖨️ Imprimir Balance Ejecutivo PDF"
-              payload={livePrintPayload}
-              variant="primary"
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="pk-card">
-        <div className="pk-card-head">
-          <div className="pk-card-title">🗂️ Cortes Ejecutivos Históricos Almacenados ({snapshots.length})</div>
-          <div className="pk-row-actions">
-            <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={handleExportSnapshotsCsv}>
-              📥 CSV Histórico
-            </button>
-            <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={() => void reload()}>
-              🔄 Actualizar Consolidado
-            </button>
-          </div>
-        </div>
-        <div className="pk-card-body">
-          <div className="pk-table-wrap">
-            <table className="pk-table">
-              <thead>
-                <tr>
-                  <th>Corte</th>
-                  <th>Fecha / Hora</th>
-                  <th>Ventas</th>
-                  <th>Recaudo</th>
-                  <th>Cartera CxC</th>
-                  <th>Egresos</th>
-                  <th>Utilidad Operativa</th>
-                  <th>Inv. Costo / Venta</th>
-                  <th>Observación</th>
-                  <th>PDF</th>
-                </tr>
-              </thead>
-              <tbody>
-                {snapshots.length === 0 ? (
-                  <tr>
-                    <td colSpan={10} style={{ textAlign: 'center', color: 'var(--pk-muted)' }}>
-                      Aún no se han guardado cortes históricos en el esquema gerencial.
-                    </td>
-                  </tr>
-                ) : (
-                  snapshots.map((snap) => (
-                    <tr key={snap.id}>
-                      <td><span className="pk-badge pk-badge-blue">{snap.code}</span></td>
-                      <td>{snap.createdAt}</td>
-                      <td style={{ fontWeight: 700 }}>{formatCop(snap.totalSales)}</td>
-                      <td style={{ color: 'var(--pk-emerald)', fontWeight: 700 }}>{formatCop(snap.totalCollected)}</td>
-                      <td style={{ color: 'var(--pk-amber)', fontWeight: 700 }}>
-                        {formatCop(snap.totalPendingReceivables)}
-                      </td>
-                      <td style={{ color: 'var(--pk-rose)', fontWeight: 700 }}>{formatCop(snap.totalExpenses)}</td>
-                      <td
-                        style={{
-                          fontWeight: 800,
-                          color: snap.netOperatingProfit >= 0 ? 'var(--pk-emerald)' : 'var(--pk-rose)',
-                        }}
-                      >
-                        {formatCop(snap.netOperatingProfit)}
-                      </td>
-                      <td>
-                        <div>{formatCop(snap.inventoryCostValue)}</div>
-                        <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>
-                          Venta: {formatCop(snap.inventorySaleValue)}
-                        </div>
-                      </td>
-                      <td>{snap.notes}</td>
-                      <td>
-                        <PkPrintButton
-                          label="🖨️ PDF"
-                          payload={buildBalancePrintPayload(snap.code, snap.createdAt, snap)}
-                        />
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      {hasFacturacion && (
         <div className="pk-card">
           <div className="pk-card-head">
-            <div className="pk-card-title">🧾 Detalle Consolidado de Facturación y Cartera ({report.invoices.length})</div>
+            <div>
+              <div className="pk-card-title">
+                📊 Centro Gerencial — Consolidación Ejecutiva, CSV UTF-8 y Balance PDF
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--pk-muted)', marginTop: 2 }}>
+                Inventario a precio de venta: <strong>{formatCop(report.inventorySaleValue)}</strong> · Alertas bajo
+                mínimo: <strong>{report.lowStockCount}</strong> · Clientes activos:{' '}
+                <strong>{report.customersCount}</strong>
+              </div>
+            </div>
+            <div className="pk-row-actions">
+              <button
+                type="button"
+                className="pk-btn pk-btn-outline pk-btn-sm"
+                onClick={() => setSnapshotModalOpen(true)}
+              >
+                💾 Guardar Corte ({nextSnapshotCode})
+              </button>
+              <button type="button" className="pk-btn pk-btn-emerald pk-btn-sm" onClick={handleExportSalesCsv}>
+                📥 CSV Ventas
+              </button>
+              <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={handleExportInventoryCsv}>
+                📥 CSV Inventario
+              </button>
+              <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={handleExportExpensesCsv}>
+                📥 CSV Egresos
+              </button>
+              <PkPrintButton
+                label="🖨️ Imprimir Balance Ejecutivo PDF"
+                payload={livePrintPayload}
+                variant="primary"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="pk-card">
+          <div className="pk-card-head">
+            <div className="pk-card-title">🗂️ Cortes Ejecutivos Históricos Almacenados ({snapshots.length})</div>
+            <div className="pk-row-actions">
+              <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={handleExportSnapshotsCsv}>
+                📥 CSV Histórico
+              </button>
+              <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={() => void reload()}>
+                🔄 Actualizar Consolidado
+              </button>
+            </div>
           </div>
           <div className="pk-card-body">
             <div className="pk-table-wrap">
               <table className="pk-table">
                 <thead>
                   <tr>
-                    <th>Factura</th>
-                    <th>Fecha</th>
-                    <th>Cliente</th>
-                    <th>Medio de Pago</th>
-                    <th>Total Facturado</th>
-                    <th>Recaudado</th>
-                    <th>Saldo CxC</th>
-                    <th>Estado</th>
+                    <th>Corte</th>
+                    <th>Fecha / Hora</th>
+                    <th>Ventas</th>
+                    <th>Recaudo</th>
+                    <th>Cartera CxC</th>
+                    <th>Egresos</th>
+                    <th>Utilidad Operativa</th>
+                    <th>Inv. Costo / Venta</th>
+                    <th>Observación</th>
+                    <th>PDF</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {report.invoices.length === 0 ? (
+                  {snapshots.length === 0 ? (
                     <tr>
-                      <td colSpan={8} style={{ textAlign: 'center', color: 'var(--pk-muted)' }}>
-                        Sin facturas emitidas en el periodo consultado.
+                      <td colSpan={10} style={{ textAlign: 'center', color: 'var(--pk-muted)', padding: 28 }}>
+                        Aún no se han guardado cortes históricos en el esquema gerencial.
                       </td>
                     </tr>
                   ) : (
-                    report.invoices.map((inv) => (
-                      <tr key={inv.id}>
-                        <td><span className="pk-badge pk-badge-blue">{inv.code || inv.id}</span></td>
-                        <td>{inv.date || inv.createdAt || '—'}</td>
-                        <td style={{ fontWeight: 700 }}>{inv.customerName}</td>
-                        <td>{inv.paymentMethod || 'Contado'}</td>
-                        <td style={{ fontWeight: 800 }}>{formatCop(inv.total)}</td>
-                        <td style={{ color: 'var(--pk-emerald)', fontWeight: 700 }}>{formatCop(inv.amountPaid)}</td>
+                    snapshots.map((snap) => (
+                      <tr key={snap.id}>
+                        <td>
+                          <span className="pk-badge pk-badge-blue">{snap.code}</span>
+                        </td>
+                        <td>{snap.createdAt}</td>
+                        <td style={{ fontWeight: 700 }}>{formatCop(snap.totalSales)}</td>
+                        <td style={{ color: 'var(--pk-emerald)', fontWeight: 700 }}>
+                          {formatCop(snap.totalCollected)}
+                        </td>
+                        <td style={{ color: 'var(--pk-amber)', fontWeight: 700 }}>
+                          {formatCop(snap.totalPendingReceivables)}
+                        </td>
+                        <td style={{ color: 'var(--pk-rose)', fontWeight: 700 }}>
+                          {formatCop(snap.totalExpenses)}
+                        </td>
                         <td
                           style={{
-                            color: inv.pendingBalance > 0 ? 'var(--pk-amber)' : 'var(--pk-muted)',
-                            fontWeight: inv.pendingBalance > 0 ? 800 : 500,
+                            fontWeight: 800,
+                            color: snap.netOperatingProfit >= 0 ? 'var(--pk-emerald)' : 'var(--pk-rose)',
                           }}
                         >
-                          {formatCop(inv.pendingBalance)}
+                          {formatCop(snap.netOperatingProfit)}
                         </td>
                         <td>
-                          <span className={`pk-badge ${inv.pendingBalance > 0 ? 'pk-badge-amber' : 'pk-badge-emerald'}`}>
-                            {inv.status || (inv.pendingBalance > 0 ? 'Pendiente' : 'Pagada')}
-                          </span>
+                          <div>{formatCop(snap.inventoryCostValue)}</div>
+                          <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>
+                            Venta: {formatCop(snap.inventorySaleValue)}
+                          </div>
+                        </td>
+                        <td>{snap.notes}</td>
+                        <td>
+                          <PkPrintButton
+                            label="🖨️ PDF"
+                            payload={buildBalancePrintPayload(snap.code, snap.createdAt, snap)}
+                          />
                         </td>
                       </tr>
                     ))
@@ -635,84 +619,185 @@ export const ReportesView: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
 
-      {hasInventario && (
-        <div className="pk-card">
-          <div className="pk-card-head">
-            <div className="pk-card-title">📦 Valorización de Inventario y Alertas Bajo Mínimo ({report.products.length})</div>
-          </div>
-          <div className="pk-card-body">
-            <div className="pk-table-wrap">
-              <table className="pk-table">
-                <thead>
-                  <tr>
-                    <th>Código</th>
-                    <th>Producto</th>
-                    <th>Categoría</th>
-                    <th>Stock</th>
-                    <th>Costo Unit.</th>
-                    <th>Precio Venta</th>
-                    <th>Margen Unit.</th>
-                    <th>Valorizado Costo</th>
-                    <th>Valorizado Venta</th>
-                    <th>Alerta Stock</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.products.length === 0 ? (
+        {hasFacturacion && (
+          <div className="pk-card">
+            <div className="pk-card-head">
+              <div className="pk-card-title">
+                🧾 Detalle Consolidado de Facturación y Cartera ({filteredInvoices.length})
+              </div>
+            </div>
+            <div className="pk-datatable-toolbar">
+              <div style={{ minWidth: 300 }}>
+                <PkSimpleSelect
+                  ariaLabel="Filtrar estado de facturas"
+                  value={invoiceFilter}
+                  onChange={setInvoiceFilter}
+                  allowClear
+                  placeholder="Todas las facturas del periodo"
+                  options={INVOICE_FILTER_OPTIONS}
+                />
+              </div>
+              <span className="pk-badge pk-badge-slate">{filteredInvoices.length} facturas</span>
+            </div>
+            <div className="pk-card-body">
+              <div className="pk-table-wrap">
+                <table className="pk-table">
+                  <thead>
                     <tr>
-                      <td colSpan={10} style={{ textAlign: 'center', color: 'var(--pk-muted)' }}>
-                        No hay referencias registradas en el inventario actual.
-                      </td>
+                      <th>Factura</th>
+                      <th>Fecha</th>
+                      <th>Cliente</th>
+                      <th>Medio de Pago</th>
+                      <th>Total Facturado</th>
+                      <th>Recaudado</th>
+                      <th>Saldo CxC</th>
+                      <th>Estado</th>
                     </tr>
-                  ) : (
-                    report.products.map((p) => {
-                      const unitMargin = p.salePrice - p.costPrice;
-                      const isLow = p.stock <= p.minStock;
-                      return (
-                        <tr key={p.id}>
-                          <td><span className="pk-badge pk-badge-slate">{p.code}</span></td>
-                          <td style={{ fontWeight: 700 }}>{p.name}</td>
-                          <td>{p.category}</td>
-                          <td style={{ fontWeight: 800 }}>{p.stock}</td>
-                          <td>{formatCop(p.costPrice)}</td>
-                          <td>{formatCop(p.salePrice)}</td>
-                          <td style={{ color: 'var(--pk-emerald)', fontWeight: 700 }}>+{formatCop(unitMargin)}</td>
-                          <td style={{ fontWeight: 700 }}>{formatCop(p.costPrice * p.stock)}</td>
-                          <td style={{ fontWeight: 800 }}>{formatCop(p.salePrice * p.stock)}</td>
+                  </thead>
+                  <tbody>
+                    {filteredInvoices.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} style={{ textAlign: 'center', color: 'var(--pk-muted)', padding: 28 }}>
+                          Sin facturas emitidas para el criterio seleccionado.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredInvoices.map((inv) => (
+                        <tr key={inv.id}>
                           <td>
-                            <span className={`pk-badge ${isLow ? 'pk-badge-amber' : 'pk-badge-emerald'}`}>
-                              {isLow ? `⚠️ Bajo mínimo (${p.minStock})` : 'Óptimo'}
+                            <span className="pk-badge pk-badge-blue">{inv.code || inv.id}</span>
+                          </td>
+                          <td>{inv.date || inv.createdAt || '—'}</td>
+                          <td style={{ fontWeight: 700 }}>{inv.customerName}</td>
+                          <td>{inv.paymentMethod || 'Contado'}</td>
+                          <td style={{ fontWeight: 800 }}>{formatCop(inv.total)}</td>
+                          <td style={{ color: 'var(--pk-emerald)', fontWeight: 700 }}>
+                            {formatCop(inv.amountPaid)}
+                          </td>
+                          <td
+                            style={{
+                              color: inv.pendingBalance > 0 ? 'var(--pk-amber)' : 'var(--pk-muted)',
+                              fontWeight: inv.pendingBalance > 0 ? 800 : 500,
+                            }}
+                          >
+                            {formatCop(inv.pendingBalance)}
+                          </td>
+                          <td>
+                            <span
+                              className={`pk-badge ${
+                                inv.pendingBalance > 0 ? 'pk-badge-amber' : 'pk-badge-emerald'
+                              }`}
+                            >
+                              {inv.status || (inv.pendingBalance > 0 ? 'Pendiente' : 'Pagada')}
                             </span>
                           </td>
                         </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {hasInventario && (
+          <div className="pk-card">
+            <div className="pk-card-head">
+              <div className="pk-card-title">
+                📦 Valorización de Inventario y Alertas Bajo Mínimo ({filteredProducts.length})
+              </div>
+            </div>
+            <div className="pk-datatable-toolbar">
+              <div style={{ minWidth: 300 }}>
+                <PkSimpleSelect
+                  ariaLabel="Filtrar nivel de stock"
+                  value={stockFilter}
+                  onChange={setStockFilter}
+                  allowClear
+                  placeholder="Todo el catálogo valorizado"
+                  options={STOCK_FILTER_OPTIONS}
+                />
+              </div>
+              <span className="pk-badge pk-badge-slate">{filteredProducts.length} referencias</span>
+            </div>
+            <div className="pk-card-body">
+              <div className="pk-table-wrap">
+                <table className="pk-table">
+                  <thead>
+                    <tr>
+                      <th>Código</th>
+                      <th>Producto</th>
+                      <th>Categoría</th>
+                      <th>Stock</th>
+                      <th>Costo Unit.</th>
+                      <th>Precio Venta</th>
+                      <th>Margen Unit.</th>
+                      <th>Valorizado Costo</th>
+                      <th>Valorizado Venta</th>
+                      <th>Alerta Stock</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredProducts.length === 0 ? (
+                      <tr>
+                        <td colSpan={10} style={{ textAlign: 'center', color: 'var(--pk-muted)', padding: 28 }}>
+                          No hay referencias registradas para el filtro seleccionado.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredProducts.map((p) => {
+                        const unitMargin = p.salePrice - p.costPrice;
+                        const isLow = p.stock <= p.minStock;
+                        return (
+                          <tr key={p.id}>
+                            <td>
+                              <span className="pk-badge pk-badge-slate">{p.code}</span>
+                            </td>
+                            <td style={{ fontWeight: 700 }}>{p.name}</td>
+                            <td>{p.category}</td>
+                            <td style={{ fontWeight: 800 }}>{p.stock}</td>
+                            <td>{formatCop(p.costPrice)}</td>
+                            <td>{formatCop(p.salePrice)}</td>
+                            <td style={{ color: 'var(--pk-emerald)', fontWeight: 700 }}>
+                              +{formatCop(unitMargin)}
+                            </td>
+                            <td style={{ fontWeight: 700 }}>{formatCop(p.costPrice * p.stock)}</td>
+                            <td style={{ fontWeight: 800 }}>{formatCop(p.salePrice * p.stock)}</td>
+                            <td>
+                              <span className={`pk-badge ${isLow ? 'pk-badge-amber' : 'pk-badge-emerald'}`}>
+                                {isLow ? `⚠️ Bajo mínimo (${p.minStock})` : 'Óptimo'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       <PkModal
         open={snapshotModalOpen}
         title="Guardar Instantánea / Corte Ejecutivo en Histórico"
         onClose={() => setSnapshotModalOpen(false)}
       >
-        <form onSubmit={handleSaveSnapshot} className="pk-form-grid">
+        <form onSubmit={handleSaveSnapshot} className="pk-form-grid cols-2">
           <PkAutoCodeInput label="Código de Corte" value={nextSnapshotCode} />
           <div className="pk-field">
             <label>Ventas Consolidadas</label>
             <input readOnly value={formatCop(report.totalSales)} />
           </div>
-          <div className="pk-field">
+          <div className="pk-field pk-col-span-full">
             <label>Utilidad Operativa</label>
             <input readOnly value={formatCop(report.netOperatingProfit)} />
           </div>
-          <div className="pk-field">
+          <div className="pk-field pk-col-span-full">
             <label>Nota / Etiqueta del Corte *</label>
             <input
               required
@@ -721,9 +806,17 @@ export const ReportesView: React.FC = () => {
               placeholder="Ej: Cierre mensual auditado"
             />
           </div>
-          <div className="pk-field" style={{ display: 'flex', alignItems: 'flex-end' }}>
+          <div className="pk-form-actions">
+            <button
+              type="button"
+              className="pk-btn pk-btn-outline"
+              onClick={() => setSnapshotModalOpen(false)}
+              disabled={busy}
+            >
+              Cancelar
+            </button>
             <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
-              Confirmar Corte Histórico
+              {busy ? 'Guardando...' : 'Confirmar Corte Histórico'}
             </button>
           </div>
         </form>
