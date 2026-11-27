@@ -4,6 +4,8 @@ import {
   ModuleGate,
   PkAutoCodeInput,
   PkSelect,
+  PkSimpleSelect,
+  PkViewSwitcher,
   PkModal,
   PkPrintButton,
   PkKpiRow,
@@ -51,6 +53,10 @@ interface NominaAllResponse {
 export const NominaView: React.FC = () => {
   const { apiGet, apiPost, toast } = usePlatform();
   const { busy, run } = useAsyncAction();
+
+  const [viewMode, setViewMode] = useState<'list' | 'create'>('list');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [employeeFilter, setEmployeeFilter] = useState('');
 
   const [nextCode, setNextCode] = useState('NOM-301');
   const [nextEmployeeCode, setNextEmployeeCode] = useState('EMP-101');
@@ -187,6 +193,7 @@ export const NominaView: React.FC = () => {
         });
         toast('Liquidación de nómina generada exitosamente');
         await reload();
+        setViewMode('list');
       } catch (err) {
         toast(err instanceof Error ? err.message : 'Error liquidando periodo salarial');
       }
@@ -221,7 +228,7 @@ export const NominaView: React.FC = () => {
         p.bonuses,
         p.deductions,
         p.netPay,
-      ]),
+      ])
     );
   };
 
@@ -264,207 +271,289 @@ export const NominaView: React.FC = () => {
     subtotal: pay.baseSalary + pay.bonuses,
     discount_total: pay.deductions,
     grand_total: pay.netPay,
-    notes: 'Constancia de liquidación salarial y aportes de seguridad social. Firma del colaborador en señal de conformidad.',
+    notes:
+      'Constancia de liquidación salarial y aportes de seguridad social. Firma del colaborador en señal de conformidad.',
   });
 
   const previewNet = Number(baseSalary || 0) + Number(bonuses || 0) - Number(deductions || 0);
   const totalDisbursed = payrolls.reduce((acc, p) => acc + Number(p.netPay || 0), 0);
 
+  const filteredPayrolls = payrolls.filter((pay) => {
+    if (employeeFilter && pay.employeeId !== employeeFilter) return false;
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      pay.code.toLowerCase().includes(q) ||
+      pay.employeeName.toLowerCase().includes(q) ||
+      pay.employeeDoc.toLowerCase().includes(q) ||
+      pay.period.toLowerCase().includes(q)
+    );
+  });
+
   return (
     <ModuleGate module="liquidacion_nomina">
-      <PkKpiRow
-        items={[
-          { label: 'Colaboradores Activos', value: String(employees.length), color: 'var(--pk-primary)' },
-          { label: 'Colillas Emitidas', value: String(payrolls.length), color: 'var(--pk-emerald)' },
-          { label: 'Total Nómina Dispersada', value: formatCop(totalDisbursed), color: '#0f172a' },
-          {
-            label: 'Neto Simulación Actual',
-            value: formatCop(previewNet),
-            color: previewNet >= 0 ? 'var(--pk-amber)' : 'var(--pk-rose)',
-          },
-        ]}
-      />
+      <div className="pk-stack">
+        <PkKpiRow
+          items={[
+            { label: 'Colaboradores Activos', value: String(employees.length), color: 'var(--pk-primary)' },
+            { label: 'Colillas Emitidas', value: String(payrolls.length), color: 'var(--pk-emerald)' },
+            { label: 'Total Nómina Dispersada', value: formatCop(totalDisbursed), color: '#0f172a' },
+            {
+              label: 'Neto Simulación Actual',
+              value: formatCop(previewNet),
+              color: previewNet >= 0 ? 'var(--pk-amber)' : 'var(--pk-rose)',
+            },
+          ]}
+        />
 
-      <div className="pk-card">
-        <div className="pk-card-head">
-          <div className="pk-card-title">👔 Liquidación Salarial por Periodo y Emisión de Desprendible</div>
-          <span className={`pk-badge ${previewNet >= 0 ? 'pk-badge-emerald' : 'pk-badge-amber'}`}>
-            Neto a Pagar: {formatCop(previewNet)}
-          </span>
-        </div>
-        <div className="pk-card-body">
-          <form onSubmit={handleCreatePayroll} className="pk-form-grid">
-            <PkAutoCodeInput label="Consecutivo Colilla" value={nextCode} />
-
-            <PkSelect
-              label="Colaborador *"
-              items={employees}
-              value={employeeId}
-              onChange={handleSelectEmployee}
-              getValue={(emp) => emp.id}
-              getLabel={(emp) => `${emp.code} — ${emp.name} (${emp.docNumber})`}
-              emptyLabel="-- Seleccionar colaborador --"
-              onCreateNew={() => setEmpModalOpen(true)}
-              createLabel="+ Nuevo Colaborador"
-              searchable
-            />
-
-            <div className="pk-field">
-              <label>Periodo de Liquidación *</label>
-              <input
-                required
-                value={period}
-                onChange={(e) => setPeriod(e.target.value)}
-                placeholder="Ej: 2026-11 — Q1 (1 al 15)"
-              />
-            </div>
-
-            <div className="pk-field">
-              <label>Salario Base Periodo ($) *</label>
-              <input
-                required
-                type="number"
-                min="1"
-                step="any"
-                value={baseSalary}
-                onChange={(e) => handleBaseSalaryChange(e.target.value)}
-              />
-            </div>
-
-            <div className="pk-field">
-              <label>Bonificaciones / Auxilios ($)</label>
-              <input
-                type="number"
-                min="0"
-                step="any"
-                value={bonuses}
-                onChange={(e) => setBonuses(e.target.value)}
-              />
-            </div>
-
-            <div className="pk-field">
-              <label>Deducciones Salud / Pensión ($)</label>
-              <input
-                type="number"
-                min="0"
-                step="any"
-                value={deductions}
-                onChange={(e) => setDeductions(e.target.value)}
-              />
-            </div>
-
-            <div className="pk-field" style={{ display: 'flex', alignItems: 'flex-end' }}>
-              <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
-                📑 Liquidar Nómina
+        <PkViewSwitcher
+          title="Liquidación de Nómina y Planta de Colaboradores"
+          subtitle="Consulta el historial de desprendibles salariales y colaboradores activos o liquida un nuevo periodo."
+          mode={viewMode}
+          onModeChange={setViewMode}
+          listLabel="📋 Colillas y Colaboradores"
+          createLabel="+ Liquidar Nómina"
+          count={payrolls.length}
+          extraActions={
+            <>
+              <button
+                type="button"
+                className="pk-btn pk-btn-outline"
+                onClick={() => setEmpModalOpen(true)}
+              >
+                + Nuevo Colaborador
               </button>
+              {viewMode === 'list' && (
+                <button type="button" className="pk-btn pk-btn-outline" onClick={handleExportCsv}>
+                  📥 Exportar CSV
+                </button>
+              )}
+            </>
+          }
+        />
+
+        {viewMode === 'create' ? (
+          <div className="pk-card">
+            <div className="pk-card-head">
+              <div className="pk-card-title">👔 Liquidación Salarial por Periodo y Emisión de Desprendible</div>
+              <span className={`pk-badge ${previewNet >= 0 ? 'pk-badge-emerald' : 'pk-badge-amber'}`}>
+                Neto a Pagar: {formatCop(previewNet)}
+              </span>
             </div>
-          </form>
-        </div>
-      </div>
+            <div className="pk-card-body">
+              <form onSubmit={handleCreatePayroll} className="pk-form-grid cols-2">
+                <PkAutoCodeInput label="Consecutivo Colilla" value={nextCode} />
 
-      <div className="pk-card">
-        <div className="pk-card-head">
-          <div className="pk-card-title">📋 Historial de Liquidaciones y Desprendibles ({payrolls.length})</div>
-          <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={handleExportCsv}>
-            📥 Exportar CSV
-          </button>
-        </div>
-        <div className="pk-card-body">
-          <div className="pk-table-wrap">
-            <table className="pk-table">
-              <thead>
-                <tr>
-                  <th>Colilla</th>
-                  <th>Fecha</th>
-                  <th>Colaborador</th>
-                  <th>Periodo</th>
-                  <th>Salario Base</th>
-                  <th>Bonificaciones</th>
-                  <th>Deducciones</th>
-                  <th>Neto Pagado</th>
-                  <th>Desprendible</th>
-                </tr>
-              </thead>
-              <tbody>
-                {payrolls.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} style={{ textAlign: 'center', color: 'var(--pk-muted)' }}>
-                      No hay liquidaciones de nómina registradas todavía.
-                    </td>
-                  </tr>
-                ) : (
-                  payrolls.map((pay) => (
-                    <tr key={pay.id}>
-                      <td>
-                        <span className="pk-badge pk-badge-blue">{pay.code}</span>
-                      </td>
-                      <td>{pay.createdAt}</td>
-                      <td>
-                        <div style={{ fontWeight: 700 }}>{pay.employeeName}</div>
-                        <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>
-                          {pay.employeeCode} · CC {pay.employeeDoc} — {pay.employeePosition}
-                        </div>
-                      </td>
-                      <td>{pay.period}</td>
-                      <td>{formatCop(pay.baseSalary)}</td>
-                      <td style={{ color: 'var(--pk-emerald)', fontWeight: 700 }}>
-                        +{formatCop(pay.bonuses)}
-                      </td>
-                      <td style={{ color: 'var(--pk-rose)', fontWeight: 700 }}>
-                        -{formatCop(pay.deductions)}
-                      </td>
-                      <td style={{ fontWeight: 800, color: '#0f172a' }}>{formatCop(pay.netPay)}</td>
-                      <td>
-                        <PkPrintButton label="🖨️ Desprendible" payload={buildPayslipPayload(pay)} />
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+                <PkSelect
+                  label="Colaborador *"
+                  items={employees}
+                  value={employeeId}
+                  onChange={handleSelectEmployee}
+                  getValue={(emp) => emp.id}
+                  getLabel={(emp) => `${emp.code} — ${emp.name} (${emp.docNumber})`}
+                  emptyLabel="-- Seleccionar colaborador --"
+                  onCreateNew={() => setEmpModalOpen(true)}
+                  createLabel="+ Nuevo Colaborador"
+                  searchable
+                />
 
-      <div className="pk-card">
-        <div className="pk-card-head">
-          <div className="pk-card-title">👥 Planta de Colaboradores ({employees.length})</div>
-          <button
-            type="button"
-            className="pk-btn pk-btn-outline pk-btn-sm"
-            onClick={() => setEmpModalOpen(true)}
-          >
-            + Nuevo Colaborador
-          </button>
-        </div>
-        <div className="pk-card-body">
-          <div className="pk-table-wrap">
-            <table className="pk-table">
-              <thead>
-                <tr>
-                  <th>Código</th>
-                  <th>Nombre Completo</th>
-                  <th>Documento</th>
-                  <th>Cargo Contractual</th>
-                  <th>Salario Mensual</th>
-                  <th>Teléfono</th>
-                </tr>
-              </thead>
-              <tbody>
-                {employees.map((emp) => (
-                  <tr key={emp.id}>
-                    <td><span className="pk-badge pk-badge-slate">{emp.code}</span></td>
-                    <td style={{ fontWeight: 700 }}>{emp.name}</td>
-                    <td>{emp.docNumber}</td>
-                    <td>{emp.position}</td>
-                    <td>{formatCop(emp.baseSalary)}</td>
-                    <td>{emp.phone || '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                <div className="pk-field">
+                  <label>Periodo de Liquidación *</label>
+                  <input
+                    required
+                    value={period}
+                    onChange={(e) => setPeriod(e.target.value)}
+                    placeholder="Ej: 2026-11 — Q1 (1 al 15)"
+                  />
+                </div>
+
+                <div className="pk-field">
+                  <label>Salario Base Periodo ($) *</label>
+                  <input
+                    required
+                    type="number"
+                    min="1"
+                    step="any"
+                    value={baseSalary}
+                    onChange={(e) => handleBaseSalaryChange(e.target.value)}
+                  />
+                </div>
+
+                <div className="pk-field">
+                  <label>Bonificaciones / Auxilios ($)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={bonuses}
+                    onChange={(e) => setBonuses(e.target.value)}
+                  />
+                </div>
+
+                <div className="pk-field">
+                  <label>Deducciones Salud / Pensión ($)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={deductions}
+                    onChange={(e) => setDeductions(e.target.value)}
+                  />
+                </div>
+
+                <div className="pk-form-actions">
+                  <button
+                    type="button"
+                    className="pk-btn pk-btn-outline"
+                    onClick={() => setViewMode('list')}
+                    disabled={busy}
+                  >
+                    Cancelar
+                  </button>
+                  <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
+                    {busy ? 'Liquidando...' : '📑 Liquidar Nómina'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="pk-stack">
+            <div className="pk-card">
+              <div className="pk-card-head">
+                <div className="pk-card-title">📋 Historial de Liquidaciones y Desprendibles ({payrolls.length})</div>
+              </div>
+              <div className="pk-datatable-toolbar">
+                <input
+                  className="pk-input pk-datatable-search"
+                  placeholder="🔎 Buscar colilla por código, colaborador, documento o periodo..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ minWidth: 260 }}>
+                    <PkSimpleSelect
+                      ariaLabel="Filtrar por colaborador"
+                      value={employeeFilter}
+                      onChange={setEmployeeFilter}
+                      allowClear
+                      placeholder="Todos los colaboradores"
+                      options={[
+                        { value: '', label: 'Todos los colaboradores' },
+                        ...employees.map((emp) => ({
+                          value: emp.id,
+                          label: `${emp.code} — ${emp.name}`,
+                          sublabel: emp.position,
+                        })),
+                      ]}
+                    />
+                  </div>
+                  <span className="pk-badge pk-badge-slate">{filteredPayrolls.length} colillas</span>
+                </div>
+              </div>
+              <div className="pk-card-body">
+                <div className="pk-table-wrap">
+                  <table className="pk-table">
+                    <thead>
+                      <tr>
+                        <th>Colilla</th>
+                        <th>Fecha</th>
+                        <th>Colaborador</th>
+                        <th>Periodo</th>
+                        <th>Salario Base</th>
+                        <th>Bonificaciones</th>
+                        <th>Deducciones</th>
+                        <th>Neto Pagado</th>
+                        <th>Desprendible</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredPayrolls.length === 0 ? (
+                        <tr>
+                          <td colSpan={9} style={{ textAlign: 'center', color: 'var(--pk-muted)', padding: 28 }}>
+                            {payrolls.length === 0
+                              ? 'No hay liquidaciones de nómina registradas todavía. Haz clic en "+ Liquidar Nómina" para emitir un desprendible.'
+                              : 'No se encontraron colillas con el filtro aplicado.'}
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredPayrolls.map((pay) => (
+                          <tr key={pay.id}>
+                            <td>
+                              <span className="pk-badge pk-badge-blue">{pay.code}</span>
+                            </td>
+                            <td>{pay.createdAt}</td>
+                            <td>
+                              <div style={{ fontWeight: 700 }}>{pay.employeeName}</div>
+                              <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>
+                                {pay.employeeCode} · CC {pay.employeeDoc} — {pay.employeePosition}
+                              </div>
+                            </td>
+                            <td>{pay.period}</td>
+                            <td>{formatCop(pay.baseSalary)}</td>
+                            <td style={{ color: 'var(--pk-emerald)', fontWeight: 700 }}>
+                              +{formatCop(pay.bonuses)}
+                            </td>
+                            <td style={{ color: 'var(--pk-rose)', fontWeight: 700 }}>
+                              -{formatCop(pay.deductions)}
+                            </td>
+                            <td style={{ fontWeight: 800, color: '#0f172a' }}>{formatCop(pay.netPay)}</td>
+                            <td>
+                              <PkPrintButton label="🖨️ Desprendible" payload={buildPayslipPayload(pay)} />
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="pk-card">
+              <div className="pk-card-head">
+                <div className="pk-card-title">👥 Planta de Colaboradores ({employees.length})</div>
+                <button
+                  type="button"
+                  className="pk-btn pk-btn-outline pk-btn-sm"
+                  onClick={() => setEmpModalOpen(true)}
+                >
+                  + Nuevo Colaborador
+                </button>
+              </div>
+              <div className="pk-card-body">
+                <div className="pk-table-wrap">
+                  <table className="pk-table">
+                    <thead>
+                      <tr>
+                        <th>Código</th>
+                        <th>Nombre Completo</th>
+                        <th>Documento</th>
+                        <th>Cargo Contractual</th>
+                        <th>Salario Mensual</th>
+                        <th>Teléfono</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {employees.map((emp) => (
+                        <tr key={emp.id}>
+                          <td>
+                            <span className="pk-badge pk-badge-slate">{emp.code}</span>
+                          </td>
+                          <td style={{ fontWeight: 700 }}>{emp.name}</td>
+                          <td>{emp.docNumber}</td>
+                          <td>{emp.position}</td>
+                          <td>{formatCop(emp.baseSalary)}</td>
+                          <td>{emp.phone || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <PkModal
@@ -472,7 +561,7 @@ export const NominaView: React.FC = () => {
         title="Registrar Nuevo Colaborador en Nómina"
         onClose={() => setEmpModalOpen(false)}
       >
-        <form onSubmit={handleCreateEmployee} className="pk-form-grid">
+        <form onSubmit={handleCreateEmployee} className="pk-form-grid cols-2">
           <PkAutoCodeInput label="Código Empleado" value={nextEmployeeCode} />
           <div className="pk-field">
             <label>Nombre Completo *</label>
@@ -520,9 +609,17 @@ export const NominaView: React.FC = () => {
               placeholder="310..."
             />
           </div>
-          <div className="pk-field" style={{ display: 'flex', alignItems: 'flex-end' }}>
+          <div className="pk-form-actions">
+            <button
+              type="button"
+              className="pk-btn pk-btn-outline"
+              onClick={() => setEmpModalOpen(false)}
+              disabled={busy}
+            >
+              Cancelar
+            </button>
             <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
-              Guardar Colaborador
+              {busy ? 'Guardando...' : 'Guardar Colaborador'}
             </button>
           </div>
         </form>

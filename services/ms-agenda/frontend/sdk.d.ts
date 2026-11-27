@@ -262,9 +262,45 @@ declare module '@platform/ui-sdk' {
     createLabel?: string;
     searchable?: boolean;
     emptyLabel?: string;
+    placeholder?: string;
+    disabled?: boolean;
   }
 
   export function PkSelect<T>(props: PkSelectProps<T>): React.ReactElement;
+
+  export interface PkSimpleOption {
+    value: string;
+    label: string;
+    sublabel?: string;
+  }
+
+  export interface PkSimpleSelectProps {
+    label?: string;
+    ariaLabel?: string;
+    options: PkSimpleOption[];
+    value: string;
+    onChange: (newValue: string) => void;
+    placeholder?: string;
+    allowClear?: boolean;
+    searchable?: boolean;
+    disabled?: boolean;
+    compact?: boolean;
+    onCreateNew?: () => void;
+    createLabel?: string;
+  }
+
+  export const PkSimpleSelect: React.FC<PkSimpleSelectProps>;
+
+  export const PkViewSwitcher: React.FC<{
+    title: string;
+    subtitle?: string;
+    mode: 'list' | 'create';
+    onModeChange: (mode: 'list' | 'create') => void;
+    listLabel?: string;
+    createLabel?: string;
+    count?: number;
+    extraActions?: React.ReactNode;
+  }>;
 
   export const PkModal: React.FC<{
     open: boolean;

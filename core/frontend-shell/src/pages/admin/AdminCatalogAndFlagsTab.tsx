@@ -259,7 +259,7 @@ export const AdminCatalogAndFlagsTab: React.FC<{
             }}
             className="pk-stack"
           >
-            <div className="pk-form-grid">
+            <div className="pk-form-grid cols-2">
               <div className="pk-field">
                 <label>Clave Técnica</label>
                 <input
@@ -318,7 +318,7 @@ export const AdminCatalogAndFlagsTab: React.FC<{
               </div>
             </div>
 
-            <div className="pk-row-actions" style={{ justifyContent: 'flex-end' }}>
+            <div className="pk-form-actions">
               <button type="button" className="pk-btn pk-btn-outline" onClick={() => setFlagModalOpen(false)}>Cancelar</button>
               <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>Guardar Flag</button>
             </div>
@@ -361,7 +361,7 @@ export const AdminCatalogAndFlagsTab: React.FC<{
           )}
         </div>
         <div className="pk-card-body">
-          <div className="pk-form-grid">
+          <div className="pk-form-grid cols-2">
             <div className="pk-field">
               <label>Microservicio Adicional (COP / mes)</label>
               <input

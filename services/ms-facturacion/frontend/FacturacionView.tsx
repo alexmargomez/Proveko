@@ -5,6 +5,8 @@ import {
   FeatureGate,
   PkAutoCodeInput,
   PkSelect,
+  PkSimpleSelect,
+  PkViewSwitcher,
   PkModal,
   PkPrintButton,
   PkKpiRow,
@@ -225,6 +227,12 @@ export const FacturacionView: React.FC = () => {
   const [newVehType, setNewVehType] = useState('Camioneta');
   const [newVehKm, setNewVehKm] = useState('45000');
 
+  const [posMode, setPosMode] = useState<'list' | 'create'>('list');
+  const [invoiceSearch, setInvoiceSearch] = useState('');
+  const [invoiceStatusFilter, setInvoiceStatusFilter] = useState('ALL');
+  const [quoteMode, setQuoteMode] = useState<'list' | 'create'>('list');
+  const [quoteSearch, setQuoteSearch] = useState('');
+
   const hasClientes = hasService('ms-clientes');
   const hasInventario = hasService('ms-inventario');
   const hasTaller = hasService('ms-taller');
@@ -436,6 +444,7 @@ export const FacturacionView: React.FC = () => {
       }
     }
 
+    setPosMode('create');
     clearIncomingPayload();
     toast('Cuenta recibida en Caja lista para facturar');
   }, [
@@ -689,6 +698,7 @@ export const FacturacionView: React.FC = () => {
       setInvoiceNotes('');
       setIsCreditMode(false);
       setAmountPaidInput('');
+      setPosMode('list');
       await loadAll();
 
       if (renderPrint) {
@@ -820,6 +830,7 @@ export const FacturacionView: React.FC = () => {
       });
       toast('Cotización comercial generada');
       setQuoteItems([]);
+      setQuoteMode('list');
       await loadAll();
     });
   };
@@ -832,6 +843,7 @@ export const FacturacionView: React.FC = () => {
       setCustomerNameOverride(q.customerName);
     }
     setCart(q.items || []);
+    setPosMode('create');
     setActiveModuleKey('pos_mostrador');
     toast(`Cotización ${q.id} cargada en Caja para facturar`);
   };
@@ -860,20 +872,20 @@ export const FacturacionView: React.FC = () => {
         open={showNewCustomerModal}
         title="👤 Registro Rápido de Cliente Comercial"
         onClose={() => setShowNewCustomerModal(false)}
+        maxWidth={700}
       >
         <form onSubmit={handleCreateQuickCustomer}>
-          <div className="pk-form-grid">
-            <div className="pk-field">
-              <label>Tipo Documento</label>
-              <select
-                value={newCustDocType}
-                onChange={(e) => setNewCustDocType(e.target.value)}
-              >
-                <option value="NIT">NIT Empresarial</option>
-                <option value="CC">Cédula de Ciudadanía</option>
-                <option value="CE">Cédula de Extranjería</option>
-              </select>
-            </div>
+          <div className="pk-form-grid cols-2">
+            <PkSimpleSelect
+              label="Tipo Documento"
+              value={newCustDocType}
+              onChange={setNewCustDocType}
+              options={[
+                { value: 'NIT', label: 'NIT Empresarial' },
+                { value: 'CC', label: 'Cédula de Ciudadanía' },
+                { value: 'CE', label: 'Cédula de Extranjería' },
+              ]}
+            />
             <div className="pk-field">
               <label>NIT / Documento *</label>
               <input
@@ -883,7 +895,7 @@ export const FacturacionView: React.FC = () => {
                 required
               />
             </div>
-            <div className="pk-field" style={{ gridColumn: '1 / -1' }}>
+            <div className="pk-field pk-col-span-full">
               <label>Razón Social o Nombre Completo *</label>
               <input
                 value={newCustName}
@@ -925,7 +937,7 @@ export const FacturacionView: React.FC = () => {
                 onChange={(e) => setNewCustCreditLimit(e.target.value)}
               />
             </div>
-            <div className="pk-field" style={{ gridColumn: '1 / -1' }}>
+            <div className="pk-field pk-col-span-full">
               <label>Dirección Comercial</label>
               <input
                 value={newCustAddress}
@@ -933,26 +945,23 @@ export const FacturacionView: React.FC = () => {
                 placeholder="Cra. 15 # 93-40 Of. 302"
               />
             </div>
-          </div>
-          <div
-            className="pk-row-actions"
-            style={{ justifyContent: 'flex-end', marginTop: 14 }}
-          >
-            <button
-              type="button"
-              className="pk-btn pk-btn-outline"
-              onClick={() => setShowNewCustomerModal(false)}
-              disabled={busy}
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              className="pk-btn pk-btn-primary"
-              disabled={busy}
-            >
-              {busy ? 'Guardando...' : 'Guardar y Seleccionar Cliente'}
-            </button>
+            <div className="pk-form-actions">
+              <button
+                type="button"
+                className="pk-btn pk-btn-outline"
+                onClick={() => setShowNewCustomerModal(false)}
+                disabled={busy}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="pk-btn pk-btn-primary"
+                disabled={busy}
+              >
+                {busy ? 'Guardando...' : 'Guardar y Seleccionar Cliente'}
+              </button>
+            </div>
           </div>
         </form>
       </PkModal>
@@ -961,9 +970,10 @@ export const FacturacionView: React.FC = () => {
         open={showNewVehicleModal}
         title="🚗 Registro Rápido de Placa / Vehículo"
         onClose={() => setShowNewVehicleModal(false)}
+        maxWidth={640}
       >
         <form onSubmit={handleCreateQuickVehicle}>
-          <div className="pk-form-grid">
+          <div className="pk-form-grid cols-2">
             <div className="pk-field">
               <label>Placa *</label>
               <input
@@ -973,19 +983,18 @@ export const FacturacionView: React.FC = () => {
                 required
               />
             </div>
-            <div className="pk-field">
-              <label>Tipo de Vehículo</label>
-              <select
-                value={newVehType}
-                onChange={(e) => setNewVehType(e.target.value)}
-              >
-                <option value="Automóvil">Automóvil</option>
-                <option value="Camioneta">Camioneta / SUV</option>
-                <option value="Motocicleta">Motocicleta</option>
-                <option value="Utilitario / Carga">Utilitario / Carga</option>
-              </select>
-            </div>
-            <div className="pk-field" style={{ gridColumn: '1 / -1' }}>
+            <PkSimpleSelect
+              label="Tipo de Vehículo"
+              value={newVehType}
+              onChange={setNewVehType}
+              options={[
+                { value: 'Automóvil', label: 'Automóvil' },
+                { value: 'Camioneta', label: 'Camioneta / SUV' },
+                { value: 'Motocicleta', label: 'Motocicleta' },
+                { value: 'Utilitario / Carga', label: 'Utilitario / Carga' },
+              ]}
+            />
+            <div className="pk-field pk-col-span-full">
               <label>Marca / Línea / Modelo *</label>
               <input
                 value={newVehBrand}
@@ -1003,26 +1012,23 @@ export const FacturacionView: React.FC = () => {
                 onChange={(e) => setNewVehKm(e.target.value)}
               />
             </div>
-          </div>
-          <div
-            className="pk-row-actions"
-            style={{ justifyContent: 'flex-end', marginTop: 14 }}
-          >
-            <button
-              type="button"
-              className="pk-btn pk-btn-outline"
-              onClick={() => setShowNewVehicleModal(false)}
-              disabled={busy}
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              className="pk-btn pk-btn-primary"
-              disabled={busy}
-            >
-              {busy ? 'Guardando...' : 'Guardar Placa'}
-            </button>
+            <div className="pk-form-actions">
+              <button
+                type="button"
+                className="pk-btn pk-btn-outline"
+                onClick={() => setShowNewVehicleModal(false)}
+                disabled={busy}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="pk-btn pk-btn-primary"
+                disabled={busy}
+              >
+                {busy ? 'Guardando...' : 'Guardar Placa'}
+              </button>
+            </div>
           </div>
         </form>
       </PkModal>
@@ -1046,242 +1052,323 @@ export const FacturacionView: React.FC = () => {
       (acc, it) => acc + it.quantity * it.unitPrice,
       0
     );
+    const totalQuotedCop = quotes.reduce((acc, q) => acc + q.total, 0);
+    const filteredQuotes = quoteSearch.trim()
+      ? quotes.filter((q) => {
+          const term = quoteSearch.trim().toLowerCase();
+          return (
+            q.id.toLowerCase().includes(term) ||
+            q.customerName.toLowerCase().includes(term) ||
+            (q.customerNit || '').toLowerCase().includes(term)
+          );
+        })
+      : quotes;
+
     return (
       <ModuleGate module="cotizaciones">
-        <div>
-          <div className="pk-card">
-            <div className="pk-card-head">
-              <div className="pk-card-title">
-                📄 Nueva Cotización Comercial Formal
-              </div>
-            </div>
-            <div className="pk-card-body">
-              <form onSubmit={handleSaveQuote}>
-                <div className="pk-form-grid">
-                  <PkAutoCodeInput
-                    label="N° Cotización"
-                    value={nextQuoteNumber}
-                  />
-                  <PkSelect
-                    label="Cliente Destinatario"
-                    items={customerSelectItems}
-                    value={quoteCustomerId}
-                    onChange={setQuoteCustomerId}
-                    getValue={(c) => c.id}
-                    getLabel={(c) => `${c.name} (${c.nit})`}
-                    onCreateNew={
-                      hasClientes
-                        ? () => setShowNewCustomerModal(true)
-                        : undefined
-                    }
-                    createLabel="+ Nuevo Cliente"
-                    searchable
-                  />
-                  <div className="pk-field">
-                    <label>Válida Hasta</label>
-                    <input
-                      type="date"
-                      value={quoteValidUntil}
-                      onChange={(e) => setQuoteValidUntil(e.target.value)}
-                    />
-                  </div>
-                </div>
+        <div className="pk-stack">
+          <PkKpiRow
+            items={[
+              {
+                label: 'Cotizaciones Emitidas',
+                value: String(quotes.length),
+                color: 'var(--pk-primary)',
+              },
+              {
+                label: 'Valor Comercial Cotizado',
+                value: formatCop(totalQuotedCop),
+                color: 'var(--pk-emerald)',
+              },
+              {
+                label: 'Próximo Consecutivo',
+                value: nextQuoteNumber,
+              },
+            ]}
+          />
 
-                {products.length > 0 && (
-                  <div className="pk-form-grid" style={{ marginTop: 12 }}>
+          <PkViewSwitcher
+            title="Cotizaciones Comerciales"
+            subtitle="Gestiona propuestas comerciales formales y conviértelas en factura con un clic."
+            mode={quoteMode}
+            onModeChange={setQuoteMode}
+            listLabel="📋 Historial de Cotizaciones"
+            createLabel="+ Nueva Cotización"
+            count={quotes.length}
+          />
+
+          {quoteMode === 'create' ? (
+            <div className="pk-card">
+              <div className="pk-card-head">
+                <div className="pk-card-title">
+                  📄 Elaborar Nueva Cotización Comercial Formal
+                </div>
+                <span className="pk-badge pk-badge-blue">{nextQuoteNumber}</span>
+              </div>
+              <div className="pk-card-body">
+                <form onSubmit={handleSaveQuote} className="pk-stack">
+                  <div className="pk-form-grid">
+                    <PkAutoCodeInput
+                      label="N° Cotización"
+                      value={nextQuoteNumber}
+                    />
                     <PkSelect
-                      label="Producto del Catálogo"
-                      items={products}
-                      value={quoteProductId}
-                      onChange={setQuoteProductId}
-                      getValue={(p) => p.id}
-                      getLabel={(p) =>
-                        `${p.code} — ${p.name} (${formatCop(p.salePrice)})`
+                      label="Cliente Destinatario"
+                      items={customerSelectItems}
+                      value={quoteCustomerId}
+                      onChange={setQuoteCustomerId}
+                      getValue={(c) => c.id}
+                      getLabel={(c) => `${c.name} (${c.nit})`}
+                      onCreateNew={
+                        hasClientes
+                          ? () => setShowNewCustomerModal(true)
+                          : undefined
                       }
+                      createLabel="+ Nuevo Cliente"
                       searchable
                     />
                     <div className="pk-field">
-                      <label>Cantidad</label>
+                      <label>Válida Hasta</label>
                       <input
-                        type="number"
-                        min={1}
-                        value={quoteQty}
-                        onChange={(e) => setQuoteQty(e.target.value)}
+                        type="date"
+                        value={quoteValidUntil}
+                        onChange={(e) => setQuoteValidUntil(e.target.value)}
                       />
                     </div>
+                  </div>
+
+                  {products.length > 0 && (
+                    <div
+                      style={{
+                        padding: '18px 20px',
+                        borderRadius: 12,
+                        background: '#f8fafc',
+                        border: '1px solid var(--pk-border)',
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 12.5,
+                          fontWeight: 800,
+                          color: 'var(--pk-navy)',
+                          marginBottom: 12,
+                        }}
+                      >
+                        📦 Agregar Productos del Catálogo a la Propuesta
+                      </div>
+                      <div className="pk-form-grid">
+                        <div className="pk-col-span-2">
+                          <PkSelect
+                            label="Producto del Catálogo"
+                            items={products}
+                            value={quoteProductId}
+                            onChange={setQuoteProductId}
+                            getValue={(p) => p.id}
+                            getLabel={(p) =>
+                              `${p.code} — ${p.name} (${formatCop(p.salePrice)})`
+                            }
+                            searchable
+                          />
+                        </div>
+                        <div className="pk-field">
+                          <label>Cantidad</label>
+                          <div style={{ display: 'flex', gap: 10 }}>
+                            <input
+                              type="number"
+                              min={1}
+                              value={quoteQty}
+                              onChange={(e) => setQuoteQty(e.target.value)}
+                            />
+                            <button
+                              type="button"
+                              className="pk-btn pk-btn-primary"
+                              onClick={handleAddQuoteLine}
+                            >
+                              + Agregar Ítem
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {quoteItems.length > 0 && (
+                    <div className="pk-table-wrap">
+                      <table className="pk-table">
+                        <thead>
+                          <tr>
+                            <th>Código</th>
+                            <th>Descripción</th>
+                            <th>Cant.</th>
+                            <th>Vr. Unitario</th>
+                            <th>Subtotal</th>
+                            <th>Quitar</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {quoteItems.map((it, idx) => (
+                            <tr key={`${it.code}-${idx}`}>
+                              <td>{it.code}</td>
+                              <td>{it.description}</td>
+                              <td>{it.quantity}</td>
+                              <td>{formatCop(it.unitPrice)}</td>
+                              <td>
+                                <strong>
+                                  {formatCop(it.quantity * it.unitPrice)}
+                                </strong>
+                              </td>
+                              <td>
+                                <button
+                                  type="button"
+                                  className="pk-btn pk-btn-danger pk-btn-sm"
+                                  onClick={() =>
+                                    setQuoteItems((prev) =>
+                                      prev.filter((_, i) => i !== idx)
+                                    )
+                                  }
+                                >
+                                  ✕
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  <div className="pk-form-grid cols-1">
                     <div className="pk-field">
-                      <label>&nbsp;</label>
+                      <label>Condiciones Comerciales y Validez</label>
+                      <input
+                        value={quoteNotes}
+                        onChange={(e) => setQuoteNotes(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pk-form-actions" style={{ justifyContent: 'space-between' }}>
+                    <strong style={{ fontSize: 15, color: 'var(--pk-navy)' }}>
+                      Subtotal Cotizado: {formatCop(quoteSub)}
+                    </strong>
+                    <div className="pk-row-actions">
                       <button
                         type="button"
                         className="pk-btn pk-btn-outline"
-                        onClick={handleAddQuoteLine}
+                        onClick={() => setQuoteMode('list')}
                       >
-                        ➕ Agregar Ítem a Cotización
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        className="pk-btn pk-btn-primary"
+                        disabled={busy}
+                      >
+                        💾 Guardar Cotización ({nextQuoteNumber})
                       </button>
                     </div>
                   </div>
-                )}
-
-                {quoteItems.length > 0 && (
-                  <div className="pk-table-wrap" style={{ marginTop: 12 }}>
-                    <table className="pk-table">
-                      <thead>
-                        <tr>
-                          <th>Código</th>
-                          <th>Descripción</th>
-                          <th>Cant.</th>
-                          <th>Vr. Unitario</th>
-                          <th>Subtotal</th>
-                          <th>Quitar</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {quoteItems.map((it, idx) => (
-                          <tr key={`${it.code}-${idx}`}>
-                            <td>{it.code}</td>
-                            <td>{it.description}</td>
-                            <td>{it.quantity}</td>
-                            <td>{formatCop(it.unitPrice)}</td>
-                            <td>
-                              <strong>
-                                {formatCop(it.quantity * it.unitPrice)}
-                              </strong>
-                            </td>
-                            <td>
-                              <button
-                                type="button"
-                                className="pk-btn pk-btn-danger pk-btn-sm"
-                                onClick={() =>
-                                  setQuoteItems((prev) =>
-                                    prev.filter((_, i) => i !== idx)
-                                  )
-                                }
-                              >
-                                ✕
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-
-                <div className="pk-form-grid" style={{ marginTop: 12 }}>
-                  <div className="pk-field" style={{ gridColumn: '1 / -1' }}>
-                    <label>Condiciones Comerciales y Validez</label>
-                    <input
-                      value={quoteNotes}
-                      onChange={(e) => setQuoteNotes(e.target.value)}
-                    />
-                  </div>
-                  <div
-                    className="pk-row-actions"
-                    style={{
-                      gridColumn: '1 / -1',
-                      justifyContent: 'space-between',
-                    }}
-                  >
-                    <strong>Subtotal Cotizado: {formatCop(quoteSub)}</strong>
-                    <button
-                      type="submit"
-                      className="pk-btn pk-btn-primary"
-                      disabled={busy}
-                    >
-                      💾 Guardar Cotización ({nextQuoteNumber})
-                    </button>
-                  </div>
-                </div>
-              </form>
-            </div>
-          </div>
-
-          <div className="pk-card">
-            <div className="pk-card-head">
-              <div className="pk-card-title">📋 Cotizaciones Emitidas</div>
-            </div>
-            <div className="pk-card-body">
-              <div className="pk-table-wrap">
-                <table className="pk-table">
-                  <thead>
-                    <tr>
-                      <th>N° Cotización</th>
-                      <th>Fecha</th>
-                      <th>Cliente</th>
-                      <th>Vigencia</th>
-                      <th>Total</th>
-                      <th>Acciones Comerciales</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {quotes.map((q) => (
-                      <tr key={q.id}>
-                        <td>
-                          <strong>{q.id}</strong>
-                        </td>
-                        <td>{q.createdAt}</td>
-                        <td>{q.customerName}</td>
-                        <td>{q.validUntil}</td>
-                        <td>
-                          <strong>{formatCop(q.total)}</strong>
-                        </td>
-                        <td>
-                          <div className="pk-row-actions">
-                            <button
-                              type="button"
-                              className="pk-btn pk-btn-emerald pk-btn-sm"
-                              onClick={() => convertQuoteToInvoice(q)}
-                            >
-                              🛒 Pasar a Factura
-                            </button>
-                            <PkPrintButton
-                              label="🖨️ Imprimir Cotización"
-                              payload={{
-                                document_type: 'COTIZACIÓN COMERCIAL',
-                                document_number: q.id,
-                                issue_date: q.createdAt,
-                                customer_name: q.customerName,
-                                customer_nit: q.customerNit,
-                                extra_fields: {
-                                  'Válida Hasta': q.validUntil || '',
-                                  Estado: q.status || 'Vigente',
-                                },
-                                items: (q.items || []).map((it) => ({
-                                  code: it.code,
-                                  description: it.description,
-                                  quantity: it.quantity,
-                                  unit_price: it.unitPrice,
-                                  tax_pct: it.taxPct,
-                                  subtotal: it.subtotal,
-                                })),
-                                subtotal: q.subtotal,
-                                tax_total: q.taxTotal,
-                                grand_total: q.total,
-                                notes: q.notes,
-                              }}
-                            />
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {quotes.length === 0 && (
-                      <tr>
-                        <td
-                          colSpan={6}
-                          style={{
-                            textAlign: 'center',
-                            color: 'var(--pk-muted)',
-                          }}
-                        >
-                          Aún no hay cotizaciones registradas.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                </form>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="pk-card">
+              <div className="pk-card-head">
+                <div className="pk-card-title">📋 Historial de Cotizaciones Emitidas</div>
+              </div>
+              <div className="pk-datatable-toolbar">
+                <input
+                  className="pk-input pk-datatable-search"
+                  placeholder="🔎 Buscar por N° cotización, cliente o NIT..."
+                  value={quoteSearch}
+                  onChange={(e) => setQuoteSearch(e.target.value)}
+                />
+                <span className="pk-badge pk-badge-slate">
+                  {filteredQuotes.length} registros
+                </span>
+              </div>
+              <div className="pk-card-body">
+                <div className="pk-table-wrap">
+                  <table className="pk-table">
+                    <thead>
+                      <tr>
+                        <th>N° Cotización</th>
+                        <th>Fecha</th>
+                        <th>Cliente</th>
+                        <th>Vigencia</th>
+                        <th>Total</th>
+                        <th>Acciones Comerciales</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredQuotes.map((q) => (
+                        <tr key={q.id}>
+                          <td>
+                            <strong>{q.id}</strong>
+                          </td>
+                          <td>{q.createdAt}</td>
+                          <td>{q.customerName}</td>
+                          <td>{q.validUntil}</td>
+                          <td>
+                            <strong>{formatCop(q.total)}</strong>
+                          </td>
+                          <td>
+                            <div className="pk-row-actions">
+                              <button
+                                type="button"
+                                className="pk-btn pk-btn-emerald pk-btn-sm"
+                                onClick={() => convertQuoteToInvoice(q)}
+                              >
+                                🛒 Pasar a Factura
+                              </button>
+                              <PkPrintButton
+                                label="🖨️ Imprimir Cotización"
+                                payload={{
+                                  document_type: 'COTIZACIÓN COMERCIAL',
+                                  document_number: q.id,
+                                  issue_date: q.createdAt,
+                                  customer_name: q.customerName,
+                                  customer_nit: q.customerNit,
+                                  extra_fields: {
+                                    'Válida Hasta': q.validUntil || '',
+                                    Estado: q.status || 'Vigente',
+                                  },
+                                  items: (q.items || []).map((it) => ({
+                                    code: it.code,
+                                    description: it.description,
+                                    quantity: it.quantity,
+                                    unit_price: it.unitPrice,
+                                    tax_pct: it.taxPct,
+                                    subtotal: it.subtotal,
+                                  })),
+                                  subtotal: q.subtotal,
+                                  tax_total: q.taxTotal,
+                                  grand_total: q.total,
+                                  notes: q.notes,
+                                }}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {filteredQuotes.length === 0 && (
+                        <tr>
+                          <td
+                            colSpan={6}
+                            style={{
+                              textAlign: 'center',
+                              color: 'var(--pk-muted)',
+                            }}
+                          >
+                            Aún no hay cotizaciones registradas.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
           {quickModals}
         </div>
       </ModuleGate>
@@ -1299,7 +1386,7 @@ export const FacturacionView: React.FC = () => {
 
     return (
       <ModuleGate module="facturas_taller">
-        <div>
+        <div className="pk-stack">
           <PkKpiRow
             items={[
               {
@@ -1326,10 +1413,13 @@ export const FacturacionView: React.FC = () => {
               </div>
               <button
                 type="button"
-                className="pk-btn pk-btn-primary pk-btn-sm"
-                onClick={() => setActiveModuleKey('pos_mostrador')}
+                className="pk-btn pk-btn-primary"
+                onClick={() => {
+                  setPosMode('create');
+                  setActiveModuleKey('pos_mostrador');
+                }}
               >
-                🛒 Ir al POS Automotriz para Facturar Vehículo
+                + Nueva Factura Automotriz (POS)
               </button>
             </div>
             <div className="pk-card-body">
@@ -1417,675 +1507,783 @@ export const FacturacionView: React.FC = () => {
       )
     : products;
 
-  return (
-    <div>
-      {(linkedTableId || linkedRoomId || workOrderId) && (
-        <div
-          className="pk-card"
-          style={{
-            background: '#ecfdf5',
-            borderColor: '#10b981',
-            padding: '10px 16px',
-            marginBottom: 12,
-          }}
-        >
-          <strong style={{ color: '#065f46', fontSize: 13 }}>
-            🔗 Liquidación Operativa Integrada:{' '}
-          </strong>
-          <span style={{ fontSize: 12.5, color: '#047857' }}>
-            {linkedTableId && `Mesa ${linkedTableId} se liberará al facturar. `}
-            {linkedRoomId &&
-              `Habitación ${linkedRoomId} completará Check-Out al facturar. `}
-            {workOrderId &&
-              `Orden de Taller ${workOrderId} quedará facturada automáticamente.`}
-          </span>
-        </div>
-      )}
+  const totalInvoicedAmount = invoices.reduce((acc, inv) => acc + inv.total, 0);
+  const totalCollectedAmount = invoices.reduce((acc, inv) => acc + inv.amountPaid, 0);
+  const totalPendingAmount = invoices.reduce((acc, inv) => acc + inv.pendingBalance, 0);
 
-      <div className="pk-grid-2">
-        <div className="pk-card">
-          <div className="pk-card-head">
-            <div className="pk-card-title">
-              📦 Catálogo Rápido de Productos y Servicios
-            </div>
-            <input
-              value={catalogSearch}
-              onChange={(e) => setCatalogSearch(e.target.value)}
-              placeholder="🔎 Buscar producto o SKU..."
+  const filteredInvoices = invoices.filter((inv) => {
+    if (invoiceStatusFilter === 'PAID' && inv.pendingBalance > 0) return false;
+    if (invoiceStatusFilter === 'CXC' && inv.pendingBalance <= 0) return false;
+    const q = invoiceSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      inv.id.toLowerCase().includes(q) ||
+      inv.customerName.toLowerCase().includes(q) ||
+      (inv.customerNit || '').toLowerCase().includes(q) ||
+      (inv.plate || '').toLowerCase().includes(q)
+    );
+  });
+
+  return (
+    <div className="pk-stack">
+      <PkKpiRow
+        items={[
+          {
+            label: 'Facturas Emitidas',
+            value: String(invoices.length),
+            color: 'var(--pk-primary)',
+          },
+          {
+            label: 'Total Facturado',
+            value: formatCop(totalInvoicedAmount),
+            color: 'var(--pk-navy)',
+          },
+          {
+            label: 'Recaudo Efectivo / Digital',
+            value: formatCop(totalCollectedAmount),
+            color: 'var(--pk-emerald)',
+          },
+          {
+            label: 'Saldo en Cartera CxC',
+            value: formatCop(totalPendingAmount),
+            color: totalPendingAmount > 0 ? 'var(--pk-amber)' : 'var(--pk-muted)',
+          },
+        ]}
+      />
+
+      <PkViewSwitcher
+        title="Facturación de Venta y Terminal POS"
+        subtitle="Consulta el listado general de facturas emitidas o abre una nueva liquidación en caja registradora."
+        mode={posMode}
+        onModeChange={setPosMode}
+        listLabel="📋 Facturas Emitidas"
+        createLabel="+ Nueva Factura"
+        count={invoices.length}
+        extraActions={
+          posMode === 'list' ? (
+            <button
+              type="button"
+              className="pk-btn pk-btn-outline"
+              onClick={() =>
+                downloadCsvUtf8(
+                  'ventas_facturacion.csv',
+                  [
+                    'Factura',
+                    'Fecha',
+                    'Cliente',
+                    'NIT',
+                    'MedioPago',
+                    'Total',
+                    'Pagado',
+                    'SaldoCxC',
+                    'Estado',
+                  ],
+                  invoices.map((inv) => [
+                    inv.id,
+                    inv.issueDate || inv.date || '',
+                    inv.customerName,
+                    inv.customerNit,
+                    inv.paymentMethod,
+                    inv.total,
+                    inv.amountPaid,
+                    inv.pendingBalance,
+                    inv.status,
+                  ])
+                )
+              }
+            >
+              📥 Exportar Ventas (.CSV)
+            </button>
+          ) : undefined
+        }
+      />
+
+      {posMode === 'create' ? (
+        <>
+          {(linkedTableId || linkedRoomId || workOrderId) && (
+            <div
+              className="pk-card"
               style={{
-                padding: '6px 10px',
-                borderRadius: 8,
-                border: '1px solid var(--pk-border)',
-                fontSize: 12.5,
+                background: '#ecfdf5',
+                borderColor: '#10b981',
+                padding: '14px 20px',
               }}
-            />
-          </div>
-          <div className="pk-card-body">
-            {filteredCatalog.length > 0 ? (
-              <div className="pk-cards-grid" style={{ marginBottom: 14 }}>
-                {filteredCatalog.map((p) => (
+            >
+              <strong style={{ color: '#065f46', fontSize: 13.5 }}>
+                🔗 Liquidación Operativa Integrada:{' '}
+              </strong>
+              <span style={{ fontSize: 13, color: '#047857' }}>
+                {linkedTableId && `Mesa ${linkedTableId} se liberará al facturar. `}
+                {linkedRoomId &&
+                  `Habitación ${linkedRoomId} completará Check-Out al facturar. `}
+                {workOrderId &&
+                  `Orden de Taller ${workOrderId} quedará facturada automáticamente.`}
+              </span>
+            </div>
+          )}
+
+          <div className="pk-grid-2" style={{ alignItems: 'start' }}>
+            <div className="pk-card">
+              <div className="pk-card-head">
+                <div className="pk-card-title">
+                  📦 Catálogo de Productos y Servicios
+                </div>
+                <input
+                  className="pk-input"
+                  value={catalogSearch}
+                  onChange={(e) => setCatalogSearch(e.target.value)}
+                  placeholder="🔎 Buscar producto o SKU..."
+                  style={{ maxWidth: 260, minHeight: 38 }}
+                />
+              </div>
+              <div className="pk-card-body">
+                {filteredCatalog.length > 0 ? (
                   <div
-                    key={p.id}
                     style={{
-                      border: '1px solid var(--pk-border)',
-                      borderRadius: 10,
-                      padding: '10px 12px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-between',
-                      gap: 8,
-                      background: '#f8fafc',
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))',
+                      gap: 14,
+                      marginBottom: 20,
                     }}
                   >
-                    <div>
+                    {filteredCatalog.map((p) => (
                       <div
+                        key={p.id}
                         style={{
+                          border: '1px solid var(--pk-border)',
+                          borderRadius: 12,
+                          padding: '14px 15px',
                           display: 'flex',
+                          flexDirection: 'column',
                           justifyContent: 'space-between',
-                          gap: 6,
+                          gap: 10,
+                          background: '#f8fafc',
                         }}
                       >
-                        <span className="pk-badge pk-badge-slate">
-                          {p.code}
-                        </span>
-                        <span
-                          className={`pk-badge ${
-                            p.stock > p.minStock
-                              ? 'pk-badge-emerald'
-                              : 'pk-badge-amber'
-                          }`}
+                        <div>
+                          <div
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              gap: 6,
+                            }}
+                          >
+                            <span className="pk-badge pk-badge-slate">
+                              {p.code}
+                            </span>
+                            <span
+                              className={`pk-badge ${
+                                p.stock > p.minStock
+                                  ? 'pk-badge-emerald'
+                                  : 'pk-badge-amber'
+                              }`}
+                            >
+                              Stock: {p.stock}
+                            </span>
+                          </div>
+                          <div
+                            style={{ fontWeight: 800, fontSize: 13.5, marginTop: 8 }}
+                          >
+                            {p.name}
+                          </div>
+                          <div
+                            style={{ fontSize: 12, color: 'var(--pk-muted)', marginTop: 2 }}
+                          >
+                            {p.category} • IVA {p.taxPct}%
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            paddingTop: 6,
+                            borderTop: '1px solid #e2e8f0',
+                          }}
                         >
-                          Stock: {p.stock}
-                        </span>
+                          <strong
+                            style={{ fontSize: 15, color: 'var(--pk-primary)' }}
+                          >
+                            {formatCop(p.salePrice)}
+                          </strong>
+                          <button
+                            type="button"
+                            className="pk-btn pk-btn-primary pk-btn-sm"
+                            onClick={() => addProductToCart(p)}
+                          >
+                            + Agregar
+                          </button>
+                        </div>
                       </div>
-                      <div
-                        style={{ fontWeight: 800, fontSize: 13, marginTop: 6 }}
-                      >
-                        {p.name}
-                      </div>
-                      <div
-                        style={{ fontSize: 11.5, color: 'var(--pk-muted)' }}
-                      >
-                        {p.category} • IVA {p.taxPct}%
-                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      padding: '16px 0',
+                      fontSize: 13,
+                      color: 'var(--pk-muted)',
+                    }}
+                  >
+                    {hasInventario
+                      ? 'No se encontraron productos para el filtro ingresado.'
+                      : 'Catálogo de inventario desacoplado; puedes facturar servicios libres a continuación.'}
+                  </div>
+                )}
+
+                <form
+                  onSubmit={handleAddQuickService}
+                  style={{
+                    borderTop: '1px solid #e2e8f0',
+                    paddingTop: 18,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 800,
+                      marginBottom: 14,
+                      color: 'var(--pk-navy)',
+                    }}
+                  >
+                    🛠️ Agregar Servicio Libre / Mano de Obra Especializada
+                  </div>
+                  <div className="pk-form-grid cols-2">
+                    <div className="pk-field pk-col-span-full">
+                      <label>Descripción del Servicio</label>
+                      <input
+                        value={srvName}
+                        onChange={(e) => setSrvName(e.target.value)}
+                        placeholder="Ej: Mano de Obra Diagnóstico / Instalación"
+                      />
                     </div>
+                    <div className="pk-field">
+                      <label>Valor Unitario ($)</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={srvPrice}
+                        onChange={(e) => setSrvPrice(e.target.value)}
+                      />
+                    </div>
+                    <div className="pk-field">
+                      <label>IVA (%)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={srvTaxPct}
+                        onChange={(e) => setSrvTaxPct(e.target.value)}
+                      />
+                    </div>
+                    <div className="pk-form-actions">
+                      <button type="submit" className="pk-btn pk-btn-outline">
+                        + Añadir Servicio al Carrito
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            <div className="pk-card">
+              <div className="pk-card-head">
+                <div className="pk-card-title">
+                  🧾 Liquidación de Venta y Caja Registradora
+                </div>
+                <span className="pk-badge pk-badge-blue">{nextInvoiceNumber}</span>
+              </div>
+              <div className="pk-card-body">
+                <div className="pk-form-grid cols-2">
+                  <PkAutoCodeInput
+                    label="Consecutivo Autorizado"
+                    value={nextInvoiceNumber}
+                  />
+                  <PkSelect
+                    label="Cliente / Adquiriente"
+                    items={customerSelectItems}
+                    value={customerId}
+                    onChange={(val) => {
+                      setCustomerId(val);
+                      setCustomerNameOverride('');
+                      applyCustomerTariff(val, customers, contracts, tariffs);
+                    }}
+                    getValue={(c) => c.id}
+                    getLabel={(c) => `${c.name} (${c.nit})`}
+                    onCreateNew={
+                      hasClientes ? () => setShowNewCustomerModal(true) : undefined
+                    }
+                    createLabel="+ Nuevo Cliente"
+                    searchable
+                  />
+                </div>
+
+                <FacturasTallerBox
+                  vehicles={vehicles}
+                  workers={workers}
+                  vehicleId={vehicleId}
+                  onVehicleChange={handleSelectVehicle}
+                  currentKm={currentKm}
+                  onCurrentKmChange={setCurrentKm}
+                  nextOilKm={nextOilKm}
+                  onNextOilKmChange={setNextOilKm}
+                  mechanicId={mechanicId}
+                  onMechanicChange={setMechanicId}
+                  workOrderId={workOrderId}
+                  onWorkOrderIdChange={setWorkOrderId}
+                  onOpenNewVehicleModal={() => setShowNewVehicleModal(true)}
+                />
+
+                <div className="pk-table-wrap" style={{ marginTop: 16 }}>
+                  <table className="pk-table">
+                    <thead>
+                      <tr>
+                        <th>Detalle</th>
+                        <th>Cant.</th>
+                        <th>Precio Unit.</th>
+                        <th>Subtotal</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cart.map((item, idx) => {
+                        const lockedCatalogPrice =
+                          Boolean(item.productId) && hasInventario;
+                        return (
+                          <tr key={`${item.code}-${idx}`}>
+                            <td>
+                              <strong>{item.description}</strong>
+                              <div
+                                style={{ fontSize: 11, color: 'var(--pk-muted)' }}
+                              >
+                                {item.itemType} • IVA {item.taxPct}%
+                              </div>
+                            </td>
+                            <td style={{ width: 92 }}>
+                              <input
+                                type="number"
+                                min={1}
+                                value={item.quantity}
+                                onChange={(e) =>
+                                  updateCartItem(idx, {
+                                    quantity: Number(e.target.value || 1),
+                                  })
+                                }
+                                style={{
+                                  width: 72,
+                                  padding: '6px 8px',
+                                  borderRadius: 8,
+                                  border: '1px solid var(--pk-border-strong)',
+                                }}
+                              />
+                            </td>
+                            <td style={{ width: 128 }}>
+                              <input
+                                type="number"
+                                min={1}
+                                value={item.unitPrice}
+                                readOnly={lockedCatalogPrice}
+                                title={
+                                  lockedCatalogPrice
+                                    ? 'Precio gobernado por el catálogo central de inventario'
+                                    : undefined
+                                }
+                                onChange={(e) =>
+                                  updateCartItem(idx, {
+                                    unitPrice: Number(e.target.value || 0),
+                                  })
+                                }
+                                style={{
+                                  width: 112,
+                                  padding: '6px 8px',
+                                  borderRadius: 8,
+                                  border: '1px solid var(--pk-border-strong)',
+                                  background: lockedCatalogPrice
+                                    ? '#f1f5f9'
+                                    : undefined,
+                                }}
+                              />
+                            </td>
+                            <td>
+                              <strong>
+                                {formatCop(item.quantity * item.unitPrice)}
+                              </strong>
+                            </td>
+                            <td>
+                              <button
+                                type="button"
+                                className="pk-btn pk-btn-danger pk-btn-sm"
+                                onClick={() => updateCartItem(idx, { quantity: 0 })}
+                              >
+                                ✕
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {cart.length === 0 && (
+                        <tr>
+                          <td
+                            colSpan={5}
+                            style={{
+                              textAlign: 'center',
+                              color: 'var(--pk-muted)',
+                              padding: 24,
+                            }}
+                          >
+                            Selecciona productos o servicios en el panel izquierdo
+                            para iniciar la liquidación.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="pk-form-grid cols-2" style={{ marginTop: 18 }}>
+                  <PkSimpleSelect
+                    label="Medio de Pago"
+                    value={paymentMethod}
+                    onChange={setPaymentMethod}
+                    searchable={false}
+                    options={[
+                      { value: 'Efectivo', label: 'Efectivo en Caja' },
+                      {
+                        value: 'Transferencia / Nequi',
+                        label: 'Transferencia / Nequi / PSE',
+                      },
+                      {
+                        value: 'Tarjeta Débito / Crédito',
+                        label: 'Tarjeta Débito / Crédito',
+                      },
+                    ]}
+                  />
+
+                  <FeatureGate feature="descuento_linea">
+                    <div className="pk-field">
+                      <label>Descuento Convenio / Tarifa (%)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={discountPct}
+                        onChange={(e) => setDiscountPct(e.target.value)}
+                      />
+                    </div>
+                  </FeatureGate>
+
+                  <FeatureGate feature="pagos_mixtos_cxc">
+                    <div className="pk-field pk-col-span-full">
+                      <label>
+                        <span>Modalidad Cartera CxC (Crédito)</span>
+                        <input
+                          type="checkbox"
+                          checked={isCreditMode}
+                          onChange={(e) => {
+                            setIsCreditMode(e.target.checked);
+                            if (e.target.checked && !amountPaidInput) {
+                              setAmountPaidInput('0');
+                            }
+                          }}
+                          style={{ width: 16, height: 16, minHeight: 16 }}
+                        />
+                      </label>
+                      {isCreditMode ? (
+                        <input
+                          type="number"
+                          min={0}
+                          max={grandTotal}
+                          value={amountPaidInput}
+                          onChange={(e) => setAmountPaidInput(e.target.value)}
+                          placeholder="Abono recibido hoy ($)"
+                        />
+                      ) : (
+                        <input
+                          readOnly
+                          value="Pago de Contado (100%)"
+                          style={{ background: '#f8fafc' }}
+                        />
+                      )}
+                    </div>
+                  </FeatureGate>
+
+                  <div className="pk-field pk-col-span-full">
+                    <label>Observaciones en Factura</label>
+                    <input
+                      value={invoiceNotes}
+                      onChange={(e) => setInvoiceNotes(e.target.value)}
+                      placeholder="Opcional: orden de compra, garantía o nota de entrega"
+                    />
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: 18,
+                    padding: '16px 18px',
+                    background: '#f8fafc',
+                    borderRadius: 12,
+                    border: '1px solid var(--pk-border)',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      fontSize: 13,
+                      marginBottom: 4,
+                    }}
+                  >
+                    <span>Subtotal Bruto:</span>
+                    <strong>{formatCop(rawSubtotal)}</strong>
+                  </div>
+                  {discountAmount > 0 && (
                     <div
                       style={{
                         display: 'flex',
                         justifyContent: 'space-between',
-                        alignItems: 'center',
+                        fontSize: 13,
+                        color: 'var(--pk-rose)',
+                        marginBottom: 4,
                       }}
                     >
-                      <strong
-                        style={{ fontSize: 14.5, color: 'var(--pk-primary)' }}
-                      >
-                        {formatCop(p.salePrice)}
-                      </strong>
-                      <button
-                        type="button"
-                        className="pk-btn pk-btn-primary pk-btn-sm"
-                        onClick={() => addProductToCart(p)}
-                      >
-                        + Agregar
-                      </button>
+                      <span>Descuento ({effectivePct}%):</span>
+                      <strong>-{formatCop(discountAmount)}</strong>
                     </div>
+                  )}
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      fontSize: 13,
+                    }}
+                  >
+                    <span>IVA / Impuestos:</span>
+                    <strong>{formatCop(taxAmount)}</strong>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div
-                style={{
-                  padding: '12px 0',
-                  fontSize: 12.5,
-                  color: 'var(--pk-muted)',
-                }}
-              >
-                {hasInventario
-                  ? 'No se encontraron productos para el filtro ingresado.'
-                  : 'Catálogo de inventario desacoplado; puedes facturar servicios libres a continuación.'}
-              </div>
-            )}
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      fontSize: 19,
+                      fontWeight: 900,
+                      marginTop: 10,
+                      paddingTop: 10,
+                      borderTop: '1px solid #cbd5e1',
+                      color: 'var(--pk-primary)',
+                    }}
+                  >
+                    <span>TOTAL A PAGAR:</span>
+                    <span>{formatCop(grandTotal)}</span>
+                  </div>
+                  {isCreditMode && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        fontSize: 13,
+                        color: 'var(--pk-amber)',
+                        marginTop: 6,
+                      }}
+                    >
+                      <span>Saldo a Cartera CxC:</span>
+                      <strong>
+                        {formatCop(
+                          Math.max(0, grandTotal - Number(amountPaidInput || 0))
+                        )}
+                      </strong>
+                    </div>
+                  )}
+                </div>
 
-            <form
-              onSubmit={handleAddQuickService}
-              style={{
-                borderTop: '1px solid #e2e8f0',
-                paddingTop: 12,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 12,
-                  fontWeight: 800,
-                  marginBottom: 8,
-                  color: '#334155',
-                }}
-              >
-                🛠️ Agregar Servicio Libre / Mano de Obra Especializada
-              </div>
-              <div className="pk-form-grid">
-                <div className="pk-field">
-                  <label>Descripción del Servicio</label>
-                  <input
-                    value={srvName}
-                    onChange={(e) => setSrvName(e.target.value)}
-                    placeholder="Ej: Mano de Obra Diagnóstico / Instalación"
-                  />
-                </div>
-                <div className="pk-field">
-                  <label>Valor ($)</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={srvPrice}
-                    onChange={(e) => setSrvPrice(e.target.value)}
-                  />
-                </div>
-                <div className="pk-field">
-                  <label>IVA (%)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={srvTaxPct}
-                    onChange={(e) => setSrvTaxPct(e.target.value)}
-                  />
-                </div>
-                <div className="pk-field">
-                  <label>&nbsp;</label>
-                  <button type="submit" className="pk-btn pk-btn-outline">
-                    ➕ Añadir Servicio
+                <div className="pk-form-actions">
+                  <button
+                    type="button"
+                    className="pk-btn pk-btn-outline"
+                    disabled={busy}
+                    onClick={() => setPosMode('list')}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    className="pk-btn pk-btn-primary"
+                    disabled={busy}
+                    onClick={() => submitInvoice(false)}
+                  >
+                    {busy ? 'Procesando...' : '⚡ Emitir Factura'}
+                  </button>
+                  <button
+                    type="button"
+                    className="pk-btn pk-btn-emerald"
+                    disabled={busy}
+                    onClick={() => submitInvoice(true)}
+                  >
+                    {busy ? 'Procesando...' : '🖨️ Facturar e Imprimir'}
                   </button>
                 </div>
               </div>
-            </form>
+            </div>
           </div>
-        </div>
-
+        </>
+      ) : (
         <div className="pk-card">
           <div className="pk-card-head">
-            <div className="pk-card-title">
-              🧾 Liquidación de Venta y Caja Registradora
+            <div className="pk-card-title">📋 Listado General de Facturas Emitidas</div>
+            <span className="pk-badge pk-badge-blue">
+              Próximo consecutivo: {nextInvoiceNumber}
+            </span>
+          </div>
+          <div className="pk-datatable-toolbar">
+            <input
+              className="pk-input pk-datatable-search"
+              placeholder="🔎 Buscar por N° factura, cliente, NIT o placa..."
+              value={invoiceSearch}
+              onChange={(e) => setInvoiceSearch(e.target.value)}
+            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ minWidth: 230 }}>
+                <PkSimpleSelect
+                  ariaLabel="Filtrar por estado de recaudo"
+                  value={invoiceStatusFilter}
+                  onChange={setInvoiceStatusFilter}
+                  searchable={false}
+                  options={[
+                    { value: 'ALL', label: 'Todos los estados de factura' },
+                    { value: 'PAID', label: 'Solo Pagadas (Contado)' },
+                    { value: 'CXC', label: 'Con Saldo en Cartera CxC' },
+                  ]}
+                />
+              </div>
+              <span className="pk-badge pk-badge-slate">
+                {filteredInvoices.length} facturas
+              </span>
             </div>
-            <span className="pk-badge pk-badge-blue">{nextInvoiceNumber}</span>
           </div>
           <div className="pk-card-body">
-            <div className="pk-form-grid">
-              <PkAutoCodeInput
-                label="Consecutivo Autorizado"
-                value={nextInvoiceNumber}
-              />
-              <PkSelect
-                label="Cliente / Adquiriente"
-                items={customerSelectItems}
-                value={customerId}
-                onChange={(val) => {
-                  setCustomerId(val);
-                  setCustomerNameOverride('');
-                  applyCustomerTariff(val, customers, contracts, tariffs);
-                }}
-                getValue={(c) => c.id}
-                getLabel={(c) => `${c.name} (${c.nit})`}
-                onCreateNew={
-                  hasClientes ? () => setShowNewCustomerModal(true) : undefined
-                }
-                createLabel="+ Nuevo Cliente"
-                searchable
-              />
-            </div>
-
-            <FacturasTallerBox
-              vehicles={vehicles}
-              workers={workers}
-              vehicleId={vehicleId}
-              onVehicleChange={handleSelectVehicle}
-              currentKm={currentKm}
-              onCurrentKmChange={setCurrentKm}
-              nextOilKm={nextOilKm}
-              onNextOilKmChange={setNextOilKm}
-              mechanicId={mechanicId}
-              onMechanicChange={setMechanicId}
-              workOrderId={workOrderId}
-              onWorkOrderIdChange={setWorkOrderId}
-              onOpenNewVehicleModal={() => setShowNewVehicleModal(true)}
-            />
-
-            <div className="pk-table-wrap" style={{ marginTop: 10 }}>
+            <div className="pk-table-wrap">
               <table className="pk-table">
                 <thead>
                   <tr>
-                    <th>Detalle</th>
-                    <th>Cant.</th>
-                    <th>Precio Unit.</th>
-                    <th>Subtotal</th>
-                    <th></th>
+                    <th>Factura</th>
+                    <th>Fecha</th>
+                    <th>Cliente / Adquiriente</th>
+                    <th>Placa / Taller</th>
+                    <th>Medio de Pago</th>
+                    <th>Total</th>
+                    <th>Saldo CxC</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {cart.map((item, idx) => {
-                    const lockedCatalogPrice =
-                      Boolean(item.productId) && hasInventario;
-                    return (
-                      <tr key={`${item.code}-${idx}`}>
-                        <td>
-                          <strong>{item.description}</strong>
-                          <div
-                            style={{ fontSize: 10.5, color: 'var(--pk-muted)' }}
-                          >
-                            {item.itemType} • IVA {item.taxPct}%
+                  {filteredInvoices.map((inv) => (
+                    <tr key={inv.id}>
+                      <td>
+                        <strong>{inv.id}</strong>
+                      </td>
+                      <td>{inv.issueDate || inv.date}</td>
+                      <td>
+                        <strong>{inv.customerName}</strong>
+                        <div style={{ fontSize: 11.5, color: 'var(--pk-muted)' }}>
+                          {inv.customerNit}
+                        </div>
+                      </td>
+                      <td>
+                        {inv.plate ? (
+                          <div>
+                            <span className="pk-badge pk-badge-blue">
+                              {inv.plate}
+                            </span>
+                            {inv.mechanicName && (
+                              <div
+                                style={{ fontSize: 11, color: 'var(--pk-muted)' }}
+                              >
+                                {inv.mechanicName}
+                              </div>
+                            )}
                           </div>
-                        </td>
-                        <td style={{ width: 88 }}>
-                          <input
-                            type="number"
-                            min={1}
-                            value={item.quantity}
-                            onChange={(e) =>
-                              updateCartItem(idx, {
-                                quantity: Number(e.target.value || 1),
-                              })
-                            }
-                            style={{
-                              width: 68,
-                              padding: '4px 6px',
-                              borderRadius: 6,
-                              border: '1px solid var(--pk-border)',
-                            }}
-                          />
-                        </td>
-                        <td style={{ width: 118 }}>
-                          <input
-                            type="number"
-                            min={1}
-                            value={item.unitPrice}
-                            readOnly={lockedCatalogPrice}
-                            title={
-                              lockedCatalogPrice
-                                ? 'Precio gobernado por el catálogo central de inventario'
-                                : undefined
-                            }
-                            onChange={(e) =>
-                              updateCartItem(idx, {
-                                unitPrice: Number(e.target.value || 0),
-                              })
-                            }
-                            style={{
-                              width: 104,
-                              padding: '4px 6px',
-                              borderRadius: 6,
-                              border: '1px solid var(--pk-border)',
-                              background: lockedCatalogPrice
-                                ? '#f1f5f9'
-                                : undefined,
-                            }}
-                          />
-                        </td>
-                        <td>
-                          <strong>
-                            {formatCop(item.quantity * item.unitPrice)}
-                          </strong>
-                        </td>
-                        <td>
+                        ) : (
+                          <span style={{ color: 'var(--pk-muted)' }}>
+                            Mostrador
+                          </span>
+                        )}
+                      </td>
+                      <td>{inv.paymentMethod}</td>
+                      <td>
+                        <strong>{formatCop(inv.total)}</strong>
+                      </td>
+                      <td>
+                        {inv.pendingBalance > 0 ? (
+                          <span className="pk-badge pk-badge-amber">
+                            {formatCop(inv.pendingBalance)}
+                          </span>
+                        ) : (
+                          <span
+                            style={{ color: 'var(--pk-emerald)', fontWeight: 700 }}
+                          >
+                            $0
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        <span
+                          className={`pk-badge ${
+                            inv.pendingBalance > 0
+                              ? 'pk-badge-amber'
+                              : 'pk-badge-emerald'
+                          }`}
+                        >
+                          {inv.status}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="pk-row-actions">
                           <button
                             type="button"
-                            className="pk-btn pk-btn-danger pk-btn-sm"
-                            onClick={() => updateCartItem(idx, { quantity: 0 })}
+                            className="pk-btn pk-btn-outline pk-btn-sm"
+                            onClick={() => setSelectedInvoice(inv)}
                           >
-                            ✕
+                            👁️ Ver
                           </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {cart.length === 0 && (
+                          <PkPrintButton
+                            label="🖨️ Imprimir"
+                            variant="primary"
+                            payload={buildInvoicePrintPayload(inv)}
+                          />
+                          {inv.pendingBalance > 0 && hasClientes && (
+                            <button
+                              type="button"
+                              className="pk-btn pk-btn-amber pk-btn-sm"
+                              onClick={() =>
+                                navigateTo('ms-clientes', 'cartera_cxc')
+                              }
+                            >
+                              💳 Abonar
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredInvoices.length === 0 && (
                     <tr>
                       <td
-                        colSpan={5}
-                        style={{
-                          textAlign: 'center',
-                          color: 'var(--pk-muted)',
-                          padding: 18,
-                        }}
+                        colSpan={9}
+                        style={{ textAlign: 'center', color: 'var(--pk-muted)', padding: 28 }}
                       >
-                        Selecciona productos o servicios de la columna izquierda
-                        para iniciar la venta.
+                        {invoices.length === 0
+                          ? 'Aún no hay facturas emitidas. Haz clic en "+ Nueva Factura" para registrar tu primera venta.'
+                          : 'No se encontraron facturas con los filtros seleccionados.'}
                       </td>
                     </tr>
                   )}
                 </tbody>
               </table>
             </div>
-
-            <div className="pk-form-grid" style={{ marginTop: 14 }}>
-              <div className="pk-field">
-                <label>Medio de Pago</label>
-                <select
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value)}
-                >
-                  <option value="Efectivo">Efectivo en Caja</option>
-                  <option value="Transferencia / Nequi">
-                    Transferencia / Nequi / PSE
-                  </option>
-                  <option value="Tarjeta Débito / Crédito">
-                    Tarjeta Débito / Crédito
-                  </option>
-                </select>
-              </div>
-
-              <FeatureGate feature="descuento_linea">
-                <div className="pk-field">
-                  <label>Descuento Convenio / Tarifa (%)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={discountPct}
-                    onChange={(e) => setDiscountPct(e.target.value)}
-                  />
-                </div>
-              </FeatureGate>
-
-              <FeatureGate feature="pagos_mixtos_cxc">
-                <div className="pk-field">
-                  <label>
-                    <span>Modalidad Cartera CxC</span>
-                    <input
-                      type="checkbox"
-                      checked={isCreditMode}
-                      onChange={(e) => {
-                        setIsCreditMode(e.target.checked);
-                        if (e.target.checked && !amountPaidInput) {
-                          setAmountPaidInput('0');
-                        }
-                      }}
-                      style={{ width: 16, height: 16 }}
-                    />
-                  </label>
-                  {isCreditMode ? (
-                    <input
-                      type="number"
-                      min={0}
-                      max={grandTotal}
-                      value={amountPaidInput}
-                      onChange={(e) => setAmountPaidInput(e.target.value)}
-                      placeholder="Abono hoy ($)"
-                    />
-                  ) : (
-                    <input
-                      readOnly
-                      value="Contado 100%"
-                      style={{ background: '#f8fafc' }}
-                    />
-                  )}
-                </div>
-              </FeatureGate>
-
-              <div className="pk-field" style={{ gridColumn: '1 / -1' }}>
-                <label>Observaciones en Factura</label>
-                <input
-                  value={invoiceNotes}
-                  onChange={(e) => setInvoiceNotes(e.target.value)}
-                  placeholder="Opcional: orden de compra, garantía o nota de entrega"
-                />
-              </div>
-            </div>
-
-            <div
-              style={{
-                marginTop: 14,
-                padding: '12px 14px',
-                background: '#f8fafc',
-                borderRadius: 10,
-                border: '1px solid var(--pk-border)',
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  fontSize: 12.5,
-                }}
-              >
-                <span>Subtotal Bruto:</span>
-                <strong>{formatCop(rawSubtotal)}</strong>
-              </div>
-              {discountAmount > 0 && (
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    fontSize: 12.5,
-                    color: 'var(--pk-rose)',
-                  }}
-                >
-                  <span>Descuento ({effectivePct}%):</span>
-                  <strong>-{formatCop(discountAmount)}</strong>
-                </div>
-              )}
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  fontSize: 12.5,
-                }}
-              >
-                <span>IVA / Impuestos:</span>
-                <strong>{formatCop(taxAmount)}</strong>
-              </div>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  fontSize: 18,
-                  fontWeight: 900,
-                  marginTop: 6,
-                  paddingTop: 6,
-                  borderTop: '1px solid #cbd5e1',
-                  color: 'var(--pk-primary)',
-                }}
-              >
-                <span>TOTAL A PAGAR:</span>
-                <span>{formatCop(grandTotal)}</span>
-              </div>
-              {isCreditMode && (
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    fontSize: 12.5,
-                    color: 'var(--pk-amber)',
-                    marginTop: 4,
-                  }}
-                >
-                  <span>Saldo a Cartera CxC:</span>
-                  <strong>
-                    {formatCop(
-                      Math.max(0, grandTotal - Number(amountPaidInput || 0))
-                    )}
-                  </strong>
-                </div>
-              )}
-            </div>
-
-            <div className="pk-row-actions" style={{ marginTop: 14 }}>
-              <button
-                type="button"
-                className="pk-btn pk-btn-primary"
-                disabled={busy}
-                onClick={() => submitInvoice(false)}
-              >
-                {busy ? 'Procesando...' : '⚡ Emitir Factura'}
-              </button>
-              <button
-                type="button"
-                className="pk-btn pk-btn-emerald"
-                disabled={busy}
-                onClick={() => submitInvoice(true)}
-              >
-                {busy ? 'Procesando...' : '🖨️ Facturar e Imprimir'}
-              </button>
-            </div>
           </div>
         </div>
-      </div>
-
-      <div className="pk-card">
-        <div className="pk-card-head">
-          <div className="pk-card-title">📋 Facturas Emitidas Recientemente</div>
-          <button
-            type="button"
-            className="pk-btn pk-btn-outline pk-btn-sm"
-            onClick={() =>
-              downloadCsvUtf8(
-                'ventas_facturacion.csv',
-                [
-                  'Factura',
-                  'Fecha',
-                  'Cliente',
-                  'NIT',
-                  'MedioPago',
-                  'Total',
-                  'Pagado',
-                  'SaldoCxC',
-                  'Estado',
-                ],
-                invoices.map((inv) => [
-                  inv.id,
-                  inv.issueDate || inv.date || '',
-                  inv.customerName,
-                  inv.customerNit,
-                  inv.paymentMethod,
-                  inv.total,
-                  inv.amountPaid,
-                  inv.pendingBalance,
-                  inv.status,
-                ])
-              )
-            }
-          >
-            📥 Exportar Ventas (.CSV)
-          </button>
-        </div>
-        <div className="pk-card-body">
-          <div className="pk-table-wrap">
-            <table className="pk-table">
-              <thead>
-                <tr>
-                  <th>Factura</th>
-                  <th>Fecha</th>
-                  <th>Cliente</th>
-                  <th>Placa / Taller</th>
-                  <th>Total</th>
-                  <th>Saldo CxC</th>
-                  <th>Estado</th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {invoices.map((inv) => (
-                  <tr key={inv.id}>
-                    <td>
-                      <strong>{inv.id}</strong>
-                    </td>
-                    <td>{inv.issueDate || inv.date}</td>
-                    <td>
-                      <strong>{inv.customerName}</strong>
-                      <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>
-                        {inv.customerNit}
-                      </div>
-                    </td>
-                    <td>
-                      {inv.plate ? (
-                        <div>
-                          <span className="pk-badge pk-badge-blue">
-                            {inv.plate}
-                          </span>
-                          {inv.mechanicName && (
-                            <div
-                              style={{ fontSize: 11, color: 'var(--pk-muted)' }}
-                            >
-                              {inv.mechanicName}
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <span style={{ color: 'var(--pk-muted)' }}>
-                          Mostrador
-                        </span>
-                      )}
-                    </td>
-                    <td>
-                      <strong>{formatCop(inv.total)}</strong>
-                    </td>
-                    <td>
-                      {inv.pendingBalance > 0 ? (
-                        <span className="pk-badge pk-badge-amber">
-                          {formatCop(inv.pendingBalance)}
-                        </span>
-                      ) : (
-                        <span
-                          style={{ color: 'var(--pk-emerald)', fontWeight: 700 }}
-                        >
-                          $0
-                        </span>
-                      )}
-                    </td>
-                    <td>
-                      <span
-                        className={`pk-badge ${
-                          inv.pendingBalance > 0
-                            ? 'pk-badge-amber'
-                            : 'pk-badge-emerald'
-                        }`}
-                      >
-                        {inv.status}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="pk-row-actions">
-                        <button
-                          type="button"
-                          className="pk-btn pk-btn-outline pk-btn-sm"
-                          onClick={() => setSelectedInvoice(inv)}
-                        >
-                          👁️ Ver
-                        </button>
-                        <PkPrintButton
-                          label="🖨️ Imprimir"
-                          variant="primary"
-                          payload={buildInvoicePrintPayload(inv)}
-                        />
-                        {inv.pendingBalance > 0 && hasClientes && (
-                          <button
-                            type="button"
-                            className="pk-btn pk-btn-amber pk-btn-sm"
-                            onClick={() =>
-                              navigateTo('ms-clientes', 'cartera_cxc')
-                            }
-                          >
-                            💳 Abonar
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {invoices.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={8}
-                      style={{ textAlign: 'center', color: 'var(--pk-muted)' }}
-                    >
-                      Aún no hay facturas emitidas en este turno.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+      )}
 
       <PkModal
         open={Boolean(selectedInvoice)}

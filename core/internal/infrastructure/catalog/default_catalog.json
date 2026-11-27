@@ -104,7 +104,7 @@
         "summary": "Generación determinista de CUFE y control de numeración."
       }
     ],
-    "bundleHash": "447b4b8a8728"
+    "bundleHash": "2d46ea145bf4"
   },
   {
     "serviceKey": "ms-clientes",
@@ -176,7 +176,7 @@
         "summary": "Gestión de convenios institucionales con descuento pactado."
       }
     ],
-    "bundleHash": "c99c24af1799"
+    "bundleHash": "d39a79235c83"
   },
   {
     "serviceKey": "ms-inventario",
@@ -262,7 +262,7 @@
         "summary": "Control de consumo interno por área solicitante."
       }
     ],
-    "bundleHash": "0d7a4d4dcc83"
+    "bundleHash": "557fd6ff220d"
   },
   {
     "serviceKey": "ms-caja",
@@ -313,7 +313,7 @@
         "summary": "Conciliación de transferencias y datáfonos."
       }
     ],
-    "bundleHash": "cb6381e67e6f"
+    "bundleHash": "edc30217b381"
   },
   {
     "serviceKey": "ms-comandas",
@@ -364,7 +364,7 @@
         "summary": "Priorización y despacho de platos preparados."
       }
     ],
-    "bundleHash": "edb88ccdc452"
+    "bundleHash": "35ada3af1e55"
   },
   {
     "serviceKey": "ms-hoteleria",
@@ -415,7 +415,7 @@
         "summary": "Definición de precios según tipo de habitación."
       }
     ],
-    "bundleHash": "5d2e4e8be83b"
+    "bundleHash": "feaaf493727c"
   },
   {
     "serviceKey": "ms-taller",
@@ -480,7 +480,7 @@
         "summary": "Liquidación transparente por orden facturada."
       }
     ],
-    "bundleHash": "afdcf401a142"
+    "bundleHash": "26c956892fcf"
   },
   {
     "serviceKey": "ms-bascula",
@@ -545,7 +545,7 @@
         "summary": "Control de orígenes, destinos y mercancía a granel."
       }
     ],
-    "bundleHash": "f7f311b34ea7"
+    "bundleHash": "884ae52ce07c"
   },
   {
     "serviceKey": "ms-compras",
@@ -596,7 +596,7 @@
         "summary": "Abastecimiento con recálculo automático de costo promedio."
       }
     ],
-    "bundleHash": "04d76fcb5b3b"
+    "bundleHash": "dd2eb8c49f3e"
   },
   {
     "serviceKey": "ms-agenda",
@@ -633,7 +633,7 @@
         "summary": "Gestión de disponibilidad horaria y confirmación de citas."
       }
     ],
-    "bundleHash": "f9cb24558cbb"
+    "bundleHash": "ec04bee1aaad"
   },
   {
     "serviceKey": "ms-taquilla",
@@ -670,7 +670,7 @@
         "summary": "Control de boletería numerada y recaudo en taquilla."
       }
     ],
-    "bundleHash": "dcec7d2e9699"
+    "bundleHash": "b390fa54710c"
   },
   {
     "serviceKey": "ms-nomina",
@@ -707,7 +707,7 @@
         "summary": "Liquidación periódica de salarios, auxilios y deducciones."
       }
     ],
-    "bundleHash": "74da002d1ed4"
+    "bundleHash": "4885cebe1396"
   },
   {
     "serviceKey": "ms-contabilidad",
@@ -744,7 +744,7 @@
         "summary": "Validación cuadrada de débitos y créditos contables."
       }
     ],
-    "bundleHash": "6212625bdc53"
+    "bundleHash": "df63ec9638d0"
   },
   {
     "serviceKey": "ms-reportes",
@@ -781,7 +781,7 @@
         "summary": "Consolidación gerencial de ventas, cartera e inventario."
       }
     ],
-    "bundleHash": "ae0f4ce83fe7"
+    "bundleHash": "1a97edf3c362"
   },
   {
     "serviceKey": "ms-impresiones",
@@ -821,6 +821,6 @@
         "summary": "Diseño institucional para Carta, Media Carta, Tirilla POS y Taller."
       }
     ],
-    "bundleHash": "f55b999a920d"
+    "bundleHash": "afa1352ec805"
   }
 ]

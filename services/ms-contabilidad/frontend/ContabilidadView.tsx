@@ -4,6 +4,8 @@ import {
   ModuleGate,
   PkAutoCodeInput,
   PkSelect,
+  PkSimpleSelect,
+  PkViewSwitcher,
   PkModal,
   PkPrintButton,
   PkKpiRow,
@@ -62,9 +64,22 @@ interface RemoteCustomer {
   nit: string;
 }
 
+const PUC_CATEGORY_OPTIONS = [
+  { value: 'Activo', label: '1 — Activo' },
+  { value: 'Pasivo', label: '2 — Pasivo' },
+  { value: 'Patrimonio', label: '3 — Patrimonio' },
+  { value: 'Ingreso', label: '4 — Ingreso' },
+  { value: 'Gasto', label: '5 — Gasto' },
+  { value: 'Costo', label: '6 — Costo de Ventas' },
+];
+
 export const ContabilidadView: React.FC = () => {
   const { apiGet, apiPost, toast, hasService } = usePlatform();
   const { busy, run } = useAsyncAction();
+
+  const [viewMode, setViewMode] = useState<'list' | 'create'>('list');
+  const [voucherSearch, setVoucherSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
 
   const [nextVoucherCode, setNextVoucherCode] = useState('CMP-901');
   const [pucAccounts, setPucAccounts] = useState<PucAccount[]>([]);
@@ -98,10 +113,10 @@ export const ContabilidadView: React.FC = () => {
       setBalances(data.balances || []);
 
       setDebitAccountId((prev) =>
-        prev && accList.some((a) => a.id === prev) ? prev : accList[0]?.id || '',
+        prev && accList.some((a) => a.id === prev) ? prev : accList[0]?.id || ''
       );
       setCreditAccountId((prev) =>
-        prev && accList.some((a) => a.id === prev) ? prev : accList[1]?.id || accList[0]?.id || '',
+        prev && accList.some((a) => a.id === prev) ? prev : accList[1]?.id || accList[0]?.id || ''
       );
     } catch (err) {
       toast(err instanceof Error ? err.message : 'No fue posible cargar el libro contable');
@@ -173,7 +188,13 @@ export const ContabilidadView: React.FC = () => {
   const handleCreateVoucher = (e: React.FormEvent) => {
     e.preventDefault();
     const numericAmount = Number(amount || 0);
-    if (!debitAccountId || !creditAccountId || !concept.trim() || !Number.isFinite(numericAmount) || numericAmount <= 0) {
+    if (
+      !debitAccountId ||
+      !creditAccountId ||
+      !concept.trim() ||
+      !Number.isFinite(numericAmount) ||
+      numericAmount <= 0
+    ) {
       toast('Completa las cuentas Débito y Crédito, el concepto y un valor mayor a cero.');
       return;
     }
@@ -196,6 +217,7 @@ export const ContabilidadView: React.FC = () => {
         setConcept('');
         setAmount('');
         await reload();
+        setViewMode('list');
       } catch (err) {
         toast(err instanceof Error ? err.message : 'Error asentando comprobante contable');
       }
@@ -228,7 +250,7 @@ export const ContabilidadView: React.FC = () => {
         v.thirdPartyNit,
         v.concept,
         v.amount,
-      ]),
+      ])
     );
   };
 
@@ -269,211 +291,309 @@ export const ContabilidadView: React.FC = () => {
 
   const totalJournalVolume = vouchers.reduce((acc, v) => acc + Number(v.amount || 0), 0);
 
+  const filteredVouchers = vouchers.filter((v) => {
+    const q = voucherSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      v.code.toLowerCase().includes(q) ||
+      v.debitAccountCode.toLowerCase().includes(q) ||
+      v.debitAccountName.toLowerCase().includes(q) ||
+      v.creditAccountCode.toLowerCase().includes(q) ||
+      v.creditAccountName.toLowerCase().includes(q) ||
+      v.thirdPartyName.toLowerCase().includes(q) ||
+      v.concept.toLowerCase().includes(q)
+    );
+  });
+
+  const filteredBalances = balances.filter((bal) => !categoryFilter || bal.category === categoryFilter);
+
   return (
     <ModuleGate module="comprobantes_puc">
-      <PkKpiRow
-        items={[
-          { label: 'Subcuentas PUC Activas', value: String(pucAccounts.length), color: 'var(--pk-primary)' },
-          { label: 'Comprobantes Asentados', value: String(vouchers.length), color: 'var(--pk-emerald)' },
-          { label: 'Sumas Iguales (Debe = Haber)', value: formatCop(totalJournalVolume), color: '#0f172a' },
-          { label: 'Próximo Comprobante', value: nextVoucherCode, color: 'var(--pk-amber)' },
-        ]}
-      />
+      <div className="pk-stack">
+        <PkKpiRow
+          items={[
+            { label: 'Subcuentas PUC Activas', value: String(pucAccounts.length), color: 'var(--pk-primary)' },
+            { label: 'Comprobantes Asentados', value: String(vouchers.length), color: 'var(--pk-emerald)' },
+            { label: 'Sumas Iguales (Debe = Haber)', value: formatCop(totalJournalVolume), color: '#0f172a' },
+            { label: 'Próximo Comprobante', value: nextVoucherCode, color: 'var(--pk-amber)' },
+          ]}
+        />
 
-      <div className="pk-card">
-        <div className="pk-card-head">
-          <div className="pk-card-title">📘 Asentar Comprobante Contable de Partida Doble (PUC)</div>
-          <button
-            type="button"
-            className="pk-btn pk-btn-outline pk-btn-sm"
-            onClick={() => openNewPucDialog('debit')}
-          >
-            + Nueva Cuenta PUC
-          </button>
-        </div>
-        <div className="pk-card-body">
-          <form onSubmit={handleCreateVoucher} className="pk-form-grid">
-            <PkAutoCodeInput label="Comprobante Contable" value={nextVoucherCode} />
-
-            <PkSelect
-              label="Cuenta PUC Débito (Debe) *"
-              items={pucAccounts}
-              value={debitAccountId}
-              onChange={setDebitAccountId}
-              getValue={(a) => a.id}
-              getLabel={(a) => `${a.code} — ${a.name} [${a.category}]`}
-              onCreateNew={() => openNewPucDialog('debit')}
-              createLabel="+ Nueva Cuenta PUC"
-              searchable
-            />
-
-            <PkSelect
-              label="Cuenta PUC Crédito (Haber) *"
-              items={pucAccounts}
-              value={creditAccountId}
-              onChange={setCreditAccountId}
-              getValue={(a) => a.id}
-              getLabel={(a) => `${a.code} — ${a.name} [${a.category}]`}
-              onCreateNew={() => openNewPucDialog('credit')}
-              createLabel="+ Nueva Cuenta PUC"
-              searchable
-            />
-
-            {hasClientes && customers.length > 0 && (
-              <PkSelect
-                label="Tercero Registrado (Opcional)"
-                items={customers}
-                value={selectedThirdPartyId}
-                onChange={handleSelectThirdParty}
-                getValue={(c) => c.id}
-                getLabel={(c) => `${c.name} (${c.nit})`}
-                emptyLabel="Tercero General / Manual"
-                searchable
-              />
-            )}
-
-            <div className="pk-field">
-              <label>Nombre Tercero *</label>
-              <input
-                required
-                value={thirdPartyName}
-                onChange={(e) => setThirdPartyName(e.target.value)}
-                placeholder="Tercero General"
-              />
-            </div>
-
-            <div className="pk-field">
-              <label>NIT / Documento Tercero</label>
-              <input
-                value={thirdPartyNit}
-                onChange={(e) => setThirdPartyNit(e.target.value)}
-                placeholder="222222222222"
-              />
-            </div>
-
-            <div className="pk-field">
-              <label>Concepto Contable *</label>
-              <input
-                required
-                value={concept}
-                onChange={(e) => setConcept(e.target.value)}
-                placeholder="Ej: Causación honorarios / Consignación recaudo diario"
-              />
-            </div>
-
-            <div className="pk-field">
-              <label>Valor del Asiento ($) *</label>
-              <input
-                required
-                type="number"
-                min="1"
-                step="any"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="Ej: 850000"
-              />
-            </div>
-
-            <div className="pk-field" style={{ display: 'flex', alignItems: 'flex-end' }}>
-              <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
-                ⚖️ Contabilizar Asiento
+        <PkViewSwitcher
+          title="Libro Diario Contable y Plan Único de Cuentas (PUC)"
+          subtitle="Consulta los comprobantes mayorizados y el balance por subcuenta PUC o contabiliza un nuevo asiento."
+          mode={viewMode}
+          onModeChange={setViewMode}
+          listLabel="📋 Libro Diario y Saldos PUC"
+          createLabel="+ Asentar Comprobante"
+          count={vouchers.length}
+          extraActions={
+            <>
+              <button
+                type="button"
+                className="pk-btn pk-btn-outline"
+                onClick={() => openNewPucDialog('debit')}
+              >
+                + Nueva Cuenta PUC
               </button>
+              {viewMode === 'list' && (
+                <button type="button" className="pk-btn pk-btn-outline" onClick={handleExportCsv}>
+                  📥 Exportar CSV
+                </button>
+              )}
+            </>
+          }
+        />
+
+        {viewMode === 'create' ? (
+          <div className="pk-card">
+            <div className="pk-card-head">
+              <div className="pk-card-title">📘 Asentar Comprobante Contable de Partida Doble (PUC)</div>
+              <span className="pk-badge pk-badge-blue">{nextVoucherCode}</span>
             </div>
-          </form>
-        </div>
-      </div>
+            <div className="pk-card-body">
+              <form onSubmit={handleCreateVoucher} className="pk-form-grid cols-2">
+                <PkAutoCodeInput label="Comprobante Contable" value={nextVoucherCode} />
 
-      <div className="pk-card">
-        <div className="pk-card-head">
-          <div className="pk-card-title">📊 Balance Rápido de Prueba por Subcuenta PUC ({balances.length})</div>
-        </div>
-        <div className="pk-card-body">
-          <div className="pk-table-wrap">
-            <table className="pk-table">
-              <thead>
-                <tr>
-                  <th>Código PUC</th>
-                  <th>Subcuenta</th>
-                  <th>Clase</th>
-                  <th>Mov. Débitos</th>
-                  <th>Mov. Créditos</th>
-                  <th>Saldo Neto</th>
-                </tr>
-              </thead>
-              <tbody>
-                {balances.map((bal) => (
-                  <tr key={bal.accountId}>
-                    <td><strong>{bal.code}</strong></td>
-                    <td>{bal.name}</td>
-                    <td><span className="pk-badge pk-badge-slate">{bal.category}</span></td>
-                    <td style={{ color: 'var(--pk-emerald)', fontWeight: 700 }}>{formatCop(bal.totalDebits)}</td>
-                    <td style={{ color: 'var(--pk-amber)', fontWeight: 700 }}>{formatCop(bal.totalCredits)}</td>
-                    <td style={{ fontWeight: 800, color: bal.netBalance >= 0 ? '#0f172a' : 'var(--pk-rose)' }}>
-                      {formatCop(bal.netBalance)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+                <div className="pk-field">
+                  <label>Valor del Asiento ($) *</label>
+                  <input
+                    required
+                    type="number"
+                    min="1"
+                    step="any"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder="Ej: 850000"
+                  />
+                </div>
 
-      <div className="pk-card">
-        <div className="pk-card-head">
-          <div className="pk-card-title">📋 Libro Diario de Comprobantes PUC ({vouchers.length})</div>
-          <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={handleExportCsv}>
-            📥 Exportar CSV
-          </button>
-        </div>
-        <div className="pk-card-body">
-          <div className="pk-table-wrap">
-            <table className="pk-table">
-              <thead>
-                <tr>
-                  <th>Comprobante</th>
-                  <th>Fecha</th>
-                  <th>Cuenta Débito (Debe)</th>
-                  <th>Cuenta Crédito (Haber)</th>
-                  <th>Tercero</th>
-                  <th>Concepto</th>
-                  <th>Valor</th>
-                  <th>Imprimir</th>
-                </tr>
-              </thead>
-              <tbody>
-                {vouchers.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} style={{ textAlign: 'center', color: 'var(--pk-muted)' }}>
-                      No se han asentado comprobantes contables aún.
-                    </td>
-                  </tr>
-                ) : (
-                  vouchers.map((v) => (
-                    <tr key={v.id}>
-                      <td><span className="pk-badge pk-badge-blue">{v.code}</span></td>
-                      <td>{v.createdAt}</td>
-                      <td>
-                        <span className="pk-badge pk-badge-emerald">{v.debitAccountCode}</span>{' '}
-                        {v.debitAccountName}
-                      </td>
-                      <td>
-                        <span className="pk-badge pk-badge-amber">{v.creditAccountCode}</span>{' '}
-                        {v.creditAccountName}
-                      </td>
-                      <td style={{ fontWeight: 700 }}>{v.thirdPartyName}</td>
-                      <td>{v.concept}</td>
-                      <td style={{ fontWeight: 800, color: '#0f172a' }}>{formatCop(v.amount)}</td>
-                      <td>
-                        <PkPrintButton label="🖨️ Comprobante" payload={buildVoucherPayload(v)} />
-                      </td>
-                    </tr>
-                  ))
+                <PkSelect
+                  label="Cuenta PUC Débito (Debe) *"
+                  items={pucAccounts}
+                  value={debitAccountId}
+                  onChange={setDebitAccountId}
+                  getValue={(a) => a.id}
+                  getLabel={(a) => `${a.code} — ${a.name} [${a.category}]`}
+                  onCreateNew={() => openNewPucDialog('debit')}
+                  createLabel="+ Nueva Cuenta PUC"
+                  searchable
+                />
+
+                <PkSelect
+                  label="Cuenta PUC Crédito (Haber) *"
+                  items={pucAccounts}
+                  value={creditAccountId}
+                  onChange={setCreditAccountId}
+                  getValue={(a) => a.id}
+                  getLabel={(a) => `${a.code} — ${a.name} [${a.category}]`}
+                  onCreateNew={() => openNewPucDialog('credit')}
+                  createLabel="+ Nueva Cuenta PUC"
+                  searchable
+                />
+
+                {hasClientes && customers.length > 0 && (
+                  <PkSelect
+                    label="Tercero Registrado (Opcional)"
+                    items={customers}
+                    value={selectedThirdPartyId}
+                    onChange={handleSelectThirdParty}
+                    getValue={(c) => c.id}
+                    getLabel={(c) => `${c.name} (${c.nit})`}
+                    emptyLabel="Tercero General / Manual"
+                    searchable
+                  />
                 )}
-              </tbody>
-            </table>
+
+                <div className="pk-field">
+                  <label>Nombre Tercero *</label>
+                  <input
+                    required
+                    value={thirdPartyName}
+                    onChange={(e) => setThirdPartyName(e.target.value)}
+                    placeholder="Tercero General"
+                  />
+                </div>
+
+                <div className="pk-field">
+                  <label>NIT / Documento Tercero</label>
+                  <input
+                    value={thirdPartyNit}
+                    onChange={(e) => setThirdPartyNit(e.target.value)}
+                    placeholder="222222222222"
+                  />
+                </div>
+
+                <div className="pk-field pk-col-span-full">
+                  <label>Concepto Contable *</label>
+                  <input
+                    required
+                    value={concept}
+                    onChange={(e) => setConcept(e.target.value)}
+                    placeholder="Ej: Causación honorarios / Consignación recaudo diario"
+                  />
+                </div>
+
+                <div className="pk-form-actions">
+                  <button
+                    type="button"
+                    className="pk-btn pk-btn-outline"
+                    onClick={() => setViewMode('list')}
+                    disabled={busy}
+                  >
+                    Cancelar
+                  </button>
+                  <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
+                    {busy ? 'Contabilizando...' : '⚖️ Contabilizar Asiento'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="pk-stack">
+            <div className="pk-card">
+              <div className="pk-card-head">
+                <div className="pk-card-title">📋 Libro Diario de Comprobantes PUC ({vouchers.length})</div>
+              </div>
+              <div className="pk-datatable-toolbar">
+                <input
+                  className="pk-input pk-datatable-search"
+                  placeholder="🔎 Buscar comprobante por código, cuenta PUC, tercero o concepto..."
+                  value={voucherSearch}
+                  onChange={(e) => setVoucherSearch(e.target.value)}
+                />
+                <span className="pk-badge pk-badge-slate">{filteredVouchers.length} asientos</span>
+              </div>
+              <div className="pk-card-body">
+                <div className="pk-table-wrap">
+                  <table className="pk-table">
+                    <thead>
+                      <tr>
+                        <th>Comprobante</th>
+                        <th>Fecha</th>
+                        <th>Cuenta Débito (Debe)</th>
+                        <th>Cuenta Crédito (Haber)</th>
+                        <th>Tercero</th>
+                        <th>Concepto</th>
+                        <th>Valor</th>
+                        <th>Imprimir</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredVouchers.length === 0 ? (
+                        <tr>
+                          <td colSpan={8} style={{ textAlign: 'center', color: 'var(--pk-muted)', padding: 28 }}>
+                            {vouchers.length === 0
+                              ? 'No se han asentado comprobantes contables aún. Haz clic en "+ Asentar Comprobante" para crear uno.'
+                              : 'No se encontraron comprobantes con el criterio buscado.'}
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredVouchers.map((v) => (
+                          <tr key={v.id}>
+                            <td>
+                              <span className="pk-badge pk-badge-blue">{v.code}</span>
+                            </td>
+                            <td>{v.createdAt}</td>
+                            <td>
+                              <span className="pk-badge pk-badge-emerald">{v.debitAccountCode}</span>{' '}
+                              {v.debitAccountName}
+                            </td>
+                            <td>
+                              <span className="pk-badge pk-badge-amber">{v.creditAccountCode}</span>{' '}
+                              {v.creditAccountName}
+                            </td>
+                            <td style={{ fontWeight: 700 }}>{v.thirdPartyName}</td>
+                            <td>{v.concept}</td>
+                            <td style={{ fontWeight: 800, color: '#0f172a' }}>{formatCop(v.amount)}</td>
+                            <td>
+                              <PkPrintButton label="🖨️ Comprobante" payload={buildVoucherPayload(v)} />
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="pk-card">
+              <div className="pk-card-head">
+                <div className="pk-card-title">
+                  📊 Balance Rápido de Prueba por Subcuenta PUC ({filteredBalances.length})
+                </div>
+                <button
+                  type="button"
+                  className="pk-btn pk-btn-outline pk-btn-sm"
+                  onClick={() => openNewPucDialog('debit')}
+                >
+                  + Nueva Cuenta PUC
+                </button>
+              </div>
+              <div className="pk-datatable-toolbar">
+                <div style={{ minWidth: 280 }}>
+                  <PkSimpleSelect
+                    ariaLabel="Filtrar subcuentas por naturaleza contable"
+                    value={categoryFilter}
+                    onChange={setCategoryFilter}
+                    allowClear
+                    placeholder="Todas las clases PUC"
+                    options={[
+                      { value: '', label: 'Todas las clases PUC' },
+                      ...PUC_CATEGORY_OPTIONS,
+                    ]}
+                  />
+                </div>
+                <span className="pk-badge pk-badge-slate">{filteredBalances.length} subcuentas</span>
+              </div>
+              <div className="pk-card-body">
+                <div className="pk-table-wrap">
+                  <table className="pk-table">
+                    <thead>
+                      <tr>
+                        <th>Código PUC</th>
+                        <th>Subcuenta</th>
+                        <th>Clase</th>
+                        <th>Mov. Débitos</th>
+                        <th>Mov. Créditos</th>
+                        <th>Saldo Neto</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredBalances.map((bal) => (
+                        <tr key={bal.accountId}>
+                          <td>
+                            <strong>{bal.code}</strong>
+                          </td>
+                          <td>{bal.name}</td>
+                          <td>
+                            <span className="pk-badge pk-badge-slate">{bal.category}</span>
+                          </td>
+                          <td style={{ color: 'var(--pk-emerald)', fontWeight: 700 }}>
+                            {formatCop(bal.totalDebits)}
+                          </td>
+                          <td style={{ color: 'var(--pk-amber)', fontWeight: 700 }}>
+                            {formatCop(bal.totalCredits)}
+                          </td>
+                          <td
+                            style={{
+                              fontWeight: 800,
+                              color: bal.netBalance >= 0 ? '#0f172a' : 'var(--pk-rose)',
+                            }}
+                          >
+                            {formatCop(bal.netBalance)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <PkModal
@@ -481,7 +601,7 @@ export const ContabilidadView: React.FC = () => {
         title="Agregar Nueva Subcuenta al Catálogo PUC"
         onClose={() => setPucModalOpen(false)}
       >
-        <form onSubmit={handleSavePuc} className="pk-form-grid">
+        <form onSubmit={handleSavePuc} className="pk-form-grid cols-2">
           <div className="pk-field">
             <label>Código Subcuenta PUC (Numérico) *</label>
             <input
@@ -491,7 +611,13 @@ export const ContabilidadView: React.FC = () => {
               placeholder="Ej: 513535"
             />
           </div>
-          <div className="pk-field">
+          <PkSimpleSelect
+            label="Clase / Naturaleza Contable"
+            value={pucCategory}
+            onChange={setPucCategory}
+            options={PUC_CATEGORY_OPTIONS}
+          />
+          <div className="pk-field pk-col-span-full">
             <label>Denominación Oficial de la Cuenta *</label>
             <input
               required
@@ -500,20 +626,17 @@ export const ContabilidadView: React.FC = () => {
               placeholder="Ej: Acueducto y Alcantarillado"
             />
           </div>
-          <div className="pk-field">
-            <label>Clase / Naturaleza Contable</label>
-            <select value={pucCategory} onChange={(e) => setPucCategory(e.target.value)}>
-              <option value="Activo">1 — Activo</option>
-              <option value="Pasivo">2 — Pasivo</option>
-              <option value="Patrimonio">3 — Patrimonio</option>
-              <option value="Ingreso">4 — Ingreso</option>
-              <option value="Gasto">5 — Gasto</option>
-              <option value="Costo">6 — Costo de Ventas</option>
-            </select>
-          </div>
-          <div className="pk-field" style={{ display: 'flex', alignItems: 'flex-end' }}>
+          <div className="pk-form-actions">
+            <button
+              type="button"
+              className="pk-btn pk-btn-outline"
+              onClick={() => setPucModalOpen(false)}
+              disabled={busy}
+            >
+              Cancelar
+            </button>
             <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
-              Guardar Cuenta PUC
+              {busy ? 'Guardando...' : 'Guardar Cuenta PUC'}
             </button>
           </div>
         </form>

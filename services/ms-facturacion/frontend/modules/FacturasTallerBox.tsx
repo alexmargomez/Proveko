@@ -95,11 +95,11 @@ export const FacturasTallerBox: React.FC<FacturasTallerBoxProps> = ({
     <ModuleGate module="facturas_taller">
       <div
         style={{
-          margin: '12px 0',
-          padding: '12px 14px',
-          borderRadius: 10,
-          border: '1px solid #93c5fd',
-          background: '#eff6ff',
+          margin: '18px 0',
+          padding: '16px 18px',
+          borderRadius: 12,
+          border: '1px solid #bfdbfe',
+          background: '#f0f7ff',
         }}
       >
         <div
@@ -107,37 +107,39 @@ export const FacturasTallerBox: React.FC<FacturasTallerBoxProps> = ({
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            gap: 8,
-            marginBottom: 10,
+            gap: 10,
+            marginBottom: 14,
             flexWrap: 'wrap',
           }}
         >
-          <strong style={{ fontSize: 12.5, color: '#1e3a8a' }}>
-            🔧 Apartado Automotriz — Placa, Kilometraje y Orden de Taller
+          <strong style={{ fontSize: 13, color: '#1e3a8a' }}>
+            🔧 Datos de Vehículo, Kilometraje y Orden de Taller
           </strong>
           {hasFeature('facturas_taller', 'factura_taller_pdf') && vehicleId && (
             <span className="pk-badge pk-badge-blue">
-              🖨️ PDF Estructura Automotriz Activo
+              🖨️ Formato Automotriz Activo
             </span>
           )}
         </div>
 
-        <div className="pk-form-grid">
-          <PkSelect
-            label="Placa / Vehículo"
-            items={vehicleOptions}
-            value={vehicleId}
-            onChange={onVehicleChange}
-            getValue={(v) => v.id}
-            getLabel={(v) =>
-              v.id
-                ? `${v.plate} — ${v.brand} (${v.customerName || 'Taller'})`
-                : v.brand
-            }
-            onCreateNew={canManageWorkshop ? onOpenNewVehicleModal : undefined}
-            createLabel="+ Nueva Placa"
-            searchable
-          />
+        <div className="pk-form-grid cols-2">
+          <div className="pk-col-span-full">
+            <PkSelect
+              label="Placa / Vehículo"
+              items={vehicleOptions}
+              value={vehicleId}
+              onChange={onVehicleChange}
+              getValue={(v) => v.id}
+              getLabel={(v) =>
+                v.id
+                  ? `${v.plate} — ${v.brand} (${v.customerName || 'Taller'})`
+                  : v.brand
+              }
+              onCreateNew={canManageWorkshop ? onOpenNewVehicleModal : undefined}
+              createLabel="+ Nueva Placa"
+              searchable
+            />
+          </div>
 
           <div className="pk-field">
             <label>Kilometraje Actual</label>
@@ -150,7 +152,7 @@ export const FacturasTallerBox: React.FC<FacturasTallerBoxProps> = ({
           </div>
 
           <div className="pk-field">
-            <label>Próximo Aceite</label>
+            <label>Próximo Cambio de Aceite</label>
             <input
               type="text"
               value={nextOilKm}

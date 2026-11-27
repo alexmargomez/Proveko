@@ -31,7 +31,7 @@
       "dependsOnSubmodule": "apertura_cierre_turno"
     }
   ],
-  "bundleHash": "cb6381e67e6f",
+  "bundleHash": "edc30217b381",
   "submodules": [
     {
       "submoduleKey": "apertura_cierre_turno",

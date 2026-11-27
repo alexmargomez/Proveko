@@ -4,6 +4,9 @@ import {
   ModuleGate,
   FeatureGate,
   PkAutoCodeInput,
+  PkSelect,
+  PkSimpleSelect,
+  PkViewSwitcher,
   PkModal,
   PkConfirmModal,
   PkPrintButton,
@@ -62,6 +65,26 @@ interface OptionalInventoryResponse {
 
 const VALID_MODULES = ['mapa_mesas', 'monitor_cocina'] as const;
 
+const TABLE_ZONE_OPTIONS = [
+  { value: 'Salón Principal', label: 'Salón Principal' },
+  { value: 'Terraza', label: 'Terraza' },
+  { value: 'VIP / Segundo Piso', label: 'VIP / Segundo Piso' },
+  { value: 'Barra', label: 'Barra' },
+];
+
+const DISH_CATEGORY_OPTIONS = [
+  { value: 'Restaurante — Fuertes', label: 'Restaurante — Fuertes' },
+  { value: 'Restaurante — Entradas', label: 'Restaurante — Entradas' },
+  { value: 'Barra y Bebidas', label: 'Barra y Bebidas' },
+  { value: 'Postres y Cafetería', label: 'Postres y Cafetería' },
+];
+
+const DISH_TAX_OPTIONS = [
+  { value: '8', label: '8% Impoconsumo' },
+  { value: '19', label: '19% IVA' },
+  { value: '0', label: '0% Exento' },
+];
+
 export const ComandasView: React.FC = () => {
   const {
     activeModuleKey,
@@ -75,6 +98,10 @@ export const ComandasView: React.FC = () => {
     toast,
   } = usePlatform();
   const { busy, run } = useAsyncAction();
+
+  const [tablesViewMode, setTablesViewMode] = useState<'list' | 'create'>('list');
+  const [tableSearch, setTableSearch] = useState('');
+  const [zoneFilter, setZoneFilter] = useState('');
 
   const [nextMenuCode, setNextMenuCode] = useState('MNU-206');
   const [tables, setTables] = useState<DiningTable[]>([]);
@@ -160,6 +187,18 @@ export const ComandasView: React.FC = () => {
   const activeSalesSum = tables.reduce((acc, t) => acc + (t.total || 0), 0);
   const notesEnabled = hasFeature('mapa_mesas', 'notas_preparacion');
 
+  const filteredTables = tables.filter((tbl) => {
+    if (zoneFilter && tbl.zone !== zoneFilter) return false;
+    const q = tableSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      tbl.name.toLowerCase().includes(q) ||
+      tbl.zone.toLowerCase().includes(q) ||
+      (tbl.waiter || '').toLowerCase().includes(q) ||
+      tbl.status.toLowerCase().includes(q)
+    );
+  });
+
   const handleCreateTable = (e: React.FormEvent) => {
     e.preventDefault();
     if (!tableName.trim()) {
@@ -211,7 +250,7 @@ export const ComandasView: React.FC = () => {
     });
   };
 
-  const addProductToActiveTable = (prod: MenuItem, customQty?: number) => {
+  const addProductToActiveTable = (prod: MenuItem, customQty?: number, returnToList = false) => {
     if (!activeTable) {
       toast('Selecciona primero una mesa para cargar el pedido');
       return;
@@ -230,9 +269,13 @@ export const ComandasView: React.FC = () => {
           qty: itemQty,
           note: notesEnabled && customQty === undefined ? note.trim() : '',
         });
+        toast(`Agregado a ${activeTable.name}: ${itemQty}x ${prod.name}`);
         if (customQty === undefined) {
           setNote('');
           setQty('1');
+        }
+        if (returnToList) {
+          setTablesViewMode('list');
         }
         await reload();
       } catch (err) {
@@ -248,7 +291,7 @@ export const ComandasView: React.FC = () => {
       toast('Selecciona un plato o bebida del menú');
       return;
     }
-    addProductToActiveTable(prod);
+    addProductToActiveTable(prod, undefined, true);
   };
 
   const confirmRemoveItem = () => {
@@ -362,121 +405,109 @@ export const ComandasView: React.FC = () => {
   };
 
   return (
-    <div>
+    <div className="pk-stack">
       {currentTab === 'mapa_mesas' && (
         <ModuleGate module="mapa_mesas">
-          <PkKpiRow
-            items={[
-              { label: 'Total Mesas', value: String(tables.length) },
-              { label: 'Mesas Ocupadas', value: String(occupiedCount), color: 'var(--pk-primary)' },
-              { label: 'Comandas en Cocina', value: String(kitchenTables.length), color: 'var(--pk-amber)' },
-              { label: 'Consumo Activo en Salón', value: formatCop(activeSalesSum), color: 'var(--pk-emerald)' },
-            ]}
-          />
+          <div className="pk-stack">
+            <PkKpiRow
+              items={[
+                { label: 'Total Mesas', value: String(tables.length) },
+                { label: 'Mesas Ocupadas', value: String(occupiedCount), color: 'var(--pk-primary)' },
+                { label: 'Comandas en Cocina', value: String(kitchenTables.length), color: 'var(--pk-amber)' },
+                { label: 'Consumo Activo en Salón', value: formatCop(activeSalesSum), color: 'var(--pk-emerald)' },
+              ]}
+            />
 
-          <div className="pk-grid-2">
-            <div className="pk-card">
-              <div className="pk-card-head">
-                <div className="pk-card-title">🍽️ Mapa de Salón, Terraza y Barra</div>
-                <div className="pk-row-actions">
+            <PkViewSwitcher
+              title="Salón, Mesas y Toma de Comandas"
+              subtitle="Monitorea el mapa operativo del establecimiento y gestiona cuentas activas o registra nuevos pedidos de carta."
+              mode={tablesViewMode}
+              onModeChange={setTablesViewMode}
+              listLabel="🍽️ Mapa y Cuentas"
+              createLabel="+ Cargar Pedido a Mesa"
+              count={tables.length}
+              extraActions={
+                <>
                   <button
                     type="button"
-                    className="pk-btn pk-btn-outline pk-btn-sm"
-                    onClick={handleExportActiveTablesCsv}
-                  >
-                    📥 CSV
-                  </button>
-                  <button
-                    type="button"
-                    className="pk-btn pk-btn-primary pk-btn-sm"
+                    className="pk-btn pk-btn-outline"
                     onClick={() => setShowNewTableModal(true)}
                   >
                     + Nueva Mesa
                   </button>
-                </div>
-              </div>
-              <div className="pk-card-body">
-                <div className="pk-cards-grid">
-                  {tables.map((tbl) => {
-                    const selected = activeTable?.id === tbl.id;
-                    return (
-                      <div
-                        key={tbl.id}
-                        onClick={() => setSelectedTableId(tbl.id)}
-                        style={{
-                          border: selected ? '2px solid var(--pk-primary)' : '1px solid var(--pk-border)',
-                          borderRadius: 10,
-                          padding: 12,
-                          background: selected ? '#eff6ff' : '#ffffff',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <strong style={{ fontSize: 15 }}>{tbl.name}</strong>
-                          <span className={badgeClassForStatus(tbl.status)}>{tbl.status}</span>
-                        </div>
-                        <div style={{ fontSize: 12, color: 'var(--pk-muted)', marginTop: 4 }}>
-                          📍 {tbl.zone} · 🧑 {tbl.waiter}
-                        </div>
-                        <div
-                          style={{
-                            marginTop: 10,
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                          }}
-                        >
-                          <span style={{ fontSize: 12, color: '#334155' }}>
-                            {(tbl.items || []).length} línea(s)
-                          </span>
-                          <span style={{ fontWeight: 800, fontSize: 15 }}>{formatCop(tbl.total)}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            <div className="pk-card">
-              <div className="pk-card-head">
-                <div className="pk-card-title">
-                  {activeTable ? `🧾 Comanda Activa — ${activeTable.name}` : 'Selecciona una Mesa'}
-                </div>
-                <div className="pk-row-actions">
                   <button
                     type="button"
-                    className="pk-btn pk-btn-outline pk-btn-sm"
+                    className="pk-btn pk-btn-outline"
                     onClick={() => setShowNewDishModal(true)}
                   >
                     + Nuevo Plato
                   </button>
-                  {activeTable && <span className={badgeClassForStatus(activeTable.status)}>{activeTable.status}</span>}
-                </div>
-              </div>
-              <div className="pk-card-body">
-                {!activeTable ? (
-                  <div style={{ color: 'var(--pk-muted)' }}>Crea o selecciona una mesa para registrar pedidos.</div>
-                ) : (
-                  <>
-                    <form onSubmit={handleSubmitSelectedDish} style={{ marginBottom: 12 }}>
-                      <div className="pk-form-grid">
-                        <div className="pk-field">
-                          <label>Carta / Platos y Bebidas</label>
-                          <select
-                            value={selectedProductId}
-                            onChange={(e) => setSelectedProductId(e.target.value)}
-                          >
-                            {menuItems.map((p) => (
-                              <option key={p.id} value={p.id}>
-                                {p.name} — {formatCop(p.salePrice)}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="pk-field">
-                          <label>Cantidad</label>
+                  {tablesViewMode === 'list' && (
+                    <button
+                      type="button"
+                      className="pk-btn pk-btn-outline"
+                      onClick={handleExportActiveTablesCsv}
+                    >
+                      📥 Exportar CSV
+                    </button>
+                  )}
+                </>
+              }
+            />
+
+            {tablesViewMode === 'create' ? (
+              <div className="pk-stack">
+                <div className="pk-card">
+                  <div className="pk-card-head">
+                    <div className="pk-card-title">
+                      {activeTable
+                        ? `🧾 Toma de Comanda — ${activeTable.name} (${activeTable.zone})`
+                        : '🧾 Toma de Comanda y Adición de Carta'}
+                    </div>
+                    {activeTable && (
+                      <div className="pk-row-actions">
+                        <span className={badgeClassForStatus(activeTable.status)}>{activeTable.status}</span>
+                        <span className="pk-badge pk-badge-blue">
+                          Subtotal Mesa: {formatCop(activeTable.total)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="pk-card-body">
+                    {!activeTable ? (
+                      <div style={{ color: 'var(--pk-muted)' }}>
+                        Registra primero una mesa para poder cargar pedidos de carta.
+                      </div>
+                    ) : (
+                      <form onSubmit={handleSubmitSelectedDish} className="pk-form-grid cols-2">
+                        <PkSelect
+                          label="Mesa o Ubicación Destino *"
+                          items={tables}
+                          value={activeTable.id}
+                          onChange={setSelectedTableId}
+                          getValue={(t) => t.id}
+                          getLabel={(t) => `${t.name} — ${t.zone} (${t.status})`}
+                          onCreateNew={() => setShowNewTableModal(true)}
+                          createLabel="+ Nueva Mesa"
+                          searchable
+                        />
+
+                        <PkSelect
+                          label="Carta / Platos y Bebidas *"
+                          items={menuItems}
+                          value={selectedProductId}
+                          onChange={setSelectedProductId}
+                          getValue={(p) => p.id}
+                          getLabel={(p) => `${p.name} — ${formatCop(p.salePrice)}`}
+                          onCreateNew={() => setShowNewDishModal(true)}
+                          createLabel="+ Nuevo Plato"
+                          searchable
+                        />
+
+                        <div className="pk-field pk-col-span-full">
+                          <label>Cantidad *</label>
                           <input
+                            required
                             type="number"
                             min="1"
                             step="1"
@@ -484,42 +515,61 @@ export const ComandasView: React.FC = () => {
                             onChange={(e) => setQty(e.target.value)}
                           />
                         </div>
-                      </div>
 
-                      <FeatureGate module="mapa_mesas" feature="notas_preparacion">
-                        <div className="pk-field" style={{ marginTop: 8 }}>
-                          <label>Nota de Cocina / Término de Preparación</label>
-                          <input
-                            value={note}
-                            onChange={(e) => setNote(e.target.value)}
-                            placeholder="Ej: Término 3/4, sin cebolla, bebida sin hielo..."
-                          />
-                          <div className="pk-row-actions" style={{ marginTop: 4 }}>
-                            {['Término 3/4', 'Bien asado', 'Sin cebolla', 'Para llevar'].map((preset) => (
-                              <button
-                                key={preset}
-                                type="button"
-                                className="pk-btn pk-btn-outline pk-btn-sm"
-                                onClick={() => setNote(preset)}
-                              >
-                                {preset}
-                              </button>
-                            ))}
+                        <FeatureGate module="mapa_mesas" feature="notas_preparacion">
+                          <div className="pk-field pk-col-span-full">
+                            <label>Nota de Cocina / Término de Preparación</label>
+                            <input
+                              value={note}
+                              onChange={(e) => setNote(e.target.value)}
+                              placeholder="Ej: Término 3/4, sin cebolla, bebida sin hielo..."
+                            />
+                            <div className="pk-row-actions" style={{ marginTop: 6 }}>
+                              {['Término 3/4', 'Bien asado', 'Sin cebolla', 'Para llevar'].map((preset) => (
+                                <button
+                                  key={preset}
+                                  type="button"
+                                  className="pk-btn pk-btn-outline pk-btn-sm"
+                                  onClick={() => setNote(preset)}
+                                >
+                                  {preset}
+                                </button>
+                              ))}
+                            </div>
                           </div>
+                        </FeatureGate>
+
+                        <div className="pk-form-actions">
+                          <button
+                            type="button"
+                            className="pk-btn pk-btn-outline"
+                            onClick={() => setTablesViewMode('list')}
+                            disabled={busy}
+                          >
+                            Cancelar
+                          </button>
+                          <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
+                            {busy ? 'Cargando...' : `➕ Cargar a ${activeTable.name}`}
+                          </button>
                         </div>
-                      </FeatureGate>
+                      </form>
+                    )}
+                  </div>
+                </div>
 
-                      <div style={{ marginTop: 10 }}>
-                        <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
-                          ➕ Cargar a {activeTable.name}
-                        </button>
-                      </div>
-                    </form>
-
-                    <div style={{ marginBottom: 12 }}>
-                      <div style={{ fontSize: 11.5, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
-                        ⚡ Adición Rápida de Carta:
-                      </div>
+                {activeTable && menuItems.length > 0 && (
+                  <div className="pk-card">
+                    <div className="pk-card-head">
+                      <div className="pk-card-title">⚡ Adición Rápida de Carta en {activeTable.name}</div>
+                      <button
+                        type="button"
+                        className="pk-btn pk-btn-outline pk-btn-sm"
+                        onClick={() => setTablesViewMode('list')}
+                      >
+                        Ver Cuenta ({(activeTable.items || []).length} líneas)
+                      </button>
+                    </div>
+                    <div className="pk-card-body">
                       <div className="pk-row-actions">
                         {menuItems.slice(0, 6).map((p) => (
                           <button
@@ -527,299 +577,438 @@ export const ComandasView: React.FC = () => {
                             type="button"
                             className="pk-btn pk-btn-outline pk-btn-sm"
                             disabled={busy}
-                            onClick={() => addProductToActiveTable(p, 1)}
+                            onClick={() => addProductToActiveTable(p, 1, false)}
                           >
                             + {p.name} ({formatCop(p.salePrice)})
                           </button>
                         ))}
                       </div>
                     </div>
-
-                    <div className="pk-table-wrap">
-                      <table className="pk-table">
-                        <thead>
-                          <tr>
-                            <th>Plato / Bebida</th>
-                            <th>Cant.</th>
-                            <th>Subtotal</th>
-                            <th></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(activeTable.items || []).length === 0 ? (
-                            <tr>
-                              <td colSpan={4} style={{ textAlign: 'center', color: 'var(--pk-muted)' }}>
-                                Mesa disponible sin consumos registrados.
-                              </td>
-                            </tr>
-                          ) : (
-                            activeTable.items.map((it) => (
-                              <tr key={it.itemId}>
-                                <td>
-                                  <div style={{ fontWeight: 700 }}>{it.name}</div>
-                                  {it.note && (
-                                    <div style={{ fontSize: 11, color: 'var(--pk-amber)', fontWeight: 700 }}>
-                                      📝 {it.note}
-                                    </div>
-                                  )}
-                                </td>
-                                <td>{it.qty}</td>
-                                <td style={{ fontWeight: 700 }}>{formatCop(it.qty * it.price)}</td>
-                                <td>
-                                  <button
-                                    type="button"
-                                    className="pk-btn pk-btn-danger pk-btn-sm"
-                                    disabled={busy}
-                                    onClick={() => setItemToDelete({ table: activeTable, item: it })}
-                                  >
-                                    ✕
-                                  </button>
-                                </td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    <div
-                      style={{
-                        marginTop: 12,
-                        paddingTop: 12,
-                        borderTop: '1px solid #e2e8f0',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        flexWrap: 'wrap',
-                        gap: 10,
-                      }}
-                    >
-                      <div style={{ fontSize: 17, fontWeight: 800 }}>
-                        Total Mesa: {formatCop(activeTable.total)}
-                      </div>
-                      <div className="pk-row-actions">
-                        <button
-                          type="button"
-                          className="pk-btn pk-btn-amber pk-btn-sm"
-                          disabled={busy || (activeTable.items || []).length === 0}
-                          onClick={handleSendKitchen}
-                        >
-                          👨‍🍳 Enviar a Cocina
-                        </button>
-                        <PkPrintButton
-                          label="🖨️ Precuenta 80mm"
-                          payload={buildTablePrintPayload(activeTable, false)}
-                        />
-                        <button
-                          type="button"
-                          className="pk-btn pk-btn-emerald pk-btn-sm"
-                          disabled={busy || (activeTable.items || []).length === 0}
-                          onClick={() => handlePassToPos(activeTable)}
-                        >
-                          💵 Cobrar en Caja POS
-                        </button>
-                      </div>
-                    </div>
-                  </>
+                  </div>
                 )}
               </div>
-            </div>
+            ) : (
+              <div className="pk-stack">
+                <div className="pk-card">
+                  <div className="pk-card-head">
+                    <div className="pk-card-title">🍽️ Mapa de Salón, Terraza y Barra</div>
+                  </div>
+                  <div className="pk-datatable-toolbar">
+                    <input
+                      className="pk-input pk-datatable-search"
+                      placeholder="🔎 Buscar mesa, ambiente o mesero..."
+                      value={tableSearch}
+                      onChange={(e) => setTableSearch(e.target.value)}
+                    />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                      <div style={{ minWidth: 230 }}>
+                        <PkSimpleSelect
+                          ariaLabel="Filtrar mesas por zona"
+                          value={zoneFilter}
+                          onChange={setZoneFilter}
+                          allowClear
+                          placeholder="Todas las zonas y ambientes"
+                          options={TABLE_ZONE_OPTIONS}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="pk-card-body">
+                    <div className="pk-cards-grid">
+                      {filteredTables.map((tbl) => {
+                        const selected = activeTable?.id === tbl.id;
+                        return (
+                          <div
+                            key={tbl.id}
+                            onClick={() => setSelectedTableId(tbl.id)}
+                            style={{
+                              border: selected ? '2px solid var(--pk-primary)' : '1px solid var(--pk-border)',
+                              borderRadius: 10,
+                              padding: 12,
+                              background: selected ? '#eff6ff' : '#ffffff',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <strong style={{ fontSize: 15 }}>{tbl.name}</strong>
+                              <span className={badgeClassForStatus(tbl.status)}>{tbl.status}</span>
+                            </div>
+                            <div style={{ fontSize: 12, color: 'var(--pk-muted)', marginTop: 4 }}>
+                              📍 {tbl.zone} · 🧑 {tbl.waiter || 'Salón General'}
+                            </div>
+                            <div
+                              style={{
+                                marginTop: 10,
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                              }}
+                            >
+                              <span style={{ fontSize: 12, color: '#334155' }}>
+                                {(tbl.items || []).length} línea(s)
+                              </span>
+                              <span style={{ fontWeight: 800, fontSize: 15 }}>{formatCop(tbl.total)}</span>
+                            </div>
+                            <div
+                              style={{
+                                marginTop: 10,
+                                paddingTop: 8,
+                                borderTop: '1px dashed #cbd5e1',
+                                display: 'flex',
+                                justifyContent: 'flex-end',
+                              }}
+                            >
+                              <button
+                                type="button"
+                                className="pk-btn pk-btn-primary pk-btn-sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedTableId(tbl.id);
+                                  setTablesViewMode('create');
+                                }}
+                              >
+                                🧾 Tomar Pedido
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pk-card">
+                  <div className="pk-card-head">
+                    <div className="pk-card-title">
+                      {activeTable ? `🧾 Detalle de Comanda Activa — ${activeTable.name}` : 'Selecciona una Mesa'}
+                    </div>
+                    {activeTable && (
+                      <div className="pk-row-actions">
+                        <span className={badgeClassForStatus(activeTable.status)}>{activeTable.status}</span>
+                        <button
+                          type="button"
+                          className="pk-btn pk-btn-primary pk-btn-sm"
+                          onClick={() => setTablesViewMode('create')}
+                        >
+                          + Agregar Platos
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="pk-card-body">
+                    {!activeTable ? (
+                      <div style={{ color: 'var(--pk-muted)' }}>Crea o selecciona una mesa para gestionar su cuenta.</div>
+                    ) : (
+                      <>
+                        <div className="pk-table-wrap">
+                          <table className="pk-table">
+                            <thead>
+                              <tr>
+                                <th>Plato / Bebida</th>
+                                <th>Cant.</th>
+                                <th>Valor Unit.</th>
+                                <th>Subtotal</th>
+                                <th></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(activeTable.items || []).length === 0 ? (
+                                <tr>
+                                  <td colSpan={5} style={{ textAlign: 'center', color: 'var(--pk-muted)', padding: 20 }}>
+                                    Mesa disponible sin consumos registrados. Usa &quot;+ Agregar Platos&quot; para iniciar comanda.
+                                  </td>
+                                </tr>
+                              ) : (
+                                activeTable.items.map((it) => (
+                                  <tr key={it.itemId}>
+                                    <td>
+                                      <div style={{ fontWeight: 700 }}>{it.name}</div>
+                                      {it.note && (
+                                        <div style={{ fontSize: 11, color: 'var(--pk-amber)', fontWeight: 700 }}>
+                                          📝 {it.note}
+                                        </div>
+                                      )}
+                                    </td>
+                                    <td>{it.qty}</td>
+                                    <td>{formatCop(it.price)}</td>
+                                    <td style={{ fontWeight: 700 }}>{formatCop(it.qty * it.price)}</td>
+                                    <td>
+                                      <button
+                                        type="button"
+                                        className="pk-btn pk-btn-danger pk-btn-sm"
+                                        disabled={busy}
+                                        onClick={() => setItemToDelete({ table: activeTable, item: it })}
+                                      >
+                                        ✕
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        <div
+                          style={{
+                            marginTop: 14,
+                            paddingTop: 14,
+                            borderTop: '1px solid #e2e8f0',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            flexWrap: 'wrap',
+                            gap: 10,
+                          }}
+                        >
+                          <div style={{ fontSize: 17, fontWeight: 800 }}>
+                            Total Mesa: {formatCop(activeTable.total)}
+                          </div>
+                          <div className="pk-row-actions">
+                            <button
+                              type="button"
+                              className="pk-btn pk-btn-amber pk-btn-sm"
+                              disabled={busy || (activeTable.items || []).length === 0}
+                              onClick={handleSendKitchen}
+                            >
+                              👨‍🍳 Enviar a Cocina
+                            </button>
+                            <PkPrintButton
+                              label="🖨️ Precuenta 80mm"
+                              payload={buildTablePrintPayload(activeTable, false)}
+                            />
+                            <button
+                              type="button"
+                              className="pk-btn pk-btn-emerald pk-btn-sm"
+                              disabled={busy || (activeTable.items || []).length === 0}
+                              onClick={() => handlePassToPos(activeTable)}
+                            >
+                              💵 Cobrar en Caja POS
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <PkModal
+              open={showNewTableModal}
+              title="Registrar Nueva Mesa o Ubicación"
+              onClose={() => setShowNewTableModal(false)}
+            >
+              <form onSubmit={handleCreateTable} className="pk-form-grid cols-2">
+                <div className="pk-field">
+                  <label>Nombre o Número de Mesa *</label>
+                  <input
+                    required
+                    value={tableName}
+                    onChange={(e) => setTableName(e.target.value)}
+                    placeholder="Ej: Mesa 5 / Barra 2"
+                  />
+                </div>
+
+                <PkSimpleSelect
+                  label="Zona / Ambiente"
+                  value={tableZone}
+                  onChange={setTableZone}
+                  options={TABLE_ZONE_OPTIONS}
+                />
+
+                <div className="pk-field pk-col-span-full">
+                  <label>Mesero Asignado</label>
+                  <input
+                    value={tableWaiter}
+                    onChange={(e) => setTableWaiter(e.target.value)}
+                    placeholder="Nombre del mesero responsable"
+                  />
+                </div>
+
+                <div className="pk-form-actions">
+                  <button
+                    type="button"
+                    className="pk-btn pk-btn-outline"
+                    onClick={() => setShowNewTableModal(false)}
+                    disabled={busy}
+                  >
+                    Cancelar
+                  </button>
+                  <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
+                    {busy ? 'Guardando...' : '💾 Crear Mesa'}
+                  </button>
+                </div>
+              </form>
+            </PkModal>
+
+            <PkModal
+              open={showNewDishModal}
+              title="Agregar Plato o Bebida a la Carta"
+              onClose={() => setShowNewDishModal(false)}
+            >
+              <form onSubmit={handleCreateMenuItem} className="pk-form-grid cols-2">
+                <PkAutoCodeInput label="Código Carta" value={nextMenuCode} />
+
+                <div className="pk-field">
+                  <label>Nombre del Plato o Bebida *</label>
+                  <input
+                    required
+                    value={dishName}
+                    onChange={(e) => setDishName(e.target.value)}
+                    placeholder="Ej: Bandeja Ejecutiva Especial"
+                  />
+                </div>
+
+                <PkSimpleSelect
+                  label="Categoría"
+                  value={dishCategory}
+                  onChange={setDishCategory}
+                  options={DISH_CATEGORY_OPTIONS}
+                />
+
+                <div className="pk-field">
+                  <label>Precio de Venta (COP) *</label>
+                  <input
+                    required
+                    type="number"
+                    min="100"
+                    step="100"
+                    value={dishPrice}
+                    onChange={(e) => setDishPrice(e.target.value)}
+                    placeholder="Ej: 36000"
+                  />
+                </div>
+
+                <div className="pk-col-span-full">
+                  <PkSimpleSelect
+                    label="Impoconsumo / IVA (%)"
+                    value={dishTaxPct}
+                    onChange={setDishTaxPct}
+                    options={DISH_TAX_OPTIONS}
+                  />
+                </div>
+
+                <div className="pk-form-actions">
+                  <button
+                    type="button"
+                    className="pk-btn pk-btn-outline"
+                    onClick={() => setShowNewDishModal(false)}
+                    disabled={busy}
+                  >
+                    Cancelar
+                  </button>
+                  <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
+                    {busy ? 'Guardando...' : '💾 Guardar en Carta'}
+                  </button>
+                </div>
+              </form>
+            </PkModal>
+
+            <PkConfirmModal
+              open={Boolean(itemToDelete)}
+              title="Retirar Plato de la Comanda"
+              message={
+                itemToDelete
+                  ? `¿Confirmas retirar "${itemToDelete.item.name}" (${itemToDelete.item.qty} und.) de ${itemToDelete.table.name}?`
+                  : ''
+              }
+              confirmLabel="Retirar Línea"
+              busy={busy}
+              onConfirm={confirmRemoveItem}
+              onCancel={() => setItemToDelete(null)}
+            />
           </div>
-
-          <PkModal
-            open={showNewTableModal}
-            title="Registrar Nueva Mesa o Ubicación"
-            onClose={() => setShowNewTableModal(false)}
-          >
-            <form onSubmit={handleCreateTable} className="pk-form-grid">
-              <div className="pk-field">
-                <label>Nombre o Número de Mesa *</label>
-                <input
-                  required
-                  value={tableName}
-                  onChange={(e) => setTableName(e.target.value)}
-                  placeholder="Ej: Mesa 5 / Barra 2"
-                />
-              </div>
-              <div className="pk-field">
-                <label>Zona / Ambiente</label>
-                <select value={tableZone} onChange={(e) => setTableZone(e.target.value)}>
-                  <option value="Salón Principal">Salón Principal</option>
-                  <option value="Terraza">Terraza</option>
-                  <option value="VIP / Segundo Piso">VIP / Segundo Piso</option>
-                  <option value="Barra">Barra</option>
-                </select>
-              </div>
-              <div className="pk-field">
-                <label>Mesero Asignado</label>
-                <input
-                  value={tableWaiter}
-                  onChange={(e) => setTableWaiter(e.target.value)}
-                  placeholder="Nombre del mesero responsable"
-                />
-              </div>
-              <div className="pk-field" style={{ justifyContent: 'flex-end' }}>
-                <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
-                  💾 Crear Mesa
-                </button>
-              </div>
-            </form>
-          </PkModal>
-
-          <PkModal
-            open={showNewDishModal}
-            title="Agregar Plato o Bebida a la Carta"
-            onClose={() => setShowNewDishModal(false)}
-          >
-            <form onSubmit={handleCreateMenuItem} className="pk-form-grid">
-              <PkAutoCodeInput label="Código Carta" value={nextMenuCode} />
-              <div className="pk-field">
-                <label>Nombre del Plato o Bebida *</label>
-                <input
-                  required
-                  value={dishName}
-                  onChange={(e) => setDishName(e.target.value)}
-                  placeholder="Ej: Bandeja Ejecutiva Especial"
-                />
-              </div>
-              <div className="pk-field">
-                <label>Categoría</label>
-                <select value={dishCategory} onChange={(e) => setDishCategory(e.target.value)}>
-                  <option value="Restaurante — Fuertes">Restaurante — Fuertes</option>
-                  <option value="Restaurante — Entradas">Restaurante — Entradas</option>
-                  <option value="Barra y Bebidas">Barra y Bebidas</option>
-                  <option value="Postres y Cafetería">Postres y Cafetería</option>
-                </select>
-              </div>
-              <div className="pk-field">
-                <label>Precio de Venta (COP) *</label>
-                <input
-                  required
-                  type="number"
-                  min="100"
-                  step="100"
-                  value={dishPrice}
-                  onChange={(e) => setDishPrice(e.target.value)}
-                  placeholder="Ej: 36000"
-                />
-              </div>
-              <div className="pk-field">
-                <label>Impoconsumo / IVA (%)</label>
-                <select value={dishTaxPct} onChange={(e) => setDishTaxPct(e.target.value)}>
-                  <option value="8">8% Impoconsumo</option>
-                  <option value="19">19% IVA</option>
-                  <option value="0">0% Exento</option>
-                </select>
-              </div>
-              <div className="pk-field" style={{ justifyContent: 'flex-end' }}>
-                <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
-                  💾 Guardar en Carta
-                </button>
-              </div>
-            </form>
-          </PkModal>
-
-          <PkConfirmModal
-            open={Boolean(itemToDelete)}
-            title="Retirar Plato de la Comanda"
-            message={
-              itemToDelete
-                ? `¿Confirmas retirar "${itemToDelete.item.name}" (${itemToDelete.item.qty} und.) de ${itemToDelete.table.name}?`
-                : ''
-            }
-            confirmLabel="Retirar Línea"
-            busy={busy}
-            onConfirm={confirmRemoveItem}
-            onCancel={() => setItemToDelete(null)}
-          />
         </ModuleGate>
       )}
 
       {currentTab === 'monitor_cocina' && (
         <ModuleGate module="monitor_cocina">
-          <div className="pk-card">
-            <div className="pk-card-head">
-              <div className="pk-card-title">
-                👨‍🍳 Monitor en Vivo de Cocina y Barra ({kitchenTables.length} pendientes)
+          <div className="pk-stack">
+            <div className="pk-card">
+              <div className="pk-card-head">
+                <div className="pk-card-title">
+                  👨‍🍳 Monitor en Vivo de Cocina y Barra ({kitchenTables.length} pendientes)
+                </div>
+                <button
+                  type="button"
+                  className="pk-btn pk-btn-outline pk-btn-sm"
+                  disabled={busy}
+                  onClick={() => void reload()}
+                >
+                  🔄 Actualizar Pantalla
+                </button>
               </div>
-              <button
-                type="button"
-                className="pk-btn pk-btn-outline pk-btn-sm"
-                disabled={busy}
-                onClick={() => void reload()}
-              >
-                🔄 Actualizar Pantalla
-              </button>
-            </div>
-            <div className="pk-card-body">
-              {kitchenTables.length === 0 ? (
-                <div style={{ padding: 24, textAlign: 'center', color: 'var(--pk-muted)' }}>
-                  No hay comandas pendientes de preparación en este momento.
-                </div>
-              ) : (
-                <div className="pk-cards-grid">
-                  {kitchenTables.map((tbl) => (
-                    <div
-                      key={tbl.id}
-                      style={{
-                        border: '2px solid var(--pk-amber)',
-                        borderRadius: 12,
-                        padding: 14,
-                        background: '#fffbeb',
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <strong style={{ fontSize: 16 }}>{tbl.name}</strong>
-                        <span className="pk-badge pk-badge-amber">🔥 En Cocina</span>
-                      </div>
-                      <div style={{ fontSize: 12, color: '#64748b', marginTop: 4, marginBottom: 10 }}>
-                        📍 {tbl.zone} · Mesero: {tbl.waiter}
-                      </div>
+              <div className="pk-card-body">
+                {kitchenTables.length === 0 ? (
+                  <div style={{ padding: 24, textAlign: 'center', color: 'var(--pk-muted)' }}>
+                    No hay comandas pendientes de preparación en este momento.
+                  </div>
+                ) : (
+                  <div className="pk-cards-grid">
+                    {kitchenTables.map((tbl) => (
+                      <div
+                        key={tbl.id}
+                        style={{
+                          border: '2px solid var(--pk-amber)',
+                          borderRadius: 12,
+                          padding: 14,
+                          background: '#fffbeb',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <strong style={{ fontSize: 16 }}>{tbl.name}</strong>
+                          <span className="pk-badge pk-badge-amber">🔥 En Cocina</span>
+                        </div>
+                        <div style={{ fontSize: 12, color: '#64748b', marginTop: 4, marginBottom: 10 }}>
+                          📍 {tbl.zone} · Mesero: {tbl.waiter}
+                        </div>
 
-                      <div style={{ borderTop: '1px dashed #cbd5e1', paddingTop: 8, marginBottom: 12 }}>
-                        {(tbl.items || []).map((it) => (
-                          <div key={it.itemId} style={{ marginBottom: 8 }}>
-                            <div style={{ fontWeight: 800, fontSize: 13.5 }}>
-                              {it.qty}x {it.name}
-                            </div>
-                            {it.note && (
-                              <div
-                                style={{
-                                  fontSize: 12,
-                                  color: '#92400e',
-                                  background: '#fef3c7',
-                                  padding: '2px 6px',
-                                  borderRadius: 4,
-                                  marginTop: 2,
-                                  display: 'inline-block',
-                                  fontWeight: 700,
-                                }}
-                              >
-                                ⚠️ Nota: {it.note}
+                        <div style={{ borderTop: '1px dashed #cbd5e1', paddingTop: 8, marginBottom: 12 }}>
+                          {(tbl.items || []).map((it) => (
+                            <div key={it.itemId} style={{ marginBottom: 8 }}>
+                              <div style={{ fontWeight: 800, fontSize: 13.5 }}>
+                                {it.qty}x {it.name}
                               </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                              {it.note && (
+                                <div
+                                  style={{
+                                    fontSize: 12,
+                                    color: '#92400e',
+                                    background: '#fef3c7',
+                                    padding: '2px 6px',
+                                    borderRadius: 4,
+                                    marginTop: 2,
+                                    display: 'inline-block',
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  ⚠️ Nota: {it.note}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
 
-                      <div className="pk-row-actions">
-                        <button
-                          type="button"
-                          className="pk-btn pk-btn-emerald pk-btn-sm"
-                          disabled={busy}
-                          onClick={() => handleMarkReady(tbl)}
-                        >
-                          ✅ Pedido Listo
-                        </button>
-                        <PkPrintButton
-                          label="🖨️ Comanda Cocina"
-                          payload={buildTablePrintPayload(tbl, true)}
-                        />
+                        <div className="pk-row-actions">
+                          <button
+                            type="button"
+                            className="pk-btn pk-btn-emerald pk-btn-sm"
+                            disabled={busy}
+                            onClick={() => handleMarkReady(tbl)}
+                          >
+                            ✅ Pedido Listo
+                          </button>
+                          <PkPrintButton
+                            label="🖨️ Comanda Cocina"
+                            payload={buildTablePrintPayload(tbl, true)}
+                          />
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </ModuleGate>

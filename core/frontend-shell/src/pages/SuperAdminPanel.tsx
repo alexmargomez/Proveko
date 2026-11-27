@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { usePlatform, useAsyncAction, TenantSummary, PkModal } from '@platform/ui-sdk';
+import { usePlatform, useAsyncAction, TenantSummary, PkModal, PkSimpleSelect } from '@platform/ui-sdk';
 import { PkIcon } from '../components/ServiceIcons';
 
 export const SuperAdminPanel: React.FC<{
@@ -298,21 +298,17 @@ export const SuperAdminPanel: React.FC<{
         </div>
 
         <div className="pk-card-body">
-          <div className="pk-form-grid">
-            <div className="pk-field">
-              <label htmlFor="sa-tenant-select">Empresa Cliente Seleccionada</label>
-              <select
-                id="sa-tenant-select"
-                value={selectedTenant?.tenantId || ''}
-                onChange={(e) => setSelectedTenantId(e.target.value)}
-              >
-                {tenantsList.map((t) => (
-                  <option key={t.tenantId} value={t.tenantId}>
-                    {t.companyName} — NIT {t.nit} ({t.status === 'SUSPENDED' ? 'Suspendida' : 'Activa'})
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className="pk-form-grid cols-2">
+            <PkSimpleSelect
+              label="Empresa Cliente Seleccionada"
+              value={selectedTenant?.tenantId || ''}
+              onChange={(nextId) => setSelectedTenantId(nextId)}
+              options={tenantsList.map((t) => ({
+                value: t.tenantId,
+                label: `${t.companyName} — NIT ${t.nit}`,
+                sublabel: t.status === 'SUSPENDED' ? 'Suspendida' : 'Activa',
+              }))}
+            />
             {selectedTenant && (
               <div className="pk-field">
                 <label>Estado Operativo y Cupo de Usuarios</label>
@@ -581,8 +577,8 @@ export const SuperAdminPanel: React.FC<{
         title="Aprovisionamiento Corporativo de Nueva Empresa"
         onClose={() => setShowCreateModal(false)}
       >
-        <form onSubmit={handleCreateTenantSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div className="pk-form-grid">
+        <form onSubmit={handleCreateTenantSubmit} className="pk-stack">
+          <div className="pk-form-grid cols-2">
             <div className="pk-field">
               <label htmlFor="sa-new-company">Razón Social</label>
               <input
@@ -626,26 +622,26 @@ export const SuperAdminPanel: React.FC<{
                 placeholder="Contraseña segura"
               />
             </div>
-            <div className="pk-field" style={{ gridColumn: '1 / -1' }}>
-              <label htmlFor="sa-new-preset">Plantilla Inicial de Operación</label>
-              <select
-                id="sa-new-preset"
+            <div className="pk-col-span-full">
+              <PkSimpleSelect
+                label="Plantilla Inicial de Operación"
                 value={newPreset}
-                onChange={(e) => setNewPreset(e.target.value)}
-              >
-                <option value="full">Suite Empresarial Completa (Todas las Áreas)</option>
-                <option value="comercio">Comercio, Tienda y Ferretería</option>
-                <option value="restaurante">Restaurante, Gastrobar y Cafetería</option>
-                <option value="bares">Bares, Discotecas y Eventos</option>
-                <option value="automotriz">Centro Automotriz y Taller</option>
-                <option value="hotel">Hoteles y Alojamiento</option>
-                <option value="citas">Consultorios, Spa y Servicios por Cita</option>
-                <option value="mayorista">Distribuidora Mayorista</option>
-                <option value="logistica">Agroindustria y Báscula Camionera</option>
-              </select>
+                onChange={(nextPreset) => setNewPreset(nextPreset)}
+                options={[
+                  { value: 'full', label: 'Suite Empresarial Completa (Todas las Áreas)' },
+                  { value: 'comercio', label: 'Comercio, Tienda y Ferretería' },
+                  { value: 'restaurante', label: 'Restaurante, Gastrobar y Cafetería' },
+                  { value: 'bares', label: 'Bares, Discotecas y Eventos' },
+                  { value: 'automotriz', label: 'Centro Automotriz y Taller' },
+                  { value: 'hotel', label: 'Hoteles y Alojamiento' },
+                  { value: 'citas', label: 'Consultorios, Spa y Servicios por Cita' },
+                  { value: 'mayorista', label: 'Distribuidora Mayorista' },
+                  { value: 'logistica', label: 'Agroindustria y Báscula Camionera' },
+                ]}
+              />
             </div>
           </div>
-          <div className="pk-row-actions" style={{ justifyContent: 'flex-end', marginTop: 6 }}>
+          <div className="pk-form-actions">
             <button
               type="button"
               className="pk-btn pk-btn-outline"

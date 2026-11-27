@@ -3,6 +3,7 @@ import {
   BusinessPresetSpec,
   formatCop,
   PkModal,
+  PkSimpleSelect,
   TenantSummary,
   useAsyncAction,
   usePlatform,
@@ -701,7 +702,7 @@ export const RegistrationWizard: React.FC<{
               <strong>{companyName}</strong> con todas las áreas seleccionadas listas para operar y crear los usuarios de tu equipo.
             </div>
 
-            <div className="pk-grid-2">
+            <div className="pk-form-grid cols-2">
               <div className="pk-field">
                 <label>Empresa a Aprovisionar</label>
                 <input type="text" readOnly value={`${companyName} (NIT ${nit})`} style={{ background: '#f8fafc', fontWeight: 700 }} />
@@ -717,20 +718,19 @@ export const RegistrationWizard: React.FC<{
               </div>
             </div>
 
-            <div className="pk-field">
-              <label htmlFor="pay-method-sel">Modalidad de Facturación Empresarial</label>
-              <select
-                id="pay-method-sel"
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-              >
-                <option value="PSE_EMPRESARIAL">PSE / Transferencia Bancaria Empresarial</option>
-                <option value="TARJETA_CORPORATIVA">Tarjeta Débito o Crédito Corporativa</option>
-                <option value="FACTURACION_CONTRATO">Facturación Electrónica por Contrato Mensual</option>
-              </select>
-            </div>
+            <PkSimpleSelect
+              label="Modalidad de Facturación Empresarial"
+              searchable={false}
+              value={paymentMethod}
+              onChange={(nextMethod) => setPaymentMethod(nextMethod)}
+              options={[
+                { value: 'PSE_EMPRESARIAL', label: 'PSE / Transferencia Bancaria Empresarial' },
+                { value: 'TARJETA_CORPORATIVA', label: 'Tarjeta Débito o Crédito Corporativa' },
+                { value: 'FACTURACION_CONTRATO', label: 'Facturación Electrónica por Contrato Mensual' },
+              ]}
+            />
 
-            <div className="pk-row-between" style={{ marginTop: 6 }}>
+            <div className="pk-form-actions" style={{ justifyContent: 'space-between' }}>
               <button
                 type="button"
                 className="pk-btn pk-btn-outline"

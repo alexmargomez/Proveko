@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { PkModal, TenantSummary, usePlatform } from '@platform/ui-sdk';
+import { PkModal, PkSimpleSelect, TenantSummary, usePlatform } from '@platform/ui-sdk';
 
 interface AuditEntry {
   logId: string;
@@ -82,17 +82,21 @@ export const AdminAuditLogTab: React.FC = () => {
 
         <div className="pk-card-body" style={{ borderBottom: '1px solid var(--pk-border)', paddingBottom: 14 }}>
           <div className="pk-form-grid">
-            <div className="pk-field">
-              <label>Filtrar por Empresa</label>
-              <select value={tenantFilter} onChange={(e) => setTenantFilter(e.target.value)}>
-                <option value="">Todas las empresas</option>
-                {tenants.map((t) => (
-                  <option key={t.tenantId} value={t.tenantId}>
-                    {t.companyName} ({t.tenantId})
-                  </option>
-                ))}
-              </select>
-            </div>
+            <PkSimpleSelect
+              label="Filtrar por Empresa"
+              allowClear
+              placeholder="Todas las empresas"
+              value={tenantFilter}
+              onChange={(nextTenant) => setTenantFilter(nextTenant)}
+              options={[
+                { value: '', label: 'Todas las empresas' },
+                ...tenants.map((t) => ({
+                  value: t.tenantId,
+                  label: t.companyName,
+                  sublabel: `NIT ${t.nit} · ${t.tenantId}`,
+                })),
+              ]}
+            />
             <div className="pk-field">
               <label>Correo del Operador</label>
               <input
@@ -109,10 +113,7 @@ export const AdminAuditLogTab: React.FC = () => {
                 onChange={(e) => setActionFilter(e.target.value)}
               />
             </div>
-            <div className="pk-row-actions">
-              <button type="button" className="pk-btn pk-btn-primary" disabled={loading} onClick={() => void load()}>
-                {loading ? 'Consultando...' : 'Aplicar Filtros'}
-              </button>
+            <div className="pk-form-actions">
               <button
                 type="button"
                 className="pk-btn pk-btn-outline"
@@ -123,6 +124,9 @@ export const AdminAuditLogTab: React.FC = () => {
                 }}
               >
                 Limpiar
+              </button>
+              <button type="button" className="pk-btn pk-btn-primary" disabled={loading} onClick={() => void load()}>
+                {loading ? 'Consultando...' : 'Aplicar Filtros'}
               </button>
             </div>
           </div>

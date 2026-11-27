@@ -3,6 +3,8 @@ import {
   PkConfirmModal,
   PkKpiRow,
   PkModal,
+  PkSimpleSelect,
+  PkViewSwitcher,
   RoleTemplateSpec,
   TenantUserRecord,
   useAsyncAction,
@@ -35,6 +37,7 @@ export const CompanyUsersPanel: React.FC = () => {
   const [maxUsers, setMaxUsers] = useState<number>(15);
   const [templates, setTemplates] = useState<RoleTemplateSpec[]>(ctxTemplates || []);
 
+  const [viewMode, setViewMode] = useState<'list' | 'create'>('list');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<TenantUserRecord | null>(null);
   const [pendingDeleteUser, setPendingDeleteUser] = useState<TenantUserRecord | null>(null);
@@ -108,14 +111,15 @@ export const CompanyUsersPanel: React.FC = () => {
   const activeUsersCount = users.filter((u) => u.status !== 'SUSPENDED').length;
   const quotaReached = activeUsersCount >= maxUsers;
 
-  const openCreateModal = () => {
+  const openCreateView = () => {
     setEditingUser(null);
+    setModalOpen(false);
     setFullName('');
     setUsernameInput('');
     setPasswordInput(generateSecurePassword());
     setShowPass(false);
     computeTemplatePermissions('cajero', templates.length > 0 ? templates : ctxTemplates);
-    setModalOpen(true);
+    setViewMode('create');
   };
 
   const openEditModal = (u: TenantUserRecord) => {
@@ -192,6 +196,7 @@ export const CompanyUsersPanel: React.FC = () => {
           allowedModules: isAdminCheck ? ['*'] : allowedModules,
         });
         toast(`Permisos de ${fullName} actualizados correctamente`);
+        setModalOpen(false);
       } else {
         const res = await apiPost<{ ok: boolean; user?: TenantUserRecord }>('/api/v1/core/company/users', {
           fullName,
@@ -204,8 +209,8 @@ export const CompanyUsersPanel: React.FC = () => {
           allowedModules: isAdminCheck ? ['*'] : allowedModules,
         });
         toast(`Usuario ${res?.user?.username || usernameInput} creado con sus servicios asignados`);
+        setViewMode('list');
       }
-      setModalOpen(false);
       await loadUsers();
     });
   };
@@ -241,6 +246,257 @@ export const CompanyUsersPanel: React.FC = () => {
   const serviceName = (sk: string) =>
     catalog.find((s) => s.serviceKey === sk)?.displayName || sk;
 
+  const renderUserForm = (isEdit: boolean, onCancelForm: () => void) => {
+    const createBlocked = !isEdit && (demoReadOnly || quotaReached);
+    return (
+      <form onSubmit={handleSaveUser} className="pk-stack">
+        {createBlocked && (
+          <div
+            style={{
+              background: '#fffbeb',
+              border: '1px solid #fde68a',
+              borderRadius: 10,
+              padding: '10px 14px',
+              fontSize: 12.5,
+              color: '#92400e',
+            }}
+          >
+            {demoReadOnly
+              ? 'Modo Demostración: Registra tu propia empresa para crear empleados reales.'
+              : `Has alcanzado el cupo máximo de ${maxUsers} usuarios activos en tu plan actual.`}
+          </div>
+        )}
+
+        <div className="pk-form-grid cols-2">
+          <div className="pk-field">
+            <label htmlFor={isEdit ? 'usr-fullname-edit' : 'usr-fullname'}>Nombre Completo del Trabajador *</label>
+            <input
+              id={isEdit ? 'usr-fullname-edit' : 'usr-fullname'}
+              required
+              disabled={createBlocked}
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Ej. Laura Gómez — Cajera Principal"
+            />
+          </div>
+
+          <div className="pk-field">
+            <label htmlFor={isEdit ? 'usr-username-edit' : 'usr-username'}>Correo o Usuario para Iniciar Sesión *</label>
+            <input
+              id={isEdit ? 'usr-username-edit' : 'usr-username'}
+              required
+              disabled={isEdit || createBlocked}
+              value={usernameInput}
+              onChange={(e) => setUsernameInput(e.target.value)}
+              placeholder="Ej. caja1@miempresa.co"
+            />
+            {!isEdit && usernameInput.trim() !== '' && !usernameInput.includes('@') && (
+              <div style={{ fontSize: 11.5, color: 'var(--pk-primary)', fontWeight: 600, marginTop: 3 }}>
+                Iniciará sesión como:{' '}
+                <strong>
+                  {usernameInput.trim().toLowerCase()}@
+                  {((activeCompany?.companyName || '')
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]/g, '')
+                    .slice(0, 28) || 'empresa') + '.co'}
+                </strong>
+              </div>
+            )}
+          </div>
+
+          <PkSimpleSelect
+            label="Plantilla de Cargo / Rol Operativo *"
+            disabled={createBlocked}
+            value={selectedRole}
+            onChange={(nextRole) => computeTemplatePermissions(nextRole, templates)}
+            options={templates.map((tpl) => ({
+              value: tpl.roleKey,
+              label: tpl.displayName,
+              sublabel: tpl.description,
+            }))}
+          />
+
+          <div className="pk-field">
+            <label htmlFor={isEdit ? 'usr-pass-edit' : 'usr-pass'}>
+              <span>{isEdit ? 'Nueva Contraseña (Opcional)' : 'Contraseña de Acceso *'}</span>
+              <span style={{ display: 'inline-flex', gap: 8 }}>
+                <button
+                  type="button"
+                  disabled={createBlocked}
+                  onClick={() => setShowPass((v) => !v)}
+                  style={{
+                    border: 'none',
+                    background: 'none',
+                    color: '#64748b',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    padding: 0,
+                  }}
+                >
+                  {showPass ? 'Ocultar' : 'Mostrar'}
+                </button>
+                <button
+                  type="button"
+                  disabled={createBlocked}
+                  onClick={() => {
+                    setPasswordInput(generateSecurePassword());
+                    setShowPass(true);
+                  }}
+                  style={{
+                    border: 'none',
+                    background: 'none',
+                    color: 'var(--pk-primary)',
+                    fontSize: 11,
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    padding: 0,
+                  }}
+                >
+                  Generar clave
+                </button>
+              </span>
+            </label>
+            <input
+              id={isEdit ? 'usr-pass-edit' : 'usr-pass'}
+              type={showPass ? 'text' : 'password'}
+              minLength={isEdit ? undefined : 8}
+              required={!isEdit}
+              disabled={createBlocked}
+              value={passwordInput}
+              onChange={(e) => setPasswordInput(e.target.value)}
+              placeholder={isEdit ? 'Dejar vacío para conservar actual' : 'Mínimo 8 caracteres'}
+            />
+          </div>
+        </div>
+
+        <div
+          style={{
+            background: '#f8fafc',
+            border: '1px solid var(--pk-border)',
+            borderRadius: 10,
+            padding: '10px 14px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--pk-navy)' }}>
+              Permisos de Administrador de Empresa
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--pk-muted)' }}>
+              Si se activa, el usuario tendrá acceso a todas las áreas contratadas y podrá gestionar empleados.
+            </div>
+          </div>
+          <input
+            type="checkbox"
+            disabled={createBlocked}
+            checked={isAdminCheck}
+            onChange={(e) => {
+              const next = e.target.checked;
+              setIsAdminCheck(next);
+              if (next && activeCompany) {
+                setSelectedRole('admin_empresa');
+                setAllowedServices([...activeCompany.activeServices]);
+                setAllowedModules([...activeCompany.activeModules]);
+              } else if (!next && selectedRole === 'admin_empresa') {
+                computeTemplatePermissions('cajero', templates);
+              }
+            }}
+            style={{ width: 18, height: 18 }}
+          />
+        </div>
+
+        {!isAdminCheck && (
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 13.5, color: 'var(--pk-navy)', marginBottom: 8 }}>
+              Selecciona exactamente qué Servicios y Secciones puede ver y operar este usuario:
+            </div>
+            <div className="pk-grid-2" style={{ maxHeight: isEdit ? 340 : undefined, overflowY: isEdit ? 'auto' : undefined, paddingRight: isEdit ? 4 : 0 }}>
+              {companyServices
+                .filter((s) => s.serviceKey !== 'ms-impresiones')
+                .map((svc) => {
+                  const svcChecked = allowedServices.includes(svc.serviceKey);
+                  const availableMods = svc.modules.filter((m) =>
+                    activeCompany?.activeModules.includes(m.moduleKey)
+                  );
+                  return (
+                    <div
+                      key={svc.serviceKey}
+                      style={{
+                        border: svcChecked ? '1.5px solid var(--pk-primary)' : '1px solid var(--pk-border)',
+                        background: svcChecked ? '#f8fbff' : '#ffffff',
+                        borderRadius: 10,
+                        padding: 12,
+                      }}
+                    >
+                      <label
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 9,
+                          fontWeight: 800,
+                          fontSize: 13,
+                          color: 'var(--pk-navy)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          disabled={createBlocked}
+                          checked={svcChecked}
+                          onChange={(e) => toggleServiceForUser(svc.serviceKey, e.target.checked)}
+                        />
+                        <span>{svc.displayName}</span>
+                      </label>
+                      {availableMods.length > 0 && (
+                        <div style={{ marginTop: 8, paddingLeft: 24, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                          {availableMods.map((mod) => (
+                            <label
+                              key={mod.moduleKey}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 7,
+                                fontSize: 12,
+                                color: '#334155',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                disabled={createBlocked}
+                                checked={svcChecked && allowedModules.includes(mod.moduleKey)}
+                                onChange={(e) =>
+                                  toggleModuleForUser(svc.serviceKey, mod.moduleKey, e.target.checked)
+                                }
+                              />
+                              <span style={{ textTransform: 'none' }}>{mod.displayName}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        )}
+
+        <div className="pk-form-actions">
+          <button type="button" className="pk-btn pk-btn-outline" onClick={onCancelForm}>
+            Cancelar
+          </button>
+          <button type="submit" className="pk-btn pk-btn-emerald" disabled={busy || createBlocked}>
+            {busy ? 'Guardando...' : isEdit ? 'Guardar Permisos del Usuario' : 'Crear Usuario con Estos Servicios'}
+          </button>
+        </div>
+      </form>
+    );
+  };
+
   return (
     <div>
       <div className="pk-ws-header">
@@ -254,25 +510,10 @@ export const CompanyUsersPanel: React.FC = () => {
               Crea las cuentas de tus cajeros, meseros, bodegueros, técnicos o contadores y elige exactamente qué áreas y secciones puede operar cada uno.
             </div>
           </div>
-          <button
-            type="button"
-            className="pk-btn pk-btn-primary"
-            disabled={demoReadOnly || quotaReached}
-            title={
-              demoReadOnly
-                ? 'Registra tu propia empresa para crear empleados reales'
-                : quotaReached
-                ? 'Has alcanzado el cupo máximo de usuarios activos de tu plan'
-                : undefined
-            }
-            onClick={openCreateModal}
-          >
-            + Crear Nuevo Usuario
-          </button>
         </div>
       </div>
 
-      <div className="pk-stage">
+      <div className="pk-stage pk-stack">
         {demoReadOnly && (
           <div
             style={{
@@ -307,338 +548,151 @@ export const CompanyUsersPanel: React.FC = () => {
           ]}
         />
 
-        <div className="pk-card">
-          <div className="pk-card-head">
-            <div className="pk-card-title">Directorio de Usuarios Internos de {activeCompany?.companyName}</div>
-          </div>
-          <div className="pk-card-body" style={{ padding: 0 }}>
-            <div className="pk-table-wrap">
-              <table className="pk-table">
-                <thead>
-                  <tr>
-                    <th>Trabajador</th>
-                    <th>Usuario de Acceso</th>
-                    <th>Cargo / Rol Base</th>
-                    <th>Servicios Asignados</th>
-                    <th>Estado</th>
-                    <th style={{ textAlign: 'right' }}>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((u) => {
-                    const isRoot =
-                      u.username.toLowerCase() === activeCompany?.adminUsername?.toLowerCase() ||
-                      u.userId === `usr_${activeCompany?.tenantId}`;
-                    const allAccess = u.isCompanyAdmin || u.allowedServices.includes('*');
-                    return (
-                      <tr key={u.userId}>
-                        <td style={{ fontWeight: 700 }}>{u.fullName}</td>
-                        <td>{u.username}</td>
-                        <td>
-                          <span className={`pk-badge ${u.isCompanyAdmin ? 'pk-badge-blue' : 'pk-badge-slate'}`}>
-                            {roleName(u.internalRole)}
-                          </span>
-                        </td>
-                        <td>
-                          {allAccess ? (
-                            <span className="pk-badge pk-badge-emerald">
-                              Acceso Total a la Suscripción ({companyServices.length} áreas)
+        <PkViewSwitcher
+          title={`Directorio de Usuarios Internos${activeCompany?.companyName ? ` — ${activeCompany.companyName}` : ''}`}
+          subtitle="Consulta el personal activo o crea una nueva cuenta operativa con servicios asignados."
+          mode={viewMode}
+          onModeChange={(nextMode) => {
+            if (nextMode === 'create') {
+              openCreateView();
+            } else {
+              setViewMode('list');
+            }
+          }}
+          listLabel="Usuarios Activos"
+          createLabel="+ Crear Nuevo Usuario"
+          count={users.length}
+        />
+
+        {viewMode === 'list' ? (
+          <div className="pk-card">
+            <div className="pk-card-head">
+              <div className="pk-card-title">Usuarios Activos de la Empresa ({users.length})</div>
+            </div>
+            <div className="pk-card-body" style={{ padding: 0 }}>
+              <div className="pk-table-wrap">
+                <table className="pk-table">
+                  <thead>
+                    <tr>
+                      <th>Trabajador</th>
+                      <th>Usuario de Acceso</th>
+                      <th>Cargo / Rol Base</th>
+                      <th>Servicios Asignados</th>
+                      <th>Estado</th>
+                      <th style={{ textAlign: 'right' }}>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.map((u) => {
+                      const isRoot =
+                        u.username.toLowerCase() === activeCompany?.adminUsername?.toLowerCase() ||
+                        u.userId === `usr_${activeCompany?.tenantId}`;
+                      const allAccess = u.isCompanyAdmin || u.allowedServices.includes('*');
+                      return (
+                        <tr key={u.userId}>
+                          <td style={{ fontWeight: 700 }}>{u.fullName}</td>
+                          <td>{u.username}</td>
+                          <td>
+                            <span className={`pk-badge ${u.isCompanyAdmin ? 'pk-badge-blue' : 'pk-badge-slate'}`}>
+                              {roleName(u.internalRole)}
                             </span>
-                          ) : (
-                            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                              {u.allowedServices.map((sk) => (
-                                <span key={sk} className="pk-badge pk-badge-blue">
-                                  {serviceName(sk)}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </td>
-                        <td>
-                          <span
-                            className={`pk-badge ${
-                              u.status === 'SUSPENDED' ? 'pk-badge-rose' : 'pk-badge-emerald'
-                            }`}
-                          >
-                            {u.status === 'SUSPENDED' ? 'Suspendido' : 'Activo'}
-                          </span>
-                        </td>
-                        <td style={{ textAlign: 'right' }}>
-                          <div className="pk-row-actions" style={{ justifyContent: 'flex-end' }}>
-                            <button
-                              type="button"
-                              className="pk-btn pk-btn-outline pk-btn-sm"
-                              disabled={demoReadOnly}
-                              onClick={() => openEditModal(u)}
-                            >
-                              Permisos / Clave
-                            </button>
-                            {!isRoot && (
-                              <>
-                                <button
-                                  type="button"
-                                  className="pk-btn pk-btn-outline pk-btn-sm"
-                                  disabled={busy || demoReadOnly}
-                                  onClick={() => handleToggleUserStatus(u)}
-                                >
-                                  {u.status === 'SUSPENDED' ? 'Reactivar' : 'Suspender'}
-                                </button>
-                                <button
-                                  type="button"
-                                  className="pk-btn pk-btn-danger pk-btn-sm"
-                                  disabled={busy || demoReadOnly}
-                                  onClick={() => setPendingDeleteUser(u)}
-                                >
-                                  Eliminar
-                                </button>
-                              </>
+                          </td>
+                          <td>
+                            {allAccess ? (
+                              <span className="pk-badge pk-badge-emerald">
+                                Acceso Total a la Suscripción ({companyServices.length} áreas)
+                              </span>
+                            ) : (
+                              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                                {u.allowedServices.map((sk) => (
+                                  <span key={sk} className="pk-badge pk-badge-blue">
+                                    {serviceName(sk)}
+                                  </span>
+                                ))}
+                              </div>
                             )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          </td>
+                          <td>
+                            <span
+                              className={`pk-badge ${
+                                u.status === 'SUSPENDED' ? 'pk-badge-rose' : 'pk-badge-emerald'
+                              }`}
+                            >
+                              {u.status === 'SUSPENDED' ? 'Suspendido' : 'Activo'}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            <div className="pk-row-actions" style={{ justifyContent: 'flex-end' }}>
+                              <button
+                                type="button"
+                                className="pk-btn pk-btn-outline pk-btn-sm"
+                                disabled={demoReadOnly}
+                                onClick={() => openEditModal(u)}
+                              >
+                                Permisos / Clave
+                              </button>
+                              {!isRoot && (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="pk-btn pk-btn-outline pk-btn-sm"
+                                    disabled={busy || demoReadOnly}
+                                    onClick={() => handleToggleUserStatus(u)}
+                                  >
+                                    {u.status === 'SUSPENDED' ? 'Reactivar' : 'Suspender'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="pk-btn pk-btn-danger pk-btn-sm"
+                                    disabled={busy || demoReadOnly}
+                                    onClick={() => setPendingDeleteUser(u)}
+                                  >
+                                    Eliminar
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="pk-card">
+            <div className="pk-card-head">
+              <div>
+                <div className="pk-card-title">Crear Usuario Operativo y Asignar Servicios</div>
+                <div style={{ fontSize: 12, color: 'var(--pk-muted)', marginTop: 2 }}>
+                  Define las credenciales de acceso y habilita únicamente las áreas que operará este trabajador.
+                </div>
+              </div>
+            </div>
+            <div className="pk-card-body">{renderUserForm(false, () => setViewMode('list'))}</div>
+          </div>
+        )}
       </div>
 
       <PkModal
-        open={modalOpen}
+        open={modalOpen && Boolean(editingUser)}
         title={
           editingUser
             ? `Configurar Servicios y Acceso — ${editingUser.fullName}`
-            : 'Crear Nuevo Usuario y Asignar Servicios'
+            : 'Editar Permisos del Usuario'
         }
-        onClose={() => setModalOpen(false)}
+        onClose={() => {
+          setModalOpen(false);
+          setEditingUser(null);
+        }}
         maxWidth={860}
       >
-        <form onSubmit={handleSaveUser} className="pk-stack">
-          <div className="pk-grid-2">
-            <div className="pk-field">
-              <label htmlFor="usr-fullname">Nombre Completo del Trabajador *</label>
-              <input
-                id="usr-fullname"
-                required
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="Ej. Laura Gómez — Cajera Principal"
-              />
-            </div>
-
-            <div className="pk-field">
-              <label htmlFor="usr-username">Correo o Usuario para Iniciar Sesión *</label>
-              <input
-                id="usr-username"
-                required
-                disabled={Boolean(editingUser)}
-                value={usernameInput}
-                onChange={(e) => setUsernameInput(e.target.value)}
-                placeholder="Ej. caja1@miempresa.co"
-              />
-              {!editingUser && usernameInput.trim() !== '' && !usernameInput.includes('@') && (
-                <div style={{ fontSize: 11.5, color: 'var(--pk-primary)', fontWeight: 600, marginTop: 3 }}>
-                  Iniciará sesión como:{' '}
-                  <strong>
-                    {usernameInput.trim().toLowerCase()}@
-                    {((activeCompany?.companyName || '')
-                      .toLowerCase()
-                      .replace(/[^a-z0-9]/g, '')
-                      .slice(0, 28) || 'empresa') + '.co'}
-                  </strong>
-                </div>
-              )}
-            </div>
-
-            <div className="pk-field">
-              <label htmlFor="usr-role">Plantilla de Cargo / Rol Operativo *</label>
-              <select
-                id="usr-role"
-                value={selectedRole}
-                onChange={(e) => computeTemplatePermissions(e.target.value, templates)}
-              >
-                {templates.map((tpl) => (
-                  <option key={tpl.roleKey} value={tpl.roleKey}>
-                    {tpl.displayName}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="pk-field">
-              <label htmlFor="usr-pass">
-                <span>{editingUser ? 'Nueva Contraseña (Opcional)' : 'Contraseña de Acceso *'}</span>
-                <span style={{ display: 'inline-flex', gap: 8 }}>
-                  <button
-                    type="button"
-                    onClick={() => setShowPass((v) => !v)}
-                    style={{
-                      border: 'none',
-                      background: 'none',
-                      color: '#64748b',
-                      fontSize: 11,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      padding: 0,
-                    }}
-                  >
-                    {showPass ? 'Ocultar' : 'Mostrar'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPasswordInput(generateSecurePassword());
-                      setShowPass(true);
-                    }}
-                    style={{
-                      border: 'none',
-                      background: 'none',
-                      color: 'var(--pk-primary)',
-                      fontSize: 11,
-                      fontWeight: 800,
-                      cursor: 'pointer',
-                      padding: 0,
-                    }}
-                  >
-                    Generar clave
-                  </button>
-                </span>
-              </label>
-              <input
-                id="usr-pass"
-                type={showPass ? 'text' : 'password'}
-                minLength={editingUser ? undefined : 8}
-                required={!editingUser}
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-                placeholder={editingUser ? 'Dejar vacío para conservar actual' : 'Mínimo 8 caracteres'}
-              />
-            </div>
-          </div>
-
-          <div
-            style={{
-              background: '#f8fafc',
-              border: '1px solid var(--pk-border)',
-              borderRadius: 10,
-              padding: '10px 14px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-            }}
-          >
-            <div>
-              <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--pk-navy)' }}>
-                Permisos de Administrador de Empresa
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--pk-muted)' }}>
-                Si se activa, el usuario tendrá acceso a todas las áreas contratadas y podrá gestionar empleados.
-              </div>
-            </div>
-            <input
-              type="checkbox"
-              checked={isAdminCheck}
-              onChange={(e) => {
-                const next = e.target.checked;
-                setIsAdminCheck(next);
-                if (next && activeCompany) {
-                  setSelectedRole('admin_empresa');
-                  setAllowedServices([...activeCompany.activeServices]);
-                  setAllowedModules([...activeCompany.activeModules]);
-                } else if (!next && selectedRole === 'admin_empresa') {
-                  computeTemplatePermissions('cajero', templates);
-                }
-              }}
-              style={{ width: 18, height: 18 }}
-            />
-          </div>
-
-          {!isAdminCheck && (
-            <div>
-              <div style={{ fontWeight: 800, fontSize: 13.5, color: 'var(--pk-navy)', marginBottom: 8 }}>
-                Selecciona exactamente qué Servicios y Secciones puede ver y operar este usuario:
-              </div>
-              <div className="pk-grid-2" style={{ maxHeight: 340, overflowY: 'auto', paddingRight: 4 }}>
-                {companyServices
-                  .filter((s) => s.serviceKey !== 'ms-impresiones')
-                  .map((svc) => {
-                    const svcChecked = allowedServices.includes(svc.serviceKey);
-                    const availableMods = svc.modules.filter((m) =>
-                      activeCompany?.activeModules.includes(m.moduleKey)
-                    );
-                    return (
-                      <div
-                        key={svc.serviceKey}
-                        style={{
-                          border: svcChecked ? '1.5px solid var(--pk-primary)' : '1px solid var(--pk-border)',
-                          background: svcChecked ? '#f8fbff' : '#ffffff',
-                          borderRadius: 10,
-                          padding: 12,
-                        }}
-                      >
-                        <label
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 9,
-                            fontWeight: 800,
-                            fontSize: 13,
-                            color: 'var(--pk-navy)',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={svcChecked}
-                            onChange={(e) => toggleServiceForUser(svc.serviceKey, e.target.checked)}
-                          />
-                          <span>{svc.displayName}</span>
-                        </label>
-                        {availableMods.length > 0 && (
-                          <div style={{ marginTop: 8, paddingLeft: 24, display: 'flex', flexDirection: 'column', gap: 5 }}>
-                            {availableMods.map((mod) => (
-                              <label
-                                key={mod.moduleKey}
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 7,
-                                  fontSize: 12,
-                                  color: '#334155',
-                                  cursor: 'pointer',
-                                }}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={svcChecked && allowedModules.includes(mod.moduleKey)}
-                                  onChange={(e) =>
-                                    toggleModuleForUser(svc.serviceKey, mod.moduleKey, e.target.checked)
-                                  }
-                                />
-                                <span style={{ textTransform: 'none' }}>{mod.displayName}</span>
-                              </label>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-              </div>
-            </div>
-          )}
-
-          <div className="pk-row-actions" style={{ justifyContent: 'flex-end', marginTop: 6 }}>
-            <button type="button" className="pk-btn pk-btn-outline" onClick={() => setModalOpen(false)}>
-              Cancelar
-            </button>
-            <button type="submit" className="pk-btn pk-btn-emerald" disabled={busy}>
-              {busy ? 'Guardando...' : editingUser ? 'Guardar Permisos del Usuario' : 'Crear Usuario con Estos Servicios'}
-            </button>
-          </div>
-        </form>
+        {renderUserForm(true, () => {
+          setModalOpen(false);
+          setEditingUser(null);
+        })}
       </PkModal>
 
       <PkConfirmModal

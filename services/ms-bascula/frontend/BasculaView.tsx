@@ -4,6 +4,8 @@ import {
   ModuleGate,
   PkAutoCodeInput,
   PkSelect,
+  PkSimpleSelect,
+  PkViewSwitcher,
   PkModal,
   PkPrintButton,
   PkKpiRow,
@@ -79,9 +81,32 @@ interface BasculaStateResponse {
 
 const VALID_MODULES = ['pesaje_camionero', 'flota_conductores', 'rutas_manifiestos'] as const;
 
+const AXLE_OPTIONS = [
+  { value: 'C3S3 Tractocamión 6 Ejes', label: 'C3S3 Tractocamión 6 Ejes' },
+  { value: 'C3S2 Dobletroque 5 Ejes', label: 'C3S2 Dobletroque 5 Ejes' },
+  { value: 'C3 Volqueta Dobletroque', label: 'C3 Volqueta Dobletroque' },
+  { value: 'C2 Camión Sencillo', label: 'C2 Camión Sencillo' },
+];
+
+const LICENSE_OPTIONS = [
+  { value: 'C3', label: 'C3 — Articulados Pesados' },
+  { value: 'C2', label: 'C2 — Camiones Rígidos' },
+  { value: 'C1', label: 'C1 — Servicio Público Liviano' },
+];
+
 export const BasculaView: React.FC = () => {
   const { activeModuleKey, hasModule, hasFeature, apiGet, apiPost, toast } = usePlatform();
   const { busy, run } = useAsyncAction();
+
+  const [ticketMode, setTicketMode] = useState<'list' | 'create'>('list');
+  const [ticketSearch, setTicketSearch] = useState('');
+  const [carrierFilter, setCarrierFilter] = useState('');
+
+  const [fleetMode, setFleetMode] = useState<'list' | 'create'>('list');
+  const [fleetSearch, setFleetSearch] = useState('');
+
+  const [routeMode, setRouteMode] = useState<'list' | 'create'>('list');
+  const [routeSearch, setRouteSearch] = useState('');
 
   const [nextTicketCode, setNextTicketCode] = useState('BAS-1006');
   const [nextVehicleCode, setNextVehicleCode] = useState('CAM-303');
@@ -210,13 +235,14 @@ export const BasculaView: React.FC = () => {
           `Tiquete ${res.ticket.id} emitido (${res.ticket.netKg.toLocaleString('es-CO')} kg netos destarados)`
         );
         await reload();
+        setTicketMode('list');
       } catch (err) {
         toast(err instanceof Error ? err.message : 'No fue posible emitir el tiquete de báscula');
       }
     });
   };
 
-  const submitCreateVehicle = (closeAfter: boolean) => (e: React.FormEvent) => {
+  const submitCreateVehicle = (originMode: 'modal' | 'page') => (e: React.FormEvent) => {
     e.preventDefault();
     const tareNum = Number(vehTare || 0);
     if (vehPlate.trim().length < 5 || !vehBrand.trim() || !Number.isFinite(tareNum) || tareNum <= 0) {
@@ -234,7 +260,11 @@ export const BasculaView: React.FC = () => {
         toast(`Tractocamión registrado: ${res.vehicle.plate} (${res.vehicle.code})`);
         setVehPlate('');
         setVehBrand('');
-        if (closeAfter) setShowVehicleModal(false);
+        if (originMode === 'modal') {
+          setShowVehicleModal(false);
+        } else {
+          setFleetMode('list');
+        }
         await reload();
         setVehicleId(res.vehicle.id);
         setTareKg(String(res.vehicle.referenceTareKg));
@@ -244,7 +274,7 @@ export const BasculaView: React.FC = () => {
     });
   };
 
-  const submitCreateDriver = (closeAfter: boolean) => (e: React.FormEvent) => {
+  const submitCreateDriver = (originMode: 'modal' | 'page') => (e: React.FormEvent) => {
     e.preventDefault();
     if (!drvName.trim() || !drvDoc.trim()) {
       toast('Ingresa el nombre completo y documento del conductor');
@@ -262,7 +292,11 @@ export const BasculaView: React.FC = () => {
         setDrvName('');
         setDrvDoc('');
         setDrvPhone('');
-        if (closeAfter) setShowDriverModal(false);
+        if (originMode === 'modal') {
+          setShowDriverModal(false);
+        } else {
+          setFleetMode('list');
+        }
         await reload();
         setDriverId(res.driver.id);
       } catch (err) {
@@ -271,7 +305,7 @@ export const BasculaView: React.FC = () => {
     });
   };
 
-  const submitCreateCarrier = (closeAfter: boolean) => (e: React.FormEvent) => {
+  const submitCreateCarrier = (originMode: 'modal' | 'page') => (e: React.FormEvent) => {
     e.preventDefault();
     if (!carName.trim() || !carNit.trim()) {
       toast('Ingresa razón social y NIT de la empresa transportadora');
@@ -289,7 +323,11 @@ export const BasculaView: React.FC = () => {
         setCarName('');
         setCarNit('');
         setCarPhone('');
-        if (closeAfter) setShowCarrierModal(false);
+        if (originMode === 'modal') {
+          setShowCarrierModal(false);
+        } else {
+          setFleetMode('list');
+        }
         await reload();
         setCarrierId(res.carrier.id);
       } catch (err) {
@@ -298,7 +336,7 @@ export const BasculaView: React.FC = () => {
     });
   };
 
-  const submitCreateRoute = (closeAfter: boolean) => (e: React.FormEvent) => {
+  const submitCreateRoute = (originMode: 'modal' | 'page') => (e: React.FormEvent) => {
     e.preventDefault();
     if (!routeDesc.trim()) {
       toast('Ingresa la descripción del tipo de carga o ruta');
@@ -313,13 +351,49 @@ export const BasculaView: React.FC = () => {
         });
         toast(`Ruta / Carga registrada: ${res.route.code}`);
         setRouteDesc('');
-        if (closeAfter) setShowRouteModal(false);
+        setOrigin('');
+        setDestination('');
+        if (originMode === 'modal') {
+          setShowRouteModal(false);
+        } else {
+          setRouteMode('list');
+        }
         await reload();
         setCargoId(res.route.id);
       } catch (err) {
         toast(err instanceof Error ? err.message : 'Error al registrar la ruta o carga');
       }
     });
+  };
+
+  const handleExportTicketsCsv = () => {
+    downloadCsvUtf8(
+      'tiquetes_bascula.csv',
+      ['Tiquete', 'Fecha', 'Placa', 'Conductor', 'Transportadora', 'Carga / Ruta', 'Bruto kg', 'Tara kg', 'Neto kg'],
+      tickets.map((t) => [
+        t.id,
+        t.date,
+        t.plate,
+        t.driverName,
+        t.carrierName,
+        t.cargoDesc,
+        t.grossKg,
+        t.tareKg,
+        t.netKg,
+      ])
+    );
+  };
+
+  const handleExportRoutesCsv = () => {
+    downloadCsvUtf8(
+      'rutas_cargas_bascula.csv',
+      ['Código', 'Descripción Carga', 'Origen', 'Destino', 'Viajes', 'Peso Neto Total kg'],
+      routes.map((r) => {
+        const matched = tickets.filter((t) => t.cargoId === r.id);
+        const sumKg = matched.reduce((acc, t) => acc + t.netKg, 0);
+        return [r.code, r.description, r.origin, r.destination, matched.length, sumKg];
+      })
+    );
   };
 
   const buildTicketPrintPayload = (tk: ScaleTicket): Record<string, unknown> => {
@@ -364,559 +438,781 @@ export const BasculaView: React.FC = () => {
     };
   };
 
+  const filteredTickets = tickets.filter((tk) => {
+    if (carrierFilter && tk.carrierId !== carrierFilter) return false;
+    const q = ticketSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      tk.id.toLowerCase().includes(q) ||
+      tk.plate.toLowerCase().includes(q) ||
+      tk.driverName.toLowerCase().includes(q) ||
+      tk.carrierName.toLowerCase().includes(q) ||
+      tk.cargoDesc.toLowerCase().includes(q)
+    );
+  });
+
+  const fleetQuery = fleetSearch.trim().toLowerCase();
+  const filteredVehicles = vehicles.filter(
+    (v) =>
+      !fleetQuery ||
+      v.code.toLowerCase().includes(fleetQuery) ||
+      v.plate.toLowerCase().includes(fleetQuery) ||
+      v.brand.toLowerCase().includes(fleetQuery) ||
+      v.axleConfig.toLowerCase().includes(fleetQuery)
+  );
+  const filteredDrivers = drivers.filter(
+    (d) =>
+      !fleetQuery ||
+      d.code.toLowerCase().includes(fleetQuery) ||
+      d.name.toLowerCase().includes(fleetQuery) ||
+      d.docNumber.toLowerCase().includes(fleetQuery)
+  );
+  const filteredCarriers = carriers.filter(
+    (c) =>
+      !fleetQuery ||
+      c.code.toLowerCase().includes(fleetQuery) ||
+      c.name.toLowerCase().includes(fleetQuery) ||
+      c.nit.toLowerCase().includes(fleetQuery) ||
+      c.city.toLowerCase().includes(fleetQuery)
+  );
+
+  const routeQuery = routeSearch.trim().toLowerCase();
+  const filteredRoutes = routes.filter(
+    (r) =>
+      !routeQuery ||
+      r.code.toLowerCase().includes(routeQuery) ||
+      r.description.toLowerCase().includes(routeQuery) ||
+      r.origin.toLowerCase().includes(routeQuery) ||
+      r.destination.toLowerCase().includes(routeQuery)
+  );
+
   return (
-    <div>
+    <div className="pk-stack">
       {currentTab === 'pesaje_camionero' && (
         <ModuleGate module="pesaje_camionero">
-          <PkKpiRow
-            items={[
-              { label: 'Tiquetes Emitidos', value: String(tickets.length), color: 'var(--pk-primary)' },
-              {
-                label: 'Peso Neto Acumulado',
-                value: `${totalNetDispatchedKg.toLocaleString('es-CO')} kg`,
-                color: 'var(--pk-emerald)',
-              },
-              { label: 'Toneladas Despachadas', value: `${totalTons} Ton`, color: '#0f172a' },
-              {
-                label: 'Flota y Conductores',
-                value: `${vehicles.length} camiones · ${drivers.length} cond.`,
-                color: 'var(--pk-amber)',
-              },
-            ]}
-          />
+          <div className="pk-stack">
+            <PkKpiRow
+              items={[
+                { label: 'Tiquetes Emitidos', value: String(tickets.length), color: 'var(--pk-primary)' },
+                {
+                  label: 'Peso Neto Acumulado',
+                  value: `${totalNetDispatchedKg.toLocaleString('es-CO')} kg`,
+                  color: 'var(--pk-emerald)',
+                },
+                { label: 'Toneladas Despachadas', value: `${totalTons} Ton`, color: '#0f172a' },
+                {
+                  label: 'Flota y Conductores',
+                  value: `${vehicles.length} camiones · ${drivers.length} cond.`,
+                  color: 'var(--pk-amber)',
+                },
+              ]}
+            />
 
-          <div className="pk-card" style={{ marginBottom: 16 }}>
-            <div className="pk-card-head">
-              <div className="pk-card-title">⚖️ Estación de Pesaje Camionero y Destare Oficial</div>
-              <div
-                style={{
-                  background: liveNetKg > 0 ? '#d1fae5' : '#fee2e2',
-                  color: liveNetKg > 0 ? '#065f46' : '#991b1b',
-                  padding: '6px 14px',
-                  borderRadius: 8,
-                  fontWeight: 800,
-                  fontSize: 13.5,
-                }}
-              >
-                Peso Neto Destarado: {liveNetKg.toLocaleString('es-CO')} kg
-              </div>
-            </div>
-            <div className="pk-card-body">
-              <form onSubmit={handleEmitScaleTicket} className="pk-form-grid">
-                <PkAutoCodeInput label="N° Tiquete Báscula" value={nextTicketCode} />
-
-                <PkSelect
-                  label="Placa Tractocamión *"
-                  items={vehicles}
-                  value={vehicleId}
-                  onChange={handleSelectVehicle}
-                  getValue={(v) => v.id}
-                  getLabel={(v) => `${v.plate} — ${v.brand} (Tara ref: ${v.referenceTareKg.toLocaleString('es-CO')} kg)`}
-                  onCreateNew={() => setShowVehicleModal(true)}
-                  createLabel="+ Nuevo Camión"
-                  searchable
-                />
-
-                <PkSelect
-                  label="Conductor Asignado *"
-                  items={drivers}
-                  value={driverId}
-                  onChange={setDriverId}
-                  getValue={(d) => d.id}
-                  getLabel={(d) => `${d.name} (${d.docNumber} · Lic. ${d.licenseCategory})`}
-                  onCreateNew={() => setShowDriverModal(true)}
-                  createLabel="+ Nuevo Conductor"
-                  searchable
-                />
-
-                <PkSelect
-                  label="Empresa Transportadora *"
-                  items={carriers}
-                  value={carrierId}
-                  onChange={setCarrierId}
-                  getValue={(c) => c.id}
-                  getLabel={(c) => `${c.name} (${c.nit})`}
-                  onCreateNew={() => setShowCarrierModal(true)}
-                  createLabel="+ Nueva Transportadora"
-                  searchable
-                />
-
-                <PkSelect
-                  label="Carga / Ruta de Manifiesto *"
-                  items={routes}
-                  value={cargoId}
-                  onChange={setCargoId}
-                  getValue={(r) => r.id}
-                  getLabel={(r) =>
-                    r.origin && r.destination
-                      ? `${r.code} — ${r.description} (${r.origin} -> ${r.destination})`
-                      : `${r.code} — ${r.description}`
-                  }
-                  onCreateNew={() => setShowRouteModal(true)}
-                  createLabel="+ Nueva Ruta"
-                />
-
-                <div className="pk-field">
-                  <label>Peso Bruto en Plataforma (kg) *</label>
-                  <input
-                    required
-                    type="number"
-                    min="1"
-                    step="10"
-                    value={grossKg}
-                    onChange={(e) => setGrossKg(e.target.value)}
-                  />
-                </div>
-
-                <div className="pk-field">
-                  <label>Peso Tara Vehículo Vacío (kg) *</label>
-                  <input
-                    required
-                    type="number"
-                    min="1"
-                    step="10"
-                    value={tareKg}
-                    onChange={(e) => setTareKg(e.target.value)}
-                  />
-                </div>
-
-                <div className="pk-field" style={{ justifyContent: 'flex-end' }}>
+            <PkViewSwitcher
+              title="Estación de Pesaje Camionero y Tiquetes"
+              subtitle="Consulta el historial certificado de tiquetes de báscula o registra un nuevo pesaje con destare."
+              mode={ticketMode}
+              onModeChange={setTicketMode}
+              listLabel="🧾 Historial de Tiquetes"
+              createLabel="+ Emitir Tiquete"
+              count={tickets.length}
+              extraActions={
+                <>
                   <button
-                    type="submit"
-                    className="pk-btn pk-btn-primary"
-                    disabled={busy || liveNetKg <= 0}
+                    type="button"
+                    className="pk-btn pk-btn-outline"
+                    onClick={() => setShowVehicleModal(true)}
                   >
-                    ⚖️ Emitir Tiquete Oficial
+                    + Nuevo Camión
                   </button>
-                </div>
-              </form>
-            </div>
-          </div>
+                  <button
+                    type="button"
+                    className="pk-btn pk-btn-outline"
+                    onClick={() => setShowDriverModal(true)}
+                  >
+                    + Nuevo Conductor
+                  </button>
+                  {ticketMode === 'list' && (
+                    <button type="button" className="pk-btn pk-btn-outline" onClick={handleExportTicketsCsv}>
+                      📥 Exportar CSV
+                    </button>
+                  )}
+                </>
+              }
+            />
 
-          <div className="pk-card">
-            <div className="pk-card-head">
-              <div className="pk-card-title">🧾 Historial de Tiquetes de Pesaje Certificados</div>
-              <button
-                type="button"
-                className="pk-btn pk-btn-outline pk-btn-sm"
-                onClick={() =>
-                  downloadCsvUtf8(
-                    'tiquetes_bascula.csv',
-                    ['Tiquete', 'Fecha', 'Placa', 'Conductor', 'Transportadora', 'Carga / Ruta', 'Bruto kg', 'Tara kg', 'Neto kg'],
-                    tickets.map((t) => [
-                      t.id,
-                      t.date,
-                      t.plate,
-                      t.driverName,
-                      t.carrierName,
-                      t.cargoDesc,
-                      t.grossKg,
-                      t.tareKg,
-                      t.netKg,
-                    ])
-                  )
-                }
-              >
-                📥 Exportar CSV
-              </button>
-            </div>
-            <div className="pk-card-body">
-              <div className="pk-table-wrap">
-                <table className="pk-table">
-                  <thead>
-                    <tr>
-                      <th>Tiquete</th>
-                      <th>Placa / Conductor</th>
-                      <th>Transportadora</th>
-                      <th>Carga / Ruta</th>
-                      <th>Bruto (kg)</th>
-                      <th>Tara (kg)</th>
-                      <th>Neto (kg)</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tickets.map((tk) => (
-                      <tr key={tk.id}>
-                        <td>
-                          <div style={{ fontWeight: 800 }}>{tk.id}</div>
-                          <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>{tk.date}</div>
-                        </td>
-                        <td>
-                          <div style={{ fontWeight: 800 }}>{tk.plate}</div>
-                          <div style={{ fontSize: 11.5, color: '#475569' }}>{tk.driverName}</div>
-                        </td>
-                        <td>{tk.carrierName}</td>
-                        <td>{tk.cargoDesc}</td>
-                        <td className="num">{tk.grossKg.toLocaleString('es-CO')}</td>
-                        <td className="num">{tk.tareKg.toLocaleString('es-CO')}</td>
-                        <td className="num" style={{ fontWeight: 800, color: 'var(--pk-emerald)' }}>
-                          {tk.netKg.toLocaleString('es-CO')} kg
-                        </td>
-                        <td>
-                          <PkPrintButton
-                            label="🖨️ Tiquete"
-                            payload={buildTicketPrintPayload(tk)}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {ticketMode === 'create' ? (
+              <div className="pk-card">
+                <div className="pk-card-head">
+                  <div className="pk-card-title">⚖️ Estación de Pesaje Camionero y Destare Oficial</div>
+                  <div
+                    style={{
+                      background: liveNetKg > 0 ? '#d1fae5' : '#fee2e2',
+                      color: liveNetKg > 0 ? '#065f46' : '#991b1b',
+                      padding: '6px 14px',
+                      borderRadius: 8,
+                      fontWeight: 800,
+                      fontSize: 13.5,
+                    }}
+                  >
+                    Peso Neto Destarado: {liveNetKg.toLocaleString('es-CO')} kg
+                  </div>
+                </div>
+                <div className="pk-card-body">
+                  <form onSubmit={handleEmitScaleTicket} className="pk-form-grid cols-2">
+                    <PkAutoCodeInput label="N° Tiquete Báscula" value={nextTicketCode} />
+
+                    <PkSelect
+                      label="Placa Tractocamión *"
+                      items={vehicles}
+                      value={vehicleId}
+                      onChange={handleSelectVehicle}
+                      getValue={(v) => v.id}
+                      getLabel={(v) =>
+                        `${v.plate} — ${v.brand} (Tara ref: ${v.referenceTareKg.toLocaleString('es-CO')} kg)`
+                      }
+                      onCreateNew={() => setShowVehicleModal(true)}
+                      createLabel="+ Nuevo Camión"
+                      searchable
+                    />
+
+                    <PkSelect
+                      label="Conductor Asignado *"
+                      items={drivers}
+                      value={driverId}
+                      onChange={setDriverId}
+                      getValue={(d) => d.id}
+                      getLabel={(d) => `${d.name} (${d.docNumber} · Lic. ${d.licenseCategory})`}
+                      onCreateNew={() => setShowDriverModal(true)}
+                      createLabel="+ Nuevo Conductor"
+                      searchable
+                    />
+
+                    <PkSelect
+                      label="Empresa Transportadora *"
+                      items={carriers}
+                      value={carrierId}
+                      onChange={setCarrierId}
+                      getValue={(c) => c.id}
+                      getLabel={(c) => `${c.name} (${c.nit})`}
+                      onCreateNew={() => setShowCarrierModal(true)}
+                      createLabel="+ Nueva Transportadora"
+                      searchable
+                    />
+
+                    <PkSelect
+                      label="Carga / Ruta de Manifiesto *"
+                      items={routes}
+                      value={cargoId}
+                      onChange={setCargoId}
+                      getValue={(r) => r.id}
+                      getLabel={(r) =>
+                        r.origin && r.destination
+                          ? `${r.code} — ${r.description} (${r.origin} -> ${r.destination})`
+                          : `${r.code} — ${r.description}`
+                      }
+                      onCreateNew={() => setShowRouteModal(true)}
+                      createLabel="+ Nueva Ruta"
+                      searchable
+                    />
+
+                    <div className="pk-field">
+                      <label>Peso Bruto en Plataforma (kg) *</label>
+                      <input
+                        required
+                        type="number"
+                        min="1"
+                        step="10"
+                        value={grossKg}
+                        onChange={(e) => setGrossKg(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="pk-field">
+                      <label>Peso Tara Vehículo Vacío (kg) *</label>
+                      <input
+                        required
+                        type="number"
+                        min="1"
+                        step="10"
+                        value={tareKg}
+                        onChange={(e) => setTareKg(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="pk-form-actions">
+                      <button
+                        type="button"
+                        className="pk-btn pk-btn-outline"
+                        onClick={() => setTicketMode('list')}
+                        disabled={busy}
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        className="pk-btn pk-btn-primary"
+                        disabled={busy || liveNetKg <= 0}
+                      >
+                        {busy ? 'Emitiendo...' : '⚖️ Emitir Tiquete Oficial'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="pk-card">
+                <div className="pk-card-head">
+                  <div className="pk-card-title">🧾 Historial de Tiquetes de Pesaje Certificados</div>
+                </div>
+                <div className="pk-datatable-toolbar">
+                  <input
+                    className="pk-input pk-datatable-search"
+                    placeholder="🔎 Buscar por tiquete, placa, conductor o carga..."
+                    value={ticketSearch}
+                    onChange={(e) => setTicketSearch(e.target.value)}
+                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    <div style={{ minWidth: 260 }}>
+                      <PkSimpleSelect
+                        ariaLabel="Filtrar por empresa transportadora"
+                        value={carrierFilter}
+                        onChange={setCarrierFilter}
+                        allowClear
+                        placeholder="Todas las transportadoras"
+                        options={[
+                          { value: '', label: 'Todas las transportadoras' },
+                          ...carriers.map((c) => ({
+                            value: c.id,
+                            label: c.name,
+                            sublabel: c.nit,
+                          })),
+                        ]}
+                      />
+                    </div>
+                    <span className="pk-badge pk-badge-slate">{filteredTickets.length} tiquetes</span>
+                  </div>
+                </div>
+                <div className="pk-card-body">
+                  <div className="pk-table-wrap">
+                    <table className="pk-table">
+                      <thead>
+                        <tr>
+                          <th>Tiquete</th>
+                          <th>Placa / Conductor</th>
+                          <th>Transportadora</th>
+                          <th>Carga / Ruta</th>
+                          <th>Bruto (kg)</th>
+                          <th>Tara (kg)</th>
+                          <th>Neto (kg)</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredTickets.length === 0 ? (
+                          <tr>
+                            <td colSpan={8} style={{ textAlign: 'center', color: 'var(--pk-muted)', padding: 28 }}>
+                              {tickets.length === 0
+                                ? 'No hay tiquetes emitidos todavía. Haz clic en "+ Emitir Tiquete" para registrar un pesaje.'
+                                : 'No se encontraron tiquetes con el criterio seleccionado.'}
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredTickets.map((tk) => (
+                            <tr key={tk.id}>
+                              <td>
+                                <div style={{ fontWeight: 800 }}>{tk.id}</div>
+                                <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>{tk.date}</div>
+                              </td>
+                              <td>
+                                <div style={{ fontWeight: 800 }}>{tk.plate}</div>
+                                <div style={{ fontSize: 11.5, color: '#475569' }}>{tk.driverName}</div>
+                              </td>
+                              <td>{tk.carrierName}</td>
+                              <td>{tk.cargoDesc}</td>
+                              <td className="num">{tk.grossKg.toLocaleString('es-CO')}</td>
+                              <td className="num">{tk.tareKg.toLocaleString('es-CO')}</td>
+                              <td className="num" style={{ fontWeight: 800, color: 'var(--pk-emerald)' }}>
+                                {tk.netKg.toLocaleString('es-CO')} kg
+                              </td>
+                              <td>
+                                <PkPrintButton label="🖨️ Tiquete" payload={buildTicketPrintPayload(tk)} />
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </ModuleGate>
       )}
 
       {currentTab === 'flota_conductores' && (
         <ModuleGate module="flota_conductores">
-          <div className="pk-grid-2" style={{ marginBottom: 16 }}>
-            <div className="pk-card">
-              <div className="pk-card-head">
-                <div className="pk-card-title">🚛 Registrar Tractocamión / Vehículo Pesado</div>
-              </div>
-              <div className="pk-card-body">
-                <form onSubmit={submitCreateVehicle(false)} className="pk-form-grid">
-                  <PkAutoCodeInput label="Código Flota" value={nextVehicleCode} />
-                  <div className="pk-field">
-                    <label>Placa *</label>
-                    <input
-                      required
-                      value={vehPlate}
-                      onChange={(e) => setVehPlate(e.target.value.toUpperCase())}
-                      placeholder="Ej: TRK945"
-                    />
-                  </div>
-                  <div className="pk-field">
-                    <label>Marca y Línea *</label>
-                    <input
-                      required
-                      value={vehBrand}
-                      onChange={(e) => setVehBrand(e.target.value)}
-                      placeholder="Ej: Freightliner Cascadia DD15"
-                    />
-                  </div>
-                  <div className="pk-field">
-                    <label>Configuración Ejes</label>
-                    <select value={vehAxle} onChange={(e) => setVehAxle(e.target.value)}>
-                      <option value="C3S3 Tractocamión 6 Ejes">C3S3 Tractocamión 6 Ejes</option>
-                      <option value="C3S2 Dobletroque 5 Ejes">C3S2 Dobletroque 5 Ejes</option>
-                      <option value="C3 Volqueta Dobletroque">C3 Volqueta Dobletroque</option>
-                      <option value="C2 Camión Sencillo">C2 Camión Sencillo</option>
-                    </select>
-                  </div>
-                  <div className="pk-field">
-                    <label>Peso Tara Referencia (kg) *</label>
-                    <input
-                      required
-                      type="number"
-                      min="500"
-                      step="50"
-                      value={vehTare}
-                      onChange={(e) => setVehTare(e.target.value)}
-                    />
-                  </div>
-                  <div className="pk-field" style={{ justifyContent: 'flex-end' }}>
-                    <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
-                      💾 Guardar Tractocamión
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
+          <div className="pk-stack">
+            <PkKpiRow
+              items={[
+                { label: 'Flota Pesada', value: String(vehicles.length), color: 'var(--pk-primary)' },
+                { label: 'Conductores Activos', value: String(drivers.length), color: 'var(--pk-emerald)' },
+                { label: 'Transportadoras', value: String(carriers.length), color: 'var(--pk-amber)' },
+                { label: 'Próximo Código Flota', value: nextVehicleCode, color: '#0f172a' },
+              ]}
+            />
 
-            <div className="pk-card">
-              <div className="pk-card-head">
-                <div className="pk-card-title">🪪 Registrar Conductor de Carga</div>
-              </div>
-              <div className="pk-card-body">
-                <form onSubmit={submitCreateDriver(false)} className="pk-form-grid">
-                  <PkAutoCodeInput label="Código Conductor" value={nextDriverCode} />
-                  <div className="pk-field">
-                    <label>Nombre Completo *</label>
-                    <input
-                      required
-                      value={drvName}
-                      onChange={(e) => setDrvName(e.target.value)}
-                      placeholder="Ej: Álvaro Ríos"
-                    />
-                  </div>
-                  <div className="pk-field">
-                    <label>Cédula *</label>
-                    <input
-                      required
-                      value={drvDoc}
-                      onChange={(e) => setDrvDoc(e.target.value)}
-                      placeholder="Ej: 79.812.304"
-                    />
-                  </div>
-                  <div className="pk-field">
-                    <label>Categoría Licencia</label>
-                    <select value={drvCat} onChange={(e) => setDrvCat(e.target.value)}>
-                      <option value="C3">C3 — Articulados Pesados</option>
-                      <option value="C2">C2 — Camiones Rígidos</option>
-                      <option value="C1">C1 — Servicio Público Liviano</option>
-                    </select>
-                  </div>
-                  <div className="pk-field">
-                    <label>Teléfono Móvil</label>
-                    <input
-                      value={drvPhone}
-                      onChange={(e) => setDrvPhone(e.target.value)}
-                      placeholder="Ej: 3124009911"
-                    />
-                  </div>
-                  <div className="pk-field" style={{ justifyContent: 'flex-end' }}>
-                    <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
-                      💾 Guardar Conductor
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          </div>
+            <PkViewSwitcher
+              title="Flota Pesada, Conductores y Empresas Transportadoras"
+              subtitle="Administra el directorio logístico de tractocamiones, conductores de carga y empresas aliadas."
+              mode={fleetMode}
+              onModeChange={setFleetMode}
+              listLabel="🚛 Directorio de Flota y Conductores"
+              createLabel="+ Registrar Vehículo / Conductor"
+              count={vehicles.length + drivers.length + carriers.length}
+              extraActions={
+                <button
+                  type="button"
+                  className="pk-btn pk-btn-outline"
+                  onClick={() => setShowCarrierModal(true)}
+                >
+                  + Nueva Transportadora
+                </button>
+              }
+            />
 
-          <div className="pk-card" style={{ marginBottom: 16 }}>
-            <div className="pk-card-head">
-              <div className="pk-card-title">🏢 Registrar Empresa Transportadora</div>
-            </div>
-            <div className="pk-card-body">
-              <form onSubmit={submitCreateCarrier(false)} className="pk-form-grid">
-                <PkAutoCodeInput label="Código Transportadora" value={nextCarrierCode} />
-                <div className="pk-field">
-                  <label>Razón Social *</label>
-                  <input
-                    required
-                    value={carName}
-                    onChange={(e) => setCarName(e.target.value)}
-                    placeholder="Ej: Expreso Andino de Carga S.A.S."
-                  />
-                </div>
-                <div className="pk-field">
-                  <label>NIT *</label>
-                  <input
-                    required
-                    value={carNit}
-                    onChange={(e) => setCarNit(e.target.value)}
-                    placeholder="Ej: 900.812.441-9"
-                  />
-                </div>
-                <div className="pk-field">
-                  <label>Ciudad Sede</label>
-                  <input
-                    value={carCity}
-                    onChange={(e) => setCarCity(e.target.value)}
-                    placeholder="Ej: Bogotá D.C."
-                  />
-                </div>
-                <div className="pk-field">
-                  <label>Teléfono Contacto</label>
-                  <input
-                    value={carPhone}
-                    onChange={(e) => setCarPhone(e.target.value)}
-                    placeholder="Ej: 6017428800"
-                  />
-                </div>
-                <div className="pk-field" style={{ justifyContent: 'flex-end' }}>
-                  <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
-                    💾 Guardar Transportadora
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
+            {fleetMode === 'create' ? (
+              <div className="pk-stack">
+                <div className="pk-grid-2">
+                  <div className="pk-card">
+                    <div className="pk-card-head">
+                      <div className="pk-card-title">🚛 Registrar Tractocamión / Vehículo Pesado</div>
+                      <span className="pk-badge pk-badge-blue">{nextVehicleCode}</span>
+                    </div>
+                    <div className="pk-card-body">
+                      <form onSubmit={submitCreateVehicle('page')} className="pk-form-grid cols-2">
+                        <PkAutoCodeInput label="Código Flota" value={nextVehicleCode} />
+                        <div className="pk-field">
+                          <label>Placa *</label>
+                          <input
+                            required
+                            value={vehPlate}
+                            onChange={(e) => setVehPlate(e.target.value.toUpperCase())}
+                            placeholder="Ej: TRK945"
+                          />
+                        </div>
+                        <div className="pk-field">
+                          <label>Marca y Línea *</label>
+                          <input
+                            required
+                            value={vehBrand}
+                            onChange={(e) => setVehBrand(e.target.value)}
+                            placeholder="Ej: Freightliner Cascadia DD15"
+                          />
+                        </div>
+                        <PkSimpleSelect
+                          label="Configuración Ejes"
+                          value={vehAxle}
+                          onChange={setVehAxle}
+                          options={AXLE_OPTIONS}
+                        />
+                        <div className="pk-field pk-col-span-full">
+                          <label>Peso Tara Referencia (kg) *</label>
+                          <input
+                            required
+                            type="number"
+                            min="500"
+                            step="50"
+                            value={vehTare}
+                            onChange={(e) => setVehTare(e.target.value)}
+                          />
+                        </div>
+                        <div className="pk-form-actions">
+                          <button
+                            type="button"
+                            className="pk-btn pk-btn-outline"
+                            onClick={() => setFleetMode('list')}
+                            disabled={busy}
+                          >
+                            Cancelar
+                          </button>
+                          <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
+                            💾 Guardar Tractocamión
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
 
-          <div className="pk-grid-2">
-            <div className="pk-card">
-              <div className="pk-card-head">
-                <div className="pk-card-title">🚛 Flota Pesada ({vehicles.length})</div>
-              </div>
-              <div className="pk-card-body">
-                <div className="pk-table-wrap">
-                  <table className="pk-table">
-                    <thead>
-                      <tr>
-                        <th>Código</th>
-                        <th>Placa</th>
-                        <th>Vehículo</th>
-                        <th>Tara Ref.</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {vehicles.map((v) => (
-                        <tr key={v.id}>
-                          <td>{v.code}</td>
-                          <td style={{ fontWeight: 800 }}>{v.plate}</td>
-                          <td>
-                            <div>{v.brand}</div>
-                            <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>{v.axleConfig}</div>
-                          </td>
-                          <td className="num">{v.referenceTareKg.toLocaleString('es-CO')} kg</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-
-            <div className="pk-card">
-              <div className="pk-card-head">
-                <div className="pk-card-title">
-                  🪪 Conductores ({drivers.length}) y Transportadoras ({carriers.length})
-                </div>
-              </div>
-              <div className="pk-card-body">
-                <div className="pk-table-wrap" style={{ marginBottom: 12 }}>
-                  <table className="pk-table">
-                    <thead>
-                      <tr>
-                        <th>Código</th>
-                        <th>Conductor</th>
-                        <th>Cédula</th>
-                        <th>Lic.</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {drivers.map((d) => (
-                        <tr key={d.id}>
-                          <td>{d.code}</td>
-                          <td style={{ fontWeight: 700 }}>{d.name}</td>
-                          <td>{d.docNumber}</td>
-                          <td>{d.licenseCategory}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <div className="pk-card">
+                    <div className="pk-card-head">
+                      <div className="pk-card-title">🪪 Registrar Conductor de Carga</div>
+                      <span className="pk-badge pk-badge-emerald">{nextDriverCode}</span>
+                    </div>
+                    <div className="pk-card-body">
+                      <form onSubmit={submitCreateDriver('page')} className="pk-form-grid cols-2">
+                        <PkAutoCodeInput label="Código Conductor" value={nextDriverCode} />
+                        <div className="pk-field">
+                          <label>Nombre Completo *</label>
+                          <input
+                            required
+                            value={drvName}
+                            onChange={(e) => setDrvName(e.target.value)}
+                            placeholder="Ej: Álvaro Ríos"
+                          />
+                        </div>
+                        <div className="pk-field">
+                          <label>Cédula *</label>
+                          <input
+                            required
+                            value={drvDoc}
+                            onChange={(e) => setDrvDoc(e.target.value)}
+                            placeholder="Ej: 79.812.304"
+                          />
+                        </div>
+                        <PkSimpleSelect
+                          label="Categoría Licencia"
+                          value={drvCat}
+                          onChange={setDrvCat}
+                          options={LICENSE_OPTIONS}
+                        />
+                        <div className="pk-field pk-col-span-full">
+                          <label>Teléfono Móvil</label>
+                          <input
+                            value={drvPhone}
+                            onChange={(e) => setDrvPhone(e.target.value)}
+                            placeholder="Ej: 3124009911"
+                          />
+                        </div>
+                        <div className="pk-form-actions">
+                          <button
+                            type="button"
+                            className="pk-btn pk-btn-outline"
+                            onClick={() => setFleetMode('list')}
+                            disabled={busy}
+                          >
+                            Cancelar
+                          </button>
+                          <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
+                            💾 Guardar Conductor
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="pk-table-wrap">
-                  <table className="pk-table">
-                    <thead>
-                      <tr>
-                        <th>Código</th>
-                        <th>Transportadora</th>
-                        <th>NIT</th>
-                        <th>Ciudad</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {carriers.map((c) => (
-                        <tr key={c.id}>
-                          <td>{c.code}</td>
-                          <td style={{ fontWeight: 700 }}>{c.name}</td>
-                          <td>{c.nit}</td>
-                          <td>{c.city}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="pk-card">
+                  <div className="pk-card-head">
+                    <div className="pk-card-title">🏢 Registrar Empresa Transportadora</div>
+                    <span className="pk-badge pk-badge-amber">{nextCarrierCode}</span>
+                  </div>
+                  <div className="pk-card-body">
+                    <form onSubmit={submitCreateCarrier('page')} className="pk-form-grid cols-2">
+                      <PkAutoCodeInput label="Código Transportadora" value={nextCarrierCode} />
+                      <div className="pk-field">
+                        <label>Razón Social *</label>
+                        <input
+                          required
+                          value={carName}
+                          onChange={(e) => setCarName(e.target.value)}
+                          placeholder="Ej: Expreso Andino de Carga S.A.S."
+                        />
+                      </div>
+                      <div className="pk-field">
+                        <label>NIT *</label>
+                        <input
+                          required
+                          value={carNit}
+                          onChange={(e) => setCarNit(e.target.value)}
+                          placeholder="Ej: 900.812.441-9"
+                        />
+                      </div>
+                      <div className="pk-field">
+                        <label>Ciudad Sede</label>
+                        <input
+                          value={carCity}
+                          onChange={(e) => setCarCity(e.target.value)}
+                          placeholder="Ej: Bogotá D.C."
+                        />
+                      </div>
+                      <div className="pk-field pk-col-span-full">
+                        <label>Teléfono Contacto</label>
+                        <input
+                          value={carPhone}
+                          onChange={(e) => setCarPhone(e.target.value)}
+                          placeholder="Ej: 6017428800"
+                        />
+                      </div>
+                      <div className="pk-form-actions">
+                        <button
+                          type="button"
+                          className="pk-btn pk-btn-outline"
+                          onClick={() => setFleetMode('list')}
+                          disabled={busy}
+                        >
+                          Cancelar
+                        </button>
+                        <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
+                          💾 Guardar Transportadora
+                        </button>
+                      </div>
+                    </form>
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="pk-stack">
+                <div className="pk-card">
+                  <div className="pk-datatable-toolbar">
+                    <input
+                      className="pk-input pk-datatable-search"
+                      placeholder="🔎 Filtrar tractocamiones, placas, conductores o empresas transportadoras..."
+                      value={fleetSearch}
+                      onChange={(e) => setFleetSearch(e.target.value)}
+                    />
+                    <div className="pk-row-actions">
+                      <button
+                        type="button"
+                        className="pk-btn pk-btn-outline pk-btn-sm"
+                        onClick={() => setShowVehicleModal(true)}
+                      >
+                        + Camión Rápido
+                      </button>
+                      <button
+                        type="button"
+                        className="pk-btn pk-btn-outline pk-btn-sm"
+                        onClick={() => setShowDriverModal(true)}
+                      >
+                        + Conductor Rápido
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pk-grid-2">
+                  <div className="pk-card">
+                    <div className="pk-card-head">
+                      <div className="pk-card-title">🚛 Flota Pesada ({filteredVehicles.length})</div>
+                    </div>
+                    <div className="pk-card-body">
+                      <div className="pk-table-wrap">
+                        <table className="pk-table">
+                          <thead>
+                            <tr>
+                              <th>Código</th>
+                              <th>Placa</th>
+                              <th>Vehículo</th>
+                              <th>Tara Ref.</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredVehicles.map((v) => (
+                              <tr key={v.id}>
+                                <td>{v.code}</td>
+                                <td style={{ fontWeight: 800 }}>{v.plate}</td>
+                                <td>
+                                  <div>{v.brand}</div>
+                                  <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>{v.axleConfig}</div>
+                                </td>
+                                <td className="num">{v.referenceTareKg.toLocaleString('es-CO')} kg</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pk-card">
+                    <div className="pk-card-head">
+                      <div className="pk-card-title">🪪 Conductores Registrados ({filteredDrivers.length})</div>
+                    </div>
+                    <div className="pk-card-body">
+                      <div className="pk-table-wrap">
+                        <table className="pk-table">
+                          <thead>
+                            <tr>
+                              <th>Código</th>
+                              <th>Conductor</th>
+                              <th>Cédula</th>
+                              <th>Lic.</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredDrivers.map((d) => (
+                              <tr key={d.id}>
+                                <td>{d.code}</td>
+                                <td style={{ fontWeight: 700 }}>{d.name}</td>
+                                <td>{d.docNumber}</td>
+                                <td>{d.licenseCategory}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pk-card">
+                  <div className="pk-card-head">
+                    <div className="pk-card-title">🏢 Empresas Transportadoras ({filteredCarriers.length})</div>
+                  </div>
+                  <div className="pk-card-body">
+                    <div className="pk-table-wrap">
+                      <table className="pk-table">
+                        <thead>
+                          <tr>
+                            <th>Código</th>
+                            <th>Transportadora</th>
+                            <th>NIT</th>
+                            <th>Ciudad</th>
+                            <th>Teléfono</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredCarriers.map((c) => (
+                            <tr key={c.id}>
+                              <td>{c.code}</td>
+                              <td style={{ fontWeight: 700 }}>{c.name}</td>
+                              <td>{c.nit}</td>
+                              <td>{c.city}</td>
+                              <td>{c.phone || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </ModuleGate>
       )}
 
       {currentTab === 'rutas_manifiestos' && (
         <ModuleGate module="rutas_manifiestos">
-          <div className="pk-card" style={{ marginBottom: 16 }}>
-            <div className="pk-card-head">
-              <div className="pk-card-title">🛣️ Catálogo de Cargas, Materiales y Rutas Logísticas</div>
-            </div>
-            <div className="pk-card-body">
-              <form onSubmit={submitCreateRoute(false)} className="pk-form-grid">
-                <PkAutoCodeInput label="Código Carga / Ruta" value={nextRouteCode} />
-                <div className="pk-field">
-                  <label>Descripción de Carga o Material *</label>
-                  <input
-                    required
-                    value={routeDesc}
-                    onChange={(e) => setRouteDesc(e.target.value)}
-                    placeholder="Ej: Carbón Térmico Granulado / Soya a Granel"
-                  />
-                </div>
-                <div className="pk-field">
-                  <label>Origen</label>
-                  <input
-                    value={origin}
-                    onChange={(e) => setOrigin(e.target.value)}
-                    placeholder="Ej: Puerto Buenaventura"
-                  />
-                </div>
-                <div className="pk-field">
-                  <label>Destino</label>
-                  <input
-                    value={destination}
-                    onChange={(e) => setDestination(e.target.value)}
-                    placeholder="Ej: Zona Franca Bogotá"
-                  />
-                </div>
-                <div className="pk-field" style={{ justifyContent: 'flex-end' }}>
-                  <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
-                    ➕ Registrar Ruta / Carga
+          <div className="pk-stack">
+            <PkViewSwitcher
+              title="Catálogo de Cargas, Materiales y Rutas Logísticas"
+              subtitle="Consulta el volumen despachado por ruta de manifiesto o registra un nuevo corredor logístico."
+              mode={routeMode}
+              onModeChange={setRouteMode}
+              listLabel="📦 Consolidado de Rutas"
+              createLabel="+ Registrar Ruta / Carga"
+              count={routes.length}
+              extraActions={
+                routeMode === 'list' ? (
+                  <button type="button" className="pk-btn pk-btn-outline" onClick={handleExportRoutesCsv}>
+                    📥 Exportar Rutas CSV
                   </button>
-                </div>
-              </form>
-            </div>
-          </div>
+                ) : null
+              }
+            />
 
-          <div className="pk-card">
-            <div className="pk-card-head">
-              <div className="pk-card-title">📦 consolidado de Despachos por Ruta y Tipo de Carga</div>
-              <button
-                type="button"
-                className="pk-btn pk-btn-outline pk-btn-sm"
-                onClick={() =>
-                  downloadCsvUtf8(
-                    'rutas_cargas_bascula.csv',
-                    ['Código', 'Descripción Carga', 'Origen', 'Destino', 'Viajes', 'Peso Neto Total kg'],
-                    routes.map((r) => {
-                      const matched = tickets.filter((t) => t.cargoId === r.id);
-                      const sumKg = matched.reduce((acc, t) => acc + t.netKg, 0);
-                      return [r.code, r.description, r.origin, r.destination, matched.length, sumKg];
-                    })
-                  )
-                }
-              >
-                📥 Exportar Rutas CSV
-              </button>
-            </div>
-            <div className="pk-card-body">
-              <div className="pk-table-wrap">
-                <table className="pk-table">
-                  <thead>
-                    <tr>
-                      <th>Código</th>
-                      <th>Descripción Carga / Producto</th>
-                      <th>Origen</th>
-                      <th>Destino</th>
-                      <th>Despachos</th>
-                      <th>Total Neto Despachado</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {routes.map((r) => {
-                      const matched = tickets.filter((t) => t.cargoId === r.id);
-                      const sumKg = matched.reduce((acc, t) => acc + t.netKg, 0);
-                      return (
-                        <tr key={r.id}>
-                          <td style={{ fontWeight: 800 }}>{r.code}</td>
-                          <td style={{ fontWeight: 700 }}>{r.description}</td>
-                          <td>{r.origin || '—'}</td>
-                          <td>{r.destination || '—'}</td>
-                          <td className="num">{matched.length}</td>
-                          <td className="num" style={{ fontWeight: 800, color: 'var(--pk-emerald)' }}>
-                            {sumKg.toLocaleString('es-CO')} kg
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+            {routeMode === 'create' ? (
+              <div className="pk-card">
+                <div className="pk-card-head">
+                  <div className="pk-card-title">🛣️ Registrar Carga, Material o Ruta Logística</div>
+                  <span className="pk-badge pk-badge-blue">{nextRouteCode}</span>
+                </div>
+                <div className="pk-card-body">
+                  <form onSubmit={submitCreateRoute('page')} className="pk-form-grid cols-2">
+                    <PkAutoCodeInput label="Código Carga / Ruta" value={nextRouteCode} />
+                    <div className="pk-field">
+                      <label>Descripción de Carga o Material *</label>
+                      <input
+                        required
+                        value={routeDesc}
+                        onChange={(e) => setRouteDesc(e.target.value)}
+                        placeholder="Ej: Carbón Térmico Granulado / Soya a Granel"
+                      />
+                    </div>
+                    <div className="pk-field">
+                      <label>Origen</label>
+                      <input
+                        value={origin}
+                        onChange={(e) => setOrigin(e.target.value)}
+                        placeholder="Ej: Puerto Buenaventura"
+                      />
+                    </div>
+                    <div className="pk-field">
+                      <label>Destino</label>
+                      <input
+                        value={destination}
+                        onChange={(e) => setDestination(e.target.value)}
+                        placeholder="Ej: Zona Franca Bogotá"
+                      />
+                    </div>
+                    <div className="pk-form-actions">
+                      <button
+                        type="button"
+                        className="pk-btn pk-btn-outline"
+                        onClick={() => setRouteMode('list')}
+                        disabled={busy}
+                      >
+                        Cancelar
+                      </button>
+                      <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
+                        ➕ Registrar Ruta / Carga
+                      </button>
+                    </div>
+                  </form>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="pk-card">
+                <div className="pk-card-head">
+                  <div className="pk-card-title">📦 Consolidado de Despachos por Ruta y Tipo de Carga</div>
+                </div>
+                <div className="pk-datatable-toolbar">
+                  <input
+                    className="pk-input pk-datatable-search"
+                    placeholder="🔎 Buscar por código, material, origen o destino..."
+                    value={routeSearch}
+                    onChange={(e) => setRouteSearch(e.target.value)}
+                  />
+                  <span className="pk-badge pk-badge-slate">{filteredRoutes.length} rutas</span>
+                </div>
+                <div className="pk-card-body">
+                  <div className="pk-table-wrap">
+                    <table className="pk-table">
+                      <thead>
+                        <tr>
+                          <th>Código</th>
+                          <th>Descripción Carga / Producto</th>
+                          <th>Origen</th>
+                          <th>Destino</th>
+                          <th>Despachos</th>
+                          <th>Total Neto Despachado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredRoutes.map((r) => {
+                          const matched = tickets.filter((t) => t.cargoId === r.id);
+                          const sumKg = matched.reduce((acc, t) => acc + t.netKg, 0);
+                          return (
+                            <tr key={r.id}>
+                              <td style={{ fontWeight: 800 }}>{r.code}</td>
+                              <td style={{ fontWeight: 700 }}>{r.description}</td>
+                              <td>{r.origin || '—'}</td>
+                              <td>{r.destination || '—'}</td>
+                              <td className="num">{matched.length}</td>
+                              <td className="num" style={{ fontWeight: 800, color: 'var(--pk-emerald)' }}>
+                                {sumKg.toLocaleString('es-CO')} kg
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </ModuleGate>
       )}
@@ -926,7 +1222,7 @@ export const BasculaView: React.FC = () => {
         title="Registrar Nuevo Tractocamión"
         onClose={() => setShowVehicleModal(false)}
       >
-        <form onSubmit={submitCreateVehicle(true)} className="pk-form-grid">
+        <form onSubmit={submitCreateVehicle('modal')} className="pk-form-grid cols-2">
           <PkAutoCodeInput label="Código Flota" value={nextVehicleCode} />
           <div className="pk-field">
             <label>Placa *</label>
@@ -946,14 +1242,13 @@ export const BasculaView: React.FC = () => {
               placeholder="Ej: Kenworth T800"
             />
           </div>
-          <div className="pk-field">
-            <label>Configuración Ejes</label>
-            <input
-              value={vehAxle}
-              onChange={(e) => setVehAxle(e.target.value)}
-            />
-          </div>
-          <div className="pk-field">
+          <PkSimpleSelect
+            label="Configuración Ejes"
+            value={vehAxle}
+            onChange={setVehAxle}
+            options={AXLE_OPTIONS}
+          />
+          <div className="pk-field pk-col-span-full">
             <label>Peso Tara Referencia (kg) *</label>
             <input
               required
@@ -963,7 +1258,15 @@ export const BasculaView: React.FC = () => {
               onChange={(e) => setVehTare(e.target.value)}
             />
           </div>
-          <div className="pk-field" style={{ justifyContent: 'flex-end' }}>
+          <div className="pk-form-actions">
+            <button
+              type="button"
+              className="pk-btn pk-btn-outline"
+              onClick={() => setShowVehicleModal(false)}
+              disabled={busy}
+            >
+              Cancelar
+            </button>
             <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
               💾 Guardar Camión
             </button>
@@ -976,7 +1279,7 @@ export const BasculaView: React.FC = () => {
         title="Registrar Nuevo Conductor"
         onClose={() => setShowDriverModal(false)}
       >
-        <form onSubmit={submitCreateDriver(true)} className="pk-form-grid">
+        <form onSubmit={submitCreateDriver('modal')} className="pk-form-grid cols-2">
           <PkAutoCodeInput label="Código Conductor" value={nextDriverCode} />
           <div className="pk-field">
             <label>Nombre Completo *</label>
@@ -994,22 +1297,28 @@ export const BasculaView: React.FC = () => {
               onChange={(e) => setDrvDoc(e.target.value)}
             />
           </div>
-          <div className="pk-field">
-            <label>Categoría Licencia</label>
-            <select value={drvCat} onChange={(e) => setDrvCat(e.target.value)}>
-              <option value="C3">C3</option>
-              <option value="C2">C2</option>
-              <option value="C1">C1</option>
-            </select>
-          </div>
-          <div className="pk-field">
+          <PkSimpleSelect
+            label="Categoría Licencia"
+            value={drvCat}
+            onChange={setDrvCat}
+            options={LICENSE_OPTIONS}
+          />
+          <div className="pk-field pk-col-span-full">
             <label>Teléfono</label>
             <input
               value={drvPhone}
               onChange={(e) => setDrvPhone(e.target.value)}
             />
           </div>
-          <div className="pk-field" style={{ justifyContent: 'flex-end' }}>
+          <div className="pk-form-actions">
+            <button
+              type="button"
+              className="pk-btn pk-btn-outline"
+              onClick={() => setShowDriverModal(false)}
+              disabled={busy}
+            >
+              Cancelar
+            </button>
             <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
               💾 Guardar Conductor
             </button>
@@ -1022,7 +1331,7 @@ export const BasculaView: React.FC = () => {
         title="Registrar Nueva Empresa Transportadora"
         onClose={() => setShowCarrierModal(false)}
       >
-        <form onSubmit={submitCreateCarrier(true)} className="pk-form-grid">
+        <form onSubmit={submitCreateCarrier('modal')} className="pk-form-grid cols-2">
           <PkAutoCodeInput label="Código Transportadora" value={nextCarrierCode} />
           <div className="pk-field">
             <label>Razón Social *</label>
@@ -1047,14 +1356,22 @@ export const BasculaView: React.FC = () => {
               onChange={(e) => setCarCity(e.target.value)}
             />
           </div>
-          <div className="pk-field">
+          <div className="pk-field pk-col-span-full">
             <label>Teléfono</label>
             <input
               value={carPhone}
               onChange={(e) => setCarPhone(e.target.value)}
             />
           </div>
-          <div className="pk-field" style={{ justifyContent: 'flex-end' }}>
+          <div className="pk-form-actions">
+            <button
+              type="button"
+              className="pk-btn pk-btn-outline"
+              onClick={() => setShowCarrierModal(false)}
+              disabled={busy}
+            >
+              Cancelar
+            </button>
             <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
               💾 Guardar Transportadora
             </button>
@@ -1067,7 +1384,7 @@ export const BasculaView: React.FC = () => {
         title="Registrar Nueva Ruta o Tipo de Carga"
         onClose={() => setShowRouteModal(false)}
       >
-        <form onSubmit={submitCreateRoute(true)} className="pk-form-grid">
+        <form onSubmit={submitCreateRoute('modal')} className="pk-form-grid cols-2">
           <PkAutoCodeInput label="Código Ruta" value={nextRouteCode} />
           <div className="pk-field">
             <label>Descripción de Carga *</label>
@@ -1091,7 +1408,15 @@ export const BasculaView: React.FC = () => {
               onChange={(e) => setDestination(e.target.value)}
             />
           </div>
-          <div className="pk-field" style={{ justifyContent: 'flex-end' }}>
+          <div className="pk-form-actions">
+            <button
+              type="button"
+              className="pk-btn pk-btn-outline"
+              onClick={() => setShowRouteModal(false)}
+              disabled={busy}
+            >
+              Cancelar
+            </button>
             <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
               💾 Guardar Ruta
             </button>

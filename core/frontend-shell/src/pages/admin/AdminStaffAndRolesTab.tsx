@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { PkConfirmModal, PkModal, TenantSummary, useAsyncAction, usePlatform } from '@platform/ui-sdk';
+import { PkConfirmModal, PkModal, PkSimpleSelect, TenantSummary, useAsyncAction, usePlatform } from '@platform/ui-sdk';
 import { generateSecurePassword } from '../../utils/password';
 import { AdminSwitch } from './AdminSwitch';
 
@@ -399,7 +399,7 @@ export const AdminStaffAndRolesTab: React.FC<{
               <label>Descripción de Responsabilidades</label>
               <input value={newRoleForm.description} onChange={(e) => setNewRoleForm({ ...newRoleForm, description: e.target.value })} placeholder="Alcance operativo del rol..." />
             </div>
-            <div className="pk-row-actions" style={{ justifyContent: 'flex-end' }}>
+            <div className="pk-form-actions">
               <button type="button" className="pk-btn pk-btn-outline" onClick={() => setShowNewRoleModal(false)}>Cancelar</button>
               <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>Crear Rol</button>
             </div>
@@ -573,7 +573,7 @@ export const AdminStaffAndRolesTab: React.FC<{
         maxWidth={660}
       >
         <form onSubmit={handleSaveStaff} className="pk-stack">
-          <div className="pk-form-grid">
+          <div className="pk-form-grid cols-2">
             <div className="pk-field">
               <label>Nombre Completo</label>
               <input required value={staffFullName} onChange={(e) => setStaffFullName(e.target.value)} placeholder="Ej. Camila Rojas" />
@@ -591,18 +591,17 @@ export const AdminStaffAndRolesTab: React.FC<{
               </label>
               <input type="text" required={!editingStaff} value={staffPassword} onChange={(e) => setStaffPassword(e.target.value)} placeholder={editingStaff ? 'Dejar vacío para mantener' : ''} />
             </div>
-            <div className="pk-field">
-              <label>Rol en Plataforma</label>
-              <select
-                disabled={editingStaff?.userId === 'usr_platform_superadmin'}
-                value={staffRoleKey}
-                onChange={(e) => setStaffRoleKey(e.target.value)}
-              >
-                {roles.map((r) => (
-                  <option key={r.roleKey} value={r.roleKey}>{r.displayName}</option>
-                ))}
-              </select>
-            </div>
+            <PkSimpleSelect
+              label="Rol en Plataforma"
+              disabled={editingStaff?.userId === 'usr_platform_superadmin'}
+              value={staffRoleKey}
+              onChange={(nextRoleKey) => setStaffRoleKey(nextRoleKey)}
+              options={roles.map((r) => ({
+                value: r.roleKey,
+                label: r.displayName,
+                sublabel: r.description,
+              }))}
+            />
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 12, borderRadius: 10, background: '#f8fafc', border: '1px solid var(--pk-border)' }}>
@@ -641,7 +640,7 @@ export const AdminStaffAndRolesTab: React.FC<{
             )}
           </div>
 
-          <div className="pk-row-actions" style={{ justifyContent: 'flex-end' }}>
+          <div className="pk-form-actions">
             <button type="button" className="pk-btn pk-btn-outline" onClick={() => setStaffModalOpen(false)}>Cancelar</button>
             <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
               {busy ? 'Guardando...' : editingStaff ? 'Guardar Cambios' : 'Crear Operador'}
