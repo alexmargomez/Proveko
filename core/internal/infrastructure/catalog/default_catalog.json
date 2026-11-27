@@ -118,7 +118,7 @@
         "summary": "Devoluciones parciales, anulaciones totales y ajustes de valor con CUDE."
       }
     ],
-    "bundleHash": "257076af8472"
+    "bundleHash": "8d7e8fd2c5d0"
   },
   {
     "serviceKey": "ms-clientes",
@@ -336,14 +336,14 @@
     "apiPrefix": "/api/v1/comandas",
     "uiBundlePath": "/api/v1/comandas/ui.js",
     "category": "Gastronomía",
-    "summary": "Atención de mesas, envío a cocina y barra, precuenta impresa y transferencia a facturación.",
+    "summary": "Atención de mesas, envío a cocina y barra, carta gastronómica, personal y transferencia a facturación.",
     "modules": [
       {
         "moduleKey": "mapa_mesas",
         "displayName": "Mapa de Mesas y Pedidos",
         "tabIcon": "🍽️",
         "defaultActive": true,
-        "summary": "Selección de mesa, platos y precuenta."
+        "summary": "Plano del salón en vivo, detalle de cuentas en modal y liquidación hacia POS."
       },
       {
         "moduleKey": "monitor_cocina",
@@ -351,6 +351,27 @@
         "tabIcon": "👨‍🍳",
         "defaultActive": true,
         "summary": "Pedidos pendientes de preparación por orden de llegada."
+      },
+      {
+        "moduleKey": "catalogo_mesas",
+        "displayName": "Mesas y Ambientes",
+        "tabIcon": "🪑",
+        "defaultActive": true,
+        "summary": "Listado maestro de mesas físicas, aforo, ambientes y mesero base."
+      },
+      {
+        "moduleKey": "carta_servicios",
+        "displayName": "Carta y Servicios",
+        "tabIcon": "📋",
+        "defaultActive": true,
+        "summary": "Administración de platos, bebidas, servicios gastronómicos e impuestos."
+      },
+      {
+        "moduleKey": "directorio_meseros",
+        "displayName": "Meseros y Personal",
+        "tabIcon": "🧑",
+        "defaultActive": true,
+        "summary": "Directorio de meseros, turnos, ambientes asignados y estado operativo."
       }
     ],
     "features": [
@@ -376,9 +397,30 @@
         "dependsOnModule": "monitor_cocina",
         "defaultActive": true,
         "summary": "Priorización y despacho de platos preparados."
+      },
+      {
+        "submoduleKey": "configuracion_mesas",
+        "displayName": "Configuración de Ambientes y Mesas",
+        "dependsOnModule": "catalogo_mesas",
+        "defaultActive": true,
+        "summary": "Creación, edición y control de aforo por mesa."
+      },
+      {
+        "submoduleKey": "catalogo_gastronomico",
+        "displayName": "Platos, Bebidas y Servicios de Carta",
+        "dependsOnModule": "carta_servicios",
+        "defaultActive": true,
+        "summary": "Precios, categorías gastronómicas e impoconsumo."
+      },
+      {
+        "submoduleKey": "plantilla_meseros",
+        "displayName": "Plantilla de Meseros y Turnos",
+        "dependsOnModule": "directorio_meseros",
+        "defaultActive": true,
+        "summary": "Control de personal de servicio en salón y barra."
       }
     ],
-    "bundleHash": "498b923a0f89"
+    "bundleHash": "3143cb7fd50e"
   },
   {
     "serviceKey": "ms-hoteleria",

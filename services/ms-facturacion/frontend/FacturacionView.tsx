@@ -137,27 +137,26 @@ function formatKmText(raw: unknown): string {
   return '';
 }
 
-function channelBadgeForInvoice(inv: InvoiceRecord): {
-  label: string;
-  tone: 'blue' | 'purple' | 'emerald' | 'amber' | 'slate';
-} {
-  const t = (inv.invoiceType || '').toUpperCase();
-  if (t === 'TALLER' || inv.plate || inv.vehicleId) {
-    return {
-      label: inv.plate ? `🔧 Placa ${inv.plate}` : '🔧 Automotriz',
-      tone: 'blue',
-    };
-  }
-  if (t === 'CORPORATIVA_CXC' || inv.contractId || inv.purchaseOrderRef) {
-    return { label: '🏢 Corporativa CxC', tone: 'purple' };
-  }
-  if (inv.linkedRoomId) {
-    return { label: `🔗 Hab. ${inv.linkedRoomId}`, tone: 'emerald' };
+function operationalRefForInvoice(inv: InvoiceRecord): string | null {
+  if (inv.plate) {
+    return `Placa ${inv.plate}`;
   }
   if (inv.linkedTableId) {
-    return { label: `🔗 Cuenta ${inv.linkedTableId}`, tone: 'amber' };
+    return `Comanda ${inv.linkedTableId.toUpperCase()}`;
   }
-  return { label: '🛒 Estándar POS', tone: 'slate' };
+  if (inv.linkedRoomId) {
+    return `Hab. ${inv.linkedRoomId}`;
+  }
+  if (inv.purchaseOrderRef) {
+    return `OC ${inv.purchaseOrderRef}`;
+  }
+  if (inv.contractId) {
+    return `Convenio ${inv.contractId}`;
+  }
+  if ((inv.invoiceType || '').toUpperCase() === 'TALLER' && inv.vehicleId) {
+    return 'Orden Automotriz';
+  }
+  return null;
 }
 
 export const FacturacionView: React.FC = () => {
@@ -1938,7 +1937,6 @@ export const FacturacionView: React.FC = () => {
                 <tr>
                   <th>Documento</th>
                   <th>Adquiriente / NIT</th>
-                  <th>Modalidad</th>
                   <th>Progreso 4 Etapas</th>
                   <th>Total / Saldo CxC</th>
                   <th>Estado</th>
@@ -1953,13 +1951,14 @@ export const FacturacionView: React.FC = () => {
                   const isEditable =
                     inv.editable ??
                     (!isAnulada && st !== 'ENVIADA' && st !== 'ACEPTADA');
-                  const badge = channelBadgeForInvoice(inv);
+                  const opRef = operationalRefForInvoice(inv);
                   return (
                     <tr key={inv.id}>
                       <td>
                         <strong>{inv.id}</strong>
                         <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>
                           {inv.issueDate || inv.date}
+                          {opRef ? ` · ${opRef}` : ''}
                         </div>
                       </td>
                       <td>
@@ -1967,15 +1966,6 @@ export const FacturacionView: React.FC = () => {
                         <div style={{ fontSize: 11.5, color: 'var(--pk-muted)' }}>
                           {inv.customerNit}
                         </div>
-                      </td>
-                      <td>
-                        <span
-                          className={`pk-badge pk-badge-${
-                            badge.tone === 'purple' ? 'blue' : badge.tone
-                          }`}
-                        >
-                          {badge.label}
-                        </span>
                       </td>
                       <td style={{ minWidth: 250 }}>
                         <PkProcessNodes
@@ -2081,7 +2071,7 @@ export const FacturacionView: React.FC = () => {
                 {filteredInvoices.length === 0 && (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={6}
                       style={{
                         textAlign: 'center',
                         color: 'var(--pk-muted)',

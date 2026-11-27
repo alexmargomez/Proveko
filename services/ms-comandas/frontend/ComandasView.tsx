@@ -16,231 +16,44 @@ import {
   PkProcessNodes,
   PkTypeCards,
   PkFullscreenDialog,
-  PkDistributionStrip,
   useAsyncAction,
   formatCop,
   downloadCsvUtf8,
 } from '@platform/ui-sdk';
-import type { PkProcessStep, PkTypeCardOption } from '@platform/ui-sdk';
-
-type OrderChannel = 'MESA' | 'DOMICILIO' | 'PARA_LLEVAR';
-type OrderStage = 'LIBRE' | 'NUEVA' | 'PREPARANDO' | 'LISTA' | 'ENTREGADA';
-type ChannelPillKey = 'ALL' | 'MESA' | 'DOMICILIO' | 'PARA_LLEVAR';
-type SalonDisplayMode = 'floor' | 'table';
-
-interface MenuItem {
-  id: string;
-  code: string;
-  name: string;
-  category: string;
-  salePrice: number;
-  taxPct: number;
-}
-
-interface OrderItem {
-  itemId: string;
-  productId: string;
-  name: string;
-  qty: number;
-  price: number;
-  note: string;
-}
-
-interface DiningTable {
-  id: string;
-  name: string;
-  zone: string;
-  waiter: string;
-  status: string;
-  orderCode?: string;
-  channel?: string;
-  orderStage?: string;
-  customerName?: string;
-  customerPhone?: string;
-  deliveryAddress?: string;
-  guests?: number;
-  paymentHint?: string;
-  openedAt?: string;
-  items: OrderItem[];
-  total: number;
-}
-
-interface DraftOrderLine {
-  draftId: string;
-  productId: string;
-  code: string;
-  name: string;
-  price: number;
-  qty: number;
-  note: string;
-}
-
-interface ComandasStateResponse {
-  ok: boolean;
-  nextMenuCode: string;
-  tables: DiningTable[];
-  products: MenuItem[];
-}
-
-interface OptionalInventoryResponse {
-  ok?: boolean;
-  products?: Array<{
-    id: string;
-    code: string;
-    name: string;
-    category: string;
-    salePrice: number;
-    taxPct?: number;
-  }>;
-}
-
-const VALID_MODULES = ['mapa_mesas', 'monitor_cocina'] as const;
-
-const TABLE_ZONE_OPTIONS = [
-  { value: 'Salón Principal', label: 'Salón Principal' },
-  { value: 'Terraza', label: 'Terraza' },
-  { value: 'VIP / Reservados', label: 'VIP / Reservados' },
-  { value: 'Barra', label: 'Barra' },
-];
-
-const FLOOR_ZONE_PILLS = [
-  'Todas las Zonas',
-  'Salón Principal',
-  'Terraza',
-  'VIP / Reservados',
-] as const;
-
-const DISH_CATEGORY_OPTIONS = [
-  { value: 'Restaurante — Fuertes', label: 'Restaurante — Fuertes' },
-  { value: 'Restaurante — Entradas', label: 'Restaurante — Entradas' },
-  { value: 'Barra y Bebidas', label: 'Barra y Bebidas' },
-  { value: 'Postres y Cafetería', label: 'Postres y Cafetería' },
-];
-
-const DISH_TAX_OPTIONS = [
-  { value: '8', label: '8% Impoconsumo' },
-  { value: '19', label: '19% IVA' },
-  { value: '0', label: '0% Exento' },
-];
-
-const PAYMENT_METHOD_OPTIONS = [
-  { value: 'Efectivo en caja', label: 'Efectivo en caja' },
-  { value: 'Efectivo contraentrega', label: 'Efectivo contraentrega' },
-  { value: 'Tarjeta crédito / débito', label: 'Tarjeta crédito / débito' },
-  { value: 'Datáfono inalámbrico', label: 'Datáfono inalámbrico' },
-  { value: 'Transferencia electrónica', label: 'Transferencia electrónica' },
-  { value: 'Pago con código QR', label: 'Pago con código QR' },
-  { value: 'Factura electrónica corporativa', label: 'Factura electrónica corporativa' },
-];
-
-const PICKUP_WINDOW_OPTIONS = [
-  { value: 'Recoge en mostrador principal (15 min)', label: 'Mostrador principal — 15 min' },
-  { value: 'Entrega rápida en bahía exterior (20 min)', label: 'Bahía exterior — 20 min' },
-  { value: 'Empaque térmico corporativo (30 min)', label: 'Empaque térmico corporativo — 30 min' },
-];
-
-const CHANNEL_TYPE_CARDS: PkTypeCardOption[] = [
-  {
-    key: 'MESA',
-    icon: '🪑',
-    title: '🪑 Servicio en Mesa',
-    description: 'Apertura o adición de platos para mesas de salón, terraza o reservados VIP.',
-    badge: 'Salón',
-  },
-  {
-    key: 'DOMICILIO',
-    icon: '🛵',
-    title: '🛵 Domicilio con Entrega',
-    description: 'Captura de cliente, dirección exacta, empaque sellado y medio de recaudo.',
-    badge: 'Despacho',
-  },
-  {
-    key: 'PARA_LLEVAR',
-    icon: '🛍️',
-    title: '🛍️ Pedido Para Llevar',
-    description: 'Orden empacada para retiro ágil del cliente directamente en mostrador.',
-    badge: 'Mostrador',
-  },
-];
-
-const KITCHEN_NOTE_PRESETS = [
-  'Término 3/4',
-  'Término medio',
-  'Bien asado',
-  'Sin cebolla',
-  'Salsa aparte',
-  'Sin azúcar',
-];
-
-function resolveChannel(tbl: DiningTable): OrderChannel {
-  const raw = (tbl.channel || '').toUpperCase().trim();
-  if (raw === 'DOMICILIO') return 'DOMICILIO';
-  if (raw === 'PARA_LLEVAR') return 'PARA_LLEVAR';
-  return 'MESA';
-}
-
-function resolveStage(tbl: DiningTable): OrderStage {
-  const raw = (tbl.orderStage || '').toUpperCase().trim();
-  if (tbl.status === 'Libre' && (!tbl.items || tbl.items.length === 0)) {
-    return 'LIBRE';
-  }
-  if (raw === 'NUEVA' || raw === 'PREPARANDO' || raw === 'LISTA' || raw === 'ENTREGADA') {
-    return raw;
-  }
-  if (tbl.status === 'En Cocina') return 'PREPARANDO';
-  if (tbl.status !== 'Libre' || (tbl.items && tbl.items.length > 0)) return 'NUEVA';
-  return 'LIBRE';
-}
-
-function formatOpenedElapsed(openedAt?: string): string {
-  const clean = (openedAt || '').trim();
-  if (!clean) return 'En curso';
-  if (clean.toLowerCase().startsWith('hace ')) return clean;
-  const parsed = Date.parse(clean);
-  if (Number.isNaN(parsed)) return clean;
-  const diffMin = Math.max(1, Math.round((Date.now() - parsed) / 60000));
-  if (diffMin < 60) return `Hace ${diffMin} min`;
-  const hrs = Math.floor(diffMin / 60);
-  const rem = diffMin % 60;
-  return rem > 0 ? `Hace ${hrs}h ${rem}m` : `Hace ${hrs}h`;
-}
-
-function channelBadgeFor(channel: OrderChannel): {
-  label: string;
-  tone: 'coral' | 'blue' | 'purple';
-} {
-  if (channel === 'DOMICILIO') return { label: 'Domicilio', tone: 'coral' };
-  if (channel === 'PARA_LLEVAR') return { label: 'Para llevar', tone: 'purple' };
-  return { label: 'Mesa', tone: 'blue' };
-}
-
-function buildOrderProcessSteps(
-  stage: OrderStage,
-  onSelectStage?: (target: OrderStage) => void
-): PkProcessStep[] {
-  const order: Array<Exclude<OrderStage, 'LIBRE'>> = ['NUEVA', 'PREPARANDO', 'LISTA', 'ENTREGADA'];
-  const labels: Record<Exclude<OrderStage, 'LIBRE'>, string> = {
-    NUEVA: 'Nueva',
-    PREPARANDO: 'Cocina',
-    LISTA: 'Lista',
-    ENTREGADA: 'Entregada',
-  };
-  const currentIdx = stage === 'LIBRE' ? -1 : order.indexOf(stage);
-
-  return order.map((st, idx) => {
-    let status: PkProcessStep['status'] = 'pending';
-    if (currentIdx > idx) status = 'done';
-    else if (currentIdx === idx) status = st === 'ENTREGADA' ? 'done' : 'active';
-
-    return {
-      step: idx + 1,
-      label: labels[st],
-      status,
-      tooltip: `Etapa: ${labels[st]}`,
-      onClick: onSelectStage && stage !== 'LIBRE' ? () => onSelectStage(st) : undefined,
-    };
-  });
-}
+import {
+  OrderChannel,
+  OrderStage,
+  ChannelPillKey,
+  SalonDisplayMode,
+  MenuItem,
+  WaiterRecord,
+  OrderItem,
+  DiningTable,
+  DraftOrderLine,
+  ComandasStateResponse,
+  OptionalInventoryResponse,
+  VALID_MODULES,
+  TABLE_ZONE_OPTIONS,
+  FLOOR_ZONE_PILLS,
+  DISH_CATEGORY_OPTIONS,
+  DISH_TAX_OPTIONS,
+  WAITER_SHIFT_OPTIONS,
+  PAYMENT_METHOD_OPTIONS,
+  PICKUP_WINDOW_OPTIONS,
+  CHANNEL_TYPE_CARDS,
+  KITCHEN_NOTE_PRESETS,
+  resolveChannel,
+  resolveStage,
+  formatOpenedElapsed,
+  channelBadgeFor,
+  buildOrderProcessSteps,
+  buildComandaPrintPayload,
+} from './comandasTypes';
+import {
+  TablesCatalogSection,
+  MenuServicesSection,
+  WaitersDirectorySection,
+} from './ComandasCatalogViews';
 
 export const ComandasView: React.FC = () => {
   const {
@@ -251,6 +64,7 @@ export const ComandasView: React.FC = () => {
     navigateTo,
     apiGet,
     apiPost,
+    apiPut,
     apiDelete,
     toast,
   } = usePlatform();
@@ -262,10 +76,15 @@ export const ComandasView: React.FC = () => {
   const [floorZonePill, setFloorZonePill] = useState<string>('Todas las Zonas');
 
   const [nextMenuCode, setNextMenuCode] = useState('MNU-209');
+  const [nextWaiterCode, setNextWaiterCode] = useState('MSR-305');
   const [tables, setTables] = useState<DiningTable[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [selectedFloorTableId, setSelectedFloorTableId] = useState<string>('');
+  const [waiters, setWaiters] = useState<WaiterRecord[]>([]);
 
+  // Modal detail when clicking a table or order card in Mapa de Mesas
+  const [detailModalTableId, setDetailModalTableId] = useState<string | null>(null);
+
+  // Fullscreen Order Creation Studio
   const [studioOpen, setStudioOpen] = useState(false);
   const [studioChannel, setStudioChannel] = useState<OrderChannel>('MESA');
   const [studioTableId, setStudioTableId] = useState('');
@@ -282,25 +101,48 @@ export const ComandasView: React.FC = () => {
   const [studioQuickNote, setStudioQuickNote] = useState('');
   const [draftLines, setDraftLines] = useState<DraftOrderLine[]>([]);
 
-  const [showNewTableModal, setShowNewTableModal] = useState(false);
+  // Create / Edit Table Modal
+  const [showTableModal, setShowTableModal] = useState(false);
+  const [editingTable, setEditingTable] = useState<DiningTable | null>(null);
   const [tableName, setTableName] = useState('');
   const [tableZone, setTableZone] = useState('Salón Principal');
   const [tableWaiter, setTableWaiter] = useState('');
   const [tableCapacity, setTableCapacity] = useState('4');
 
-  const [showNewDishModal, setShowNewDishModal] = useState(false);
+  // Create / Edit Dish or Service Modal
+  const [showDishModal, setShowDishModal] = useState(false);
+  const [editingDish, setEditingDish] = useState<MenuItem | null>(null);
   const [dishName, setDishName] = useState('');
   const [dishCategory, setDishCategory] = useState('Restaurante — Fuertes');
   const [dishPrice, setDishPrice] = useState('');
   const [dishTaxPct, setDishTaxPct] = useState('8');
 
-  const [itemToDelete, setItemToDelete] = useState<{ table: DiningTable; item: OrderItem } | null>(null);
+  // Create / Edit Waiter Modal
+  const [showWaiterModal, setShowWaiterModal] = useState(false);
+  const [editingWaiter, setEditingWaiter] = useState<WaiterRecord | null>(null);
+  const [waiterFullName, setWaiterFullName] = useState('');
+  const [waiterDocId, setWaiterDocId] = useState('');
+  const [waiterPhone, setWaiterPhone] = useState('');
+  const [waiterZone, setWaiterZone] = useState('Salón Principal');
+  const [waiterShift, setWaiterShift] = useState('Turno Completo');
+  const [waiterActive, setWaiterActive] = useState('true');
+
+  // Confirmation Modals
+  const [itemToDelete, setItemToDelete] = useState<{ table: DiningTable; item: OrderItem } | null>(
+    null
+  );
+  const [tableToDelete, setTableToDelete] = useState<DiningTable | null>(null);
+  const [dishToDelete, setDishToDelete] = useState<MenuItem | null>(null);
+  const [waiterToDelete, setWaiterToDelete] = useState<WaiterRecord | null>(null);
 
   const reload = useCallback(async () => {
     try {
       const data = await apiGet<ComandasStateResponse>('/api/v1/comandas/tables');
       const tableList = data.tables || [];
-      const combinedMenu: MenuItem[] = [...(data.products || [])];
+      const combinedMenu: MenuItem[] = (data.products || []).map((m) => ({
+        ...m,
+        fromInventory: false,
+      }));
       const seenCodes = new Set(combinedMenu.map((m) => m.code.toUpperCase()));
       const seenIds = new Set(combinedMenu.map((m) => m.id));
 
@@ -319,6 +161,7 @@ export const ComandasView: React.FC = () => {
               category: p.category || 'Catálogo Inventario',
               salePrice: p.salePrice,
               taxPct: p.taxPct ?? 8,
+              fromInventory: true,
             });
           }
         } catch {
@@ -327,14 +170,12 @@ export const ComandasView: React.FC = () => {
       }
 
       setNextMenuCode(data.nextMenuCode || 'MNU-209');
+      setNextWaiterCode(data.nextWaiterCode || 'MSR-305');
       setTables(tableList);
       setMenuItems(combinedMenu);
+      setWaiters(data.waiters || []);
 
       const physical = tableList.filter((t) => resolveChannel(t) === 'MESA');
-      setSelectedFloorTableId((prev) => {
-        if (prev && physical.some((t) => t.id === prev)) return prev;
-        return physical.length > 0 ? physical[0].id : '';
-      });
       setStudioTableId((prev) => {
         if (prev && physical.some((t) => t.id === prev)) return prev;
         return physical.length > 0 ? physical[0].id : '';
@@ -353,7 +194,11 @@ export const ComandasView: React.FC = () => {
       ? activeModuleKey
       : VALID_MODULES.find((m) => hasModule(m)) || 'mapa_mesas';
 
-  const canManageOrders = hasModule('mapa_mesas');
+  const canManageOrders =
+    hasModule('mapa_mesas') ||
+    hasModule('catalogo_mesas') ||
+    hasModule('carta_servicios') ||
+    hasModule('directorio_meseros');
   const notesEnabled = hasFeature('mapa_mesas', 'notas_preparacion');
 
   const physicalTables = useMemo(
@@ -365,6 +210,31 @@ export const ComandasView: React.FC = () => {
     () => tables.filter((t) => resolveStage(t) !== 'LIBRE' && (t.items || []).length > 0),
     [tables]
   );
+
+  const detailModalTable = useMemo(
+    () => (detailModalTableId ? tables.find((t) => t.id === detailModalTableId) || null : null),
+    [tables, detailModalTableId]
+  );
+
+  const waiterSelectItems = useMemo(() => {
+    const activeList = waiters.filter((w) => w.active);
+    const seen = new Set(activeList.map((w) => w.fullName.trim().toLowerCase()));
+    const out: Array<{ value: string; label: string }> = activeList.map((w) => ({
+      value: w.fullName,
+      label: `${w.fullName} — ${w.zone}`,
+    }));
+    for (const extra of [studioWaiter, tableWaiter]) {
+      const clean = extra.trim();
+      if (clean && !seen.has(clean.toLowerCase())) {
+        seen.add(clean.toLowerCase());
+        out.push({ value: clean, label: clean });
+      }
+    }
+    if (out.length === 0) {
+      out.push({ value: 'Mesero Turno', label: 'Mesero Turno' });
+    }
+    return out;
+  }, [waiters, studioWaiter, tableWaiter]);
 
   const countsByChannel = useMemo(() => {
     let mesa = 0;
@@ -390,7 +260,10 @@ export const ComandasView: React.FC = () => {
       const ch = resolveChannel(ord);
       if (channelFilter !== 'ALL' && ch !== channelFilter) return false;
       if (!q) return true;
-      const itemsText = (ord.items || []).map((i) => `${i.name} ${i.note || ''}`).join(' ').toLowerCase();
+      const itemsText = (ord.items || [])
+        .map((i) => `${i.name} ${i.note || ''}`)
+        .join(' ')
+        .toLowerCase();
       return (
         (ord.orderCode || '').toLowerCase().includes(q) ||
         ord.name.toLowerCase().includes(q) ||
@@ -444,11 +317,6 @@ export const ComandasView: React.FC = () => {
     });
   }, [physicalTables, floorZonePill, searchQuery]);
 
-  const selectedFloorTable = useMemo(
-    () => physicalTables.find((t) => t.id === selectedFloorTableId) || physicalTables[0] || null,
-    [physicalTables, selectedFloorTableId]
-  );
-
   const menuCategories = useMemo(() => {
     const cats = new Set<string>();
     for (const m of menuItems) {
@@ -499,11 +367,16 @@ export const ComandasView: React.FC = () => {
           ? 'PARA_LLEVAR'
           : 'MESA');
 
+      setDetailModalTableId(null);
       setStudioChannel(targetChannel);
+      const fallbackWaiter = waiters.find((w) => w.active)?.fullName || 'Mesero Turno';
+
       if (preset?.table) {
         setStudioTableId(preset.table.id);
-        setStudioWaiter(preset.table.waiter || '');
-        setStudioGuests(String(preset.table.guests && preset.table.guests > 0 ? preset.table.guests : 4));
+        setStudioWaiter(preset.table.waiter || fallbackWaiter);
+        setStudioGuests(
+          String(preset.table.guests && preset.table.guests > 0 ? preset.table.guests : 4)
+        );
         setStudioCustomerName(preset.table.customerName || '');
         setStudioPaymentMethod(preset.table.paymentHint || 'Tarjeta crédito / débito');
       } else {
@@ -511,8 +384,12 @@ export const ComandasView: React.FC = () => {
           physicalTables.find((t) => resolveStage(t) === 'LIBRE') || physicalTables[0] || null;
         if (defaultTable) {
           setStudioTableId(defaultTable.id);
-          setStudioWaiter(defaultTable.waiter || '');
-          setStudioGuests(String(defaultTable.guests && defaultTable.guests > 0 ? defaultTable.guests : 4));
+          setStudioWaiter(defaultTable.waiter || fallbackWaiter);
+          setStudioGuests(
+            String(defaultTable.guests && defaultTable.guests > 0 ? defaultTable.guests : 4)
+          );
+        } else {
+          setStudioWaiter(fallbackWaiter);
         }
         setStudioCustomerName('');
         setStudioCustomerPhone('');
@@ -528,7 +405,7 @@ export const ComandasView: React.FC = () => {
       setStudioMenuSearch('');
       setStudioOpen(true);
     },
-    [channelFilter, physicalTables]
+    [channelFilter, physicalTables, waiters]
   );
 
   const handleSelectStudioTable = (newTableId: string) => {
@@ -594,7 +471,7 @@ export const ComandasView: React.FC = () => {
 
   const handleSubmitStudioOrder = () => {
     if (draftLines.length === 0) {
-      toast('Agrega al menos un plato o bebida al pedido antes de confirmar');
+      toast('Agrega al menos un plato o servicio al pedido antes de confirmar');
       return;
     }
     if (studioChannel === 'MESA' && !studioTableId) {
@@ -647,9 +524,7 @@ export const ComandasView: React.FC = () => {
             note: notesEnabled ? l.note.trim() : '',
           })),
         });
-        toast(
-          `Comanda ${res.table.orderCode || res.table.name} registrada y disponible en tablero en vivo`
-        );
+        toast(`Comanda ${res.table.orderCode || res.table.name} registrada y enviada`);
         setStudioOpen(false);
         setDraftLines([]);
         await reload();
@@ -675,12 +550,31 @@ export const ComandasView: React.FC = () => {
         toast(`${tbl.orderCode || tbl.name}: ${stageLabels[nextStage]}`);
         await reload();
       } catch (err) {
-        toast(err instanceof Error ? err.message : 'No fue posible actualizar la etapa de la comanda');
+        toast(err instanceof Error ? err.message : 'No fue posible actualizar la etapa');
       }
     });
   };
 
-  const handleCreateTable = (e: React.FormEvent) => {
+  // --- Table Modal Handlers ---
+  const openCreateTableModal = () => {
+    setEditingTable(null);
+    setTableName('');
+    setTableZone('Salón Principal');
+    setTableCapacity('4');
+    setTableWaiter(waiters.find((w) => w.active)?.fullName || '');
+    setShowTableModal(true);
+  };
+
+  const openEditTableModal = (tbl: DiningTable) => {
+    setEditingTable(tbl);
+    setTableName(tbl.name);
+    setTableZone(tbl.zone || 'Salón Principal');
+    setTableCapacity(String(tbl.guests && tbl.guests > 0 ? tbl.guests : 4));
+    setTableWaiter(tbl.waiter || '');
+    setShowTableModal(true);
+  };
+
+  const handleSaveTable = (e: React.FormEvent) => {
     e.preventDefault();
     if (!tableName.trim()) {
       toast('Ingresa el nombre o número de la mesa');
@@ -688,46 +582,190 @@ export const ComandasView: React.FC = () => {
     }
     void run(async () => {
       try {
-        const res = await apiPost<{ table: DiningTable }>('/api/v1/comandas/tables', {
+        const payload = {
           name: tableName.trim(),
           zone: tableZone,
           waiter: tableWaiter.trim(),
           guests: Math.max(1, Number(tableCapacity || 4)),
-        });
-        toast(`Mesa registrada: ${res.table.name}`);
-        setTableName('');
-        setShowNewTableModal(false);
+        };
+        if (editingTable) {
+          const res = await apiPut<{ table: DiningTable }>(
+            `/api/v1/comandas/tables/${encodeURIComponent(editingTable.id)}`,
+            payload
+          );
+          toast(`Mesa actualizada: ${res.table.name}`);
+        } else {
+          const res = await apiPost<{ table: DiningTable }>('/api/v1/comandas/tables', payload);
+          toast(`Mesa registrada: ${res.table.name}`);
+          setStudioTableId(res.table.id);
+          if (res.table.waiter) setStudioWaiter(res.table.waiter);
+        }
+        setShowTableModal(false);
+        setEditingTable(null);
         await reload();
-        setSelectedFloorTableId(res.table.id);
-        setStudioTableId(res.table.id);
       } catch (err) {
-        toast(err instanceof Error ? err.message : 'Error al registrar la mesa');
+        toast(err instanceof Error ? err.message : 'Error al guardar la mesa');
       }
     });
   };
 
-  const handleCreateMenuItem = (e: React.FormEvent) => {
+  const confirmDeleteTable = () => {
+    if (!tableToDelete) return;
+    const target = tableToDelete;
+    void run(async () => {
+      try {
+        await apiDelete(`/api/v1/comandas/tables/${encodeURIComponent(target.id)}`);
+        toast(`Mesa eliminada: ${target.name}`);
+        setTableToDelete(null);
+        if (detailModalTableId === target.id) setDetailModalTableId(null);
+        await reload();
+      } catch (err) {
+        toast(err instanceof Error ? err.message : 'No fue posible eliminar la mesa');
+      }
+    });
+  };
+
+  // --- Dish / Service Modal Handlers ---
+  const openCreateDishModal = () => {
+    setEditingDish(null);
+    setDishName('');
+    setDishCategory('Restaurante — Fuertes');
+    setDishPrice('');
+    setDishTaxPct('8');
+    setShowDishModal(true);
+  };
+
+  const openEditDishModal = (item: MenuItem) => {
+    setEditingDish(item);
+    setDishName(item.name);
+    setDishCategory(item.category || 'Restaurante — Fuertes');
+    setDishPrice(String(item.salePrice));
+    setDishTaxPct(String(item.taxPct ?? 8));
+    setShowDishModal(true);
+  };
+
+  const handleSaveMenuItem = (e: React.FormEvent) => {
     e.preventDefault();
     const numericPrice = Number(dishPrice);
     if (!dishName.trim() || !Number.isFinite(numericPrice) || numericPrice <= 0) {
-      toast('Ingresa nombre del plato y un precio de venta mayor a cero');
+      toast('Ingresa nombre y un precio unitario mayor a cero');
       return;
     }
     void run(async () => {
       try {
-        const res = await apiPost<{ menuItem: MenuItem }>('/api/v1/comandas/menu-items', {
+        const payload = {
           name: dishName.trim(),
           category: dishCategory,
           salePrice: numericPrice,
           taxPct: Number(dishTaxPct || 8),
-        });
-        toast(`Plato agregado a la carta: ${res.menuItem.name}`);
-        setDishName('');
-        setDishPrice('');
-        setShowNewDishModal(false);
+        };
+        if (editingDish) {
+          const res = await apiPut<{ menuItem: MenuItem }>(
+            `/api/v1/comandas/menu-items/${encodeURIComponent(editingDish.id)}`,
+            payload
+          );
+          toast(`Carta actualizada: ${res.menuItem.name}`);
+        } else {
+          const res = await apiPost<{ menuItem: MenuItem }>('/api/v1/comandas/menu-items', payload);
+          toast(`Agregado a la carta: ${res.menuItem.name}`);
+        }
+        setShowDishModal(false);
+        setEditingDish(null);
         await reload();
       } catch (err) {
-        toast(err instanceof Error ? err.message : 'Error al agregar plato a la carta');
+        toast(err instanceof Error ? err.message : 'Error al guardar en la carta');
+      }
+    });
+  };
+
+  const confirmDeleteDish = () => {
+    if (!dishToDelete) return;
+    const target = dishToDelete;
+    void run(async () => {
+      try {
+        await apiDelete(`/api/v1/comandas/menu-items/${encodeURIComponent(target.id)}`);
+        toast(`Ítem eliminado de la carta: ${target.name}`);
+        setDishToDelete(null);
+        await reload();
+      } catch (err) {
+        toast(err instanceof Error ? err.message : 'No fue posible eliminar el ítem de la carta');
+      }
+    });
+  };
+
+  // --- Waiter Modal Handlers ---
+  const openCreateWaiterModal = () => {
+    setEditingWaiter(null);
+    setWaiterFullName('');
+    setWaiterDocId('');
+    setWaiterPhone('');
+    setWaiterZone('Salón Principal');
+    setWaiterShift('Turno Completo');
+    setWaiterActive('true');
+    setShowWaiterModal(true);
+  };
+
+  const openEditWaiterModal = (w: WaiterRecord) => {
+    setEditingWaiter(w);
+    setWaiterFullName(w.fullName);
+    setWaiterDocId(w.docId || '');
+    setWaiterPhone(w.phone || '');
+    setWaiterZone(w.zone || 'Salón Principal');
+    setWaiterShift(w.shift || 'Turno Completo');
+    setWaiterActive(w.active ? 'true' : 'false');
+    setShowWaiterModal(true);
+  };
+
+  const handleSaveWaiter = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!waiterFullName.trim()) {
+      toast('Ingresa el nombre completo del mesero');
+      return;
+    }
+    void run(async () => {
+      try {
+        const payload = {
+          fullName: waiterFullName.trim(),
+          docId: waiterDocId.trim(),
+          phone: waiterPhone.trim(),
+          zone: waiterZone,
+          shift: waiterShift,
+          active: waiterActive === 'true',
+        };
+        if (editingWaiter) {
+          const res = await apiPut<{ waiter: WaiterRecord }>(
+            `/api/v1/comandas/waiters/${encodeURIComponent(editingWaiter.id)}`,
+            payload
+          );
+          toast(`Mesero actualizado: ${res.waiter.fullName}`);
+        } else {
+          const res = await apiPost<{ waiter: WaiterRecord }>('/api/v1/comandas/waiters', payload);
+          toast(`Mesero registrado: ${res.waiter.fullName}`);
+          setStudioWaiter(res.waiter.fullName);
+          if (showTableModal) {
+            setTableWaiter(res.waiter.fullName);
+          }
+        }
+        setShowWaiterModal(false);
+        setEditingWaiter(null);
+        await reload();
+      } catch (err) {
+        toast(err instanceof Error ? err.message : 'Error al guardar el mesero');
+      }
+    });
+  };
+
+  const confirmDeleteWaiter = () => {
+    if (!waiterToDelete) return;
+    const target = waiterToDelete;
+    void run(async () => {
+      try {
+        await apiDelete(`/api/v1/comandas/waiters/${encodeURIComponent(target.id)}`);
+        toast(`Mesero eliminado: ${target.fullName}`);
+        setWaiterToDelete(null);
+        await reload();
+      } catch (err) {
+        toast(err instanceof Error ? err.message : 'No fue posible eliminar el mesero');
       }
     });
   };
@@ -758,6 +796,7 @@ export const ComandasView: React.FC = () => {
       toast('El servicio de Facturación POS no está activo en la suscripción actual');
       return;
     }
+    setDetailModalTableId(null);
     navigateTo('ms-facturacion', 'pos_mostrador', {
       linkedTableId: tbl.id,
       tableName: tbl.orderCode ? `${tbl.name} (${tbl.orderCode})` : tbl.name,
@@ -797,38 +836,6 @@ export const ComandasView: React.FC = () => {
     );
   };
 
-  const buildPrintPayload = (tbl: DiningTable, forKitchen: boolean): Record<string, unknown> => {
-    const ch = resolveChannel(tbl);
-    return {
-      document_type: 'COMANDA',
-      layout_variant: 'tirilla_80mm',
-      document_number: `${forKitchen ? 'COC' : 'PRE'}-${(tbl.orderCode || tbl.id).replace('#', '').toUpperCase()}`,
-      issue_date: new Date().toISOString().slice(0, 16).replace('T', ' '),
-      customer_name: tbl.customerName
-        ? `${tbl.customerName} (${tbl.name})`
-        : `${tbl.name} — ${tbl.zone}`,
-      extra_fields: {
-        Comanda: tbl.orderCode || tbl.id.toUpperCase(),
-        Canal: ch,
-        Ubicacion: ch === 'MESA' ? `${tbl.name} · ${tbl.zone}` : tbl.deliveryAddress || tbl.zone,
-        Responsable: tbl.waiter || 'Turno General',
-        Etapa: resolveStage(tbl),
-      },
-      items: (tbl.items || []).map((it, idx) => ({
-        code: `P-${idx + 1}`,
-        description: it.note ? `${it.name} [Nota: ${it.note}]` : it.name,
-        quantity: it.qty,
-        unit_price: forKitchen ? 0 : it.price,
-        subtotal: forKitchen ? 0 : it.qty * it.price,
-      })),
-      subtotal: forKitchen ? 0 : tbl.total,
-      grand_total: forKitchen ? 0 : tbl.total,
-      notes: forKitchen
-        ? 'COMANDA DE PREPARACIÓN COCINA Y BARRA'
-        : 'PRECUENTA INFORMATIVA — Solicite su factura electrónica en Caja POS.',
-    };
-  };
-
   const renderKitchenTicketCard = (tbl: DiningTable) => {
     const ch = resolveChannel(tbl);
     const stg = resolveStage(tbl);
@@ -845,15 +852,15 @@ export const ComandasView: React.FC = () => {
 
     const subtitle =
       ch === 'MESA'
-        ? `🧑 ${tbl.waiter || 'Mesero Turno'} · ${tbl.zone}`
-        : `🧑 ${tbl.waiter || 'Despacho'} · ${ch === 'DOMICILIO' ? 'Empaque domicilio' : 'Empaque mostrador'}`;
+        ? `${tbl.waiter || 'Mesero Turno'} · ${tbl.zone}`
+        : `${tbl.waiter || 'Despacho'} · ${ch === 'DOMICILIO' ? 'Empaque domicilio' : 'Empaque mostrador'}`;
 
     const metaLine =
       ch === 'DOMICILIO'
-        ? `🛵 Destino: ${tbl.deliveryAddress || 'Dirección registrada'}`
+        ? `Destino: ${tbl.deliveryAddress || 'Dirección registrada'}`
         : ch === 'PARA_LLEVAR'
-        ? `🛍️ ${tbl.deliveryAddress || 'Retiro en mostrador principal'}`
-        : `👥 ${tbl.guests && tbl.guests > 0 ? `${tbl.guests} comensales` : 'Servicio en salón'}`;
+        ? tbl.deliveryAddress || 'Retiro en mostrador principal'
+        : `${tbl.guests && tbl.guests > 0 ? `${tbl.guests} comensales` : 'Servicio en salón'}`;
 
     const notesList = (tbl.items || [])
       .filter((it) => it.note && it.note.trim() !== '')
@@ -874,7 +881,7 @@ export const ComandasView: React.FC = () => {
           disabled?: boolean;
         }
       | undefined = {
-      label: '🔥 Aceptar y preparar',
+      label: 'Aceptar y preparar',
       tone: 'coral',
       onClick: () => handleStageChange(tbl, 'PREPARANDO'),
       disabled: busy,
@@ -883,7 +890,7 @@ export const ComandasView: React.FC = () => {
     if (stg === 'PREPARANDO') {
       statusPill = { label: 'En fogones / barra', tone: 'blue' };
       primaryAction = {
-        label: '🛎️ Marcar pedido listo',
+        label: 'Marcar pedido listo',
         tone: 'blue',
         onClick: () => handleStageChange(tbl, 'LISTA'),
         disabled: busy,
@@ -891,7 +898,7 @@ export const ComandasView: React.FC = () => {
     } else if (stg === 'LISTA') {
       statusPill = { label: 'Lista en pasaplatos', tone: 'purple' };
       primaryAction = {
-        label: '✅ Despachar pedido',
+        label: 'Despachar pedido',
         tone: 'purple',
         onClick: () => handleStageChange(tbl, 'ENTREGADA'),
         disabled: busy,
@@ -920,7 +927,7 @@ export const ComandasView: React.FC = () => {
         statusPill={statusPill}
         primaryAction={primaryAction}
         secondaryActions={
-          <PkPrintButton label="🖨️ Tirilla Cocina" payload={buildPrintPayload(tbl, true)} />
+          <PkPrintButton label="Tirilla Cocina" payload={buildComandaPrintPayload(tbl, true)} />
         }
       />
     );
@@ -955,7 +962,7 @@ export const ComandasView: React.FC = () => {
                   <input
                     className="pk-input"
                     style={{ minWidth: 'min(100%, 240px)', minHeight: 38 }}
-                    placeholder="🔎 Buscar #comanda, plato o mesa..."
+                    placeholder="Buscar #comanda, plato o mesa..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
@@ -966,7 +973,7 @@ export const ComandasView: React.FC = () => {
                     onClick={() => void reload()}
                     title="Sincronizar monitor de cocina"
                   >
-                    🔄 Actualizar
+                    Actualizar
                   </button>
                 </div>
               }
@@ -1034,12 +1041,40 @@ export const ComandasView: React.FC = () => {
               ]}
             />
           </>
+        ) : currentModule === 'catalogo_mesas' ? (
+          <TablesCatalogSection
+            tables={physicalTables}
+            busy={busy}
+            onOpenNewTable={openCreateTableModal}
+            onEditTable={openEditTableModal}
+            onDeleteTable={setTableToDelete}
+            onOpenTableDetail={(tbl) => setDetailModalTableId(tbl.id)}
+          />
+        ) : currentModule === 'carta_servicios' ? (
+          <MenuServicesSection
+            menuItems={menuItems}
+            nextMenuCode={nextMenuCode}
+            busy={busy}
+            onOpenNewItem={openCreateDishModal}
+            onEditItem={openEditDishModal}
+            onDeleteItem={setDishToDelete}
+          />
+        ) : currentModule === 'directorio_meseros' ? (
+          <WaitersDirectorySection
+            waiters={waiters}
+            tables={tables}
+            nextWaiterCode={nextWaiterCode}
+            busy={busy}
+            onOpenNewWaiter={openCreateWaiterModal}
+            onEditWaiter={openEditWaiterModal}
+            onDeleteWaiter={setWaiterToDelete}
+          />
         ) : (
           <>
             <PkLiveHeader
               title="Mapa de Mesas y Pedidos"
               liveLabel="En vivo"
-              subtitle="Plano interactivo del salón por ambientes, apertura de cuentas, domicilios y liquidación directa hacia Caja POS."
+              subtitle="Haz clic sobre cualquier mesa o pedido para consultar su cuenta en modal, agregar platos o liquidar en Caja POS."
               primaryActionLabel={canManageOrders ? '+ Nueva Comanda' : undefined}
               onPrimaryAction={canManageOrders ? () => openOrderStudio() : undefined}
               extraActions={
@@ -1052,7 +1087,7 @@ export const ComandasView: React.FC = () => {
                       className={`pk-segmented-btn${salonView === 'floor' ? ' active' : ''}`}
                       onClick={() => setSalonView('floor')}
                     >
-                      🪑 Plano de Mesas
+                      Plano de Mesas
                     </button>
                     <button
                       type="button"
@@ -1061,28 +1096,9 @@ export const ComandasView: React.FC = () => {
                       className={`pk-segmented-btn${salonView === 'table' ? ' active' : ''}`}
                       onClick={() => setSalonView('table')}
                     >
-                      📋 Listado de Cuentas ({activeOrders.length})
+                      Listado de Cuentas ({activeOrders.length})
                     </button>
                   </div>
-
-                  {canManageOrders && (
-                    <>
-                      <button
-                        type="button"
-                        className="pk-btn pk-btn-outline pk-btn-sm"
-                        onClick={() => setShowNewTableModal(true)}
-                      >
-                        + Mesa
-                      </button>
-                      <button
-                        type="button"
-                        className="pk-btn pk-btn-outline pk-btn-sm"
-                        onClick={() => setShowNewDishModal(true)}
-                      >
-                        + Plato
-                      </button>
-                    </>
-                  )}
 
                   <button
                     type="button"
@@ -1091,7 +1107,7 @@ export const ComandasView: React.FC = () => {
                     onClick={() => void reload()}
                     title="Actualizar estado del salón"
                   >
-                    🔄
+                    Actualizar
                   </button>
                 </>
               }
@@ -1115,7 +1131,7 @@ export const ComandasView: React.FC = () => {
                   color: 'var(--pk-amber)',
                 },
                 {
-                  label: 'Cuentas Abiertas en Salón',
+                  label: 'Cuentas Abiertas',
                   value: formatCop(totalLiveBilling),
                   color: 'var(--pk-navy)',
                 },
@@ -1124,44 +1140,6 @@ export const ComandasView: React.FC = () => {
 
             {salonView === 'floor' ? (
               <div className="pk-stack">
-                <PkDistributionStrip
-                  title="Ocupación del Salón y Ambientes Gastronómicos"
-                  segments={[
-                    {
-                      label: 'Mesas Libres',
-                      value: freeTablesCount,
-                      displayValue: String(freeTablesCount),
-                      color: '#10b981',
-                    },
-                    {
-                      label: 'Comanda Nueva',
-                      value: physicalTables.filter((t) => resolveStage(t) === 'NUEVA').length,
-                      displayValue: String(physicalTables.filter((t) => resolveStage(t) === 'NUEVA').length),
-                      color: '#f59e0b',
-                    },
-                    {
-                      label: 'En Cocina',
-                      value: physicalTables.filter((t) => resolveStage(t) === 'PREPARANDO').length,
-                      displayValue: String(physicalTables.filter((t) => resolveStage(t) === 'PREPARANDO').length),
-                      color: '#2563eb',
-                    },
-                    {
-                      label: 'Listas / Servidas',
-                      value: physicalTables.filter((t) => {
-                        const st = resolveStage(t);
-                        return st === 'LISTA' || st === 'ENTREGADA';
-                      }).length,
-                      displayValue: String(
-                        physicalTables.filter((t) => {
-                          const st = resolveStage(t);
-                          return st === 'LISTA' || st === 'ENTREGADA';
-                        }).length
-                      ),
-                      color: '#8b5cf6',
-                    },
-                  ]}
-                />
-
                 <div className="pk-card">
                   <div className="pk-card-head" style={{ flexWrap: 'wrap', gap: 12 }}>
                     <div className="pk-pill-tabs" role="tablist" aria-label="Ambientes del restaurante">
@@ -1191,31 +1169,23 @@ export const ComandasView: React.FC = () => {
                       <input
                         className="pk-input"
                         style={{ minWidth: 'min(100%, 230px)' }}
-                        placeholder="🔎 Buscar mesa o mesero..."
+                        placeholder="Buscar mesa o mesero..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                       />
-                      <button
-                        type="button"
-                        className="pk-btn pk-btn-outline pk-btn-sm"
-                        onClick={() => setShowNewTableModal(true)}
-                      >
-                        + Nueva Mesa
-                      </button>
                     </div>
                   </div>
 
                   <div className="pk-card-body">
                     {filteredFloorTables.length === 0 ? (
                       <div className="pk-kanban-empty">
-                        No hay mesas registradas en este ambiente. Usa &quot;+ Nueva Mesa&quot; para configurar el plano.
+                        No hay mesas registradas en este ambiente. Ve a la pestaña &quot;Mesas y Ambientes&quot; o crea una comanda para agregarlas.
                       </div>
                     ) : (
                       <div className="pk-cards-showcase">
                         {filteredFloorTables.map((tbl) => {
                           const stg = resolveStage(tbl);
                           const isFree = stg === 'LIBRE';
-                          const isSelected = selectedFloorTable?.id === tbl.id;
                           const dotBg = isFree
                             ? '#10b981'
                             : stg === 'NUEVA'
@@ -1239,11 +1209,18 @@ export const ComandasView: React.FC = () => {
                           return (
                             <div
                               key={tbl.id}
-                              onClick={() => setSelectedFloorTableId(tbl.id)}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => setDetailModalTableId(tbl.id)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  setDetailModalTableId(tbl.id);
+                                }
+                              }}
                               className="pk-ticket-card"
                               style={{
                                 cursor: 'pointer',
-                                border: isSelected ? '2px solid var(--pk-primary)' : undefined,
                                 background: isFree ? '#f8fafc' : '#ffffff',
                               }}
                             >
@@ -1251,17 +1228,17 @@ export const ComandasView: React.FC = () => {
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                                   <span
                                     style={{
-                                      width: 12,
-                                      height: 12,
+                                      width: 10,
+                                      height: 10,
                                       borderRadius: 999,
                                       background: dotBg,
-                                      boxShadow: `0 0 0 4px ${dotBg}22`,
+                                      boxShadow: `0 0 0 3px ${dotBg}22`,
                                       flexShrink: 0,
                                     }}
                                   />
                                   <div>
                                     <div className="pk-ticket-code">{tbl.name}</div>
-                                    <div className="pk-ticket-time">📍 {tbl.zone}</div>
+                                    <div className="pk-ticket-time">{tbl.zone}</div>
                                   </div>
                                 </div>
 
@@ -1288,59 +1265,44 @@ export const ComandasView: React.FC = () => {
                                   justifyContent: 'space-between',
                                   alignItems: 'center',
                                   fontSize: 12.5,
-                                  color: '#334155',
+                                  color: '#475569',
                                   gap: 8,
                                   flexWrap: 'wrap',
                                 }}
                               >
                                 <span>
-                                  👥 Capacidad:{' '}
-                                  <strong>{tbl.guests && tbl.guests > 0 ? tbl.guests : 4} puestos</strong>
+                                  {tbl.guests && tbl.guests > 0 ? `${tbl.guests} puestos` : '4 puestos'}
                                 </span>
-                                <span>🧑 {tbl.waiter || 'Mesero Turno'}</span>
+                                <span>{tbl.waiter || 'Mesero Turno'}</span>
                               </div>
 
                               {tbl.customerName && (
                                 <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--pk-navy)' }}>
-                                  👤 {tbl.customerName}
+                                  {tbl.customerName}
                                 </div>
                               )}
 
-                              <div style={{ padding: '4px 0' }}>
-                                <PkProcessNodes
-                                  compact
-                                  steps={buildOrderProcessSteps(stg, (target) => handleStageChange(tbl, target))}
-                                />
-                              </div>
+                              {!isFree && (
+                                <div
+                                  style={{ padding: '4px 0' }}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <PkProcessNodes
+                                    compact
+                                    steps={buildOrderProcessSteps(stg, (target) =>
+                                      handleStageChange(tbl, target)
+                                    )}
+                                  />
+                                </div>
+                              )}
 
                               <div className="pk-ticket-total-row">
-                                <span>{(tbl.items || []).length} plato(s)</span>
+                                <span>
+                                  {isFree
+                                    ? 'Clic para abrir comanda'
+                                    : `${(tbl.items || []).length} ítem(s) · Ver detalle`}
+                                </span>
                                 <span>{formatCop(tbl.total)}</span>
-                              </div>
-
-                              <div className="pk-row-actions" style={{ justifyContent: 'space-between', marginTop: 4 }}>
-                                <button
-                                  type="button"
-                                  className="pk-btn pk-btn-primary pk-btn-sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    openOrderStudio({ channel: 'MESA', table: tbl });
-                                  }}
-                                >
-                                  + Agregar Platos
-                                </button>
-
-                                <button
-                                  type="button"
-                                  className="pk-btn pk-btn-emerald pk-btn-sm"
-                                  disabled={busy || (tbl.items || []).length === 0}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handlePassToPos(tbl);
-                                  }}
-                                >
-                                  Liquidar Cuenta
-                                </button>
                               </div>
                             </div>
                           );
@@ -1350,95 +1312,11 @@ export const ComandasView: React.FC = () => {
                   </div>
                 </div>
 
-                {selectedFloorTable && (
-                  <div className="pk-card">
-                    <div className="pk-card-head">
-                      <div className="pk-card-title">
-                        🧾 Cuenta Detallada — {selectedFloorTable.name}
-                        {selectedFloorTable.orderCode ? ` (${selectedFloorTable.orderCode})` : ''}
-                      </div>
-                      <div className="pk-row-actions">
-                        {(selectedFloorTable.items || []).length > 0 && (
-                          <>
-                            <PkPrintButton
-                              label="🖨️ Precuenta 80mm"
-                              payload={buildPrintPayload(selectedFloorTable, false)}
-                            />
-                            <button
-                              type="button"
-                              className="pk-btn pk-btn-emerald pk-btn-sm"
-                              disabled={busy}
-                              onClick={() => handlePassToPos(selectedFloorTable)}
-                            >
-                              💳 Pasar a Factura POS
-                            </button>
-                          </>
-                        )}
-                        <button
-                          type="button"
-                          className="pk-btn pk-btn-primary pk-btn-sm"
-                          onClick={() => openOrderStudio({ channel: 'MESA', table: selectedFloorTable })}
-                        >
-                          + Agregar Platos
-                        </button>
-                      </div>
-                    </div>
-                    <div className="pk-card-body">
-                      {(selectedFloorTable.items || []).length === 0 ? (
-                        <div style={{ color: 'var(--pk-muted)', fontSize: 13.5 }}>
-                          Esta mesa está libre y lista para recibir comensales. Haz clic en &quot;+ Agregar Platos&quot; para abrir comanda.
-                        </div>
-                      ) : (
-                        <div className="pk-table-wrap">
-                          <table className="pk-table">
-                            <thead>
-                              <tr>
-                                <th>Plato / Bebida</th>
-                                <th>Cant.</th>
-                                <th>Precio Unit.</th>
-                                <th>Subtotal</th>
-                                <th></th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {selectedFloorTable.items.map((it) => (
-                                <tr key={it.itemId}>
-                                  <td>
-                                    <div style={{ fontWeight: 700 }}>{it.name}</div>
-                                    {it.note && (
-                                      <div style={{ fontSize: 11.5, color: 'var(--pk-amber)', fontWeight: 700 }}>
-                                        “{it.note}”
-                                      </div>
-                                    )}
-                                  </td>
-                                  <td>{it.qty}</td>
-                                  <td>{formatCop(it.price)}</td>
-                                  <td style={{ fontWeight: 800 }}>{formatCop(it.qty * it.price)}</td>
-                                  <td style={{ textAlign: 'right' }}>
-                                    <button
-                                      type="button"
-                                      className="pk-btn pk-btn-danger pk-btn-sm"
-                                      disabled={busy}
-                                      onClick={() => setItemToDelete({ table: selectedFloorTable, item: it })}
-                                    >
-                                      ✕
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
                 {nonTableOrders.length > 0 && (
                   <div className="pk-card">
                     <div className="pk-card-head">
                       <div className="pk-card-title">
-                        🛵 Domicilios y Pedidos Para Llevar Activos ({nonTableOrders.length})
+                        Domicilios y Pedidos Para Llevar Activos ({nonTableOrders.length})
                       </div>
                       <div className="pk-row-actions">
                         <button
@@ -1446,7 +1324,7 @@ export const ComandasView: React.FC = () => {
                           className="pk-btn pk-btn-outline pk-btn-sm"
                           onClick={() => openOrderStudio({ channel: 'DOMICILIO' })}
                         >
-                          + Nuevo Domicilio
+                          + Domicilio
                         </button>
                         <button
                           type="button"
@@ -1464,33 +1342,36 @@ export const ComandasView: React.FC = () => {
                           const stg = resolveStage(ord);
                           const badge = channelBadgeFor(ch);
                           return (
-                            <PkTicketCard
+                            <div
                               key={ord.id}
-                              code={ord.orderCode || `#${ord.id.toUpperCase()}`}
-                              timeAgo={formatOpenedElapsed(ord.openedAt)}
-                              channelBadge={badge}
-                              title={ord.customerName || ord.name}
-                              subtitle={`${ord.customerPhone ? `📞 ${ord.customerPhone} · ` : ''}🧑 ${ord.waiter || 'Despacho'}`}
-                              metaLine={`📍 ${ord.deliveryAddress || ord.zone}`}
-                              items={(ord.items || []).map((it) => ({
-                                qty: it.qty,
-                                name: it.name,
-                                amount: formatCop(it.qty * it.price),
-                              }))}
-                              totalLabel="TOTAL CUENTA"
-                              totalValue={formatCop(ord.total)}
-                              paymentLabel={`Pago: ${ord.paymentHint || 'En caja'}`}
-                              processNodes={buildOrderProcessSteps(stg, (next) => handleStageChange(ord, next))}
-                              primaryAction={{
-                                label: '💳 Liquidar en Caja POS',
-                                tone: 'emerald',
-                                disabled: busy,
-                                onClick: () => handlePassToPos(ord),
-                              }}
-                              secondaryActions={
-                                <PkPrintButton label="🖨️ Precuenta" payload={buildPrintPayload(ord, false)} />
-                              }
-                            />
+                              style={{ cursor: 'pointer' }}
+                              onClick={() => setDetailModalTableId(ord.id)}
+                            >
+                              <PkTicketCard
+                                code={ord.orderCode || `#${ord.id.toUpperCase()}`}
+                                timeAgo={formatOpenedElapsed(ord.openedAt)}
+                                channelBadge={badge}
+                                title={ord.customerName || ord.name}
+                                subtitle={`${ord.customerPhone ? `${ord.customerPhone} · ` : ''}${ord.waiter || 'Despacho'}`}
+                                metaLine={ord.deliveryAddress || ord.zone}
+                                items={(ord.items || []).slice(0, 3).map((it) => ({
+                                  qty: it.qty,
+                                  name: it.name,
+                                  amount: formatCop(it.qty * it.price),
+                                }))}
+                                totalLabel="TOTAL CUENTA"
+                                totalValue={formatCop(ord.total)}
+                                processNodes={buildOrderProcessSteps(stg, (next) =>
+                                  handleStageChange(ord, next)
+                                )}
+                                primaryAction={{
+                                  label: 'Ver Cuenta / Facturar',
+                                  tone: 'blue',
+                                  disabled: busy,
+                                  onClick: () => setDetailModalTableId(ord.id),
+                                }}
+                              />
+                            </div>
                           );
                         })}
                       </div>
@@ -1501,17 +1382,21 @@ export const ComandasView: React.FC = () => {
             ) : (
               <div className="pk-card">
                 <div className="pk-card-head">
-                  <div className="pk-card-title">📋 Consolidado de Cuentas, Mesas y Pedidos</div>
+                  <div className="pk-card-title">Consolidado de Cuentas y Pedidos Activos</div>
                   <div className="pk-row-actions">
                     <input
                       className="pk-input"
                       style={{ minWidth: 'min(100%, 230px)' }}
-                      placeholder="🔎 Buscar código, cliente o mesa..."
+                      placeholder="Buscar código, cliente o mesa..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                     />
-                    <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={handleExportCsv}>
-                      📥 Exportar CSV
+                    <button
+                      type="button"
+                      className="pk-btn pk-btn-outline pk-btn-sm"
+                      onClick={handleExportCsv}
+                    >
+                      CSV
                     </button>
                   </div>
                 </div>
@@ -1530,7 +1415,7 @@ export const ComandasView: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {tables
+                        {activeOrders
                           .filter((t) => {
                             const ch = resolveChannel(t);
                             if (channelFilter !== 'ALL' && ch !== channelFilter) return false;
@@ -1549,40 +1434,45 @@ export const ComandasView: React.FC = () => {
                             const badge = channelBadgeFor(ch);
                             return (
                               <tr key={tbl.id}>
-                                <td style={{ fontWeight: 900 }}>{tbl.orderCode || '—'}</td>
+                                <td style={{ fontWeight: 800 }}>{tbl.orderCode || '—'}</td>
                                 <td>
-                                  <span className={`pk-ticket-channel ${badge.tone}`}>{badge.label}</span>
+                                  <span className={`pk-ticket-channel ${badge.tone}`}>
+                                    {badge.label}
+                                  </span>
                                 </td>
                                 <td>
-                                  <div style={{ fontWeight: 800 }}>{tbl.name}</div>
+                                  <div style={{ fontWeight: 700 }}>{tbl.name}</div>
                                   {tbl.customerName && (
                                     <div style={{ fontSize: 12, color: 'var(--pk-muted)' }}>
-                                      {tbl.customerName} {tbl.customerPhone ? `· ${tbl.customerPhone}` : ''}
+                                      {tbl.customerName}
+                                      {tbl.customerPhone ? ` · ${tbl.customerPhone}` : ''}
                                     </div>
                                   )}
                                 </td>
                                 <td style={{ fontSize: 12.5 }}>
-                                  {ch === 'MESA' ? `${tbl.zone} · 🧑 ${tbl.waiter}` : tbl.deliveryAddress || tbl.zone}
+                                  {ch === 'MESA'
+                                    ? `${tbl.zone} · ${tbl.waiter}`
+                                    : tbl.deliveryAddress || tbl.zone}
                                 </td>
                                 <td style={{ minWidth: 230 }}>
                                   <PkProcessNodes
                                     compact
-                                    steps={buildOrderProcessSteps(stg, (next) => handleStageChange(tbl, next))}
+                                    steps={buildOrderProcessSteps(stg, (next) =>
+                                      handleStageChange(tbl, next)
+                                    )}
                                   />
                                 </td>
                                 <td style={{ fontWeight: 800 }}>{formatCop(tbl.total)}</td>
                                 <td>
                                   <div className="pk-row-actions">
-                                    {ch === 'MESA' && (
-                                      <button
-                                        type="button"
-                                        className="pk-btn pk-btn-outline pk-btn-sm"
-                                        onClick={() => openOrderStudio({ channel: 'MESA', table: tbl })}
-                                      >
-                                        + Platos
-                                      </button>
-                                    )}
-                                    {(tbl.items || []).length > 0 && canManageOrders && (
+                                    <button
+                                      type="button"
+                                      className="pk-btn pk-btn-outline pk-btn-sm"
+                                      onClick={() => setDetailModalTableId(tbl.id)}
+                                    >
+                                      Ver Cuenta
+                                    </button>
+                                    {canManageOrders && (
                                       <button
                                         type="button"
                                         className="pk-btn pk-btn-emerald pk-btn-sm"
@@ -1597,6 +1487,16 @@ export const ComandasView: React.FC = () => {
                               </tr>
                             );
                           })}
+                        {activeOrders.length === 0 && (
+                          <tr>
+                            <td
+                              colSpan={7}
+                              style={{ textAlign: 'center', color: 'var(--pk-muted)', padding: 28 }}
+                            >
+                              No hay cuentas activas en este momento.
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -1606,17 +1506,213 @@ export const ComandasView: React.FC = () => {
           </>
         )}
 
+        {/* Modal de Detalle de Mesa / Cuenta al hacer clic en Mapa de Mesas */}
+        <PkModal
+          open={Boolean(detailModalTable)}
+          maxWidth={720}
+          title={
+            detailModalTable
+              ? `${detailModalTable.name}${
+                  detailModalTable.orderCode ? ` · Comanda ${detailModalTable.orderCode}` : ''
+                }`
+              : 'Detalle de Cuenta'
+          }
+          onClose={() => setDetailModalTableId(null)}
+        >
+          {detailModalTable && (
+            <div className="pk-stack" style={{ gap: 16 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: 10,
+                  padding: '12px 14px',
+                  borderRadius: 12,
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                }}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a' }}>
+                    {resolveChannel(detailModalTable) === 'MESA'
+                      ? `${detailModalTable.zone} · Mesero: ${detailModalTable.waiter || 'Turno General'}`
+                      : `${detailModalTable.customerName || detailModalTable.name} · ${
+                          detailModalTable.deliveryAddress || detailModalTable.zone
+                        }`}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--pk-muted)' }}>
+                    {resolveChannel(detailModalTable) === 'MESA'
+                      ? `Capacidad: ${
+                          detailModalTable.guests && detailModalTable.guests > 0
+                            ? detailModalTable.guests
+                            : 4
+                        } puestos${
+                          detailModalTable.customerName
+                            ? ` · Titular: ${detailModalTable.customerName}`
+                            : ''
+                        }`
+                      : `Medio estimado: ${detailModalTable.paymentHint || 'Caja POS'}`}
+                  </div>
+                </div>
+
+                {resolveStage(detailModalTable) !== 'LIBRE' && (
+                  <PkProcessNodes
+                    compact
+                    steps={buildOrderProcessSteps(resolveStage(detailModalTable), (next) =>
+                      handleStageChange(detailModalTable, next)
+                    )}
+                  />
+                )}
+              </div>
+
+              {(detailModalTable.items || []).length === 0 ? (
+                <div
+                  style={{
+                    textAlign: 'center',
+                    padding: '28px 18px',
+                    borderRadius: 12,
+                    border: '1px dashed #cbd5e1',
+                    color: 'var(--pk-muted)',
+                  }}
+                >
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                    Esta mesa está disponible y sin consumos activos
+                  </div>
+                  <div style={{ fontSize: 12.5, marginBottom: 16 }}>
+                    Abre una comanda para registrar platos, bebidas o servicios gastronómicos.
+                  </div>
+                  {canManageOrders && (
+                    <button
+                      type="button"
+                      className="pk-btn pk-btn-primary"
+                      onClick={() => openOrderStudio({ channel: 'MESA', table: detailModalTable })}
+                    >
+                      + Abrir Comanda y Agregar Platos
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className="pk-table-wrap">
+                    <table className="pk-table">
+                      <thead>
+                        <tr>
+                          <th>Plato / Bebida / Servicio</th>
+                          <th>Cant.</th>
+                          <th>Precio Unit.</th>
+                          <th>Subtotal</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {detailModalTable.items.map((it) => (
+                          <tr key={it.itemId}>
+                            <td>
+                              <div style={{ fontWeight: 700 }}>{it.name}</div>
+                              {it.note && (
+                                <div
+                                  style={{
+                                    fontSize: 11.5,
+                                    color: 'var(--pk-amber)',
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  Nota: {it.note}
+                                </div>
+                              )}
+                            </td>
+                            <td>{it.qty}</td>
+                            <td>{formatCop(it.price)}</td>
+                            <td style={{ fontWeight: 800 }}>{formatCop(it.qty * it.price)}</td>
+                            <td style={{ textAlign: 'right' }}>
+                              <button
+                                type="button"
+                                className="pk-btn pk-btn-danger pk-btn-sm"
+                                disabled={busy}
+                                title="Retirar línea de la cuenta"
+                                onClick={() =>
+                                  setItemToDelete({ table: detailModalTable, item: it })
+                                }
+                              >
+                                ✕
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '12px 16px',
+                      borderRadius: 12,
+                      background: '#0f172a',
+                      color: '#ffffff',
+                    }}
+                  >
+                    <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: '0.04em' }}>
+                      TOTAL CUENTA ACUMULADA ({detailModalTable.items.length} LÍNEAS)
+                    </span>
+                    <strong style={{ fontSize: 18 }}>{formatCop(detailModalTable.total)}</strong>
+                  </div>
+
+                  <div
+                    className="pk-row-actions"
+                    style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}
+                  >
+                    <div className="pk-row-actions">
+                      {resolveChannel(detailModalTable) === 'MESA' && canManageOrders && (
+                        <button
+                          type="button"
+                          className="pk-btn pk-btn-outline"
+                          onClick={() =>
+                            openOrderStudio({ channel: 'MESA', table: detailModalTable })
+                          }
+                        >
+                          + Agregar Platos
+                        </button>
+                      )}
+                      <PkPrintButton
+                        label="Precuenta 80mm"
+                        payload={buildComandaPrintPayload(detailModalTable, false)}
+                      />
+                    </div>
+
+                    {canManageOrders && (
+                      <button
+                        type="button"
+                        className="pk-btn pk-btn-emerald"
+                        disabled={busy}
+                        onClick={() => handlePassToPos(detailModalTable)}
+                      >
+                        Pasar a Factura POS
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </PkModal>
+
+        {/* Estudio Fullscreen para Toma de Comanda (conserva mini-diálogos rápidos de Mesa, Mesero y Plato) */}
         <PkFullscreenDialog
           open={studioOpen}
           title="Estudio Gastronómico de Toma de Comanda"
-          subtitle="Selecciona la modalidad operativa, personaliza las notas de preparación y envía el pedido directo a cocina y despacho."
+          subtitle="Selecciona la modalidad operativa, asigna mesa y mesero, personaliza notas de cocina y confirma el pedido."
           badge={{
             label:
               studioChannel === 'DOMICILIO'
-                ? '🛵 Canal Domicilio'
+                ? 'Canal Domicilio'
                 : studioChannel === 'PARA_LLEVAR'
-                ? '🛍️ Canal Para Llevar'
-                : '🪑 Servicio en Salón',
+                ? 'Canal Para Llevar'
+                : 'Servicio en Salón',
             tone:
               studioChannel === 'DOMICILIO'
                 ? 'rose'
@@ -1645,10 +1741,11 @@ export const ComandasView: React.FC = () => {
             <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
               <div>
                 <div style={{ fontSize: 11.5, color: 'var(--pk-muted)', fontWeight: 700 }}>
-                  NUEVOS PLATOS EN COMANDA
+                  NUEVOS ÍTEMS EN COMANDA
                 </div>
                 <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--pk-navy)' }}>
-                  {draftLines.reduce((acc, l) => acc + l.qty, 0)} unidad(es) · {formatCop(draftSubtotal)}
+                  {draftLines.reduce((acc, l) => acc + l.qty, 0)} unidad(es) ·{' '}
+                  {formatCop(draftSubtotal)}
                 </div>
               </div>
               {existingTableTotal > 0 && (
@@ -1679,7 +1776,7 @@ export const ComandasView: React.FC = () => {
                 disabled={busy || draftLines.length === 0}
                 onClick={handleSubmitStudioOrder}
               >
-                {busy ? 'Enviando comanda...' : '✅ Confirmar y Enviar Comanda'}
+                {busy ? 'Enviando comanda...' : 'Confirmar y Enviar Comanda'}
               </button>
             </>
           }
@@ -1688,10 +1785,10 @@ export const ComandasView: React.FC = () => {
             <div className="pk-card-head">
               <div className="pk-card-title">
                 {studioChannel === 'MESA'
-                  ? '🪑 Datos Operativos de Mesa y Salón'
+                  ? 'Datos Operativos de Mesa y Mesero'
                   : studioChannel === 'DOMICILIO'
-                  ? '🛵 Datos del Cliente y Dirección de Domicilio'
-                  : '🛍️ Datos de Retiro en Mostrador'}
+                  ? 'Datos del Cliente y Dirección de Domicilio'
+                  : 'Datos de Retiro en Mostrador'}
               </div>
             </div>
             <div className="pk-card-body">
@@ -1704,10 +1801,24 @@ export const ComandasView: React.FC = () => {
                     onChange={handleSelectStudioTable}
                     getValue={(t) => t.id}
                     getLabel={(t) =>
-                      `${t.name} — ${t.zone} (${resolveStage(t) === 'LIBRE' ? 'Libre' : formatCop(t.total)})`
+                      `${t.name} — ${t.zone} (${
+                        resolveStage(t) === 'LIBRE' ? 'Libre' : formatCop(t.total)
+                      })`
                     }
-                    onCreateNew={() => setShowNewTableModal(true)}
+                    onCreateNew={openCreateTableModal}
                     createLabel="+ Nueva Mesa"
+                    searchable
+                  />
+
+                  <PkSelect
+                    label="Mesero Asignado *"
+                    items={waiterSelectItems}
+                    value={studioWaiter}
+                    onChange={setStudioWaiter}
+                    getValue={(w) => w.value}
+                    getLabel={(w) => w.label}
+                    onCreateNew={openCreateWaiterModal}
+                    createLabel="+ Nuevo Mesero"
                     searchable
                   />
 
@@ -1719,15 +1830,6 @@ export const ComandasView: React.FC = () => {
                       max="40"
                       value={studioGuests}
                       onChange={(e) => setStudioGuests(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="pk-field">
-                    <label>Mesero Asignado</label>
-                    <input
-                      value={studioWaiter}
-                      onChange={(e) => setStudioWaiter(e.target.value)}
-                      placeholder="Nombre del mesero"
                     />
                   </div>
 
@@ -1843,21 +1945,21 @@ export const ComandasView: React.FC = () => {
           <div className="pk-comandas-split">
             <div className="pk-card">
               <div className="pk-card-head" style={{ flexWrap: 'wrap', gap: 10 }}>
-                <div className="pk-card-title">🍽️ Carta Interactiva de Platos y Bebidas</div>
+                <div className="pk-card-title">Carta Interactiva de Platos y Servicios</div>
                 <div className="pk-row-actions" style={{ flex: '1 1 auto', justifyContent: 'flex-end' }}>
                   <input
                     className="pk-input"
                     style={{ flex: '1 1 180px', maxWidth: 260, minWidth: 0 }}
-                    placeholder="🔎 Buscar en la carta..."
+                    placeholder="Buscar en la carta..."
                     value={studioMenuSearch}
                     onChange={(e) => setStudioMenuSearch(e.target.value)}
                   />
                   <button
                     type="button"
                     className="pk-btn pk-btn-outline pk-btn-sm"
-                    onClick={() => setShowNewDishModal(true)}
+                    onClick={openCreateDishModal}
                   >
-                    + Nuevo Plato
+                    + Nuevo Servicio / Plato
                   </button>
                 </div>
               </div>
@@ -1887,7 +1989,7 @@ export const ComandasView: React.FC = () => {
                     }}
                   >
                     <div style={{ fontSize: 12, fontWeight: 800, color: '#92400e', marginBottom: 6 }}>
-                      📝 Nota rápida para el próximo plato a agregar (opcional)
+                      Nota rápida para el próximo plato a agregar (opcional)
                     </div>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                       <input
@@ -1913,7 +2015,7 @@ export const ComandasView: React.FC = () => {
 
                 {filteredStudioMenu.length === 0 ? (
                   <div className="pk-kanban-empty">
-                    No hay platos en esta categoría. Usa &quot;+ Nuevo Plato&quot; para ampliar la carta.
+                    No hay ítems en esta categoría. Usa &quot;+ Nuevo Servicio / Plato&quot; para ampliar la carta.
                   </div>
                 ) : (
                   <div
@@ -1982,7 +2084,7 @@ export const ComandasView: React.FC = () => {
             <div className="pk-ticket-card" style={{ position: 'sticky', top: 0 }}>
               <div className="pk-ticket-top">
                 <div>
-                  <div className="pk-ticket-code">🧾 Tiquete en Construcción</div>
+                  <div className="pk-ticket-code">Tiquete en Construcción</div>
                   <div className="pk-ticket-time">Previsualización inmediata para cocina</div>
                 </div>
                 <span className={`pk-ticket-channel ${channelBadgeFor(studioChannel).tone}`}>
@@ -2000,10 +2102,10 @@ export const ComandasView: React.FC = () => {
                 </div>
                 <div className="pk-ticket-sub">
                   {studioChannel === 'DOMICILIO'
-                    ? `📍 ${studioDeliveryAddress.trim() || 'Dirección pendiente'}`
+                    ? studioDeliveryAddress.trim() || 'Dirección pendiente'
                     : studioChannel === 'PARA_LLEVAR'
-                    ? `🛍️ ${studioPickupWindow}`
-                    : `👥 ${studioGuests || 1} personas · 🧑 ${studioWaiter || 'Mesero Turno'}`}
+                    ? studioPickupWindow
+                    : `${studioGuests || 1} personas · ${studioWaiter || 'Mesero Turno'}`}
                 </div>
               </div>
 
@@ -2020,7 +2122,8 @@ export const ComandasView: React.FC = () => {
                     }}
                   >
                     <div style={{ fontWeight: 800, color: '#334155', marginBottom: 4 }}>
-                      Consumo previo en {selectedStudioTable.name}: {formatCop(selectedStudioTable.total)}
+                      Consumo previo en {selectedStudioTable.name}:{' '}
+                      {formatCop(selectedStudioTable.total)}
                     </div>
                     {selectedStudioTable.items.map((it) => (
                       <div
@@ -2038,7 +2141,7 @@ export const ComandasView: React.FC = () => {
 
               {draftLines.length === 0 ? (
                 <div className="pk-kanban-empty">
-                  Haz clic en &quot;+ Agregar&quot; sobre cualquier plato o bebida de la carta para armar la comanda.
+                  Haz clic en &quot;+ Agregar&quot; sobre cualquier plato, bebida o servicio para armar la comanda.
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -2116,7 +2219,7 @@ export const ComandasView: React.FC = () => {
                 <span>{formatCop(draftSubtotal)}</span>
               </div>
 
-              <div className="pk-ticket-pay">💳 Pago: {studioPaymentMethod}</div>
+              <div className="pk-ticket-pay">Pago: {studioPaymentMethod}</div>
 
               <button
                 type="button"
@@ -2130,12 +2233,16 @@ export const ComandasView: React.FC = () => {
           </div>
         </PkFullscreenDialog>
 
+        {/* Modal Crear / Editar Mesa */}
         <PkModal
-          open={showNewTableModal}
-          title="Registrar Nueva Mesa o Ubicación"
-          onClose={() => setShowNewTableModal(false)}
+          open={showTableModal}
+          title={editingTable ? `Editar ${editingTable.name}` : 'Registrar Nueva Mesa'}
+          onClose={() => {
+            setShowTableModal(false);
+            setEditingTable(null);
+          }}
         >
-          <form onSubmit={handleCreateTable} className="pk-form-grid cols-2">
+          <form onSubmit={handleSaveTable} className="pk-form-grid cols-2">
             <div className="pk-field">
               <label>Nombre o Número de Mesa *</label>
               <input
@@ -2164,46 +2271,63 @@ export const ComandasView: React.FC = () => {
               />
             </div>
 
-            <div className="pk-field">
-              <label>Mesero Asignado</label>
-              <input
-                value={tableWaiter}
-                onChange={(e) => setTableWaiter(e.target.value)}
-                placeholder="Nombre del mesero responsable"
-              />
-            </div>
+            <PkSelect
+              label="Mesero Asignado"
+              items={waiterSelectItems}
+              value={tableWaiter}
+              onChange={setTableWaiter}
+              getValue={(w) => w.value}
+              getLabel={(w) => w.label}
+              onCreateNew={openCreateWaiterModal}
+              createLabel="+ Nuevo Mesero"
+              searchable
+            />
 
             <div className="pk-form-actions">
               <button
                 type="button"
                 className="pk-btn pk-btn-outline"
-                onClick={() => setShowNewTableModal(false)}
+                onClick={() => {
+                  setShowTableModal(false);
+                  setEditingTable(null);
+                }}
                 disabled={busy}
               >
                 Cancelar
               </button>
               <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
-                {busy ? 'Guardando...' : '💾 Crear Mesa'}
+                {busy ? 'Guardando...' : editingTable ? 'Guardar Cambios' : 'Crear Mesa'}
               </button>
             </div>
           </form>
         </PkModal>
 
+        {/* Modal Crear / Editar Servicio o Plato */}
         <PkModal
-          open={showNewDishModal}
-          title="Agregar Plato o Bebida a la Carta"
-          onClose={() => setShowNewDishModal(false)}
+          open={showDishModal}
+          title={
+            editingDish
+              ? `Editar ${editingDish.code} — ${editingDish.name}`
+              : 'Agregar Servicio, Plato o Bebida a la Carta'
+          }
+          onClose={() => {
+            setShowDishModal(false);
+            setEditingDish(null);
+          }}
         >
-          <form onSubmit={handleCreateMenuItem} className="pk-form-grid cols-2">
-            <PkAutoCodeInput label="Código Carta" value={nextMenuCode} />
+          <form onSubmit={handleSaveMenuItem} className="pk-form-grid cols-2">
+            <PkAutoCodeInput
+              label="Código Carta"
+              value={editingDish ? editingDish.code : nextMenuCode}
+            />
 
             <div className="pk-field">
-              <label>Nombre del Plato o Bebida *</label>
+              <label>Nombre del Plato, Bebida o Servicio *</label>
               <input
                 required
                 value={dishName}
                 onChange={(e) => setDishName(e.target.value)}
-                placeholder="Ej: Cazuela Artesanal de Mariscos"
+                placeholder="Ej: Cazuela de Mariscos / Descorche"
               />
             </div>
 
@@ -2240,21 +2364,119 @@ export const ComandasView: React.FC = () => {
               <button
                 type="button"
                 className="pk-btn pk-btn-outline"
-                onClick={() => setShowNewDishModal(false)}
+                onClick={() => {
+                  setShowDishModal(false);
+                  setEditingDish(null);
+                }}
                 disabled={busy}
               >
                 Cancelar
               </button>
               <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
-                {busy ? 'Guardando...' : '💾 Guardar en Carta'}
+                {busy ? 'Guardando...' : editingDish ? 'Guardar Cambios' : 'Guardar en Carta'}
               </button>
             </div>
           </form>
         </PkModal>
 
+        {/* Modal Crear / Editar Mesero */}
+        <PkModal
+          open={showWaiterModal}
+          title={
+            editingWaiter
+              ? `Editar Mesero ${editingWaiter.code}`
+              : 'Registrar Nuevo Mesero o Personal de Atención'
+          }
+          onClose={() => {
+            setShowWaiterModal(false);
+            setEditingWaiter(null);
+          }}
+        >
+          <form onSubmit={handleSaveWaiter} className="pk-form-grid cols-2">
+            <PkAutoCodeInput
+              label="Código Mesero"
+              value={editingWaiter ? editingWaiter.code : nextWaiterCode}
+            />
+
+            <div className="pk-field">
+              <label>Nombre Completo *</label>
+              <input
+                required
+                value={waiterFullName}
+                onChange={(e) => setWaiterFullName(e.target.value)}
+                placeholder="Ej: Camila Restrepo"
+              />
+            </div>
+
+            <div className="pk-field">
+              <label>Documento de Identidad</label>
+              <input
+                value={waiterDocId}
+                onChange={(e) => setWaiterDocId(e.target.value)}
+                placeholder="Ej: 1.037.612.845"
+              />
+            </div>
+
+            <div className="pk-field">
+              <label>Teléfono / Celular</label>
+              <input
+                value={waiterPhone}
+                onChange={(e) => setWaiterPhone(e.target.value)}
+                placeholder="Ej: 312 458 9021"
+              />
+            </div>
+
+            <PkSimpleSelect
+              label="Ambiente / Zona Principal"
+              value={waiterZone}
+              onChange={setWaiterZone}
+              options={TABLE_ZONE_OPTIONS}
+            />
+
+            <PkSimpleSelect
+              label="Turno Asignado"
+              value={waiterShift}
+              onChange={setWaiterShift}
+              options={WAITER_SHIFT_OPTIONS}
+            />
+
+            {editingWaiter && (
+              <div className="pk-col-span-full">
+                <PkSimpleSelect
+                  label="Estado Operativo"
+                  value={waiterActive}
+                  onChange={setWaiterActive}
+                  options={[
+                    { value: 'true', label: 'Activo en Turno' },
+                    { value: 'false', label: 'Inactivo / Descanso' },
+                  ]}
+                />
+              </div>
+            )}
+
+            <div className="pk-form-actions">
+              <button
+                type="button"
+                className="pk-btn pk-btn-outline"
+                onClick={() => {
+                  setShowWaiterModal(false);
+                  setEditingWaiter(null);
+                }}
+                disabled={busy}
+              >
+                Cancelar
+              </button>
+              <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
+                {busy ? 'Guardando...' : editingWaiter ? 'Guardar Cambios' : 'Registrar Mesero'}
+              </button>
+            </div>
+          </form>
+        </PkModal>
+
+        {/* Confirmaciones */}
         <PkConfirmModal
           open={Boolean(itemToDelete)}
-          title="Retirar Plato de la Comanda"
+          title="Retirar Línea de la Comanda"
           message={
             itemToDelete
               ? `¿Confirmas retirar "${itemToDelete.item.name}" (${itemToDelete.item.qty} und.) de ${itemToDelete.table.name}?`
@@ -2264,6 +2486,48 @@ export const ComandasView: React.FC = () => {
           busy={busy}
           onConfirm={confirmRemoveItem}
           onCancel={() => setItemToDelete(null)}
+        />
+
+        <PkConfirmModal
+          open={Boolean(tableToDelete)}
+          title="Eliminar Mesa del Catálogo"
+          message={
+            tableToDelete
+              ? `¿Confirmas eliminar "${tableToDelete.name}" (${tableToDelete.zone}) del plano y catálogo?`
+              : ''
+          }
+          confirmLabel="Eliminar Mesa"
+          busy={busy}
+          onConfirm={confirmDeleteTable}
+          onCancel={() => setTableToDelete(null)}
+        />
+
+        <PkConfirmModal
+          open={Boolean(dishToDelete)}
+          title="Eliminar Ítem de la Carta"
+          message={
+            dishToDelete
+              ? `¿Confirmas eliminar "${dishToDelete.name}" (${dishToDelete.code}) de la carta gastronómica?`
+              : ''
+          }
+          confirmLabel="Eliminar de Carta"
+          busy={busy}
+          onConfirm={confirmDeleteDish}
+          onCancel={() => setDishToDelete(null)}
+        />
+
+        <PkConfirmModal
+          open={Boolean(waiterToDelete)}
+          title="Eliminar Mesero del Directorio"
+          message={
+            waiterToDelete
+              ? `¿Confirmas retirar a "${waiterToDelete.fullName}" (${waiterToDelete.code}) del directorio de personal?`
+              : ''
+          }
+          confirmLabel="Eliminar Mesero"
+          busy={busy}
+          onConfirm={confirmDeleteWaiter}
+          onCancel={() => setWaiterToDelete(null)}
         />
       </div>
     </ModuleGate>

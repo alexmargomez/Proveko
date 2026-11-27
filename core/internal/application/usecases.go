@@ -1007,6 +1007,28 @@ func (s *CoreService) RepairEmptyModuleTenants(ctx context.Context) error {
 				return err
 			}
 			s.invalidateTenantCache(ten.TenantID)
+			continue
+		}
+		if containsStr(ten.ActiveServices, "ms-comandas") && containsStr(ten.ActiveModules, "mapa_mesas") {
+			changed := false
+			for _, mk := range []string{"catalogo_mesas", "carta_servicios", "directorio_meseros"} {
+				if !containsStr(ten.ActiveModules, mk) {
+					ten.ActiveModules = append(ten.ActiveModules, mk)
+					changed = true
+				}
+			}
+			for _, smk := range []string{"configuracion_mesas", "catalogo_gastronomico", "plantilla_meseros"} {
+				if ten.ActiveSubmodules != nil && !containsStr(ten.ActiveSubmodules, smk) {
+					ten.ActiveSubmodules = append(ten.ActiveSubmodules, smk)
+					changed = true
+				}
+			}
+			if changed {
+				if err := s.repo.UpdateSubscriptions(ctx, ten); err != nil {
+					return err
+				}
+				s.invalidateTenantCache(ten.TenantID)
+			}
 		}
 	}
 	return nil

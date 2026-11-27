@@ -25,12 +25,14 @@ const (
 	StageLista      = "LISTA"
 	StageEntregada  = "ENTREGADA"
 
-	DemoBaseTableSeq = 106
-	DemoBaseMenuSeq  = 208
-	DemoBaseOrderSeq = 47
-	BaseTableSeq     = 100
-	BaseMenuSeq      = 200
-	BaseOrderSeq     = 0
+	DemoBaseTableSeq  = 106
+	DemoBaseMenuSeq   = 208
+	DemoBaseWaiterSeq = 304
+	DemoBaseOrderSeq  = 47
+	BaseTableSeq      = 100
+	BaseMenuSeq       = 200
+	BaseWaiterSeq     = 300
+	BaseOrderSeq      = 0
 )
 
 type MenuItem struct {
@@ -40,6 +42,17 @@ type MenuItem struct {
 	Category  string  `json:"category"`
 	SalePrice float64 `json:"salePrice"`
 	TaxPct    float64 `json:"taxPct"`
+}
+
+type Waiter struct {
+	ID       string `json:"id"`
+	Code     string `json:"code"`
+	FullName string `json:"fullName"`
+	DocID    string `json:"docId"`
+	Phone    string `json:"phone"`
+	Zone     string `json:"zone"`
+	Shift    string `json:"shift"`
+	Active   bool   `json:"active"`
 }
 
 type OrderItem struct {
@@ -148,11 +161,43 @@ type CreateTableInput struct {
 	Guests int    `json:"guests"`
 }
 
+type UpdateTableInput struct {
+	Name   string `json:"name"`
+	Zone   string `json:"zone"`
+	Waiter string `json:"waiter"`
+	Guests int    `json:"guests"`
+}
+
 type CreateMenuItemInput struct {
 	Name      string  `json:"name"`
 	Category  string  `json:"category"`
 	SalePrice float64 `json:"salePrice"`
 	TaxPct    float64 `json:"taxPct"`
+}
+
+type UpdateMenuItemInput struct {
+	Name      string  `json:"name"`
+	Category  string  `json:"category"`
+	SalePrice float64 `json:"salePrice"`
+	TaxPct    float64 `json:"taxPct"`
+}
+
+type CreateWaiterInput struct {
+	FullName string `json:"fullName"`
+	DocID    string `json:"docId"`
+	Phone    string `json:"phone"`
+	Zone     string `json:"zone"`
+	Shift    string `json:"shift"`
+	Active   *bool  `json:"active"`
+}
+
+type UpdateWaiterInput struct {
+	FullName string `json:"fullName"`
+	DocID    string `json:"docId"`
+	Phone    string `json:"phone"`
+	Zone     string `json:"zone"`
+	Shift    string `json:"shift"`
+	Active   *bool  `json:"active"`
 }
 
 type AddOrderItemInput struct {
@@ -176,19 +221,29 @@ type CreateOrderInput struct {
 }
 
 type GastroState struct {
-	NextMenuCode string        `json:"nextMenuCode"`
-	Tables       []DiningTable `json:"tables"`
-	Products     []MenuItem    `json:"products"`
+	NextMenuCode   string        `json:"nextMenuCode"`
+	NextWaiterCode string        `json:"nextWaiterCode"`
+	Tables         []DiningTable `json:"tables"`
+	Products       []MenuItem    `json:"products"`
+	Waiters        []Waiter      `json:"waiters"`
 }
 
-func BuildDiningTable(id string, in CreateTableInput) (DiningTable, error) {
-	name := strings.TrimSpace(in.Name)
+func formatTableName(raw string) (string, error) {
+	name := strings.TrimSpace(raw)
 	if name == "" {
-		return DiningTable{}, apperr.Validation("El nombre o número de la mesa es obligatorio")
+		return "", apperr.Validation("El nombre o número de la mesa es obligatorio")
 	}
 	lower := strings.ToLower(name)
 	if !strings.Contains(lower, "mesa") && !strings.Contains(lower, "barra") && !strings.Contains(lower, "terraza") && !strings.Contains(lower, "reserv") && !strings.Contains(lower, "vip") {
 		name = "Mesa " + name
+	}
+	return name, nil
+}
+
+func BuildDiningTable(id string, in CreateTableInput) (DiningTable, error) {
+	name, err := formatTableName(in.Name)
+	if err != nil {
+		return DiningTable{}, err
 	}
 	zone := strings.TrimSpace(in.Zone)
 	if zone == "" {
@@ -214,6 +269,31 @@ func BuildDiningTable(id string, in CreateTableInput) (DiningTable, error) {
 		Items:      []OrderItem{},
 		Total:      0,
 	}, nil
+}
+
+func (t *DiningTable) ApplyTableUpdate(in UpdateTableInput) error {
+	if t.IsStandaloneTicket() {
+		return apperr.Validation("Solo se pueden editar mesas físicas de salón")
+	}
+	name, err := formatTableName(in.Name)
+	if err != nil {
+		return err
+	}
+	zone := strings.TrimSpace(in.Zone)
+	if zone == "" {
+		zone = "Salón Principal"
+	}
+	waiter := strings.TrimSpace(in.Waiter)
+	if waiter == "" {
+		waiter = "Mesero Turno"
+	}
+	t.Name = name
+	t.Zone = zone
+	t.Waiter = waiter
+	if in.Guests > 0 {
+		t.Guests = in.Guests
+	}
+	return nil
 }
 
 func ValidateCreateOrderInput(in CreateOrderInput) (CreateOrderInput, error) {
@@ -360,6 +440,83 @@ func BuildMenuItem(code string, in CreateMenuItemInput) (MenuItem, error) {
 		SalePrice: price,
 		TaxPct:    money.RoundCents(taxPct),
 	}, nil
+}
+
+func (m *MenuItem) ApplyMenuItemUpdate(in UpdateMenuItemInput) error {
+	name := strings.TrimSpace(in.Name)
+	if name == "" {
+		return apperr.Validation("El nombre del plato o servicio es obligatorio")
+	}
+	price, err := requirePositiveFinite(in.SalePrice, "precio de venta")
+	if err != nil {
+		return err
+	}
+	if in.TaxPct < 0 || in.TaxPct > 100 || !money.IsFinite(in.TaxPct) {
+		return apperr.Validation("El porcentaje de impuesto debe estar entre 0% y 100%")
+	}
+	category := strings.TrimSpace(in.Category)
+	if category == "" {
+		category = "Restaurante"
+	}
+	m.Name = name
+	m.Category = category
+	m.SalePrice = price
+	m.TaxPct = money.RoundCents(in.TaxPct)
+	return nil
+}
+
+func BuildWaiter(code string, in CreateWaiterInput) (Waiter, error) {
+	fullName := strings.TrimSpace(in.FullName)
+	if fullName == "" {
+		return Waiter{}, apperr.Validation("El nombre completo del mesero es obligatorio")
+	}
+	zone := strings.TrimSpace(in.Zone)
+	if zone == "" {
+		zone = "Salón Principal"
+	}
+	shift := strings.TrimSpace(in.Shift)
+	if shift == "" {
+		shift = "Turno General"
+	}
+	active := true
+	if in.Active != nil {
+		active = *in.Active
+	}
+	cleanCode := strings.ToUpper(strings.TrimSpace(code))
+	return Waiter{
+		ID:       strings.ToLower(cleanCode),
+		Code:     cleanCode,
+		FullName: fullName,
+		DocID:    strings.TrimSpace(in.DocID),
+		Phone:    strings.TrimSpace(in.Phone),
+		Zone:     zone,
+		Shift:    shift,
+		Active:   active,
+	}, nil
+}
+
+func (w *Waiter) ApplyWaiterUpdate(in UpdateWaiterInput) error {
+	fullName := strings.TrimSpace(in.FullName)
+	if fullName == "" {
+		return apperr.Validation("El nombre completo del mesero es obligatorio")
+	}
+	zone := strings.TrimSpace(in.Zone)
+	if zone == "" {
+		zone = "Salón Principal"
+	}
+	shift := strings.TrimSpace(in.Shift)
+	if shift == "" {
+		shift = "Turno General"
+	}
+	w.FullName = fullName
+	w.DocID = strings.TrimSpace(in.DocID)
+	w.Phone = strings.TrimSpace(in.Phone)
+	w.Zone = zone
+	w.Shift = shift
+	if in.Active != nil {
+		w.Active = *in.Active
+	}
+	return nil
 }
 
 func NormalizeOrderItemInput(in AddOrderItemInput) (AddOrderItemInput, error) {
@@ -530,6 +687,15 @@ func DemoMenuItems() []MenuItem {
 		{ID: "mnu-206", Code: "MNU-206", Name: "Lomo al Trapo con Papas Rústicas", Category: "Restaurante — Fuertes", SalePrice: 54000, TaxPct: 8},
 		{ID: "mnu-207", Code: "MNU-207", Name: "Carpaccio Artesanal de Res", Category: "Restaurante — Entradas", SalePrice: 29000, TaxPct: 8},
 		{ID: "mnu-208", Code: "MNU-208", Name: "Volcán Tibio de Chocolate Artesanal", Category: "Postres y Cafetería", SalePrice: 18500, TaxPct: 8},
+	}
+}
+
+func DemoWaiters() []Waiter {
+	return []Waiter{
+		{ID: "msr-301", Code: "MSR-301", FullName: "Camila Restrepo", DocID: "1.037.612.845", Phone: "312 458 9021", Zone: "Salón Principal", Shift: "Turno Completo", Active: true},
+		{ID: "msr-302", Code: "MSR-302", FullName: "Andrés Mejía", DocID: "1.017.204.519", Phone: "300 845 1290", Zone: "Terraza", Shift: "Turno Tarde / Noche", Active: true},
+		{ID: "msr-303", Code: "MSR-303", FullName: "Laura Pineda", DocID: "1.152.448.703", Phone: "315 620 4418", Zone: "VIP / Reservados", Shift: "Turno Apertura", Active: true},
+		{ID: "msr-304", Code: "MSR-304", FullName: "Santiago Ríos", DocID: "1.036.981.330", Phone: "320 714 0092", Zone: "Barra", Shift: "Turno Noche", Active: true},
 	}
 }
 

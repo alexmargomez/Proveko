@@ -288,3 +288,115 @@ func TestMultiChannelOrdersLifecycleAndClearTable(t *testing.T) {
 		t.Fatalf("expected physical table to reset to LIBRE/Libre, got %+v", finalState.Tables[0])
 	}
 }
+
+func TestCatalogsCRUDForWaitersTablesAndServices(t *testing.T) {
+	env := newTestEnv(t)
+	dbName := "db_gastro_catalogos"
+
+	wRes := env.doJSON(t, http.MethodPost, "/api/v1/comandas/waiters", dbName, "", map[string]any{
+		"fullName": "Mateo Aristizábal",
+		"docId":    "1036451200",
+		"phone":    "311 400 8899",
+		"zone":     "Terraza",
+		"shift":    "Turno Tarde",
+	})
+	if wRes.Code != http.StatusCreated {
+		t.Fatalf("create waiter failed (%d): %s", wRes.Code, wRes.Body.String())
+	}
+	var wWrap struct {
+		Waiter domain.Waiter `json:"waiter"`
+	}
+	_ = json.Unmarshal(wRes.Body.Bytes(), &wWrap)
+	if wWrap.Waiter.Code != "MSR-301" || !wWrap.Waiter.Active {
+		t.Fatalf("unexpected waiter created: %+v", wWrap.Waiter)
+	}
+
+	updWRes := env.doJSON(t, http.MethodPut, "/api/v1/comandas/waiters/"+wWrap.Waiter.ID, dbName, "", map[string]any{
+		"fullName": "Mateo Aristizábal Vélez",
+		"docId":    "1036451200",
+		"phone":    "311 400 9900",
+		"zone":     "VIP / Reservados",
+		"shift":    "Turno Noche",
+		"active":   false,
+	})
+	if updWRes.Code != http.StatusOK {
+		t.Fatalf("update waiter failed (%d): %s", updWRes.Code, updWRes.Body.String())
+	}
+	_ = json.Unmarshal(updWRes.Body.Bytes(), &wWrap)
+	if wWrap.Waiter.Zone != "VIP / Reservados" || wWrap.Waiter.Active {
+		t.Fatalf("unexpected waiter after update: %+v", wWrap.Waiter)
+	}
+
+	mRes := env.doJSON(t, http.MethodPost, "/api/v1/comandas/menu-items", dbName, "", map[string]any{
+		"name":      "Servicio de Descorche Especial",
+		"category":  "Servicios y Eventos",
+		"salePrice": 35000,
+		"taxPct":    8,
+	})
+	if mRes.Code != http.StatusCreated {
+		t.Fatalf("create menu service failed (%d): %s", mRes.Code, mRes.Body.String())
+	}
+	var mWrap struct {
+		MenuItem domain.MenuItem `json:"menuItem"`
+	}
+	_ = json.Unmarshal(mRes.Body.Bytes(), &mWrap)
+
+	updMRes := env.doJSON(t, http.MethodPut, "/api/v1/comandas/menu-items/"+mWrap.MenuItem.ID, dbName, "", map[string]any{
+		"name":      "Servicio de Descorche Sommelier",
+		"category":  "Servicios y Eventos",
+		"salePrice": 40000,
+		"taxPct":    8,
+	})
+	if updMRes.Code != http.StatusOK {
+		t.Fatalf("update menu service failed (%d): %s", updMRes.Code, updMRes.Body.String())
+	}
+
+	tRes := env.doJSON(t, http.MethodPost, "/api/v1/comandas/tables", dbName, "", map[string]any{
+		"name":   "Mesa 8",
+		"zone":   "Terraza",
+		"waiter": wWrap.Waiter.FullName,
+		"guests": 6,
+	})
+	if tRes.Code != http.StatusCreated {
+		t.Fatalf("create table failed (%d): %s", tRes.Code, tRes.Body.String())
+	}
+	var tWrap struct {
+		Table domain.DiningTable `json:"table"`
+	}
+	_ = json.Unmarshal(tRes.Body.Bytes(), &tWrap)
+
+	updTRes := env.doJSON(t, http.MethodPut, "/api/v1/comandas/tables/"+tWrap.Table.ID, dbName, "", map[string]any{
+		"name":   "Reservado Terraza 8",
+		"zone":   "VIP / Reservados",
+		"waiter": wWrap.Waiter.FullName,
+		"guests": 8,
+	})
+	if updTRes.Code != http.StatusOK {
+		t.Fatalf("update table failed (%d): %s", updTRes.Code, updTRes.Body.String())
+	}
+
+	_ = env.doJSON(t, http.MethodPost, "/api/v1/comandas/tables/"+tWrap.Table.ID+"/items", dbName, "", map[string]any{
+		"productId": mWrap.MenuItem.ID,
+		"qty":       1,
+	})
+	blockedDelTbl := env.doJSON(t, http.MethodDelete, "/api/v1/comandas/tables/"+tWrap.Table.ID, dbName, "", nil)
+	if blockedDelTbl.Code != http.StatusConflict {
+		t.Fatalf("expected 409 conflict deleting occupied table, got %d", blockedDelTbl.Code)
+	}
+
+	_ = env.doJSON(t, http.MethodPost, "/api/v1/comandas/internal-s2s/clear-table", dbName, security.ScopeS2SInternal, map[string]any{
+		"idempotencyKey": "clr-tbl-8",
+		"tableId":        tWrap.Table.ID,
+		"invoiceNumber":  "FEVP-2001",
+	})
+
+	if delT := env.doJSON(t, http.MethodDelete, "/api/v1/comandas/tables/"+tWrap.Table.ID, dbName, "", nil); delT.Code != http.StatusOK {
+		t.Fatalf("delete empty table failed (%d): %s", delT.Code, delT.Body.String())
+	}
+	if delM := env.doJSON(t, http.MethodDelete, "/api/v1/comandas/menu-items/"+mWrap.MenuItem.ID, dbName, "", nil); delM.Code != http.StatusOK {
+		t.Fatalf("delete menu item failed (%d): %s", delM.Code, delM.Body.String())
+	}
+	if delW := env.doJSON(t, http.MethodDelete, "/api/v1/comandas/waiters/"+wWrap.Waiter.ID, dbName, "", nil); delW.Code != http.StatusOK {
+		t.Fatalf("delete waiter failed (%d): %s", delW.Code, delW.Body.String())
+	}
+}
