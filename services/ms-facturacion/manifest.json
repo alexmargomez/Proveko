@@ -34,6 +34,13 @@
       "tabIcon": "⚡",
       "defaultActive": true,
       "summary": "Numeración autorizada, cálculo CUFE y estado de transmisión DIAN."
+    },
+    {
+      "moduleKey": "notas_ajuste",
+      "displayName": "Notas Crédito y Débito",
+      "tabIcon": "↩️",
+      "defaultActive": true,
+      "summary": "Emisión de Notas Crédito y Notas Débito referenciadas a facturas con reingreso de inventario y CUDE."
     }
   ],
   "features": [
@@ -66,7 +73,7 @@
       "dependsOnSubmodule": "liquidacion_automotriz"
     }
   ],
-  "bundleHash": "2d46ea145bf4",
+  "bundleHash": "d272acfc51c5",
   "submodules": [
     {
       "submoduleKey": "caja_rapida_pos",
@@ -102,6 +109,13 @@
       "dependsOnModule": "facturacion_dian",
       "defaultActive": true,
       "summary": "Generación determinista de CUFE y control de numeración."
+    },
+    {
+      "submoduleKey": "notas_credito_debito",
+      "displayName": "Gestión de Notas Crédito y Débito",
+      "dependsOnModule": "notas_ajuste",
+      "defaultActive": true,
+      "summary": "Devoluciones parciales, anulaciones totales y ajustes de valor con CUDE."
     }
   ]
 }

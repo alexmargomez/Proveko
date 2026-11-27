@@ -4,15 +4,16 @@ import (
 	"crypto/ed25519"
 	_ "embed"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"ms-comandas/internal/platform/config"
-	"ms-comandas/internal/platform/httpx"
-	"ms-comandas/internal/platform/security"
 	mscomandas "ms-comandas"
 	"ms-comandas/internal/application"
 	"ms-comandas/internal/domain"
+	"ms-comandas/internal/platform/config"
+	"ms-comandas/internal/platform/httpx"
+	"ms-comandas/internal/platform/security"
 )
 
 //go:embed ui_dist/ui.js
@@ -64,11 +65,13 @@ func (h *Handler) mountRoutes(r chi.Router) {
 	r.Get("/ui.js", h.handleUIBundle)
 	r.Get("/tables", h.handleGetState)
 	r.Post("/tables", h.handleCreateTable)
+	r.Post("/orders", h.handleCreateOrder)
 	r.Post("/menu-items", h.handleCreateMenuItem)
 	r.Post("/tables/{id}/items", h.handleAddItem)
 	r.Delete("/tables/{id}/items/{itemId}", h.handleDeleteItem)
 	r.Post("/tables/{id}/send-kitchen", h.handleSendKitchen)
 	r.Post("/tables/{id}/ready", h.handleMarkReady)
+	r.Post("/tables/{id}/stage", h.handleAdvanceStage)
 	r.Post("/internal-s2s/clear-table", h.handleS2SClearTable)
 }
 
@@ -115,6 +118,24 @@ func (h *Handler) handleCreateTable(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, http.StatusCreated, map[string]any{
 		"ok":    true,
 		"table": tbl,
+	})
+}
+
+func (h *Handler) handleCreateOrder(w http.ResponseWriter, r *http.Request) {
+	var req domain.CreateOrderInput
+	if err := httpx.Decode(w, r, &req); err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+	tbl, err := h.app.CreateOrder(r.Context(), req)
+	if err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusCreated, map[string]any{
+		"ok":    true,
+		"table": tbl,
+		"order": tbl,
 	})
 }
 
@@ -183,6 +204,31 @@ func (h *Handler) handleSendKitchen(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleMarkReady(w http.ResponseWriter, r *http.Request) {
 	tableID := chi.URLParam(r, "id")
 	tbl, err := h.app.MarkReady(r.Context(), tableID)
+	if err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"ok":    true,
+		"table": tbl,
+	})
+}
+
+func (h *Handler) handleAdvanceStage(w http.ResponseWriter, r *http.Request) {
+	tableID := chi.URLParam(r, "id")
+	var req struct {
+		Stage      string `json:"stage"`
+		OrderStage string `json:"orderStage"`
+	}
+	if err := httpx.Decode(w, r, &req); err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+	stage := strings.TrimSpace(req.Stage)
+	if stage == "" {
+		stage = strings.TrimSpace(req.OrderStage)
+	}
+	tbl, err := h.app.AdvanceStage(r.Context(), tableID, stage)
 	if err != nil {
 		httpx.RespondError(w, err)
 		return

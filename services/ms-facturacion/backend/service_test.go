@@ -676,3 +676,270 @@ func TestHTTPZeroTrustAndEndpoints(t *testing.T) {
 	}
 	_ = quoteRes.Body.Close()
 }
+
+func TestFourStageLifecycleTwoStepDianAndAdjustmentNotes(t *testing.T) {
+	repo := memory.NewRepository()
+	invSpy := &spyInventoryPort{
+		quotes: map[string]domain.ProductQuote{
+			"prd-500": {
+				ProductID:      "prd-500",
+				Code:           "PRD-500",
+				Name:           "Disco de Freno Ventilado",
+				SalePrice:      100000,
+				TaxPct:         19,
+				AvailableStock: 50,
+			},
+		},
+	}
+	custSpy := &spyCustomersPort{
+		terms: domain.CommercialTerms{
+			CustomerID:   "cli-500",
+			CustomerName: "Flota Continental S.A.S.",
+			CustomerNIT:  "900000000-0",
+		},
+	}
+	hospSpy := &spyHospitalityPort{}
+
+	app := application.NewService(repo, application.Ports{
+		Inventory:   invSpy,
+		Customers:   custSpy,
+		Hospitality: hospSpy,
+	})
+
+	ctx := authguard.WithContext(context.Background(), authguard.TenantContext{
+		TenantID:       "ten-4stage",
+		DBName:         "db_4stage_test",
+		Username:       "facturador@empresa.co",
+		Role:           "admin",
+		ActiveServices: []string{"ms-facturacion", "ms-inventario", "ms-clientes", "ms-hoteleria"},
+		ActiveModules:  []string{"pos_mostrador", "notas_ajuste", "cotizaciones", "facturas_taller", "facturacion_dian"},
+		ActiveFeatures: []string{"descuento_linea", "pagos_mixtos_cxc"},
+	})
+
+	paid := 100000.0
+	draftRes, err := app.CreateInvoice(ctx, domain.CreateInvoiceInput{
+		SaveMode:         domain.SaveModeDraft,
+		InvoiceType:      domain.InvoiceTypeHoteleria,
+		CustomerID:       "cli-500",
+		LinkedRoomID:     "suite-401",
+		PurchaseOrderRef: "OC-991",
+		DueDate:          "2026-12-31",
+		Items: []domain.InvoiceItem{
+			{ProductID: "prd-500", ItemType: "PRODUCTO", Quantity: 1},
+		},
+		PaymentMethod: "Crédito / Cartera CxC",
+		AmountPaid:    &paid,
+		Notes:         "Borrador inicial",
+	})
+	if err != nil {
+		t.Fatalf("CreateInvoice DRAFT failed: %v", err)
+	}
+	if !strings.HasPrefix(draftRes.Invoice.ID, "BOR-") || draftRes.Invoice.DocStatus != domain.DocStatusBorrador || !draftRes.Invoice.Editable {
+		t.Fatalf("expected BOR-* draft editable invoice, got %+v", draftRes.Invoice)
+	}
+	if len(invSpy.deductCalls) != 0 || len(custSpy.deltaCalls) != 0 || hospSpy.calls != 0 {
+		t.Fatalf("expected zero side effects on DRAFT, got deduct=%d cxc=%d hosp=%d",
+			len(invSpy.deductCalls), len(custSpy.deltaCalls), hospSpy.calls)
+	}
+
+	if _, err := app.SendToDian(ctx, domain.DianSendInput{DocumentKind: "INVOICE", DocumentID: draftRes.Invoice.ID}); !apperr.IsKind(err, apperr.KindValidation) {
+		t.Fatalf("expected Validation error sending unconfirmed draft to DIAN, got %v", err)
+	}
+
+	updDraftRes, err := app.UpdateInvoice(ctx, draftRes.Invoice.ID, domain.UpdateInvoiceInput{
+		InvoiceType:      domain.InvoiceTypeHoteleria,
+		CustomerID:       "cli-500",
+		LinkedRoomID:     "suite-401",
+		PurchaseOrderRef: "OC-991",
+		DueDate:          "2026-12-31",
+		Items: []domain.InvoiceItem{
+			{ProductID: "prd-500", ItemType: "PRODUCTO", Quantity: 2},
+		},
+		PaymentMethod: "Crédito / Cartera CxC",
+		AmountPaid:    &paid,
+		Notes:         "Borrador ajustado a 2 unidades",
+	})
+	if err != nil {
+		t.Fatalf("UpdateInvoice on DRAFT failed: %v", err)
+	}
+	if updDraftRes.Invoice.ID != draftRes.Invoice.ID || updDraftRes.Invoice.Total != 238000 {
+		t.Fatalf("expected updated draft total 238000 on same ID, got %+v", updDraftRes.Invoice)
+	}
+
+	confRes, err := app.ConfirmInvoice(ctx, draftRes.Invoice.ID, false)
+	if err != nil {
+		t.Fatalf("ConfirmInvoice failed: %v", err)
+	}
+	if !strings.HasPrefix(confRes.Invoice.ID, "FEVP-") || confRes.Invoice.DocStatus != domain.DocStatusConfirmada {
+		t.Fatalf("expected FEVP-* confirmed invoice, got %+v", confRes.Invoice)
+	}
+	if confRes.Invoice.DianStage != domain.DianStageSinEnviar || confRes.Invoice.CUFE != "" || !confRes.Invoice.Editable {
+		t.Fatalf("expected SIN_ENVIAR without auto-CUFE and editable=true, got %+v", confRes.Invoice)
+	}
+	if len(invSpy.deductCalls) != 1 || len(custSpy.deltaCalls) != 1 || hospSpy.calls != 1 {
+		t.Fatalf("expected 1 deduct, 1 cxc, 1 room checkout on confirm, got deduct=%d cxc=%d hosp=%d",
+			len(invSpy.deductCalls), len(custSpy.deltaCalls), hospSpy.calls)
+	}
+	stAfterConfirm, _ := app.GetPosState(ctx)
+	for _, iv := range stAfterConfirm.Invoices {
+		if iv.ID == draftRes.Invoice.ID {
+			t.Fatalf("expected old draft %s to be replaced upon confirmation", draftRes.Invoice.ID)
+		}
+	}
+
+	send1, err := app.SendToDian(ctx, domain.DianSendInput{
+		DocumentKind: domain.DocKindInvoice,
+		DocumentID:   confRes.Invoice.ID,
+	})
+	if err != nil {
+		t.Fatalf("SendToDian Step 1 failed: %v", err)
+	}
+	if send1.Transmission.DianStage != domain.DianStageEnviada || send1.Transmission.TrackID == "" || send1.Transmission.Attempts != 1 {
+		t.Fatalf("unexpected DIAN Step 1 transmission: %+v", send1.Transmission)
+	}
+	if send1.Invoice == nil || send1.Invoice.Editable {
+		t.Fatalf("expected invoice locked (editable=false) while ENVIADA, got %+v", send1.Invoice)
+	}
+
+	if _, err := app.UpdateInvoice(ctx, confRes.Invoice.ID, domain.UpdateInvoiceInput{
+		CustomerID: "cli-500",
+		Items:      []domain.InvoiceItem{{ProductID: "prd-500", ItemType: "PRODUCTO", Quantity: 2}},
+	}); !apperr.IsKind(err, apperr.KindValidation) {
+		t.Fatalf("expected Validation error editing ENVIADA invoice, got %v", err)
+	}
+
+	rejRes, err := app.RespondDian(ctx, domain.DianRespondInput{
+		DocumentKind: domain.DocKindInvoice,
+		DocumentID:   confRes.Invoice.ID,
+		Outcome:      "REJECTED",
+	})
+	if err != nil {
+		t.Fatalf("RespondDian REJECTED failed: %v", err)
+	}
+	if rejRes.Transmission.DianStage != domain.DianStageRechazada || rejRes.Transmission.RejectionCode != "DIAN-RUT-04" {
+		t.Fatalf("unexpected DIAN rejection state: %+v", rejRes.Transmission)
+	}
+	if rejRes.Invoice == nil || !rejRes.Invoice.Editable || rejRes.Invoice.CUFE != "" {
+		t.Fatalf("expected rejected invoice unlocked (editable=true) with empty CUFE, got %+v", rejRes.Invoice)
+	}
+
+	fixedRes, err := app.UpdateInvoice(ctx, confRes.Invoice.ID, domain.UpdateInvoiceInput{
+		InvoiceType:   domain.InvoiceTypeHoteleria,
+		CustomerID:    "cli-500",
+		CustomerName:  "Flota Continental S.A.S.",
+		CustomerNIT:   "901.555.888-3",
+		PaymentMethod: "Crédito / Cartera CxC",
+		AmountPaid:    &paid,
+		Items: []domain.InvoiceItem{
+			{ProductID: "prd-500", ItemType: "PRODUCTO", Quantity: 3},
+		},
+		Notes: "NIT corregido y cantidad actualizada a 3",
+	})
+	if err != nil {
+		t.Fatalf("UpdateInvoice on RECHAZADA invoice failed: %v", err)
+	}
+	if fixedRes.Invoice.CustomerNIT != "901.555.888-3" || fixedRes.Invoice.Total != 357000 || fixedRes.Invoice.PendingBalance != 257000 {
+		t.Fatalf("unexpected updated confirmed invoice: %+v", fixedRes.Invoice)
+	}
+	if len(invSpy.restockCalls) != 1 || len(invSpy.deductCalls) != 2 || len(custSpy.deltaCalls) != 2 {
+		t.Fatalf("expected stock restock+deduct and cxc diff on confirmed edit, got restock=%d deduct=%d cxc=%d",
+			len(invSpy.restockCalls), len(invSpy.deductCalls), len(custSpy.deltaCalls))
+	}
+
+	send2, err := app.SendToDian(ctx, domain.DianSendInput{
+		DocumentKind: domain.DocKindInvoice,
+		DocumentID:   confRes.Invoice.ID,
+	})
+	if err != nil || send2.Transmission.Attempts != 2 {
+		t.Fatalf("expected Attempt #2 on DIAN re-send, got %+v err=%v", send2.Transmission, err)
+	}
+
+	accRes, err := app.RespondDian(ctx, domain.DianRespondInput{
+		DocumentKind: domain.DocKindInvoice,
+		DocumentID:   confRes.Invoice.ID,
+		Outcome:      "ACCEPTED",
+	})
+	if err != nil {
+		t.Fatalf("RespondDian ACCEPTED failed: %v", err)
+	}
+	if len(accRes.Transmission.CUFEOrCUDE) != 96 || accRes.Invoice == nil || accRes.Invoice.Editable || accRes.Invoice.DianStatus != domain.DianStatusAceptada {
+		t.Fatalf("expected 96-char CUFE and permanently locked invoice, got tx=%+v inv=%+v", accRes.Transmission, accRes.Invoice)
+	}
+
+	if _, err := app.UpdateInvoice(ctx, confRes.Invoice.ID, domain.UpdateInvoiceInput{
+		CustomerID: "cli-500",
+		Items:      []domain.InvoiceItem{{ProductID: "prd-500", ItemType: "PRODUCTO", Quantity: 3}},
+	}); !apperr.IsKind(err, apperr.KindValidation) {
+		t.Fatalf("expected Validation error editing ACEPTADA invoice, got %v", err)
+	}
+
+	draftNC, err := app.CreateAdjustmentNote(ctx, domain.CreateAdjustmentNoteInput{
+		SaveMode:         domain.SaveModeDraft,
+		NoteKind:         domain.NoteKindCredit,
+		InvoiceID:        confRes.Invoice.ID,
+		ReasonCode:       "1",
+		RestockInventory: true,
+		Items: []domain.InvoiceItem{
+			{ProductID: "prd-500", Code: "PRD-500", Description: "Devolución 1 disco", ItemType: "PRODUCTO", Quantity: 1, UnitPrice: 100000, TaxPct: 19},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateAdjustmentNote DRAFT failed: %v", err)
+	}
+	if draftNC.DocStatus != domain.DocStatusBorrador || len(invSpy.restockCalls) != 1 {
+		t.Fatalf("expected draft NC without restocking yet, got %+v", draftNC)
+	}
+
+	confNC, err := app.ConfirmAdjustmentNote(ctx, draftNC.ID)
+	if err != nil {
+		t.Fatalf("ConfirmAdjustmentNote failed: %v", err)
+	}
+	if !strings.HasPrefix(confNC.ID, "NC-") || confNC.DocStatus != domain.DocStatusConfirmada || confNC.Total != 119000 {
+		t.Fatalf("expected confirmed NC-*, got %+v", confNC)
+	}
+	if len(invSpy.restockCalls) != 2 || len(custSpy.deltaCalls) != 3 {
+		t.Fatalf("expected restock + negative CxC delta on NC confirm, got restock=%d cxc=%d",
+			len(invSpy.restockCalls), len(custSpy.deltaCalls))
+	}
+	if custSpy.deltaCalls[2].DebtDelta != -119000 {
+		t.Fatalf("expected negative DebtDelta -119000 from NC, got %+v", custSpy.deltaCalls[2])
+	}
+
+	if _, err := app.SendToDian(ctx, domain.DianSendInput{DocumentKind: domain.DocKindCreditNote, DocumentID: confNC.ID}); err != nil {
+		t.Fatalf("SendToDian CREDIT_NOTE failed: %v", err)
+	}
+	ncAcc, err := app.RespondDian(ctx, domain.DianRespondInput{
+		DocumentKind: domain.DocKindCreditNote,
+		DocumentID:   confNC.ID,
+		Outcome:      "ACCEPTED",
+	})
+	if err != nil || ncAcc.AdjustmentNote == nil || len(ncAcc.AdjustmentNote.CUDE) != 96 {
+		t.Fatalf("expected 96-char CUDE on accepted Credit Note, got %+v err=%v", ncAcc, err)
+	}
+
+	confND, err := app.CreateAdjustmentNote(ctx, domain.CreateAdjustmentNoteInput{
+		SaveMode:   domain.SaveModeConfirm,
+		NoteKind:   domain.NoteKindDebit,
+		InvoiceID:  confRes.Invoice.ID,
+		ReasonCode: "2",
+		Items: []domain.InvoiceItem{
+			{Code: "FLETE", Description: "Recargo flete urgente", ItemType: "SERVICIO", Quantity: 1, UnitPrice: 40000, TaxPct: 0},
+		},
+	})
+	if err != nil || !strings.HasPrefix(confND.ID, "ND-") {
+		t.Fatalf("expected confirmed ND-*, got %+v err=%v", confND, err)
+	}
+	if len(custSpy.deltaCalls) != 4 || custSpy.deltaCalls[3].DebtDelta != 40000 {
+		t.Fatalf("expected positive DebtDelta +40000 from ND, got %+v", custSpy.deltaCalls)
+	}
+
+	finalState, err := app.GetPosState(ctx)
+	if err != nil {
+		t.Fatalf("GetPosState failed: %v", err)
+	}
+	if len(finalState.AdjustmentNotes) != 2 || len(finalState.DianTransmissions) != 3 {
+		t.Fatalf("expected 2 adjustment notes and 3 DIAN transmissions, got notes=%d txs=%d",
+			len(finalState.AdjustmentNotes), len(finalState.DianTransmissions))
+	}
+}
+

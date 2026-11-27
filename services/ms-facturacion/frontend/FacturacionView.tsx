@@ -1,70 +1,51 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  usePlatform,
   ModuleGate,
-  FeatureGate,
   PkAutoCodeInput,
-  PkSelect,
-  PkSimpleSelect,
-  PkViewSwitcher,
+  PkDistributionStrip,
+  PkFullscreenDialog,
+  PkKanbanBoard,
+  PkKpiRow,
+  PkLiveHeader,
   PkModal,
   PkPrintButton,
-  PkKpiRow,
-  useAsyncAction,
-  formatCop,
+  PkProcessNodes,
+  PkSelect,
+  PkSimpleSelect,
+  PkTicketCard,
   downloadCsvUtf8,
+  formatCop,
+  useAsyncAction,
+  usePlatform,
 } from '@platform/ui-sdk';
 import {
-  FacturasTallerBox,
   VehicleOption,
   WorkerOption,
 } from './modules/FacturasTallerBox';
 import {
+  AdjustmentNoteRecord,
+  DianTransmissionRecord,
   FacturacionDianTab,
   InvoiceItemRecord,
   InvoiceRecord,
+  InvoiceTypeKey,
+  buildFourStageNodes,
+  resolveDianStage,
 } from './modules/FacturacionDianTab';
-
-interface CustomerOption {
-  id: string;
-  code?: string;
-  docType?: string;
-  nit: string;
-  dv?: string;
-  name: string;
-  phone?: string;
-  email?: string;
-  city?: string;
-  address?: string;
-  contractId?: string;
-  tariffId?: string;
-  creditLimit?: number;
-  currentDebt?: number;
-}
-
-interface ContractOption {
-  id: string;
-  code: string;
-  name: string;
-  tariffId?: string;
-}
-
-interface TariffOption {
-  id: string;
-  name: string;
-  discountPct: number;
-}
-
-interface ProductOption {
-  id: string;
-  code: string;
-  name: string;
-  category: string;
-  stock: number;
-  minStock: number;
-  salePrice: number;
-  taxPct: number;
-}
+import {
+  ContractOption,
+  CustomerOption,
+  InvoiceFullscreenStudio,
+  InvoiceStudioInitialDraft,
+  InvoiceStudioSubmitPayload,
+  ProductOption,
+  TariffOption,
+} from './modules/InvoiceFullscreenStudio';
+import {
+  AdjustmentNoteStudioDialog,
+  AdjustmentNoteSubmitPayload,
+  AdjustmentNotesTab,
+} from './modules/AdjustmentNotesTab';
 
 interface QuoteRecord {
   id: string;
@@ -99,8 +80,12 @@ interface PosStateResponse {
   ok: boolean;
   nextInvoiceNumber: string;
   nextQuoteNumber: string;
+  nextCreditNoteNumber?: string;
+  nextDebitNoteNumber?: string;
   invoices: InvoiceRecord[];
   quotes: QuoteRecord[];
+  adjustmentNotes?: AdjustmentNoteRecord[];
+  dianTransmissions?: DianTransmissionRecord[];
   summary?: SalesSummary;
 }
 
@@ -124,6 +109,7 @@ interface OptionalTallerResponse {
 
 const VALID_MODULES = [
   'pos_mostrador',
+  'notas_ajuste',
   'cotizaciones',
   'facturas_taller',
   'facturacion_dian',
@@ -145,6 +131,35 @@ function formatKmText(raw: unknown): string {
   return '';
 }
 
+function channelBadgeForInvoice(inv: InvoiceRecord): {
+  label: string;
+  tone: 'coral' | 'blue' | 'purple' | 'emerald' | 'amber' | 'slate';
+} {
+  const t = (inv.invoiceType || '').toUpperCase();
+  if (t === 'TALLER' || inv.plate || inv.vehicleId) {
+    return {
+      label: inv.plate ? `🔧 Placa ${inv.plate}` : '🔧 Automotriz',
+      tone: 'blue',
+    };
+  }
+  if (t === 'HOTELERIA' || inv.linkedRoomId) {
+    return {
+      label: inv.linkedRoomId ? `🏨 Hab. ${inv.linkedRoomId}` : '🏨 Hotelería',
+      tone: 'emerald',
+    };
+  }
+  if (t === 'COMANDA' || inv.linkedTableId) {
+    return {
+      label: inv.linkedTableId ? `🍽️ ${inv.linkedTableId}` : '🍽️ Gastronomía',
+      tone: 'coral',
+    };
+  }
+  if (t === 'CORPORATIVA_CXC' || inv.contractId || inv.purchaseOrderRef) {
+    return { label: '🏢 Corporativa CxC', tone: 'purple' };
+  }
+  return { label: '🛒 Mostrador POS', tone: 'slate' };
+}
+
 export const FacturacionView: React.FC = () => {
   const {
     activeModuleKey,
@@ -152,10 +167,10 @@ export const FacturacionView: React.FC = () => {
     navigateTo,
     apiGet,
     apiPost,
+    apiPut,
     toast,
     hasService,
     hasModule,
-    hasFeature,
     hasPrintCapability,
     openHtmlPrintWindow,
     requestPrintDocument,
@@ -167,8 +182,13 @@ export const FacturacionView: React.FC = () => {
 
   const [nextInvoiceNumber, setNextInvoiceNumber] = useState('FEVP-9013');
   const [nextQuoteNumber, setNextQuoteNumber] = useState('COT-3012');
+  const [nextCreditNoteNumber, setNextCreditNoteNumber] = useState('NC-1002');
+  const [nextDebitNoteNumber, setNextDebitNoteNumber] = useState('ND-2001');
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
   const [quotes, setQuotes] = useState<QuoteRecord[]>([]);
+  const [adjustmentNotes, setAdjustmentNotes] = useState<AdjustmentNoteRecord[]>(
+    []
+  );
 
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [contracts, setContracts] = useState<ContractOption[]>([]);
@@ -177,31 +197,36 @@ export const FacturacionView: React.FC = () => {
   const [vehicles, setVehicles] = useState<VehicleOption[]>([]);
   const [workers, setWorkers] = useState<WorkerOption[]>([]);
 
-  const [catalogSearch, setCatalogSearch] = useState('');
-  const [customerId, setCustomerId] = useState('');
-  const [customerNameOverride, setCustomerNameOverride] = useState('');
-  const [cart, setCart] = useState<InvoiceItemRecord[]>([]);
-  const [discountPct, setDiscountPct] = useState('0');
-  const [paymentMethod, setPaymentMethod] = useState('Efectivo');
-  const [isCreditMode, setIsCreditMode] = useState(false);
-  const [amountPaidInput, setAmountPaidInput] = useState('');
-  const [invoiceNotes, setInvoiceNotes] = useState('');
+  // Main Invoices Board / Table state
+  const [invoiceDisplayMode, setInvoiceDisplayMode] = useState<
+    'board' | 'table'
+  >('board');
+  const [invoicePill, setInvoicePill] = useState<string>('ALL');
+  const [invoiceSearch, setInvoiceSearch] = useState('');
+  const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRecord | null>(
+    null
+  );
 
-  const [vehicleId, setVehicleId] = useState('');
-  const [plateOverride, setPlateOverride] = useState('');
-  const [currentKm, setCurrentKm] = useState('');
-  const [nextOilKm, setNextOilKm] = useState('');
-  const [mechanicId, setMechanicId] = useState('');
-  const [workOrderId, setWorkOrderId] = useState('');
-  const [linkedRoomId, setLinkedRoomId] = useState('');
-  const [linkedTableId, setLinkedTableId] = useState('');
+  // Full-Screen Invoice Studio state
+  const [invoiceStudioOpen, setInvoiceStudioOpen] = useState(false);
+  const [invoiceStudioDraft, setInvoiceStudioDraft] =
+    useState<InvoiceStudioInitialDraft | null>(null);
 
-  const [srvName, setSrvName] = useState('');
-  const [srvPrice, setSrvPrice] = useState('85000');
-  const [srvTaxPct, setSrvTaxPct] = useState('0');
+  // Full-Screen Adjustment Note Studio state
+  const [noteStudioOpen, setNoteStudioOpen] = useState(false);
+  const [noteStudioPreselectedInvId, setNoteStudioPreselectedInvId] = useState<
+    string | undefined
+  >(undefined);
+  const [editingNote, setEditingNote] = useState<AdjustmentNoteRecord | null>(
+    null
+  );
 
-  const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRecord | null>(null);
-
+  // Quotes Studio & View state
+  const [quoteDisplayMode, setQuoteDisplayMode] = useState<'board' | 'table'>(
+    'board'
+  );
+  const [quoteStudioOpen, setQuoteStudioOpen] = useState(false);
+  const [quoteSearch, setQuoteSearch] = useState('');
   const [quoteCustomerId, setQuoteCustomerId] = useState('');
   const [quoteProductId, setQuoteProductId] = useState('');
   const [quoteQty, setQuoteQty] = useState('1');
@@ -211,6 +236,7 @@ export const FacturacionView: React.FC = () => {
     'Precios sujetos a disponibilidad de inventario.'
   );
 
+  // Quick Auxiliary Modals (New Customer / New Vehicle)
   const [showNewCustomerModal, setShowNewCustomerModal] = useState(false);
   const [newCustName, setNewCustName] = useState('');
   const [newCustNit, setNewCustNit] = useState('');
@@ -227,39 +253,11 @@ export const FacturacionView: React.FC = () => {
   const [newVehType, setNewVehType] = useState('Camioneta');
   const [newVehKm, setNewVehKm] = useState('45000');
 
-  const [posMode, setPosMode] = useState<'list' | 'create'>('list');
-  const [invoiceSearch, setInvoiceSearch] = useState('');
-  const [invoiceStatusFilter, setInvoiceStatusFilter] = useState('ALL');
-  const [quoteMode, setQuoteMode] = useState<'list' | 'create'>('list');
-  const [quoteSearch, setQuoteSearch] = useState('');
-
   const hasClientes = hasService('ms-clientes');
   const hasInventario = hasService('ms-inventario');
   const hasTaller = hasService('ms-taller');
-
-  const applyCustomerTariff = useCallback(
-    (
-      custId: string,
-      custList: CustomerOption[],
-      cntList: ContractOption[],
-      trfList: TariffOption[]
-    ) => {
-      const cust = custList.find((c) => c.id === custId);
-      if (!cust) {
-        setDiscountPct('0');
-        return;
-      }
-      const cnt = cntList.find((ct) => ct.id === cust.contractId);
-      const trfId = cnt?.tariffId || cust.tariffId;
-      const trf = trfList.find((t) => t.id === trfId);
-      if (trf && hasFeature('', 'descuento_linea')) {
-        setDiscountPct(String(trf.discountPct));
-      } else {
-        setDiscountPct('0');
-      }
-    },
-    [hasFeature]
-  );
+  const hasDianModule = hasModule('facturacion_dian');
+  const hasNotasModule = hasModule('notas_ajuste');
 
   const loadAll = useCallback(async () => {
     const [posRes, cliRes, invRes, talRes] = await Promise.allSettled([
@@ -278,8 +276,11 @@ export const FacturacionView: React.FC = () => {
     if (posRes.status === 'fulfilled' && posRes.value) {
       setNextInvoiceNumber(posRes.value.nextInvoiceNumber || 'FEVP-9013');
       setNextQuoteNumber(posRes.value.nextQuoteNumber || 'COT-3012');
+      setNextCreditNoteNumber(posRes.value.nextCreditNoteNumber || 'NC-1002');
+      setNextDebitNoteNumber(posRes.value.nextDebitNoteNumber || 'ND-2001');
       setInvoices(posRes.value.invoices || []);
       setQuotes(posRes.value.quotes || []);
+      setAdjustmentNotes(posRes.value.adjustmentNotes || []);
     }
 
     const nextCustomers =
@@ -326,6 +327,7 @@ export const FacturacionView: React.FC = () => {
     void loadAll();
   }, [loadAll]);
 
+  // Auto-open InvoiceFullscreenStudio when incomingPayload arrives from Comandas / Taller / Hotelería
   useEffect(() => {
     if (!incomingPayload) return;
 
@@ -339,14 +341,10 @@ export const FacturacionView: React.FC = () => {
         : typeof incomingPayload.guestName === 'string'
         ? incomingPayload.guestName.trim()
         : '';
-
-    if (rawCustId) {
-      setCustomerId(rawCustId);
-      setCustomerNameOverride('');
-      applyCustomerTariff(rawCustId, customers, contracts, tariffs);
-    } else if (rawCustName) {
-      setCustomerNameOverride(rawCustName);
-    }
+    const rawCustNit =
+      typeof incomingPayload.customerNit === 'string'
+        ? incomingPayload.customerNit.trim()
+        : '';
 
     const rawVehId =
       typeof incomingPayload.vehicleId === 'string'
@@ -356,42 +354,36 @@ export const FacturacionView: React.FC = () => {
       typeof incomingPayload.plate === 'string'
         ? incomingPayload.plate.trim().toUpperCase()
         : '';
-    if (rawVehId) {
-      setVehicleId(rawVehId);
-    }
-    if (rawPlate) {
-      setPlateOverride(rawPlate);
-    }
-
     const kmText = formatKmText(incomingPayload.currentKm);
     const oilText = formatKmText(incomingPayload.nextOilKm);
-    if (kmText) setCurrentKm(kmText);
-    if (oilText) setNextOilKm(oilText);
+    const rawMechId =
+      typeof incomingPayload.mechanicId === 'string'
+        ? incomingPayload.mechanicId
+        : '';
+    const rawOrderId =
+      typeof incomingPayload.linkedWorkOrderId === 'string'
+        ? incomingPayload.linkedWorkOrderId
+        : '';
+    const rawRoomId =
+      typeof incomingPayload.linkedRoomId === 'string'
+        ? incomingPayload.linkedRoomId
+        : '';
+    const rawTableId =
+      typeof incomingPayload.linkedTableId === 'string'
+        ? incomingPayload.linkedTableId
+        : '';
 
-    if (typeof incomingPayload.mechanicId === 'string' && incomingPayload.mechanicId) {
-      setMechanicId(incomingPayload.mechanicId);
-    }
-    if (
-      typeof incomingPayload.linkedWorkOrderId === 'string' &&
-      incomingPayload.linkedWorkOrderId
-    ) {
-      setWorkOrderId(incomingPayload.linkedWorkOrderId);
-    }
-    if (
-      typeof incomingPayload.linkedRoomId === 'string' &&
-      incomingPayload.linkedRoomId
-    ) {
-      setLinkedRoomId(incomingPayload.linkedRoomId);
-    }
-    if (
-      typeof incomingPayload.linkedTableId === 'string' &&
-      incomingPayload.linkedTableId
-    ) {
-      setLinkedTableId(incomingPayload.linkedTableId);
+    let detectedType: InvoiceTypeKey = 'MOSTRADOR';
+    if (rawTableId) {
+      detectedType = 'COMANDA';
+    } else if (rawRoomId) {
+      detectedType = 'HOTELERIA';
+    } else if (rawPlate || rawVehId || rawOrderId) {
+      detectedType = 'TALLER';
     }
 
+    const normalizedItems: InvoiceItemRecord[] = [];
     if (Array.isArray(incomingPayload.items) && incomingPayload.items.length > 0) {
-      const normalized: InvoiceItemRecord[] = [];
       for (const raw of incomingPayload.items) {
         if (!raw || typeof raw !== 'object') continue;
         const rec = raw as Record<string, unknown>;
@@ -405,11 +397,13 @@ export const FacturacionView: React.FC = () => {
           products.some((p) => p.id === candidateProdId);
 
         const resolvedType: 'PRODUCTO' | 'SERVICIO' =
-          isServiceKind || (products.length > 0 && candidateProdId !== '' && !matchesCatalog)
+          isServiceKind ||
+          (products.length > 0 && candidateProdId !== '' && !matchesCatalog)
             ? 'SERVICIO'
             : 'PRODUCTO';
         const resolvedProdId =
-          resolvedType === 'PRODUCTO' && (products.length === 0 || matchesCatalog)
+          resolvedType === 'PRODUCTO' &&
+          (products.length === 0 || matchesCatalog)
             ? candidateProdId
             : '';
 
@@ -424,7 +418,7 @@ export const FacturacionView: React.FC = () => {
         ).trim();
         const code = String(rec.code ?? 'ITEM').trim() || 'ITEM';
 
-        normalized.push({
+        normalizedItems.push({
           productId: resolvedProdId,
           code,
           description,
@@ -439,137 +433,35 @@ export const FacturacionView: React.FC = () => {
             typeof rec.workerName === 'string' ? rec.workerName : undefined,
         });
       }
-      if (normalized.length > 0) {
-        setCart(normalized);
-      }
     }
 
-    setPosMode('create');
+    setInvoiceStudioDraft({
+      editingInvoice: null,
+      invoiceType: detectedType,
+      customerId: rawCustId,
+      customerName: rawCustName,
+      customerNit: rawCustNit,
+      vehicleId: rawVehId,
+      plate: rawPlate,
+      currentKm: kmText,
+      nextOilKm: oilText,
+      mechanicId: rawMechId,
+      workOrderId: rawOrderId,
+      linkedRoomId: rawRoomId,
+      linkedTableId: rawTableId,
+      items: normalizedItems,
+    });
+    setActiveModuleKey('pos_mostrador');
+    setInvoiceStudioOpen(true);
     clearIncomingPayload();
-    toast('Cuenta recibida en Caja lista para facturar');
+    toast('Cuenta operativa cargada en el Estudio de Facturación');
   }, [
     incomingPayload,
     clearIncomingPayload,
-    customers,
-    contracts,
-    tariffs,
     products,
-    applyCustomerTariff,
+    setActiveModuleKey,
     toast,
   ]);
-
-  const handleSelectVehicle = (vehId: string) => {
-    setVehicleId(vehId);
-    const found = vehicles.find((v) => v.id === vehId);
-    if (found) {
-      setPlateOverride(found.plate);
-      const nextKmVal = found.nextOilKm ?? found.nextOilChangeKm ?? 0;
-      setCurrentKm(
-        found.currentKm ? `${found.currentKm.toLocaleString('es-CO')} km` : ''
-      );
-      setNextOilKm(
-        nextKmVal ? `${nextKmVal.toLocaleString('es-CO')} km` : ''
-      );
-      if (found.customerId) {
-        setCustomerId(found.customerId);
-        setCustomerNameOverride('');
-        applyCustomerTariff(found.customerId, customers, contracts, tariffs);
-      }
-    } else {
-      setPlateOverride('');
-      setCurrentKm('');
-      setNextOilKm('');
-    }
-  };
-
-  const addProductToCart = (p: ProductOption) => {
-    setCart((prev) => {
-      const idx = prev.findIndex(
-        (it) => it.itemType === 'PRODUCTO' && it.productId === p.id
-      );
-      if (idx >= 0) {
-        const copy = [...prev];
-        const nextQty = copy[idx].quantity + 1;
-        copy[idx] = {
-          ...copy[idx],
-          quantity: nextQty,
-          subtotal: Math.round(nextQty * copy[idx].unitPrice),
-        };
-        return copy;
-      }
-      return [
-        ...prev,
-        {
-          productId: p.id,
-          code: p.code,
-          description: p.name,
-          itemType: 'PRODUCTO',
-          quantity: 1,
-          unitPrice: p.salePrice,
-          taxPct: p.taxPct,
-          subtotal: Math.round(p.salePrice),
-        },
-      ];
-    });
-  };
-
-  const handleAddQuickService = (e: React.FormEvent) => {
-    e.preventDefault();
-    const desc = srvName.trim();
-    const priceVal = Number(srvPrice || 0);
-    const taxVal = Math.max(0, Math.min(100, Number(srvTaxPct || 0)));
-    if (!desc || !Number.isFinite(priceVal) || priceVal <= 0) {
-      toast('Ingresa la descripción del servicio y un valor mayor a cero');
-      return;
-    }
-    setCart((prev) => [
-      ...prev,
-      {
-        productId: '',
-        code: 'SRV-MO',
-        description: desc,
-        itemType: 'SERVICIO',
-        quantity: 1,
-        unitPrice: priceVal,
-        taxPct: taxVal,
-        subtotal: Math.round(priceVal),
-        workerId: mechanicId || undefined,
-      },
-    ]);
-    setSrvName('');
-  };
-
-  const updateCartItem = (index: number, patch: Partial<InvoiceItemRecord>) => {
-    setCart((prev) => {
-      const next = [...prev];
-      const updated = { ...next[index], ...patch };
-      if (updated.quantity <= 0) {
-        next.splice(index, 1);
-      } else {
-        updated.subtotal = Math.round(updated.quantity * updated.unitPrice);
-        next[index] = updated;
-      }
-      return next;
-    });
-  };
-
-  const rawSubtotal = cart.reduce(
-    (acc, it) => acc + it.quantity * it.unitPrice,
-    0
-  );
-  const effectivePct = hasFeature('', 'descuento_linea')
-    ? Math.min(100, Math.max(0, Number(discountPct || 0)))
-    : 0;
-  const discountAmount = Math.round((rawSubtotal * effectivePct) / 100);
-  const discountRatio = rawSubtotal > 0 ? discountAmount / rawSubtotal : 0;
-  const taxAmount = Math.round(
-    cart.reduce(
-      (acc, it) =>
-        acc + it.quantity * it.unitPrice * (1 - discountRatio) * (it.taxPct / 100),
-      0
-    )
-  );
-  const grandTotal = Math.round(rawSubtotal - discountAmount + taxAmount);
 
   const buildInvoicePrintPayload = useCallback(
     (inv: InvoiceRecord): Record<string, unknown> => {
@@ -591,6 +483,12 @@ export const FacturacionView: React.FC = () => {
       if (inv.mechanicName) {
         extra['Técnico / Mecánico'] = inv.mechanicName;
       }
+      if (inv.purchaseOrderRef) {
+        extra['Orden de Compra'] = inv.purchaseOrderRef;
+      }
+      if (inv.dueDate) {
+        extra['Vencimiento'] = inv.dueDate;
+      }
       if (inv.cufe) {
         extra['CUFE'] = inv.cufe;
         extra['Estado DIAN'] = inv.dianStatus || 'ACEPTADA DIAN';
@@ -599,7 +497,9 @@ export const FacturacionView: React.FC = () => {
       return {
         document_type: inv.cufe
           ? 'FACTURA ELECTRÓNICA DE VENTA'
-          : 'FACTURA DE VENTA POS',
+          : inv.docStatus === 'BORRADOR'
+          ? 'BORRADOR DE FACTURA COMERCIAL'
+          : 'FACTURA DE VENTA COMERCIAL',
         layout_variant: inv.layoutVariant || undefined,
         document_number: inv.id,
         issue_date: inv.issueDate || inv.date,
@@ -630,78 +530,109 @@ export const FacturacionView: React.FC = () => {
     [customers]
   );
 
-  const submitInvoice = (renderPrint: boolean) => {
-    if (cart.length === 0) {
-      toast('Agrega al menos un producto o servicio al carrito');
-      return;
-    }
+  const buildNotePrintPayload = useCallback(
+    (note: AdjustmentNoteRecord): Record<string, unknown> => ({
+      document_type:
+        note.noteKind === 'DEBIT'
+          ? 'NOTA DÉBITO ELECTRÓNICA'
+          : 'NOTA CRÉDITO ELECTRÓNICA',
+      document_number: note.id,
+      issue_date: note.issueDate,
+      customer_name: note.customerName,
+      customer_nit: note.customerNit,
+      extra_fields: {
+        'Factura Referenciada': note.invoiceId,
+        'Causal DIAN': `${note.reasonCode} — ${note.reasonDescription}`,
+        ...(note.cude ? { CUDE: note.cude } : {}),
+        ...(note.referencedCufe
+          ? { 'CUFE Factura': note.referencedCufe }
+          : {}),
+      },
+      items: (note.items || []).map((it) => ({
+        code: it.code,
+        description: it.description,
+        quantity: it.quantity,
+        unit_price: it.unitPrice,
+        tax_pct: it.taxPct,
+        subtotal: it.subtotal,
+      })),
+      subtotal: note.subtotal,
+      tax_total: note.taxTotal,
+      grand_total: note.total,
+      notes: note.reasonDescription,
+    }),
+    []
+  );
 
-    const paidValue = isCreditMode ? Number(amountPaidInput || 0) : grandTotal;
-    if (isCreditMode && paidValue < grandTotal - 0.009 && !customerId) {
-      toast(
-        'Selecciona un cliente identificado para registrar saldo en Cartera CxC'
-      );
-      return;
-    }
+  const openCreateInvoiceStudio = (presetType: InvoiceTypeKey = 'MOSTRADOR') => {
+    setInvoiceStudioDraft({
+      editingInvoice: null,
+      invoiceType: presetType,
+      items: [],
+    });
+    setInvoiceStudioOpen(true);
+  };
 
-    const selectedCustomer = customers.find((c) => c.id === customerId);
-    const selectedVehicle = vehicles.find((v) => v.id === vehicleId);
-    const selectedWorker = workers.find((w) => w.id === mechanicId);
+  const openEditInvoiceStudio = (inv: InvoiceRecord) => {
+    setInvoiceStudioDraft({
+      editingInvoice: inv,
+    });
+    setInvoiceStudioOpen(true);
+  };
 
+  const handleInvoiceStudioSubmit = (payload: InvoiceStudioSubmitPayload) => {
     void run(async () => {
-      const res = await apiPost<{
-        ok: boolean;
-        invoice: InvoiceRecord;
-        printHtml?: string;
-      }>('/api/v1/facturacion/invoices', {
-        customerId,
-        customerName:
-          selectedCustomer?.name ||
-          customerNameOverride ||
-          'Consumidor Final Mostrador',
-        customerNit: selectedCustomer?.nit || '',
-        customerPhone: selectedCustomer?.phone || '',
-        customerAddress: selectedCustomer
-          ? `${selectedCustomer.address || ''} ${selectedCustomer.city || ''}`.trim()
-          : '',
-        contractId: selectedCustomer?.contractId || '',
-        discountPct: effectivePct,
-        vehicleId,
-        plate: selectedVehicle?.plate || plateOverride || '',
-        mechanicId,
-        mechanicName: selectedWorker?.name || '',
-        linkedWorkOrderId: workOrderId,
-        linkedRoomId,
-        linkedTableId,
-        workshopMeta: {
-          vehicleBrand: selectedVehicle
-            ? `${selectedVehicle.brand} ${selectedVehicle.modelYear || ''}`.trim()
-            : '',
-          currentKm,
-          nextOilKm,
-          workOrderId,
-        },
-        items: cart,
-        paymentMethod: isCreditMode ? 'Crédito / Cartera CxC' : paymentMethod,
-        amountPaid: paidValue,
-        notes: invoiceNotes,
-        renderPrint,
-      });
+      const body = {
+        saveMode: payload.saveMode,
+        invoiceType: payload.invoiceType,
+        dueDate: payload.dueDate,
+        purchaseOrderRef: payload.purchaseOrderRef,
+        customerId: payload.customerId,
+        customerName: payload.customerName,
+        customerNit: payload.customerNit,
+        customerPhone: payload.customerPhone,
+        customerAddress: payload.customerAddress,
+        contractId: payload.contractId,
+        discountPct: payload.discountPct,
+        vehicleId: payload.vehicleId,
+        plate: payload.plate,
+        mechanicId: payload.mechanicId,
+        mechanicName: payload.mechanicName,
+        linkedWorkOrderId: payload.linkedWorkOrderId,
+        linkedRoomId: payload.linkedRoomId,
+        linkedTableId: payload.linkedTableId,
+        workshopMeta: payload.workshopMeta,
+        items: payload.items,
+        paymentMethod: payload.paymentMethod,
+        amountPaid: payload.amountPaid,
+        notes: payload.notes,
+        renderPrint: payload.renderPrint,
+      };
 
-      toast(`Factura ${res.invoice.id} emitida exitosamente`);
-      setCart([]);
-      setCustomerNameOverride('');
-      setPlateOverride('');
-      setWorkOrderId('');
-      setLinkedRoomId('');
-      setLinkedTableId('');
-      setInvoiceNotes('');
-      setIsCreditMode(false);
-      setAmountPaidInput('');
-      setPosMode('list');
+      const res = payload.editingInvoiceId
+        ? await apiPut<{
+            ok: boolean;
+            invoice: InvoiceRecord;
+            printHtml?: string;
+          }>(`/api/v1/facturacion/invoices/${payload.editingInvoiceId}`, body)
+        : await apiPost<{
+            ok: boolean;
+            invoice: InvoiceRecord;
+            printHtml?: string;
+          }>('/api/v1/facturacion/invoices', body);
+
+      setInvoiceStudioOpen(false);
       await loadAll();
 
-      if (renderPrint) {
+      if (payload.saveMode === 'DRAFT') {
+        toast(`Borrador ${res.invoice.id} guardado (editable, sin descontar stock)`);
+      } else if (payload.editingInvoiceId) {
+        toast(`Factura ${res.invoice.id} actualizada exitosamente`);
+      } else {
+        toast(`Factura ${res.invoice.id} confirmada comercialmente`);
+      }
+
+      if (payload.renderPrint) {
         if (res.printHtml) {
           openHtmlPrintWindow(
             res.printHtml,
@@ -711,6 +642,123 @@ export const FacturacionView: React.FC = () => {
           await requestPrintDocument(buildInvoicePrintPayload(res.invoice));
         }
       }
+    });
+  };
+
+  const handleConfirmDraftInvoice = (invoiceId: string) => {
+    void run(async () => {
+      const res = await apiPost<{
+        ok: boolean;
+        invoice: InvoiceRecord;
+      }>(`/api/v1/facturacion/invoices/${invoiceId}/confirm`, {
+        renderPrint: false,
+      });
+      await loadAll();
+      toast(
+        `Borrador promovido a factura oficial ${res.invoice.id} — lista para Paso 1 DIAN`
+      );
+    });
+  };
+
+  const handleSendToDian = (
+    documentKind: 'INVOICE' | 'CREDIT_NOTE' | 'DEBIT_NOTE',
+    documentId: string
+  ) => {
+    void run(async () => {
+      const res = await apiPost<{
+        ok: boolean;
+        transmission: DianTransmissionRecord;
+      }>('/api/v1/facturacion/dian/send', {
+        documentKind,
+        documentId,
+      });
+      await loadAll();
+      toast(
+        `Paso 1 DIAN completado: ${documentId} transmitido (${res.transmission.trackId || 'XML UBL 2.1'})`
+      );
+    });
+  };
+
+  const handleRespondDian = (
+    documentKind: 'INVOICE' | 'CREDIT_NOTE' | 'DEBIT_NOTE',
+    documentId: string,
+    outcome: 'ACCEPTED' | 'REJECTED',
+    rejectionCode?: string,
+    rejectionMessage?: string
+  ) => {
+    void run(async () => {
+      await apiPost('/api/v1/facturacion/dian/respond', {
+        documentKind,
+        documentId,
+        outcome,
+        rejectionCode,
+        rejectionMessage,
+      });
+      await loadAll();
+      if (outcome === 'ACCEPTED') {
+        toast(
+          `Paso 2 DIAN: ${documentId} validado exitosamente con firma SHA-384`
+        );
+      } else {
+        toast(
+          `Documento ${documentId} marcado como rechazado DIAN — habilitado para corrección`
+        );
+      }
+    });
+  };
+
+  const openNoteStudioForInvoice = (invoiceId?: string) => {
+    setEditingNote(null);
+    setNoteStudioPreselectedInvId(invoiceId);
+    setNoteStudioOpen(true);
+  };
+
+  const openEditNoteStudio = (note: AdjustmentNoteRecord) => {
+    setEditingNote(note);
+    setNoteStudioPreselectedInvId(note.invoiceId);
+    setNoteStudioOpen(true);
+  };
+
+  const handleNoteStudioSubmit = (payload: AdjustmentNoteSubmitPayload) => {
+    void run(async () => {
+      const body = {
+        saveMode: payload.saveMode,
+        noteKind: payload.noteKind,
+        invoiceId: payload.invoiceId,
+        customerName: payload.customerName,
+        customerNit: payload.customerNit,
+        reasonCode: payload.reasonCode,
+        reasonDescription: payload.reasonDescription,
+        restockInventory: payload.restockInventory,
+        items: payload.items,
+      };
+      const res = payload.editingNoteId
+        ? await apiPut<{ ok: boolean; adjustmentNote: AdjustmentNoteRecord }>(
+            `/api/v1/facturacion/notes/${payload.editingNoteId}`,
+            body
+          )
+        : await apiPost<{ ok: boolean; adjustmentNote: AdjustmentNoteRecord }>(
+            '/api/v1/facturacion/notes',
+            body
+          );
+      setNoteStudioOpen(false);
+      await loadAll();
+      toast(
+        payload.saveMode === 'DRAFT'
+          ? `Borrador de nota ${res.adjustmentNote.id} guardado`
+          : `Nota ${res.adjustmentNote.id} confirmada sobre ${res.adjustmentNote.invoiceId}`
+      );
+    });
+  };
+
+  const handleConfirmNote = (noteId: string) => {
+    void run(async () => {
+      const res = await apiPost<{
+        ok: boolean;
+        adjustmentNote: AdjustmentNoteRecord;
+      }>(`/api/v1/facturacion/notes/${noteId}/confirm`, {});
+      await loadAll();
+      toast(`Nota oficial ${res.adjustmentNote.id} confirmada exitosamente`);
     });
   };
 
@@ -742,10 +790,9 @@ export const FacturacionView: React.FC = () => {
       setNewCustAddress('');
       await loadAll();
       if (res.customer?.id) {
-        setCustomerId(res.customer.id);
         setQuoteCustomerId(res.customer.id);
       }
-      toast(`Cliente ${res.customer?.name || ''} registrado y seleccionado`);
+      toast(`Cliente ${res.customer?.name || ''} registrado`);
     });
   };
 
@@ -755,9 +802,7 @@ export const FacturacionView: React.FC = () => {
       toast('La placa y la línea/marca del vehículo son obligatorias');
       return;
     }
-    const selectedCustomer = customers.find((c) => c.id === customerId);
     const kmNum = Math.max(0, Math.round(Number(newVehKm || 0)));
-
     void run(async () => {
       const res = await apiPost<{ ok: boolean; vehicle: VehicleOption }>(
         '/api/v1/taller/vehicles',
@@ -765,9 +810,8 @@ export const FacturacionView: React.FC = () => {
           plate: newVehPlate.trim().toUpperCase(),
           brand: newVehBrand.trim(),
           vehicleType: newVehType,
-          customerId,
-          customerName:
-            selectedCustomer?.name || customerNameOverride || 'Cliente Taller',
+          customerId: '',
+          customerName: 'Cliente Taller',
           currentKm: kmNum,
         }
       );
@@ -775,18 +819,7 @@ export const FacturacionView: React.FC = () => {
       setNewVehPlate('');
       setNewVehBrand('');
       await loadAll();
-      if (res.vehicle?.id) {
-        setVehicleId(res.vehicle.id);
-        setPlateOverride(res.vehicle.plate);
-        const oilKm = res.vehicle.nextOilKm ?? res.vehicle.nextOilChangeKm ?? 0;
-        setCurrentKm(
-          res.vehicle.currentKm
-            ? `${res.vehicle.currentKm.toLocaleString('es-CO')} km`
-            : ''
-        );
-        setNextOilKm(oilKm ? `${oilKm.toLocaleString('es-CO')} km` : '');
-      }
-      toast(`Placa ${res.vehicle?.plate || ''} creada y asignada`);
+      toast(`Placa ${res.vehicle?.plate || ''} registrada`);
     });
   };
 
@@ -812,8 +845,7 @@ export const FacturacionView: React.FC = () => {
     ]);
   };
 
-  const handleSaveQuote = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveQuote = () => {
     if (quoteItems.length === 0) {
       toast('Agrega al menos un producto a la cotización');
       return;
@@ -830,34 +862,25 @@ export const FacturacionView: React.FC = () => {
       });
       toast('Cotización comercial generada');
       setQuoteItems([]);
-      setQuoteMode('list');
+      setQuoteStudioOpen(false);
       await loadAll();
     });
   };
 
   const convertQuoteToInvoice = (q: QuoteRecord) => {
-    if (q.customerId) {
-      setCustomerId(q.customerId);
-      applyCustomerTariff(q.customerId, customers, contracts, tariffs);
-    } else if (q.customerName) {
-      setCustomerNameOverride(q.customerName);
-    }
-    setCart(q.items || []);
-    setPosMode('create');
+    setInvoiceStudioDraft({
+      editingInvoice: null,
+      invoiceType: 'MOSTRADOR',
+      customerId: q.customerId,
+      customerName: q.customerName,
+      customerNit: q.customerNit,
+      items: (q.items || []).map((it) => ({ ...it })),
+      notes: `Facturada según cotización ${q.id}`,
+    });
     setActiveModuleKey('pos_mostrador');
-    toast(`Cotización ${q.id} cargada en Caja para facturar`);
+    setInvoiceStudioOpen(true);
+    toast(`Cotización ${q.id} cargada en el Estudio de Facturación`);
   };
-
-  const customerSelectItems: CustomerOption[] = [
-    {
-      id: '',
-      nit: '222222222222',
-      name: customerNameOverride
-        ? `${customerNameOverride} (Mostrador)`
-        : 'Consumidor Final Mostrador',
-    },
-    ...customers,
-  ];
 
   const currentTab =
     VALID_MODULES.includes(
@@ -866,8 +889,37 @@ export const FacturacionView: React.FC = () => {
       ? activeModuleKey
       : VALID_MODULES.find((m) => hasModule(m)) || 'pos_mostrador';
 
-  const quickModals = (
+  const sharedOverlays = (
     <>
+      <InvoiceFullscreenStudio
+        open={invoiceStudioOpen}
+        onClose={() => setInvoiceStudioOpen(false)}
+        busy={busy}
+        nextInvoiceNumber={nextInvoiceNumber}
+        initialState={invoiceStudioDraft}
+        customers={customers}
+        contracts={contracts}
+        tariffs={tariffs}
+        products={products}
+        vehicles={vehicles}
+        workers={workers}
+        onOpenNewCustomerModal={() => setShowNewCustomerModal(true)}
+        onOpenNewVehicleModal={() => setShowNewVehicleModal(true)}
+        onSubmit={handleInvoiceStudioSubmit}
+      />
+
+      <AdjustmentNoteStudioDialog
+        open={noteStudioOpen}
+        onClose={() => setNoteStudioOpen(false)}
+        busy={busy}
+        invoices={invoices}
+        nextCreditNoteNumber={nextCreditNoteNumber}
+        nextDebitNoteNumber={nextDebitNoteNumber}
+        preselectedInvoiceId={noteStudioPreselectedInvId}
+        editingNote={editingNote}
+        onSubmit={handleNoteStudioSubmit}
+      />
+
       <PkModal
         open={showNewCustomerModal}
         title="👤 Registro Rápido de Cliente Comercial"
@@ -959,7 +1011,7 @@ export const FacturacionView: React.FC = () => {
                 className="pk-btn pk-btn-primary"
                 disabled={busy}
               >
-                {busy ? 'Guardando...' : 'Guardar y Seleccionar Cliente'}
+                {busy ? 'Guardando...' : 'Guardar Cliente'}
               </button>
             </div>
           </div>
@@ -1032,1273 +1084,30 @@ export const FacturacionView: React.FC = () => {
           </div>
         </form>
       </PkModal>
-    </>
-  );
-
-  if (currentTab === 'facturacion_dian') {
-    return (
-      <>
-        <FacturacionDianTab
-          invoices={invoices}
-          buildPrintPayload={buildInvoicePrintPayload}
-        />
-        {quickModals}
-      </>
-    );
-  }
-
-  if (currentTab === 'cotizaciones') {
-    const quoteSub = quoteItems.reduce(
-      (acc, it) => acc + it.quantity * it.unitPrice,
-      0
-    );
-    const totalQuotedCop = quotes.reduce((acc, q) => acc + q.total, 0);
-    const filteredQuotes = quoteSearch.trim()
-      ? quotes.filter((q) => {
-          const term = quoteSearch.trim().toLowerCase();
-          return (
-            q.id.toLowerCase().includes(term) ||
-            q.customerName.toLowerCase().includes(term) ||
-            (q.customerNit || '').toLowerCase().includes(term)
-          );
-        })
-      : quotes;
-
-    return (
-      <ModuleGate module="cotizaciones">
-        <div className="pk-stack">
-          <PkKpiRow
-            items={[
-              {
-                label: 'Cotizaciones Emitidas',
-                value: String(quotes.length),
-                color: 'var(--pk-primary)',
-              },
-              {
-                label: 'Valor Comercial Cotizado',
-                value: formatCop(totalQuotedCop),
-                color: 'var(--pk-emerald)',
-              },
-              {
-                label: 'Próximo Consecutivo',
-                value: nextQuoteNumber,
-              },
-            ]}
-          />
-
-          <PkViewSwitcher
-            title="Cotizaciones Comerciales"
-            subtitle="Gestiona propuestas comerciales formales y conviértelas en factura con un clic."
-            mode={quoteMode}
-            onModeChange={setQuoteMode}
-            listLabel="📋 Historial de Cotizaciones"
-            createLabel="+ Nueva Cotización"
-            count={quotes.length}
-          />
-
-          {quoteMode === 'create' ? (
-            <div className="pk-card">
-              <div className="pk-card-head">
-                <div className="pk-card-title">
-                  📄 Elaborar Nueva Cotización Comercial Formal
-                </div>
-                <span className="pk-badge pk-badge-blue">{nextQuoteNumber}</span>
-              </div>
-              <div className="pk-card-body">
-                <form onSubmit={handleSaveQuote} className="pk-stack">
-                  <div className="pk-form-grid">
-                    <PkAutoCodeInput
-                      label="N° Cotización"
-                      value={nextQuoteNumber}
-                    />
-                    <PkSelect
-                      label="Cliente Destinatario"
-                      items={customerSelectItems}
-                      value={quoteCustomerId}
-                      onChange={setQuoteCustomerId}
-                      getValue={(c) => c.id}
-                      getLabel={(c) => `${c.name} (${c.nit})`}
-                      onCreateNew={
-                        hasClientes
-                          ? () => setShowNewCustomerModal(true)
-                          : undefined
-                      }
-                      createLabel="+ Nuevo Cliente"
-                      searchable
-                    />
-                    <div className="pk-field">
-                      <label>Válida Hasta</label>
-                      <input
-                        type="date"
-                        value={quoteValidUntil}
-                        onChange={(e) => setQuoteValidUntil(e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  {products.length > 0 && (
-                    <div
-                      style={{
-                        padding: '18px 20px',
-                        borderRadius: 12,
-                        background: '#f8fafc',
-                        border: '1px solid var(--pk-border)',
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontSize: 12.5,
-                          fontWeight: 800,
-                          color: 'var(--pk-navy)',
-                          marginBottom: 12,
-                        }}
-                      >
-                        📦 Agregar Productos del Catálogo a la Propuesta
-                      </div>
-                      <div className="pk-form-grid">
-                        <div className="pk-col-span-2">
-                          <PkSelect
-                            label="Producto del Catálogo"
-                            items={products}
-                            value={quoteProductId}
-                            onChange={setQuoteProductId}
-                            getValue={(p) => p.id}
-                            getLabel={(p) =>
-                              `${p.code} — ${p.name} (${formatCop(p.salePrice)})`
-                            }
-                            searchable
-                          />
-                        </div>
-                        <div className="pk-field">
-                          <label>Cantidad</label>
-                          <div style={{ display: 'flex', gap: 10 }}>
-                            <input
-                              type="number"
-                              min={1}
-                              value={quoteQty}
-                              onChange={(e) => setQuoteQty(e.target.value)}
-                            />
-                            <button
-                              type="button"
-                              className="pk-btn pk-btn-primary"
-                              onClick={handleAddQuoteLine}
-                            >
-                              + Agregar Ítem
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {quoteItems.length > 0 && (
-                    <div className="pk-table-wrap">
-                      <table className="pk-table">
-                        <thead>
-                          <tr>
-                            <th>Código</th>
-                            <th>Descripción</th>
-                            <th>Cant.</th>
-                            <th>Vr. Unitario</th>
-                            <th>Subtotal</th>
-                            <th>Quitar</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {quoteItems.map((it, idx) => (
-                            <tr key={`${it.code}-${idx}`}>
-                              <td>{it.code}</td>
-                              <td>{it.description}</td>
-                              <td>{it.quantity}</td>
-                              <td>{formatCop(it.unitPrice)}</td>
-                              <td>
-                                <strong>
-                                  {formatCop(it.quantity * it.unitPrice)}
-                                </strong>
-                              </td>
-                              <td>
-                                <button
-                                  type="button"
-                                  className="pk-btn pk-btn-danger pk-btn-sm"
-                                  onClick={() =>
-                                    setQuoteItems((prev) =>
-                                      prev.filter((_, i) => i !== idx)
-                                    )
-                                  }
-                                >
-                                  ✕
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-
-                  <div className="pk-form-grid cols-1">
-                    <div className="pk-field">
-                      <label>Condiciones Comerciales y Validez</label>
-                      <input
-                        value={quoteNotes}
-                        onChange={(e) => setQuoteNotes(e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="pk-form-actions" style={{ justifyContent: 'space-between' }}>
-                    <strong style={{ fontSize: 15, color: 'var(--pk-navy)' }}>
-                      Subtotal Cotizado: {formatCop(quoteSub)}
-                    </strong>
-                    <div className="pk-row-actions">
-                      <button
-                        type="button"
-                        className="pk-btn pk-btn-outline"
-                        onClick={() => setQuoteMode('list')}
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        type="submit"
-                        className="pk-btn pk-btn-primary"
-                        disabled={busy}
-                      >
-                        💾 Guardar Cotización ({nextQuoteNumber})
-                      </button>
-                    </div>
-                  </div>
-                </form>
-              </div>
-            </div>
-          ) : (
-            <div className="pk-card">
-              <div className="pk-card-head">
-                <div className="pk-card-title">📋 Historial de Cotizaciones Emitidas</div>
-              </div>
-              <div className="pk-datatable-toolbar">
-                <input
-                  className="pk-input pk-datatable-search"
-                  placeholder="🔎 Buscar por N° cotización, cliente o NIT..."
-                  value={quoteSearch}
-                  onChange={(e) => setQuoteSearch(e.target.value)}
-                />
-                <span className="pk-badge pk-badge-slate">
-                  {filteredQuotes.length} registros
-                </span>
-              </div>
-              <div className="pk-card-body">
-                <div className="pk-table-wrap">
-                  <table className="pk-table">
-                    <thead>
-                      <tr>
-                        <th>N° Cotización</th>
-                        <th>Fecha</th>
-                        <th>Cliente</th>
-                        <th>Vigencia</th>
-                        <th>Total</th>
-                        <th>Acciones Comerciales</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredQuotes.map((q) => (
-                        <tr key={q.id}>
-                          <td>
-                            <strong>{q.id}</strong>
-                          </td>
-                          <td>{q.createdAt}</td>
-                          <td>{q.customerName}</td>
-                          <td>{q.validUntil}</td>
-                          <td>
-                            <strong>{formatCop(q.total)}</strong>
-                          </td>
-                          <td>
-                            <div className="pk-row-actions">
-                              <button
-                                type="button"
-                                className="pk-btn pk-btn-emerald pk-btn-sm"
-                                onClick={() => convertQuoteToInvoice(q)}
-                              >
-                                🛒 Pasar a Factura
-                              </button>
-                              <PkPrintButton
-                                label="🖨️ Imprimir Cotización"
-                                payload={{
-                                  document_type: 'COTIZACIÓN COMERCIAL',
-                                  document_number: q.id,
-                                  issue_date: q.createdAt,
-                                  customer_name: q.customerName,
-                                  customer_nit: q.customerNit,
-                                  extra_fields: {
-                                    'Válida Hasta': q.validUntil || '',
-                                    Estado: q.status || 'Vigente',
-                                  },
-                                  items: (q.items || []).map((it) => ({
-                                    code: it.code,
-                                    description: it.description,
-                                    quantity: it.quantity,
-                                    unit_price: it.unitPrice,
-                                    tax_pct: it.taxPct,
-                                    subtotal: it.subtotal,
-                                  })),
-                                  subtotal: q.subtotal,
-                                  tax_total: q.taxTotal,
-                                  grand_total: q.total,
-                                  notes: q.notes,
-                                }}
-                              />
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                      {filteredQuotes.length === 0 && (
-                        <tr>
-                          <td
-                            colSpan={6}
-                            style={{
-                              textAlign: 'center',
-                              color: 'var(--pk-muted)',
-                            }}
-                          >
-                            Aún no hay cotizaciones registradas.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-          {quickModals}
-        </div>
-      </ModuleGate>
-    );
-  }
-
-  if (currentTab === 'facturas_taller') {
-    const workshopInvoices = invoices.filter((inv) =>
-      Boolean(inv.plate || inv.vehicleId)
-    );
-    const workshopTotal = workshopInvoices.reduce(
-      (acc, inv) => acc + inv.total,
-      0
-    );
-
-    return (
-      <ModuleGate module="facturas_taller">
-        <div className="pk-stack">
-          <PkKpiRow
-            items={[
-              {
-                label: 'Facturas Automotrices Emitidas',
-                value: String(workshopInvoices.length),
-                color: 'var(--pk-primary)',
-              },
-              {
-                label: 'Facturación Acumulada Taller',
-                value: formatCop(workshopTotal),
-                color: 'var(--pk-emerald)',
-              },
-              {
-                label: 'Placas Registradas',
-                value: String(vehicles.length),
-              },
-            ]}
-          />
-
-          <div className="pk-card">
-            <div className="pk-card-head">
-              <div className="pk-card-title">
-                🔧 Historial Especializado de Facturas con Placa y Técnico
-              </div>
-              <button
-                type="button"
-                className="pk-btn pk-btn-primary"
-                onClick={() => {
-                  setPosMode('create');
-                  setActiveModuleKey('pos_mostrador');
-                }}
-              >
-                + Nueva Factura Automotriz (POS)
-              </button>
-            </div>
-            <div className="pk-card-body">
-              <div className="pk-table-wrap">
-                <table className="pk-table">
-                  <thead>
-                    <tr>
-                      <th>Factura</th>
-                      <th>Fecha</th>
-                      <th>Placa / Vehículo</th>
-                      <th>Cliente</th>
-                      <th>Técnico Asignado</th>
-                      <th>Formato PDF</th>
-                      <th>Total</th>
-                      <th>Imprimir</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {workshopInvoices.map((inv) => (
-                      <tr key={inv.id}>
-                        <td>
-                          <strong>{inv.id}</strong>
-                        </td>
-                        <td>{inv.issueDate || inv.date}</td>
-                        <td>
-                          <span className="pk-badge pk-badge-blue">
-                            {inv.plate}
-                          </span>
-                          <div
-                            style={{ fontSize: 11, color: 'var(--pk-muted)' }}
-                          >
-                            {inv.workshopMeta?.vehicleBrand || ''}
-                          </div>
-                        </td>
-                        <td>{inv.customerName}</td>
-                        <td>{inv.mechanicName || '— Sin asignar —'}</td>
-                        <td>
-                          <span className="pk-badge pk-badge-emerald">
-                            {inv.layoutVariant === 'factura_taller'
-                              ? 'Automotriz'
-                              : 'Estándar'}
-                          </span>
-                        </td>
-                        <td>
-                          <strong>{formatCop(inv.total)}</strong>
-                        </td>
-                        <td>
-                          <PkPrintButton
-                            label="🖨️ Imprimir"
-                            payload={buildInvoicePrintPayload(inv)}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                    {workshopInvoices.length === 0 && (
-                      <tr>
-                        <td
-                          colSpan={8}
-                          style={{
-                            textAlign: 'center',
-                            color: 'var(--pk-muted)',
-                          }}
-                        >
-                          No hay facturas con placa emitidas todavía.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-          {quickModals}
-        </div>
-      </ModuleGate>
-    );
-  }
-
-  const filteredCatalog = catalogSearch.trim()
-    ? products.filter(
-        (p) =>
-          p.name.toLowerCase().includes(catalogSearch.toLowerCase()) ||
-          p.code.toLowerCase().includes(catalogSearch.toLowerCase()) ||
-          p.category.toLowerCase().includes(catalogSearch.toLowerCase())
-      )
-    : products;
-
-  const totalInvoicedAmount = invoices.reduce((acc, inv) => acc + inv.total, 0);
-  const totalCollectedAmount = invoices.reduce((acc, inv) => acc + inv.amountPaid, 0);
-  const totalPendingAmount = invoices.reduce((acc, inv) => acc + inv.pendingBalance, 0);
-
-  const filteredInvoices = invoices.filter((inv) => {
-    if (invoiceStatusFilter === 'PAID' && inv.pendingBalance > 0) return false;
-    if (invoiceStatusFilter === 'CXC' && inv.pendingBalance <= 0) return false;
-    const q = invoiceSearch.trim().toLowerCase();
-    if (!q) return true;
-    return (
-      inv.id.toLowerCase().includes(q) ||
-      inv.customerName.toLowerCase().includes(q) ||
-      (inv.customerNit || '').toLowerCase().includes(q) ||
-      (inv.plate || '').toLowerCase().includes(q)
-    );
-  });
-
-  return (
-    <div className="pk-stack">
-      <PkKpiRow
-        items={[
-          {
-            label: 'Facturas Emitidas',
-            value: String(invoices.length),
-            color: 'var(--pk-primary)',
-          },
-          {
-            label: 'Total Facturado',
-            value: formatCop(totalInvoicedAmount),
-            color: 'var(--pk-navy)',
-          },
-          {
-            label: 'Recaudo Efectivo / Digital',
-            value: formatCop(totalCollectedAmount),
-            color: 'var(--pk-emerald)',
-          },
-          {
-            label: 'Saldo en Cartera CxC',
-            value: formatCop(totalPendingAmount),
-            color: totalPendingAmount > 0 ? 'var(--pk-amber)' : 'var(--pk-muted)',
-          },
-        ]}
-      />
-
-      <PkViewSwitcher
-        title="Facturación de Venta y Terminal POS"
-        subtitle="Consulta el listado general de facturas emitidas o abre una nueva liquidación en caja registradora."
-        mode={posMode}
-        onModeChange={setPosMode}
-        listLabel="📋 Facturas Emitidas"
-        createLabel="+ Nueva Factura"
-        count={invoices.length}
-        extraActions={
-          posMode === 'list' ? (
-            <button
-              type="button"
-              className="pk-btn pk-btn-outline"
-              onClick={() =>
-                downloadCsvUtf8(
-                  'ventas_facturacion.csv',
-                  [
-                    'Factura',
-                    'Fecha',
-                    'Cliente',
-                    'NIT',
-                    'MedioPago',
-                    'Total',
-                    'Pagado',
-                    'SaldoCxC',
-                    'Estado',
-                  ],
-                  invoices.map((inv) => [
-                    inv.id,
-                    inv.issueDate || inv.date || '',
-                    inv.customerName,
-                    inv.customerNit,
-                    inv.paymentMethod,
-                    inv.total,
-                    inv.amountPaid,
-                    inv.pendingBalance,
-                    inv.status,
-                  ])
-                )
-              }
-            >
-              📥 Exportar Ventas (.CSV)
-            </button>
-          ) : undefined
-        }
-      />
-
-      {posMode === 'create' ? (
-        <>
-          {(linkedTableId || linkedRoomId || workOrderId) && (
-            <div
-              className="pk-card"
-              style={{
-                background: '#ecfdf5',
-                borderColor: '#10b981',
-                padding: '14px 20px',
-              }}
-            >
-              <strong style={{ color: '#065f46', fontSize: 13.5 }}>
-                🔗 Liquidación Operativa Integrada:{' '}
-              </strong>
-              <span style={{ fontSize: 13, color: '#047857' }}>
-                {linkedTableId && `Mesa ${linkedTableId} se liberará al facturar. `}
-                {linkedRoomId &&
-                  `Habitación ${linkedRoomId} completará Check-Out al facturar. `}
-                {workOrderId &&
-                  `Orden de Taller ${workOrderId} quedará facturada automáticamente.`}
-              </span>
-            </div>
-          )}
-
-          <div className="pk-grid-2" style={{ alignItems: 'start' }}>
-            <div className="pk-card">
-              <div className="pk-card-head">
-                <div className="pk-card-title">
-                  📦 Catálogo de Productos y Servicios
-                </div>
-                <input
-                  className="pk-input"
-                  value={catalogSearch}
-                  onChange={(e) => setCatalogSearch(e.target.value)}
-                  placeholder="🔎 Buscar producto o SKU..."
-                  style={{ maxWidth: 260, minHeight: 38 }}
-                />
-              </div>
-              <div className="pk-card-body">
-                {filteredCatalog.length > 0 ? (
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))',
-                      gap: 14,
-                      marginBottom: 20,
-                    }}
-                  >
-                    {filteredCatalog.map((p) => (
-                      <div
-                        key={p.id}
-                        style={{
-                          border: '1px solid var(--pk-border)',
-                          borderRadius: 12,
-                          padding: '14px 15px',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          justifyContent: 'space-between',
-                          gap: 10,
-                          background: '#f8fafc',
-                        }}
-                      >
-                        <div>
-                          <div
-                            style={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              gap: 6,
-                            }}
-                          >
-                            <span className="pk-badge pk-badge-slate">
-                              {p.code}
-                            </span>
-                            <span
-                              className={`pk-badge ${
-                                p.stock > p.minStock
-                                  ? 'pk-badge-emerald'
-                                  : 'pk-badge-amber'
-                              }`}
-                            >
-                              Stock: {p.stock}
-                            </span>
-                          </div>
-                          <div
-                            style={{ fontWeight: 800, fontSize: 13.5, marginTop: 8 }}
-                          >
-                            {p.name}
-                          </div>
-                          <div
-                            style={{ fontSize: 12, color: 'var(--pk-muted)', marginTop: 2 }}
-                          >
-                            {p.category} • IVA {p.taxPct}%
-                          </div>
-                        </div>
-                        <div
-                          style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            paddingTop: 6,
-                            borderTop: '1px solid #e2e8f0',
-                          }}
-                        >
-                          <strong
-                            style={{ fontSize: 15, color: 'var(--pk-primary)' }}
-                          >
-                            {formatCop(p.salePrice)}
-                          </strong>
-                          <button
-                            type="button"
-                            className="pk-btn pk-btn-primary pk-btn-sm"
-                            onClick={() => addProductToCart(p)}
-                          >
-                            + Agregar
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div
-                    style={{
-                      padding: '16px 0',
-                      fontSize: 13,
-                      color: 'var(--pk-muted)',
-                    }}
-                  >
-                    {hasInventario
-                      ? 'No se encontraron productos para el filtro ingresado.'
-                      : 'Catálogo de inventario desacoplado; puedes facturar servicios libres a continuación.'}
-                  </div>
-                )}
-
-                <form
-                  onSubmit={handleAddQuickService}
-                  style={{
-                    borderTop: '1px solid #e2e8f0',
-                    paddingTop: 18,
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 800,
-                      marginBottom: 14,
-                      color: 'var(--pk-navy)',
-                    }}
-                  >
-                    🛠️ Agregar Servicio Libre / Mano de Obra Especializada
-                  </div>
-                  <div className="pk-form-grid cols-2">
-                    <div className="pk-field pk-col-span-full">
-                      <label>Descripción del Servicio</label>
-                      <input
-                        value={srvName}
-                        onChange={(e) => setSrvName(e.target.value)}
-                        placeholder="Ej: Mano de Obra Diagnóstico / Instalación"
-                      />
-                    </div>
-                    <div className="pk-field">
-                      <label>Valor Unitario ($)</label>
-                      <input
-                        type="number"
-                        min={1}
-                        value={srvPrice}
-                        onChange={(e) => setSrvPrice(e.target.value)}
-                      />
-                    </div>
-                    <div className="pk-field">
-                      <label>IVA (%)</label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={srvTaxPct}
-                        onChange={(e) => setSrvTaxPct(e.target.value)}
-                      />
-                    </div>
-                    <div className="pk-form-actions">
-                      <button type="submit" className="pk-btn pk-btn-outline">
-                        + Añadir Servicio al Carrito
-                      </button>
-                    </div>
-                  </div>
-                </form>
-              </div>
-            </div>
-
-            <div className="pk-card">
-              <div className="pk-card-head">
-                <div className="pk-card-title">
-                  🧾 Liquidación de Venta y Caja Registradora
-                </div>
-                <span className="pk-badge pk-badge-blue">{nextInvoiceNumber}</span>
-              </div>
-              <div className="pk-card-body">
-                <div className="pk-form-grid cols-2">
-                  <PkAutoCodeInput
-                    label="Consecutivo Autorizado"
-                    value={nextInvoiceNumber}
-                  />
-                  <PkSelect
-                    label="Cliente / Adquiriente"
-                    items={customerSelectItems}
-                    value={customerId}
-                    onChange={(val) => {
-                      setCustomerId(val);
-                      setCustomerNameOverride('');
-                      applyCustomerTariff(val, customers, contracts, tariffs);
-                    }}
-                    getValue={(c) => c.id}
-                    getLabel={(c) => `${c.name} (${c.nit})`}
-                    onCreateNew={
-                      hasClientes ? () => setShowNewCustomerModal(true) : undefined
-                    }
-                    createLabel="+ Nuevo Cliente"
-                    searchable
-                  />
-                </div>
-
-                <FacturasTallerBox
-                  vehicles={vehicles}
-                  workers={workers}
-                  vehicleId={vehicleId}
-                  onVehicleChange={handleSelectVehicle}
-                  currentKm={currentKm}
-                  onCurrentKmChange={setCurrentKm}
-                  nextOilKm={nextOilKm}
-                  onNextOilKmChange={setNextOilKm}
-                  mechanicId={mechanicId}
-                  onMechanicChange={setMechanicId}
-                  workOrderId={workOrderId}
-                  onWorkOrderIdChange={setWorkOrderId}
-                  onOpenNewVehicleModal={() => setShowNewVehicleModal(true)}
-                />
-
-                <div className="pk-table-wrap" style={{ marginTop: 16 }}>
-                  <table className="pk-table">
-                    <thead>
-                      <tr>
-                        <th>Detalle</th>
-                        <th>Cant.</th>
-                        <th>Precio Unit.</th>
-                        <th>Subtotal</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {cart.map((item, idx) => {
-                        const lockedCatalogPrice =
-                          Boolean(item.productId) && hasInventario;
-                        return (
-                          <tr key={`${item.code}-${idx}`}>
-                            <td>
-                              <strong>{item.description}</strong>
-                              <div
-                                style={{ fontSize: 11, color: 'var(--pk-muted)' }}
-                              >
-                                {item.itemType} • IVA {item.taxPct}%
-                              </div>
-                            </td>
-                            <td style={{ width: 92 }}>
-                              <input
-                                type="number"
-                                min={1}
-                                value={item.quantity}
-                                onChange={(e) =>
-                                  updateCartItem(idx, {
-                                    quantity: Number(e.target.value || 1),
-                                  })
-                                }
-                                style={{
-                                  width: 72,
-                                  padding: '6px 8px',
-                                  borderRadius: 8,
-                                  border: '1px solid var(--pk-border-strong)',
-                                }}
-                              />
-                            </td>
-                            <td style={{ width: 128 }}>
-                              <input
-                                type="number"
-                                min={1}
-                                value={item.unitPrice}
-                                readOnly={lockedCatalogPrice}
-                                title={
-                                  lockedCatalogPrice
-                                    ? 'Precio gobernado por el catálogo central de inventario'
-                                    : undefined
-                                }
-                                onChange={(e) =>
-                                  updateCartItem(idx, {
-                                    unitPrice: Number(e.target.value || 0),
-                                  })
-                                }
-                                style={{
-                                  width: 112,
-                                  padding: '6px 8px',
-                                  borderRadius: 8,
-                                  border: '1px solid var(--pk-border-strong)',
-                                  background: lockedCatalogPrice
-                                    ? '#f1f5f9'
-                                    : undefined,
-                                }}
-                              />
-                            </td>
-                            <td>
-                              <strong>
-                                {formatCop(item.quantity * item.unitPrice)}
-                              </strong>
-                            </td>
-                            <td>
-                              <button
-                                type="button"
-                                className="pk-btn pk-btn-danger pk-btn-sm"
-                                onClick={() => updateCartItem(idx, { quantity: 0 })}
-                              >
-                                ✕
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                      {cart.length === 0 && (
-                        <tr>
-                          <td
-                            colSpan={5}
-                            style={{
-                              textAlign: 'center',
-                              color: 'var(--pk-muted)',
-                              padding: 24,
-                            }}
-                          >
-                            Selecciona productos o servicios en el panel izquierdo
-                            para iniciar la liquidación.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="pk-form-grid cols-2" style={{ marginTop: 18 }}>
-                  <PkSimpleSelect
-                    label="Medio de Pago"
-                    value={paymentMethod}
-                    onChange={setPaymentMethod}
-                    searchable={false}
-                    options={[
-                      { value: 'Efectivo', label: 'Efectivo en Caja' },
-                      {
-                        value: 'Transferencia / Nequi',
-                        label: 'Transferencia / Nequi / PSE',
-                      },
-                      {
-                        value: 'Tarjeta Débito / Crédito',
-                        label: 'Tarjeta Débito / Crédito',
-                      },
-                    ]}
-                  />
-
-                  <FeatureGate feature="descuento_linea">
-                    <div className="pk-field">
-                      <label>Descuento Convenio / Tarifa (%)</label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={discountPct}
-                        onChange={(e) => setDiscountPct(e.target.value)}
-                      />
-                    </div>
-                  </FeatureGate>
-
-                  <FeatureGate feature="pagos_mixtos_cxc">
-                    <div className="pk-field pk-col-span-full">
-                      <label>
-                        <span>Modalidad Cartera CxC (Crédito)</span>
-                        <input
-                          type="checkbox"
-                          checked={isCreditMode}
-                          onChange={(e) => {
-                            setIsCreditMode(e.target.checked);
-                            if (e.target.checked && !amountPaidInput) {
-                              setAmountPaidInput('0');
-                            }
-                          }}
-                          style={{ width: 16, height: 16, minHeight: 16 }}
-                        />
-                      </label>
-                      {isCreditMode ? (
-                        <input
-                          type="number"
-                          min={0}
-                          max={grandTotal}
-                          value={amountPaidInput}
-                          onChange={(e) => setAmountPaidInput(e.target.value)}
-                          placeholder="Abono recibido hoy ($)"
-                        />
-                      ) : (
-                        <input
-                          readOnly
-                          value="Pago de Contado (100%)"
-                          style={{ background: '#f8fafc' }}
-                        />
-                      )}
-                    </div>
-                  </FeatureGate>
-
-                  <div className="pk-field pk-col-span-full">
-                    <label>Observaciones en Factura</label>
-                    <input
-                      value={invoiceNotes}
-                      onChange={(e) => setInvoiceNotes(e.target.value)}
-                      placeholder="Opcional: orden de compra, garantía o nota de entrega"
-                    />
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    marginTop: 18,
-                    padding: '16px 18px',
-                    background: '#f8fafc',
-                    borderRadius: 12,
-                    border: '1px solid var(--pk-border)',
-                  }}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      fontSize: 13,
-                      marginBottom: 4,
-                    }}
-                  >
-                    <span>Subtotal Bruto:</span>
-                    <strong>{formatCop(rawSubtotal)}</strong>
-                  </div>
-                  {discountAmount > 0 && (
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        fontSize: 13,
-                        color: 'var(--pk-rose)',
-                        marginBottom: 4,
-                      }}
-                    >
-                      <span>Descuento ({effectivePct}%):</span>
-                      <strong>-{formatCop(discountAmount)}</strong>
-                    </div>
-                  )}
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      fontSize: 13,
-                    }}
-                  >
-                    <span>IVA / Impuestos:</span>
-                    <strong>{formatCop(taxAmount)}</strong>
-                  </div>
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      fontSize: 19,
-                      fontWeight: 900,
-                      marginTop: 10,
-                      paddingTop: 10,
-                      borderTop: '1px solid #cbd5e1',
-                      color: 'var(--pk-primary)',
-                    }}
-                  >
-                    <span>TOTAL A PAGAR:</span>
-                    <span>{formatCop(grandTotal)}</span>
-                  </div>
-                  {isCreditMode && (
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        fontSize: 13,
-                        color: 'var(--pk-amber)',
-                        marginTop: 6,
-                      }}
-                    >
-                      <span>Saldo a Cartera CxC:</span>
-                      <strong>
-                        {formatCop(
-                          Math.max(0, grandTotal - Number(amountPaidInput || 0))
-                        )}
-                      </strong>
-                    </div>
-                  )}
-                </div>
-
-                <div className="pk-form-actions">
-                  <button
-                    type="button"
-                    className="pk-btn pk-btn-outline"
-                    disabled={busy}
-                    onClick={() => setPosMode('list')}
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="button"
-                    className="pk-btn pk-btn-primary"
-                    disabled={busy}
-                    onClick={() => submitInvoice(false)}
-                  >
-                    {busy ? 'Procesando...' : '⚡ Emitir Factura'}
-                  </button>
-                  <button
-                    type="button"
-                    className="pk-btn pk-btn-emerald"
-                    disabled={busy}
-                    onClick={() => submitInvoice(true)}
-                  >
-                    {busy ? 'Procesando...' : '🖨️ Facturar e Imprimir'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </>
-      ) : (
-        <div className="pk-card">
-          <div className="pk-card-head">
-            <div className="pk-card-title">📋 Listado General de Facturas Emitidas</div>
-            <span className="pk-badge pk-badge-blue">
-              Próximo consecutivo: {nextInvoiceNumber}
-            </span>
-          </div>
-          <div className="pk-datatable-toolbar">
-            <input
-              className="pk-input pk-datatable-search"
-              placeholder="🔎 Buscar por N° factura, cliente, NIT o placa..."
-              value={invoiceSearch}
-              onChange={(e) => setInvoiceSearch(e.target.value)}
-            />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-              <div style={{ minWidth: 230 }}>
-                <PkSimpleSelect
-                  ariaLabel="Filtrar por estado de recaudo"
-                  value={invoiceStatusFilter}
-                  onChange={setInvoiceStatusFilter}
-                  searchable={false}
-                  options={[
-                    { value: 'ALL', label: 'Todos los estados de factura' },
-                    { value: 'PAID', label: 'Solo Pagadas (Contado)' },
-                    { value: 'CXC', label: 'Con Saldo en Cartera CxC' },
-                  ]}
-                />
-              </div>
-              <span className="pk-badge pk-badge-slate">
-                {filteredInvoices.length} facturas
-              </span>
-            </div>
-          </div>
-          <div className="pk-card-body">
-            <div className="pk-table-wrap">
-              <table className="pk-table">
-                <thead>
-                  <tr>
-                    <th>Factura</th>
-                    <th>Fecha</th>
-                    <th>Cliente / Adquiriente</th>
-                    <th>Placa / Taller</th>
-                    <th>Medio de Pago</th>
-                    <th>Total</th>
-                    <th>Saldo CxC</th>
-                    <th>Estado</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredInvoices.map((inv) => (
-                    <tr key={inv.id}>
-                      <td>
-                        <strong>{inv.id}</strong>
-                      </td>
-                      <td>{inv.issueDate || inv.date}</td>
-                      <td>
-                        <strong>{inv.customerName}</strong>
-                        <div style={{ fontSize: 11.5, color: 'var(--pk-muted)' }}>
-                          {inv.customerNit}
-                        </div>
-                      </td>
-                      <td>
-                        {inv.plate ? (
-                          <div>
-                            <span className="pk-badge pk-badge-blue">
-                              {inv.plate}
-                            </span>
-                            {inv.mechanicName && (
-                              <div
-                                style={{ fontSize: 11, color: 'var(--pk-muted)' }}
-                              >
-                                {inv.mechanicName}
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <span style={{ color: 'var(--pk-muted)' }}>
-                            Mostrador
-                          </span>
-                        )}
-                      </td>
-                      <td>{inv.paymentMethod}</td>
-                      <td>
-                        <strong>{formatCop(inv.total)}</strong>
-                      </td>
-                      <td>
-                        {inv.pendingBalance > 0 ? (
-                          <span className="pk-badge pk-badge-amber">
-                            {formatCop(inv.pendingBalance)}
-                          </span>
-                        ) : (
-                          <span
-                            style={{ color: 'var(--pk-emerald)', fontWeight: 700 }}
-                          >
-                            $0
-                          </span>
-                        )}
-                      </td>
-                      <td>
-                        <span
-                          className={`pk-badge ${
-                            inv.pendingBalance > 0
-                              ? 'pk-badge-amber'
-                              : 'pk-badge-emerald'
-                          }`}
-                        >
-                          {inv.status}
-                        </span>
-                      </td>
-                      <td>
-                        <div className="pk-row-actions">
-                          <button
-                            type="button"
-                            className="pk-btn pk-btn-outline pk-btn-sm"
-                            onClick={() => setSelectedInvoice(inv)}
-                          >
-                            👁️ Ver
-                          </button>
-                          <PkPrintButton
-                            label="🖨️ Imprimir"
-                            variant="primary"
-                            payload={buildInvoicePrintPayload(inv)}
-                          />
-                          {inv.pendingBalance > 0 && hasClientes && (
-                            <button
-                              type="button"
-                              className="pk-btn pk-btn-amber pk-btn-sm"
-                              onClick={() =>
-                                navigateTo('ms-clientes', 'cartera_cxc')
-                              }
-                            >
-                              💳 Abonar
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredInvoices.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={9}
-                        style={{ textAlign: 'center', color: 'var(--pk-muted)', padding: 28 }}
-                      >
-                        {invoices.length === 0
-                          ? 'Aún no hay facturas emitidas. Haz clic en "+ Nueva Factura" para registrar tu primera venta.'
-                          : 'No se encontraron facturas con los filtros seleccionados.'}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
 
       <PkModal
         open={Boolean(selectedInvoice)}
-        title={`🧾 Detalle de Factura ${selectedInvoice?.id || ''}`}
+        title={`🧾 Expediente de Factura ${selectedInvoice?.id || ''}`}
         onClose={() => setSelectedInvoice(null)}
+        maxWidth={720}
       >
         {selectedInvoice && (
-          <div>
+          <div className="pk-stack">
+            <PkProcessNodes
+              steps={buildFourStageNodes(
+                selectedInvoice.docStatus,
+                selectedInvoice.dianStage,
+                selectedInvoice.cufe
+              )}
+              compact
+            />
+
             <div
               style={{
                 display: 'grid',
                 gridTemplateColumns: '1fr 1fr',
                 gap: 8,
                 fontSize: 13,
-                marginBottom: 12,
               }}
             >
               <div>
@@ -2306,25 +1115,25 @@ export const FacturacionView: React.FC = () => {
                 {selectedInvoice.customerNit})
               </div>
               <div>
-                <strong>Fecha:</strong>{' '}
+                <strong>Emisión:</strong>{' '}
                 {selectedInvoice.issueDate || selectedInvoice.date}
               </div>
               <div>
                 <strong>Medio de Pago:</strong> {selectedInvoice.paymentMethod}
               </div>
               <div>
-                <strong>Formato de Documento:</strong>{' '}
-                {({
-                  carta_membrete: 'Carta Membrete Corporativa',
-                  tirilla_80mm: 'Tirilla POS 80 mm',
-                  media_carta: 'Media Carta Comercial',
-                  factura_taller: 'Orden / Factura de Taller',
-                } as Record<string, string>)[selectedInvoice.layoutVariant || 'carta_membrete'] || 'Carta Membrete Corporativa'}
+                <strong>Estado Comercial:</strong> {selectedInvoice.status}
               </div>
               {selectedInvoice.plate && (
                 <div>
                   <strong>Placa / Técnico:</strong> {selectedInvoice.plate} —{' '}
                   {selectedInvoice.mechanicName || 'N/A'}
+                </div>
+              )}
+              {selectedInvoice.purchaseOrderRef && (
+                <div>
+                  <strong>Orden de Compra:</strong>{' '}
+                  {selectedInvoice.purchaseOrderRef}
                 </div>
               )}
               {selectedInvoice.cufe && (
@@ -2333,10 +1142,14 @@ export const FacturacionView: React.FC = () => {
                     gridColumn: '1 / -1',
                     fontSize: 11,
                     wordBreak: 'break-all',
-                    color: 'var(--pk-muted)',
+                    color: '#065f46',
+                    fontFamily: 'monospace',
+                    background: '#ecfdf5',
+                    padding: '8px 10px',
+                    borderRadius: 8,
                   }}
                 >
-                  <strong>CUFE ({selectedInvoice.dianStatus || 'DIAN'}):</strong>{' '}
+                  <strong>CUFE ({selectedInvoice.dianStatus || 'ACEPTADA DIAN'}):</strong>{' '}
                   {selectedInvoice.cufe}
                 </div>
               )}
@@ -2374,24 +1187,1226 @@ export const FacturacionView: React.FC = () => {
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                marginTop: 14,
+                flexWrap: 'wrap',
+                gap: 10,
               }}
             >
               <div>
                 <strong>Total: {formatCop(selectedInvoice.total)}</strong> •
-                Saldo: {formatCop(selectedInvoice.pendingBalance)}
+                Saldo CxC: {formatCop(selectedInvoice.pendingBalance)}
+                {(selectedInvoice.creditedTotal || 0) > 0 && (
+                  <span style={{ color: 'var(--pk-rose)', marginLeft: 8 }}>
+                    • Acreditado NC: {formatCop(selectedInvoice.creditedTotal || 0)}
+                  </span>
+                )}
               </div>
-              <PkPrintButton
-                label="🖨️ Imprimir Representación Gráfica"
-                variant="primary"
-                payload={buildInvoicePrintPayload(selectedInvoice)}
-              />
+              <div className="pk-row-actions">
+                {selectedInvoice.editable && (
+                  <button
+                    type="button"
+                    className="pk-btn pk-btn-outline pk-btn-sm"
+                    onClick={() => {
+                      const target = selectedInvoice;
+                      setSelectedInvoice(null);
+                      openEditInvoiceStudio(target);
+                    }}
+                  >
+                    ✏️ Editar
+                  </button>
+                )}
+                <PkPrintButton
+                  label="🖨️ Imprimir Representación Gráfica"
+                  variant="primary"
+                  payload={buildInvoicePrintPayload(selectedInvoice)}
+                />
+              </div>
             </div>
           </div>
         )}
       </PkModal>
+    </>
+  );
 
-      {quickModals}
+  // TAB: FACTURACIÓN ELECTRÓNICA DIAN (2 PASOS)
+  if (currentTab === 'facturacion_dian') {
+    return (
+      <>
+        <FacturacionDianTab
+          invoices={invoices}
+          adjustmentNotes={adjustmentNotes}
+          busy={busy}
+          onSendToDian={handleSendToDian}
+          onRespondDian={handleRespondDian}
+          onEditInvoice={openEditInvoiceStudio}
+          onEditNote={openEditNoteStudio}
+          onOpenNoteFromInvoice={(inv) => openNoteStudioForInvoice(inv.id)}
+          buildPrintPayload={buildInvoicePrintPayload}
+          buildNotePrintPayload={buildNotePrintPayload}
+        />
+        {sharedOverlays}
+      </>
+    );
+  }
+
+  // TAB: NOTAS CRÉDITO Y DÉBITO
+  if (currentTab === 'notas_ajuste') {
+    return (
+      <>
+        <AdjustmentNotesTab
+          notes={adjustmentNotes}
+          invoices={invoices}
+          nextCreditNoteNumber={nextCreditNoteNumber}
+          nextDebitNoteNumber={nextDebitNoteNumber}
+          busy={busy}
+          onOpenCreateNote={(invId) => openNoteStudioForInvoice(invId)}
+          onEditNote={openEditNoteStudio}
+          onConfirmNote={handleConfirmNote}
+          onSendNoteToDian={(note) =>
+            handleSendToDian(
+              note.noteKind === 'DEBIT' ? 'DEBIT_NOTE' : 'CREDIT_NOTE',
+              note.id
+            )
+          }
+          buildNotePrintPayload={buildNotePrintPayload}
+        />
+        {sharedOverlays}
+      </>
+    );
+  }
+
+  // TAB: COTIZACIONES COMERCIALES
+  if (currentTab === 'cotizaciones') {
+    const quoteSub = quoteItems.reduce(
+      (acc, it) => acc + it.quantity * it.unitPrice,
+      0
+    );
+    const totalQuotedCop = quotes.reduce((acc, q) => acc + q.total, 0);
+    const filteredQuotes = quoteSearch.trim()
+      ? quotes.filter((q) => {
+          const term = quoteSearch.trim().toLowerCase();
+          return (
+            q.id.toLowerCase().includes(term) ||
+            q.customerName.toLowerCase().includes(term) ||
+            (q.customerNit || '').toLowerCase().includes(term)
+          );
+        })
+      : quotes;
+
+    const customerSelectItems: CustomerOption[] = [
+      { id: '', nit: '222222222222', name: 'Cliente Comercial General' },
+      ...customers,
+    ];
+
+    return (
+      <ModuleGate module="cotizaciones">
+        <div className="pk-stack">
+          <PkKpiRow
+            items={[
+              {
+                label: 'Cotizaciones Emitidas',
+                value: String(quotes.length),
+                color: 'var(--pk-primary)',
+              },
+              {
+                label: 'Valor Comercial Cotizado',
+                value: formatCop(totalQuotedCop),
+                color: 'var(--pk-emerald)',
+              },
+              {
+                label: 'Próximo Consecutivo',
+                value: nextQuoteNumber,
+              },
+            ]}
+          />
+
+          <PkLiveHeader
+            title="Cotizaciones Comerciales"
+            liveLabel="En vivo"
+            subtitle="Propuestas formales con vigencia controlada listas para convertirse en factura en un clic."
+            displayMode={quoteDisplayMode}
+            onDisplayModeChange={setQuoteDisplayMode}
+            boardLabel="🎛️ Tablero de Propuestas"
+            tableLabel="📋 Vista Tabla"
+            primaryActionLabel="+ Nueva Cotización"
+            onPrimaryAction={() => setQuoteStudioOpen(true)}
+            extraActions={
+              <input
+                className="pk-input"
+                style={{ minWidth: 220, minHeight: 38 }}
+                placeholder="🔎 Buscar cotización o cliente..."
+                value={quoteSearch}
+                onChange={(e) => setQuoteSearch(e.target.value)}
+              />
+            }
+          />
+
+          {quoteDisplayMode === 'board' ? (
+            <PkKanbanBoard
+              columns={[
+                {
+                  key: 'VIGENTES',
+                  title: '🔵 Propuestas Vigentes',
+                  dotColor: 'blue',
+                  count: filteredQuotes.length,
+                  emptyText: 'Aún no hay cotizaciones registradas',
+                  children: filteredQuotes.map((q) => (
+                    <PkTicketCard
+                      key={q.id}
+                      code={q.id}
+                      timeAgo={q.createdAt}
+                      channelBadge={{ label: 'Propuesta Comercial', tone: 'blue' }}
+                      title={q.customerName}
+                      subtitle={`NIT: ${q.customerNit || 'N/A'} • Válida hasta ${q.validUntil}`}
+                      items={(q.items || []).slice(0, 3).map((it) => ({
+                        qty: it.quantity,
+                        name: it.description,
+                        amount: formatCop(it.subtotal),
+                      }))}
+                      highlightNote={q.notes}
+                      totalLabel="TOTAL COTIZADO"
+                      totalValue={formatCop(q.total)}
+                      primaryAction={{
+                        label: '🛒 Convertir en Factura',
+                        tone: 'emerald',
+                        onClick: () => convertQuoteToInvoice(q),
+                      }}
+                      secondaryActions={
+                        <PkPrintButton
+                          label="🖨️ Imprimir Cotización"
+                          payload={{
+                            document_type: 'COTIZACIÓN COMERCIAL',
+                            document_number: q.id,
+                            issue_date: q.createdAt,
+                            customer_name: q.customerName,
+                            customer_nit: q.customerNit,
+                            extra_fields: {
+                              'Válida Hasta': q.validUntil || '',
+                              Estado: q.status || 'Vigente',
+                            },
+                            items: (q.items || []).map((it) => ({
+                              code: it.code,
+                              description: it.description,
+                              quantity: it.quantity,
+                              unit_price: it.unitPrice,
+                              tax_pct: it.taxPct,
+                              subtotal: it.subtotal,
+                            })),
+                            subtotal: q.subtotal,
+                            tax_total: q.taxTotal,
+                            grand_total: q.total,
+                            notes: q.notes,
+                          }}
+                        />
+                      }
+                    />
+                  ))}
+              ]}
+            />
+          ) : (
+            <div className="pk-card">
+              <div className="pk-card-body">
+                <div className="pk-table-wrap">
+                  <table className="pk-table">
+                    <thead>
+                      <tr>
+                        <th>N° Cotización</th>
+                        <th>Fecha</th>
+                        <th>Cliente</th>
+                        <th>Vigencia</th>
+                        <th>Total</th>
+                        <th>Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredQuotes.map((q) => (
+                        <tr key={q.id}>
+                          <td>
+                            <strong>{q.id}</strong>
+                          </td>
+                          <td>{q.createdAt}</td>
+                          <td>{q.customerName}</td>
+                          <td>{q.validUntil}</td>
+                          <td>
+                            <strong>{formatCop(q.total)}</strong>
+                          </td>
+                          <td>
+                            <div className="pk-row-actions">
+                              <button
+                                type="button"
+                                className="pk-btn pk-btn-emerald pk-btn-sm"
+                                onClick={() => convertQuoteToInvoice(q)}
+                              >
+                                🛒 Pasar a Factura
+                              </button>
+                              <PkPrintButton
+                                label="🖨️ Imprimir"
+                                payload={{
+                                  document_type: 'COTIZACIÓN COMERCIAL',
+                                  document_number: q.id,
+                                  issue_date: q.createdAt,
+                                  customer_name: q.customerName,
+                                  customer_nit: q.customerNit,
+                                  items: (q.items || []).map((it) => ({
+                                    code: it.code,
+                                    description: it.description,
+                                    quantity: it.quantity,
+                                    unit_price: it.unitPrice,
+                                    tax_pct: it.taxPct,
+                                    subtotal: it.subtotal,
+                                  })),
+                                  subtotal: q.subtotal,
+                                  tax_total: q.taxTotal,
+                                  grand_total: q.total,
+                                  notes: q.notes,
+                                }}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <PkFullscreenDialog
+            open={quoteStudioOpen}
+            onClose={() => setQuoteStudioOpen(false)}
+            title="📄 Estudio de Propuesta y Cotización Comercial"
+            subtitle="Elabora propuestas comerciales formales con precios del catálogo central y vigencia controlada."
+            badge={{ label: nextQuoteNumber, tone: 'blue' }}
+            footerLeft={
+              <strong style={{ fontSize: 18, color: 'var(--pk-navy)' }}>
+                Subtotal Cotizado: {formatCop(quoteSub)}
+              </strong>
+            }
+            footerActions={
+              <>
+                <button
+                  type="button"
+                  className="pk-btn pk-btn-outline"
+                  onClick={() => setQuoteStudioOpen(false)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="pk-btn pk-btn-primary"
+                  disabled={busy}
+                  onClick={handleSaveQuote}
+                >
+                  💾 Guardar Cotización ({nextQuoteNumber})
+                </button>
+              </>
+            }
+          >
+            <div className="pk-card">
+              <div className="pk-card-body pk-stack">
+                <div className="pk-form-grid">
+                  <PkAutoCodeInput
+                    label="N° Cotización"
+                    value={nextQuoteNumber}
+                  />
+                  <PkSelect
+                    label="Cliente Destinatario"
+                    items={customerSelectItems}
+                    value={quoteCustomerId}
+                    onChange={setQuoteCustomerId}
+                    getValue={(c) => c.id}
+                    getLabel={(c) => `${c.name} (${c.nit})`}
+                    onCreateNew={
+                      hasClientes
+                        ? () => setShowNewCustomerModal(true)
+                        : undefined
+                    }
+                    createLabel="+ Nuevo Cliente"
+                    searchable
+                  />
+                  <div className="pk-field">
+                    <label>Válida Hasta</label>
+                    <input
+                      type="date"
+                      value={quoteValidUntil}
+                      onChange={(e) => setQuoteValidUntil(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {products.length > 0 && (
+                  <div className="pk-form-grid">
+                    <div className="pk-col-span-2">
+                      <PkSelect
+                        label="Producto del Catálogo"
+                        items={products}
+                        value={quoteProductId}
+                        onChange={setQuoteProductId}
+                        getValue={(p) => p.id}
+                        getLabel={(p) =>
+                          `${p.code} — ${p.name} (${formatCop(p.salePrice)})`
+                        }
+                        searchable
+                      />
+                    </div>
+                    <div className="pk-field">
+                      <label>Cantidad</label>
+                      <div style={{ display: 'flex', gap: 10 }}>
+                        <input
+                          type="number"
+                          min={1}
+                          value={quoteQty}
+                          onChange={(e) => setQuoteQty(e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          className="pk-btn pk-btn-primary"
+                          onClick={handleAddQuoteLine}
+                        >
+                          + Agregar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {quoteItems.length > 0 && (
+                  <div className="pk-table-wrap">
+                    <table className="pk-table">
+                      <thead>
+                        <tr>
+                          <th>Código</th>
+                          <th>Descripción</th>
+                          <th>Cant.</th>
+                          <th>Vr. Unitario</th>
+                          <th>Subtotal</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {quoteItems.map((it, idx) => (
+                          <tr key={`${it.code}-${idx}`}>
+                            <td>{it.code}</td>
+                            <td>{it.description}</td>
+                            <td>{it.quantity}</td>
+                            <td>{formatCop(it.unitPrice)}</td>
+                            <td>
+                              <strong>
+                                {formatCop(it.quantity * it.unitPrice)}
+                              </strong>
+                            </td>
+                            <td>
+                              <button
+                                type="button"
+                                className="pk-btn pk-btn-danger pk-btn-sm"
+                                onClick={() =>
+                                  setQuoteItems((prev) =>
+                                    prev.filter((_, i) => i !== idx)
+                                  )
+                                }
+                              >
+                                ✕
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                <div className="pk-field">
+                  <label>Condiciones Comerciales y Validez</label>
+                  <input
+                    value={quoteNotes}
+                    onChange={(e) => setQuoteNotes(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+          </PkFullscreenDialog>
+
+          {sharedOverlays}
+        </div>
+      </ModuleGate>
+    );
+  }
+
+  // TAB: APARTADO FACTURAS DE TALLER
+  if (currentTab === 'facturas_taller') {
+    const workshopInvoices = invoices.filter(
+      (inv) =>
+        Boolean(inv.plate || inv.vehicleId) ||
+        (inv.invoiceType || '').toUpperCase() === 'TALLER'
+    );
+    const workshopTotal = workshopInvoices
+      .filter((inv) => inv.docStatus !== 'BORRADOR')
+      .reduce((acc, inv) => acc + inv.total, 0);
+
+    return (
+      <ModuleGate module="facturas_taller">
+        <div className="pk-stack">
+          <PkKpiRow
+            items={[
+              {
+                label: 'Facturas Automotrices',
+                value: String(workshopInvoices.length),
+                color: 'var(--pk-primary)',
+              },
+              {
+                label: 'Facturación Confirmada Taller',
+                value: formatCop(workshopTotal),
+                color: 'var(--pk-emerald)',
+              },
+              {
+                label: 'Placas Registradas',
+                value: String(vehicles.length),
+              },
+            ]}
+          />
+
+          <PkLiveHeader
+            title="Facturación Especializada Automotriz"
+            liveLabel="En vivo"
+            subtitle="Liquidación de placas, kilometraje, órdenes de trabajo y comisiones técnicas."
+            primaryActionLabel="+ Crear Factura Automotriz"
+            onPrimaryAction={() => openCreateInvoiceStudio('TALLER')}
+          />
+
+          <div className="pk-card">
+            <div className="pk-card-body">
+              <div className="pk-table-wrap">
+                <table className="pk-table">
+                  <thead>
+                    <tr>
+                      <th>Factura</th>
+                      <th>Placa / Vehículo</th>
+                      <th>Cliente</th>
+                      <th>Técnico</th>
+                      <th>Ciclo 4 Etapas</th>
+                      <th>Total</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {workshopInvoices.map((inv) => (
+                      <tr key={inv.id}>
+                        <td>
+                          <strong>{inv.id}</strong>
+                          <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>
+                            {inv.issueDate || inv.date}
+                          </div>
+                        </td>
+                        <td>
+                          <span className="pk-badge pk-badge-blue">
+                            {inv.plate || 'TALLER'}
+                          </span>
+                          <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>
+                            {inv.workshopMeta?.vehicleBrand || ''}
+                          </div>
+                        </td>
+                        <td>{inv.customerName}</td>
+                        <td>{inv.mechanicName || '— Sin asignar —'}</td>
+                        <td style={{ minWidth: 230 }}>
+                          <PkProcessNodes
+                            compact
+                            steps={buildFourStageNodes(
+                              inv.docStatus,
+                              inv.dianStage,
+                              inv.cufe
+                            )}
+                          />
+                        </td>
+                        <td>
+                          <strong>{formatCop(inv.total)}</strong>
+                        </td>
+                        <td>
+                          <div className="pk-row-actions">
+                            {inv.editable && (
+                              <button
+                                type="button"
+                                className="pk-btn pk-btn-outline pk-btn-sm"
+                                onClick={() => openEditInvoiceStudio(inv)}
+                              >
+                                ✏️ Editar
+                              </button>
+                            )}
+                            <PkPrintButton
+                              label="🖨️ Imprimir"
+                              payload={buildInvoicePrintPayload(inv)}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {workshopInvoices.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={7}
+                          style={{
+                            textAlign: 'center',
+                            color: 'var(--pk-muted)',
+                            padding: 24,
+                          }}
+                        >
+                          No hay facturas con placa emitidas todavía.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {sharedOverlays}
+        </div>
+      </ModuleGate>
+    );
+  }
+
+  // MAIN TAB: FACTURAS COMERCIALES / POS MOSTRADOR
+  const activeConfirmed = invoices.filter(
+    (iv) =>
+      (iv.docStatus || 'CONFIRMADA') !== 'BORRADOR' &&
+      iv.docStatus !== 'ANULADA_NC'
+  );
+  const draftsCount = invoices.filter(
+    (iv) => iv.docStatus === 'BORRADOR'
+  ).length;
+  const confirmedCount = invoices.filter(
+    (iv) => (iv.docStatus || 'CONFIRMADA') === 'CONFIRMADA'
+  ).length;
+  const cxcCount = activeConfirmed.filter((iv) => iv.pendingBalance > 0).length;
+  const workshopCount = invoices.filter(
+    (iv) =>
+      Boolean(iv.plate || iv.vehicleId) ||
+      (iv.invoiceType || '').toUpperCase() === 'TALLER'
+  ).length;
+
+  const totalInvoicedAmount = activeConfirmed.reduce(
+    (acc, iv) =>
+      acc + Math.max(0, iv.total - (iv.creditedTotal || 0) + (iv.debitedTotal || 0)),
+    0
+  );
+  const totalCollectedAmount = activeConfirmed.reduce(
+    (acc, iv) => acc + iv.amountPaid,
+    0
+  );
+  const totalPendingAmount = activeConfirmed.reduce(
+    (acc, iv) => acc + iv.pendingBalance,
+    0
+  );
+  const draftsTotalAmount = invoices
+    .filter((iv) => iv.docStatus === 'BORRADOR')
+    .reduce((acc, iv) => acc + iv.total, 0);
+
+  const filteredInvoices = invoices.filter((inv) => {
+    const docSt = inv.docStatus || 'CONFIRMADA';
+    if (invoicePill === 'BORRADOR' && docSt !== 'BORRADOR') return false;
+    if (invoicePill === 'CONFIRMADA' && docSt !== 'CONFIRMADA') return false;
+    if (invoicePill === 'CXC' && (docSt === 'BORRADOR' || inv.pendingBalance <= 0))
+      return false;
+    if (
+      invoicePill === 'TALLER' &&
+      !inv.plate &&
+      !inv.vehicleId &&
+      (inv.invoiceType || '').toUpperCase() !== 'TALLER'
+    ) {
+      return false;
+    }
+
+    const q = invoiceSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      inv.id.toLowerCase().includes(q) ||
+      inv.customerName.toLowerCase().includes(q) ||
+      (inv.customerNit || '').toLowerCase().includes(q) ||
+      (inv.plate || '').toLowerCase().includes(q)
+    );
+  });
+
+  const stage1Drafts = filteredInvoices.filter(
+    (iv) => iv.docStatus === 'BORRADOR'
+  );
+  const stage2ConfirmedSinEnviar = filteredInvoices.filter(
+    (iv) =>
+      (iv.docStatus || 'CONFIRMADA') === 'CONFIRMADA' &&
+      resolveDianStage(iv.dianStage, iv.cufe) === 'SIN_ENVIAR'
+  );
+  const stage3DianTransitOrRejected = filteredInvoices.filter((iv) => {
+    if ((iv.docStatus || 'CONFIRMADA') !== 'CONFIRMADA') return false;
+    const st = resolveDianStage(iv.dianStage, iv.cufe);
+    return st === 'ENVIADA' || st === 'RECHAZADA';
+  });
+  const stage4AcceptedOrClosed = filteredInvoices.filter((iv) => {
+    if (iv.docStatus === 'BORRADOR') return false;
+    if (iv.docStatus === 'ANULADA_NC') return true;
+    return resolveDianStage(iv.dianStage, iv.cufe) === 'ACEPTADA';
+  });
+
+  return (
+    <div className="pk-stack">
+      <PkKpiRow
+        items={[
+          {
+            label: 'Facturas Confirmadas',
+            value: String(confirmedCount),
+            color: 'var(--pk-primary)',
+          },
+          {
+            label: 'Facturación Neta Activa',
+            value: formatCop(totalInvoicedAmount),
+            color: 'var(--pk-navy)',
+          },
+          {
+            label: 'Recaudo en Caja / Digital',
+            value: formatCop(totalCollectedAmount),
+            color: 'var(--pk-emerald)',
+          },
+          {
+            label: 'Saldo en Cartera CxC',
+            value: formatCop(totalPendingAmount),
+            color:
+              totalPendingAmount > 0 ? 'var(--pk-amber)' : 'var(--pk-muted)',
+          },
+          {
+            label: 'Borradores Abiertos',
+            value: String(draftsCount),
+            color: draftsCount > 0 ? 'var(--pk-amber)' : 'var(--pk-muted)',
+          },
+        ]}
+      />
+
+      <PkDistributionStrip
+        title="Composición Financiera de Cartera, Recaudo y Borradores"
+        segments={[
+          {
+            label: 'Recaudado Pagado',
+            value: totalCollectedAmount,
+            displayValue: formatCop(totalCollectedAmount),
+            color: '#10b981',
+          },
+          {
+            label: 'Cartera CxC Pendiente',
+            value: totalPendingAmount,
+            displayValue: formatCop(totalPendingAmount),
+            color: '#f59e0b',
+          },
+          {
+            label: 'En Borrador (Sin afectar stock)',
+            value: draftsTotalAmount,
+            displayValue: formatCop(draftsTotalAmount),
+            color: '#64748b',
+          },
+        ]}
+      />
+
+      <PkLiveHeader
+        title="Facturas Comerciales"
+        liveLabel="En vivo"
+        subtitle="Ciclo comercial y fiscal de 4 etapas: 1. Borrador editable → 2. Confirmada (inventario y CxC) → 3. Envío DIAN → 4. Validación CUFE."
+        pills={[
+          { key: 'ALL', label: 'Todas', count: invoices.length },
+          { key: 'BORRADOR', label: 'Borradores', count: draftsCount },
+          { key: 'CONFIRMADA', label: 'Confirmadas', count: confirmedCount },
+          { key: 'CXC', label: 'Con Saldo CxC', count: cxcCount },
+          { key: 'TALLER', label: 'Automotriz', count: workshopCount },
+        ]}
+        activePill={invoicePill}
+        onPillChange={setInvoicePill}
+        displayMode={invoiceDisplayMode}
+        onDisplayModeChange={setInvoiceDisplayMode}
+        boardLabel="🎛️ Tablero de Tiquetes"
+        tableLabel="📋 Vista Tabla"
+        primaryActionLabel="+ Crear Factura"
+        onPrimaryAction={() => openCreateInvoiceStudio('MOSTRADOR')}
+        extraActions={
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input
+              className="pk-input"
+              style={{ minWidth: 220, minHeight: 38 }}
+              placeholder="🔎 Buscar N°, cliente, NIT o placa..."
+              value={invoiceSearch}
+              onChange={(e) => setInvoiceSearch(e.target.value)}
+            />
+            <button
+              type="button"
+              className="pk-btn pk-btn-outline pk-btn-sm"
+              onClick={() =>
+                downloadCsvUtf8(
+                  'ventas_facturacion_4_etapas.csv',
+                  [
+                    'Consecutivo',
+                    'Modalidad',
+                    'EtapaComercial',
+                    'EtapaDIAN',
+                    'Fecha',
+                    'Cliente',
+                    'NIT',
+                    'Total',
+                    'Pagado',
+                    'SaldoCxC',
+                    'CUFE',
+                  ],
+                  invoices.map((inv) => [
+                    inv.id,
+                    inv.invoiceType || 'MOSTRADOR',
+                    inv.docStatus || 'CONFIRMADA',
+                    resolveDianStage(inv.dianStage, inv.cufe),
+                    inv.issueDate || inv.date || '',
+                    inv.customerName,
+                    inv.customerNit,
+                    inv.total,
+                    inv.amountPaid,
+                    inv.pendingBalance,
+                    inv.cufe || '',
+                  ])
+                )
+              }
+            >
+              📥 CSV
+            </button>
+          </div>
+        }
+      />
+
+      {invoiceDisplayMode === 'board' ? (
+        <PkKanbanBoard
+          columns={[
+            {
+              key: 'BORRADOR',
+              title: '🟡 1. Borradores Editables',
+              dotColor: 'amber',
+              count: stage1Drafts.length,
+              emptyText: 'Sin facturas en borrador',
+              children: stage1Drafts.map((inv) => (
+                <PkTicketCard
+                  key={inv.id}
+                  code={inv.id}
+                  timeAgo={inv.issueDate || inv.date}
+                  channelBadge={channelBadgeForInvoice(inv)}
+                  title={inv.customerName}
+                  subtitle={`NIT: ${inv.customerNit}`}
+                  metaLine="Borrador abierto • No descuenta stock ni cartera aún"
+                  items={inv.items.slice(0, 3).map((it) => ({
+                    qty: it.quantity,
+                    name: it.description,
+                    amount: formatCop(it.subtotal),
+                  }))}
+                  highlightNote={inv.notes}
+                  totalValue={formatCop(inv.total)}
+                  paymentLabel={inv.paymentMethod}
+                  processNodes={buildFourStageNodes(
+                    inv.docStatus,
+                    inv.dianStage,
+                    inv.cufe
+                  )}
+                  statusPill={{ label: 'Borrador Editable', tone: 'amber' }}
+                  primaryAction={{
+                    label: '✅ Confirmar Factura',
+                    tone: 'emerald',
+                    disabled: busy,
+                    onClick: () => handleConfirmDraftInvoice(inv.id),
+                  }}
+                  secondaryActions={
+                    <>
+                      <button
+                        type="button"
+                        className="pk-btn pk-btn-outline pk-btn-sm"
+                        onClick={() => openEditInvoiceStudio(inv)}
+                      >
+                        ✏️ Editar
+                      </button>
+                      <button
+                        type="button"
+                        className="pk-btn pk-btn-outline pk-btn-sm"
+                        onClick={() => setSelectedInvoice(inv)}
+                      >
+                        👁️ Ver
+                      </button>
+                    </>
+                  }
+                />
+              )),
+            },
+            {
+              key: 'CONFIRMADA',
+              title: '🔵 2. Confirmadas (Sin Enviar DIAN)',
+              dotColor: 'blue',
+              count: stage2ConfirmedSinEnviar.length,
+              emptyText: 'Sin facturas pendientes de envío DIAN',
+              children: stage2ConfirmedSinEnviar.map((inv) => {
+                const isEditable =
+                  inv.editable ?? inv.docStatus !== 'ANULADA_NC';
+                return (
+                  <PkTicketCard
+                    key={inv.id}
+                    code={inv.id}
+                    timeAgo={inv.issueDate || inv.date}
+                    channelBadge={channelBadgeForInvoice(inv)}
+                    title={inv.customerName}
+                    subtitle={`NIT: ${inv.customerNit}`}
+                    metaLine={
+                      inv.pendingBalance > 0
+                        ? `Saldo Cartera CxC: ${formatCop(inv.pendingBalance)}`
+                        : 'Stock y pago confirmados'
+                    }
+                    items={inv.items.slice(0, 3).map((it) => ({
+                      qty: it.quantity,
+                      name: it.description,
+                      amount: formatCop(it.subtotal),
+                    }))}
+                    highlightNote={inv.notes}
+                    totalValue={formatCop(inv.total)}
+                    paymentLabel={inv.paymentMethod}
+                    processNodes={buildFourStageNodes(
+                      inv.docStatus,
+                      inv.dianStage,
+                      inv.cufe
+                    )}
+                    statusPill={{
+                      label: inv.status,
+                      tone: inv.pendingBalance > 0 ? 'amber' : 'blue',
+                    }}
+                    primaryAction={
+                      hasDianModule
+                        ? {
+                            label: '🚀 Paso 1: Enviar a DIAN',
+                            tone: 'blue',
+                            disabled: busy,
+                            onClick: () => handleSendToDian('INVOICE', inv.id),
+                          }
+                        : undefined
+                    }
+                    secondaryActions={
+                      <>
+                        {isEditable && (
+                          <button
+                            type="button"
+                            className="pk-btn pk-btn-outline pk-btn-sm"
+                            onClick={() => openEditInvoiceStudio(inv)}
+                          >
+                            ✏️ Editar
+                          </button>
+                        )}
+                        <PkPrintButton
+                          label="🖨️ PDF"
+                          payload={buildInvoicePrintPayload(inv)}
+                        />
+                      </>
+                    }
+                  />
+                );
+              }),
+            },
+            {
+              key: 'DIAN_TRANSIT',
+              title: '🟣 3. En Validación / Rechazo DIAN',
+              dotColor: 'purple',
+              count: stage3DianTransitOrRejected.length,
+              emptyText: 'Sin facturas en espera o rechazo DIAN',
+              children: stage3DianTransitOrRejected.map((inv) => {
+                const st = resolveDianStage(inv.dianStage, inv.cufe);
+                return (
+                  <PkTicketCard
+                    key={inv.id}
+                    code={inv.id}
+                    timeAgo={inv.issueDate || inv.date}
+                    channelBadge={channelBadgeForInvoice(inv)}
+                    title={inv.customerName}
+                    subtitle={`NIT: ${inv.customerNit}`}
+                    highlightNote={
+                      st === 'RECHAZADA'
+                        ? `${inv.rejectionCode || 'DIAN'}: ${inv.rejectionMessage || 'Subsanar datos'}`
+                        : `TrackID: ${inv.trackId || 'Transmitida'}`
+                    }
+                    totalValue={formatCop(inv.total)}
+                    processNodes={buildFourStageNodes(
+                      inv.docStatus,
+                      inv.dianStage,
+                      inv.cufe
+                    )}
+                    statusPill={{
+                      label:
+                        st === 'RECHAZADA'
+                          ? 'Rechazada DIAN (Editable)'
+                          : 'Enviada a DIAN (Bloqueada)',
+                      tone: st === 'RECHAZADA' ? 'rose' : 'purple',
+                    }}
+                    primaryAction={
+                      st === 'RECHAZADA'
+                        ? {
+                            label: '✏️ Editar y Subsanar',
+                            tone: 'coral',
+                            onClick: () => openEditInvoiceStudio(inv),
+                          }
+                        : {
+                            label: '✅ Paso 2: Recibir Aceptación DIAN',
+                            tone: 'emerald',
+                            disabled: busy,
+                            onClick: () =>
+                              handleRespondDian('INVOICE', inv.id, 'ACCEPTED'),
+                          }
+                    }
+                    secondaryActions={
+                      <button
+                        type="button"
+                        className="pk-btn pk-btn-outline pk-btn-sm"
+                        style={{ width: '100%' }}
+                        onClick={() => setActiveModuleKey('facturacion_dian')}
+                      >
+                        ⚡ Abrir Consola DIAN
+                      </button>
+                    }
+                  />
+                );
+              }),
+            },
+            {
+              key: 'ACEPTADA',
+              title: '🟢 4. Aceptadas CUFE / Cerradas',
+              dotColor: 'emerald',
+              count: stage4AcceptedOrClosed.length,
+              emptyText: 'Aún no hay facturas aceptadas con CUFE',
+              children: stage4AcceptedOrClosed.map((inv) => {
+                const isAnulada = inv.docStatus === 'ANULADA_NC';
+                return (
+                  <PkTicketCard
+                    key={inv.id}
+                    code={inv.id}
+                    timeAgo={inv.issueDate || inv.date}
+                    channelBadge={channelBadgeForInvoice(inv)}
+                    title={inv.customerName}
+                    subtitle={`NIT: ${inv.customerNit}`}
+                    metaLine={
+                      inv.pendingBalance > 0
+                        ? `Saldo CxC: ${formatCop(inv.pendingBalance)}`
+                        : (inv.creditedTotal || 0) > 0
+                        ? `Notas Crédito aplicadas: -${formatCop(inv.creditedTotal || 0)}`
+                        : undefined
+                    }
+                    items={inv.items.slice(0, 2).map((it) => ({
+                      qty: it.quantity,
+                      name: it.description,
+                      amount: formatCop(it.subtotal),
+                    }))}
+                    totalValue={formatCop(inv.total)}
+                    paymentLabel={inv.paymentMethod}
+                    processNodes={buildFourStageNodes(
+                      inv.docStatus,
+                      inv.dianStage,
+                      inv.cufe
+                    )}
+                    statusPill={{
+                      label: isAnulada
+                        ? 'Anulada por Nota Crédito'
+                        : 'Validada CUFE DIAN',
+                      tone: isAnulada ? 'rose' : 'emerald',
+                    }}
+                    secondaryActions={
+                      <>
+                        <button
+                          type="button"
+                          className="pk-btn pk-btn-outline pk-btn-sm"
+                          onClick={() => setSelectedInvoice(inv)}
+                        >
+                          👁️ Ver
+                        </button>
+                        <PkPrintButton
+                          label="🖨️ PDF"
+                          payload={buildInvoicePrintPayload(inv)}
+                        />
+                        {!isAnulada && hasNotasModule && (
+                          <button
+                            type="button"
+                            className="pk-btn pk-btn-amber pk-btn-sm"
+                            onClick={() => openNoteStudioForInvoice(inv.id)}
+                          >
+                            ↩️ Nota Crédito / Débito
+                          </button>
+                        )}
+                      </>
+                    }
+                  />
+                );
+              }),
+            },
+          ]}
+        />
+      ) : (
+        <div className="pk-card">
+          <div className="pk-card-head">
+            <div className="pk-card-title">
+              📋 Listado General de Facturas Comerciales ({filteredInvoices.length})
+            </div>
+            <span className="pk-badge pk-badge-blue">
+              Próxima Oficial: {nextInvoiceNumber}
+            </span>
+          </div>
+          <div className="pk-card-body">
+            <div className="pk-table-wrap">
+              <table className="pk-table">
+                <thead>
+                  <tr>
+                    <th>Documento</th>
+                    <th>Adquiriente / NIT</th>
+                    <th>Modalidad</th>
+                    <th>Progreso 4 Etapas</th>
+                    <th>Total / Saldo CxC</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredInvoices.map((inv) => {
+                    const st = resolveDianStage(inv.dianStage, inv.cufe);
+                    const isDraft = inv.docStatus === 'BORRADOR';
+                    const isAnulada = inv.docStatus === 'ANULADA_NC';
+                    const isEditable =
+                      inv.editable ??
+                      (!isAnulada && st !== 'ENVIADA' && st !== 'ACEPTADA');
+                    const badge = channelBadgeForInvoice(inv);
+                    return (
+                      <tr key={inv.id}>
+                        <td>
+                          <strong>{inv.id}</strong>
+                          <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>
+                            {inv.issueDate || inv.date}
+                          </div>
+                        </td>
+                        <td>
+                          <strong>{inv.customerName}</strong>
+                          <div style={{ fontSize: 11.5, color: 'var(--pk-muted)' }}>
+                            {inv.customerNit}
+                          </div>
+                        </td>
+                        <td>
+                          <span
+                            className={`pk-badge pk-badge-${
+                              badge.tone === 'coral'
+                                ? 'amber'
+                                : badge.tone === 'purple'
+                                ? 'blue'
+                                : badge.tone
+                            }`}
+                          >
+                            {badge.label}
+                          </span>
+                        </td>
+                        <td style={{ minWidth: 250 }}>
+                          <PkProcessNodes
+                            compact
+                            steps={buildFourStageNodes(
+                              inv.docStatus,
+                              inv.dianStage,
+                              inv.cufe
+                            )}
+                          />
+                        </td>
+                        <td>
+                          <strong>{formatCop(inv.total)}</strong>
+                          {inv.pendingBalance > 0 && !isDraft && (
+                            <div style={{ fontSize: 11, color: 'var(--pk-amber)', fontWeight: 700 }}>
+                              CxC: {formatCop(inv.pendingBalance)}
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          <span
+                            className={`pk-badge ${
+                              isAnulada
+                                ? 'pk-badge-rose'
+                                : isDraft
+                                ? 'pk-badge-amber'
+                                : inv.pendingBalance > 0
+                                ? 'pk-badge-amber'
+                                : 'pk-badge-emerald'
+                            }`}
+                          >
+                            {inv.status}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="pk-row-actions">
+                            {isDraft && (
+                              <button
+                                type="button"
+                                className="pk-btn pk-btn-emerald pk-btn-sm"
+                                disabled={busy}
+                                onClick={() => handleConfirmDraftInvoice(inv.id)}
+                              >
+                                ✅ Confirmar
+                              </button>
+                            )}
+                            {isEditable && (
+                              <button
+                                type="button"
+                                className="pk-btn pk-btn-outline pk-btn-sm"
+                                onClick={() => openEditInvoiceStudio(inv)}
+                              >
+                                ✏️ Editar
+                              </button>
+                            )}
+                            {st === 'ACEPTADA' && !isAnulada && hasNotasModule && (
+                              <button
+                                type="button"
+                                className="pk-btn pk-btn-amber pk-btn-sm"
+                                onClick={() => openNoteStudioForInvoice(inv.id)}
+                              >
+                                ↩️ Nota Crédito / Débito
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="pk-btn pk-btn-outline pk-btn-sm"
+                              onClick={() => setSelectedInvoice(inv)}
+                            >
+                              👁️ Ver
+                            </button>
+                            <PkPrintButton
+                              label="🖨️ Imprimir"
+                              variant="primary"
+                              payload={buildInvoicePrintPayload(inv)}
+                            />
+                            {inv.pendingBalance > 0 && !isDraft && hasClientes && (
+                              <button
+                                type="button"
+                                className="pk-btn pk-btn-outline pk-btn-sm"
+                                onClick={() =>
+                                  navigateTo('ms-clientes', 'cartera_cxc')
+                                }
+                              >
+                                💳 Abonar
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {filteredInvoices.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={7}
+                        style={{
+                          textAlign: 'center',
+                          color: 'var(--pk-muted)',
+                          padding: 28,
+                        }}
+                      >
+                        No se encontraron facturas para los filtros actuales.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {sharedOverlays}
     </div>
   );
 };

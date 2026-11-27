@@ -667,8 +667,8 @@ export const PkModal: React.FC<{
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
-  if (!open) return null;
-  return (
+  if (!open || typeof document === 'undefined') return null;
+  return createPortal(
     <div className="pk-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby={titleId}>
       <div className="pk-modal" style={{ maxWidth }} onClick={(e) => e.stopPropagation()}>
         <div className="pk-card-head" style={{ background: '#023047', color: '#ffffff' }}>
@@ -681,7 +681,8 @@ export const PkModal: React.FC<{
         </div>
         <div className="pk-card-body">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -754,6 +755,537 @@ export const PkKpiRow: React.FC<{
     ))}
   </div>
 );
+
+export interface PkProcessStep {
+  step: number | string;
+  label: string;
+  sublabel?: string;
+  status: 'done' | 'active' | 'error' | 'pending';
+  tooltip?: string;
+  onClick?: () => void;
+}
+
+export const PkProcessNodes: React.FC<{
+  steps: PkProcessStep[];
+  compact?: boolean;
+}> = ({ steps, compact = false }) => {
+  if (!steps.length) return null;
+  return (
+    <div className={`pk-pnodes${compact ? ' compact' : ''}`}>
+      {steps.map((st, idx) => {
+        const prev = idx > 0 ? steps[idx - 1] : null;
+        const next = idx < steps.length - 1 ? steps[idx + 1] : null;
+
+        let leftLineTone = '';
+        if (prev) {
+          if (st.status === 'done') leftLineTone = 'done';
+          else if (st.status === 'active') leftLineTone = 'active';
+          else if (st.status === 'error') leftLineTone = 'error';
+        }
+
+        let rightLineTone = '';
+        if (next) {
+          if (next.status === 'done') rightLineTone = 'done';
+          else if (next.status === 'active') rightLineTone = 'active';
+          else if (next.status === 'error') rightLineTone = 'error';
+        }
+
+        return (
+          <div className="pk-pnode-item" key={`${st.step}-${idx}`} title={st.tooltip || st.label}>
+            <div className="pk-pnode-track-row">
+              <div className={`pk-pnode-line${idx === 0 ? ' hidden' : ''}${leftLineTone ? ` ${leftLineTone}` : ''}`} />
+              <button
+                type="button"
+                disabled={!st.onClick}
+                onClick={st.onClick}
+                className={`pk-pnode-circle ${st.status}${st.onClick ? ' clickable' : ''}`}
+              >
+                {st.status === 'done' ? (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                ) : st.status === 'error' ? (
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                ) : (
+                  st.step
+                )}
+              </button>
+              <div className={`pk-pnode-line${idx === steps.length - 1 ? ' hidden' : ''}${rightLineTone ? ` ${rightLineTone}` : ''}`} />
+            </div>
+            <div className="pk-pnode-caption">
+              <div className="pk-pnode-label">{st.label}</div>
+              {st.sublabel && <div className="pk-pnode-sub">{st.sublabel}</div>}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+export interface PkLivePillTab {
+  key: string;
+  label: string;
+  count?: number;
+}
+
+export const PkLiveHeader: React.FC<{
+  title: string;
+  liveLabel?: string;
+  subtitle?: string;
+  pills?: PkLivePillTab[];
+  activePill?: string;
+  onPillChange?: (key: string) => void;
+  displayMode?: 'board' | 'table';
+  onDisplayModeChange?: (mode: 'board' | 'table') => void;
+  boardLabel?: string;
+  tableLabel?: string;
+  primaryActionLabel?: string;
+  onPrimaryAction?: () => void;
+  extraActions?: React.ReactNode;
+}> = ({
+  title,
+  liveLabel = 'En vivo',
+  subtitle,
+  pills,
+  activePill,
+  onPillChange,
+  displayMode,
+  onDisplayModeChange,
+  boardLabel = '🎛️ Tablero en Vivo',
+  tableLabel = '📋 Vista Tabla',
+  primaryActionLabel,
+  onPrimaryAction,
+  extraActions,
+}) => (
+  <div className="pk-live-header">
+    <div className="pk-live-top">
+      <div className="pk-live-title-group">
+        <div className="pk-live-title-row">
+          <h2 className="pk-live-title">{title}</h2>
+          {liveLabel && (
+            <span className="pk-live-badge">
+              <span className="pk-live-dot" />
+              {liveLabel}
+            </span>
+          )}
+        </div>
+        {subtitle && <div className="pk-live-sub">{subtitle}</div>}
+      </div>
+
+      <div className="pk-live-actions">
+        {extraActions}
+        {displayMode && onDisplayModeChange && (
+          <div className="pk-segmented" role="tablist" aria-label="Modo de visualización">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={displayMode === 'board'}
+              className={`pk-segmented-btn${displayMode === 'board' ? ' active' : ''}`}
+              onClick={() => onDisplayModeChange('board')}
+            >
+              {boardLabel}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={displayMode === 'table'}
+              className={`pk-segmented-btn${displayMode === 'table' ? ' active' : ''}`}
+              onClick={() => onDisplayModeChange('table')}
+            >
+              {tableLabel}
+            </button>
+          </div>
+        )}
+        {primaryActionLabel && onPrimaryAction && (
+          <button type="button" className="pk-btn pk-btn-primary" onClick={onPrimaryAction}>
+            {primaryActionLabel}
+          </button>
+        )}
+      </div>
+    </div>
+
+    {pills && pills.length > 0 && onPillChange && (
+      <div className="pk-pill-tabs" role="tablist">
+        {pills.map((pill) => {
+          const isActive = pill.key === activePill;
+          return (
+            <button
+              key={pill.key}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              className={`pk-pill-tab${isActive ? ' active' : ''}`}
+              onClick={() => onPillChange(pill.key)}
+            >
+              <span>{pill.label}</span>
+              {typeof pill.count === 'number' && <span className="pk-pill-tab-count">{pill.count}</span>}
+            </button>
+          );
+        })}
+      </div>
+    )}
+  </div>
+);
+
+export interface PkKanbanColumnSpec {
+  key: string;
+  title: string;
+  dotColor: 'amber' | 'blue' | 'purple' | 'emerald' | 'rose' | 'slate';
+  count: number;
+  emptyText?: string;
+  children?: React.ReactNode;
+}
+
+export const PkKanbanBoard: React.FC<{
+  columns: PkKanbanColumnSpec[];
+}> = ({ columns }) => (
+  <div
+    className="pk-kanban-board"
+    style={{ '--pk-kanban-cols': Math.max(1, Math.min(4, columns.length)) } as React.CSSProperties}
+  >
+    {columns.map((col) => (
+      <div className="pk-kanban-col" key={col.key}>
+        <div className="pk-kanban-col-head">
+          <div className="pk-kanban-col-title">
+            <span className={`pk-kanban-dot ${col.dotColor}`} />
+            <span>{col.title}</span>
+          </div>
+          <span className="pk-kanban-count">{col.count}</span>
+        </div>
+        <div className="pk-kanban-cards">
+          {col.count === 0 ? (
+            <div className="pk-kanban-empty">{col.emptyText || 'Sin registros en esta etapa'}</div>
+          ) : (
+            col.children
+          )}
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
+export interface PkTicketLineItem {
+  qty?: string | number;
+  name: string;
+  amount?: string;
+}
+
+export interface PkTicketCardProps {
+  code: string;
+  timeAgo?: string;
+  channelBadge?: {
+    label: string;
+    tone?: 'coral' | 'blue' | 'purple' | 'emerald' | 'amber' | 'slate';
+  };
+  title: string;
+  subtitle?: string;
+  metaLine?: string;
+  items?: PkTicketLineItem[];
+  highlightNote?: string;
+  totalLabel?: string;
+  totalValue?: string;
+  paymentLabel?: string;
+  statusPill?: {
+    label: string;
+    tone: 'amber' | 'blue' | 'purple' | 'emerald' | 'rose' | 'slate';
+  };
+  processNodes?: PkProcessStep[];
+  extraBody?: React.ReactNode;
+  primaryAction?: {
+    label: string;
+    tone: 'coral' | 'blue' | 'purple' | 'emerald' | 'amber' | 'navy';
+    onClick: () => void;
+    disabled?: boolean;
+  };
+  secondaryActions?: React.ReactNode;
+}
+
+export const PkTicketCard: React.FC<PkTicketCardProps> = ({
+  code,
+  timeAgo,
+  channelBadge,
+  title,
+  subtitle,
+  metaLine,
+  items,
+  highlightNote,
+  totalLabel = 'TOTAL',
+  totalValue,
+  paymentLabel,
+  statusPill,
+  processNodes,
+  extraBody,
+  primaryAction,
+  secondaryActions,
+}) => (
+  <div className="pk-ticket-card">
+    <div className="pk-ticket-top">
+      <div>
+        <div className="pk-ticket-code">{code}</div>
+        {timeAgo && <div className="pk-ticket-time">{timeAgo}</div>}
+      </div>
+      {channelBadge && (
+        <span className={`pk-ticket-channel ${channelBadge.tone || 'slate'}`}>
+          {channelBadge.label}
+        </span>
+      )}
+    </div>
+
+    <div className="pk-ticket-subject">
+      <div className="pk-ticket-title">{title}</div>
+      {subtitle && <div className="pk-ticket-sub">{subtitle}</div>}
+    </div>
+
+    {metaLine && <div className="pk-ticket-meta">{metaLine}</div>}
+
+    {items && items.length > 0 && (
+      <div className="pk-ticket-items">
+        {items.map((it, i) => (
+          <div className="pk-ticket-item-row" key={`${it.name}-${i}`}>
+            <span>
+              {it.qty !== undefined && it.qty !== '' && (
+                <span className="pk-ticket-item-qty">{it.qty}×</span>
+              )}
+              <span>{it.name}</span>
+            </span>
+            {it.amount && <span className="pk-ticket-item-amt">{it.amount}</span>}
+          </div>
+        ))}
+      </div>
+    )}
+
+    {highlightNote && <div className="pk-ticket-note">“{highlightNote}”</div>}
+
+    {extraBody}
+
+    {totalValue && (
+      <div className="pk-ticket-total-row">
+        <span>{totalLabel}</span>
+        <span>{totalValue}</span>
+      </div>
+    )}
+
+    {paymentLabel && <div className="pk-ticket-pay">💳 {paymentLabel}</div>}
+
+    {processNodes && processNodes.length > 0 && (
+      <div style={{ paddingTop: 4 }}>
+        <PkProcessNodes steps={processNodes} compact />
+      </div>
+    )}
+
+    {statusPill && (
+      <span className={`pk-ticket-status-pill ${statusPill.tone}`}>
+        <span>•</span>
+        <span>{statusPill.label}</span>
+      </span>
+    )}
+
+    {primaryAction && (
+      <button
+        type="button"
+        disabled={primaryAction.disabled}
+        className={`pk-ticket-cta ${primaryAction.tone}`}
+        onClick={primaryAction.onClick}
+      >
+        {primaryAction.label}
+      </button>
+    )}
+
+    {secondaryActions && (
+      <div className="pk-row-actions" style={{ justifyContent: 'space-between', paddingTop: 2 }}>
+        {secondaryActions}
+      </div>
+    )}
+  </div>
+);
+
+export interface PkTypeCardOption {
+  key: string;
+  icon: string;
+  title: string;
+  description: string;
+  badge?: string;
+}
+
+export const PkTypeCards: React.FC<{
+  label?: string;
+  options: PkTypeCardOption[];
+  value: string;
+  onChange: (key: string) => void;
+  disabled?: boolean;
+}> = ({ label, options, value, onChange, disabled = false }) => (
+  <div>
+    {label && <div className="pk-label" style={{ marginBottom: 10 }}>{label}</div>}
+    <div className="pk-type-grid">
+      {options.map((opt) => {
+        const isActive = opt.key === value;
+        return (
+          <button
+            key={opt.key}
+            type="button"
+            disabled={disabled}
+            className={`pk-type-card${isActive ? ' active' : ''}`}
+            onClick={() => onChange(opt.key)}
+          >
+            <span className="pk-type-icon">{opt.icon}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                <span className="pk-type-title">{opt.title}</span>
+                {opt.badge && <span className="pk-badge pk-badge-blue">{opt.badge}</span>}
+              </div>
+              <div className="pk-type-desc">{opt.description}</div>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  </div>
+);
+
+export const PkFullscreenDialog: React.FC<{
+  open: boolean;
+  title: string;
+  subtitle?: string;
+  badge?: { label: string; tone?: 'blue' | 'emerald' | 'amber' | 'rose' | 'slate' };
+  onClose: () => void;
+  subheader?: React.ReactNode;
+  footerLeft?: React.ReactNode;
+  footerActions?: React.ReactNode;
+  children: React.ReactNode;
+}> = ({ open, title, subtitle, badge, onClose, subheader, footerLeft, footerActions, children }) => {
+  const titleId = useId();
+
+  useEffect(() => {
+    if (!open) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open, onClose]);
+
+  if (!open || typeof document === 'undefined') return null;
+
+  const badgeClass =
+    badge?.tone === 'emerald'
+      ? 'pk-badge pk-badge-emerald'
+      : badge?.tone === 'amber'
+      ? 'pk-badge pk-badge-amber'
+      : badge?.tone === 'rose'
+      ? 'pk-badge pk-badge-rose'
+      : badge?.tone === 'slate'
+      ? 'pk-badge pk-badge-slate'
+      : 'pk-badge pk-badge-blue';
+
+  return createPortal(
+    <div className="pk-fs-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+      <div className="pk-fs-header">
+        <div className="pk-fs-header-main">
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <h2 className="pk-fs-title" id={titleId}>{title}</h2>
+              {badge && <span className={badgeClass}>{badge.label}</span>}
+            </div>
+            {subtitle && <div className="pk-fs-subtitle">{subtitle}</div>}
+          </div>
+        </div>
+        <button type="button" className="pk-btn pk-btn-hero-outline" onClick={onClose}>
+          ✕ Cerrar Estudio
+        </button>
+      </div>
+
+      {subheader && (
+        <div className="pk-fs-subheader">
+          <div style={{ maxWidth: 1540, margin: '0 auto' }}>{subheader}</div>
+        </div>
+      )}
+
+      <div className="pk-fs-body">
+        <div className="pk-fs-container">{children}</div>
+      </div>
+
+      {(footerLeft || footerActions) && (
+        <div className="pk-fs-footer">
+          <div>{footerLeft}</div>
+          <div className="pk-row-actions">{footerActions}</div>
+        </div>
+      )}
+    </div>,
+    document.body
+  );
+};
+
+export const PkProgressBar: React.FC<{
+  label?: string;
+  valueLabel?: string;
+  pct: number;
+  tone?: 'emerald' | 'blue' | 'amber' | 'rose' | 'purple';
+}> = ({ label, valueLabel, pct, tone = 'blue' }) => {
+  const clamped = Math.max(0, Math.min(100, Number.isFinite(pct) ? pct : 0));
+  return (
+    <div className="pk-meter-wrap">
+      {(label || valueLabel) && (
+        <div className="pk-meter-head">
+          <span>{label || ''}</span>
+          <span>{valueLabel || `${Math.round(clamped)}%`}</span>
+        </div>
+      )}
+      <div className="pk-meter-track">
+        <div className={`pk-meter-fill ${tone}`} style={{ width: `${clamped}%` }} />
+      </div>
+    </div>
+  );
+};
+
+export const PkDistributionStrip: React.FC<{
+  title?: string;
+  segments: { label: string; value: number; displayValue: string; color: string }[];
+}> = ({ title, segments }) => {
+  const total = segments.reduce((acc, s) => acc + Math.max(0, s.value || 0), 0);
+  return (
+    <div className="pk-dist-card">
+      {title && (
+        <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--pk-navy)' }}>{title}</div>
+      )}
+      <div className="pk-dist-bar">
+        {total <= 0 ? (
+          <div style={{ width: '100%', background: '#e2e8f0' }} />
+        ) : (
+          segments
+            .filter((s) => s.value > 0)
+            .map((s) => (
+              <div
+                key={s.label}
+                title={`${s.label}: ${s.displayValue}`}
+                style={{
+                  width: `${Math.max(2, (s.value / total) * 100)}%`,
+                  background: s.color,
+                }}
+              />
+            ))
+        )}
+      </div>
+      <div className="pk-dist-legend">
+        {segments.map((s) => (
+          <div className="pk-dist-legend-item" key={s.label}>
+            <span className="pk-dist-swatch" style={{ background: s.color }} />
+            <span>{s.label}:</span>
+            <strong>{s.displayValue}</strong>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 export function useAsyncAction(): {
   busy: boolean;

@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"hash/fnv"
+	"math"
 	"strings"
 
 	"ms-facturacion/internal/domain"
@@ -17,6 +18,31 @@ func hashStripeIndex(dbName, idemKey string, numStripes int) int {
 	_, _ = h.Write([]byte("::"))
 	_, _ = h.Write([]byte(idemKey))
 	return int(h.Sum32() % uint32(numStripes))
+}
+
+func sameProductQuantities(a, b []domain.InvoiceItem) bool {
+	mapA := make(map[string]float64)
+	for _, it := range a {
+		if pid := strings.TrimSpace(it.ProductID); pid != "" {
+			mapA[pid] = money.RoundCents(mapA[pid] + it.Quantity)
+		}
+	}
+	mapB := make(map[string]float64)
+	for _, it := range b {
+		if pid := strings.TrimSpace(it.ProductID); pid != "" {
+			mapB[pid] = money.RoundCents(mapB[pid] + it.Quantity)
+		}
+	}
+	if len(mapA) != len(mapB) {
+		return false
+	}
+	for pid, qtyA := range mapA {
+		qtyB, ok := mapB[pid]
+		if !ok || math.Abs(qtyA-qtyB) > 0.0009 {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *Service) normalizeAndPriceItems(ctx context.Context, rawItems []domain.InvoiceItem, requireCatalogForProductID bool) ([]domain.InvoiceItem, float64, error) {
@@ -76,11 +102,18 @@ func (s *Service) normalizeAndPriceItems(ctx context.Context, rawItems []domain.
 				}
 				q, ok := quotesMap[pid]
 				if !ok {
-					return nil, 0, apperr.NotFound("El producto " + pid + " no existe en el catálogo de inventario")
+					if requireCatalogForProductID {
+						return nil, 0, apperr.NotFound("El producto " + pid + " no existe en el catálogo de inventario")
+					}
+					continue
 				}
-				normalized[i].UnitPrice = q.SalePrice
-				normalized[i].TaxPct = q.TaxPct
-				if strings.TrimSpace(q.Code) != "" {
+				if requireCatalogForProductID || normalized[i].UnitPrice <= 0 {
+					normalized[i].UnitPrice = q.SalePrice
+					normalized[i].TaxPct = q.TaxPct
+				}
+				if strings.TrimSpace(q.Code) != "" && normalized[i].Code == "" {
+					normalized[i].Code = strings.TrimSpace(q.Code)
+				} else if requireCatalogForProductID && strings.TrimSpace(q.Code) != "" {
 					normalized[i].Code = strings.TrimSpace(q.Code)
 				}
 				if normalized[i].Description == "" {

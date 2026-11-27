@@ -4,10 +4,10 @@ import (
 	"context"
 	"strings"
 
+	"ms-comandas/internal/domain"
 	"ms-comandas/internal/platform/apperr"
 	"ms-comandas/internal/platform/authguard"
 	"ms-comandas/internal/platform/licensegate"
-	"ms-comandas/internal/domain"
 )
 
 type Service struct {
@@ -63,6 +63,29 @@ func (s *Service) CreateMenuItem(ctx context.Context, in domain.CreateMenuItemIn
 		return domain.MenuItem{}, err
 	}
 	return s.repo.CreateMenuItem(ctx, tc.DBName, tc.IdempotencyKey, in)
+}
+
+func (s *Service) CreateOrder(ctx context.Context, in domain.CreateOrderInput) (domain.DiningTable, error) {
+	tc, err := requireTenant(ctx)
+	if err != nil {
+		return domain.DiningTable{}, err
+	}
+	if err := licensegate.CheckModule(ctx, "mapa_mesas"); err != nil {
+		return domain.DiningTable{}, err
+	}
+	norm, err := domain.ValidateCreateOrderInput(in)
+	if err != nil {
+		return domain.DiningTable{}, err
+	}
+	for _, it := range norm.Items {
+		if strings.TrimSpace(it.Note) != "" {
+			if err := licensegate.CheckFeature(ctx, "mapa_mesas", "notas_preparacion"); err != nil {
+				return domain.DiningTable{}, err
+			}
+			break
+		}
+	}
+	return s.repo.CreateOrder(ctx, tc.DBName, tc.IdempotencyKey, norm)
 }
 
 func (s *Service) AddItemToTable(ctx context.Context, tableID string, in domain.AddOrderItemInput) (domain.DiningTable, error) {
@@ -132,6 +155,25 @@ func (s *Service) MarkReady(ctx context.Context, tableID string) (domain.DiningT
 		return domain.DiningTable{}, apperr.Validation("El identificador de la mesa es obligatorio")
 	}
 	return s.repo.MarkReady(ctx, tc.DBName, cleanTableID)
+}
+
+func (s *Service) AdvanceStage(ctx context.Context, tableID, stage string) (domain.DiningTable, error) {
+	tc, err := requireTenant(ctx)
+	if err != nil {
+		return domain.DiningTable{}, err
+	}
+	if !licensegate.HasModule(ctx, "monitor_cocina") && !licensegate.HasModule(ctx, "mapa_mesas") {
+		return domain.DiningTable{}, apperr.Forbidden("No tiene módulos habilitados para actualizar etapas de comanda")
+	}
+	cleanTableID := strings.TrimSpace(tableID)
+	if cleanTableID == "" {
+		return domain.DiningTable{}, apperr.Validation("El identificador de la comanda o mesa es obligatorio")
+	}
+	cleanStage := strings.ToUpper(strings.TrimSpace(stage))
+	if cleanStage == "" {
+		return domain.DiningTable{}, apperr.Validation("La etapa destino de la comanda es obligatoria")
+	}
+	return s.repo.AdvanceStage(ctx, tc.DBName, cleanTableID, cleanStage)
 }
 
 func (s *Service) ClearInvoicedTable(ctx context.Context, idemKey, tableID, invoiceNumber string) (bool, error) {

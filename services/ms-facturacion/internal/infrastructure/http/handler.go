@@ -4,18 +4,20 @@ import (
 	"crypto/ed25519"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"ms-facturacion/internal/platform/config"
-	"ms-facturacion/internal/platform/httpx"
-	"ms-facturacion/internal/platform/security"
 	msfacturacion "ms-facturacion"
 	"ms-facturacion/internal/application"
 	"ms-facturacion/internal/domain"
+	"ms-facturacion/internal/platform/config"
+	"ms-facturacion/internal/platform/httpx"
+	"ms-facturacion/internal/platform/security"
 )
 
 //go:embed ui_dist/ui.js
@@ -71,6 +73,13 @@ func (h *Handler) mountRoutes(r chi.Router) {
 	r.Get("/pos-state", h.handleGetPosState)
 	r.Get("/summary", h.handleGetSummary)
 	r.Post("/invoices", h.handleCreateInvoice)
+	r.Put("/invoices/{id}", h.handleUpdateInvoice)
+	r.Post("/invoices/{id}/confirm", h.handleConfirmInvoice)
+	r.Post("/dian/send", h.handleDianSend)
+	r.Post("/dian/respond", h.handleDianRespond)
+	r.Post("/notes", h.handleCreateNote)
+	r.Put("/notes/{id}", h.handleUpdateNote)
+	r.Post("/notes/{id}/confirm", h.handleConfirmNote)
 	r.Post("/quotes", h.handleCreateQuote)
 }
 
@@ -96,12 +105,16 @@ func (h *Handler) handleGetPosState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, http.StatusOK, map[string]any{
-		"ok":                true,
-		"nextInvoiceNumber": st.NextInvoiceNumber,
-		"nextQuoteNumber":   st.NextQuoteNumber,
-		"invoices":          st.Invoices,
-		"quotes":            st.Quotes,
-		"summary":           st.Summary,
+		"ok":                   true,
+		"nextInvoiceNumber":    st.NextInvoiceNumber,
+		"nextQuoteNumber":      st.NextQuoteNumber,
+		"nextCreditNoteNumber": st.NextCreditNoteNumber,
+		"nextDebitNoteNumber":  st.NextDebitNoteNumber,
+		"invoices":             st.Invoices,
+		"quotes":               st.Quotes,
+		"adjustmentNotes":      st.AdjustmentNotes,
+		"dianTransmissions":    st.DianTransmissions,
+		"summary":              st.Summary,
 	})
 }
 
@@ -198,6 +211,10 @@ func (d invoiceItemDTO) toDomain() domain.InvoiceItem {
 }
 
 type createInvoiceDTO struct {
+	SaveMode          string           `json:"saveMode"`
+	InvoiceType       string           `json:"invoiceType"`
+	DueDate           string           `json:"dueDate"`
+	PurchaseOrderRef  string           `json:"purchaseOrderRef"`
 	CustomerID        string           `json:"customerId"`
 	CustomerName      string           `json:"customerName"`
 	CustomerNIT       string           `json:"customerNit"`
@@ -219,6 +236,40 @@ type createInvoiceDTO struct {
 	AmountPaid        *float64         `json:"amountPaid"`
 	Notes             string           `json:"notes"`
 	RenderPrint       bool             `json:"renderPrint"`
+}
+
+func (dto createInvoiceDTO) toInput() domain.CreateInvoiceInput {
+	items := make([]domain.InvoiceItem, 0, len(dto.Items))
+	for _, it := range dto.Items {
+		items = append(items, it.toDomain())
+	}
+	return domain.CreateInvoiceInput{
+		SaveMode:          dto.SaveMode,
+		InvoiceType:       dto.InvoiceType,
+		DueDate:           dto.DueDate,
+		PurchaseOrderRef:  dto.PurchaseOrderRef,
+		CustomerID:        dto.CustomerID,
+		CustomerName:      dto.CustomerName,
+		CustomerNIT:       dto.CustomerNIT,
+		CustomerPhone:     dto.CustomerPhone,
+		CustomerAddress:   dto.CustomerAddress,
+		ContractID:        dto.ContractID,
+		DiscountPct:       dto.DiscountPct,
+		VehicleID:         dto.VehicleID,
+		Plate:             dto.Plate,
+		MechanicID:        dto.MechanicID,
+		MechanicName:      dto.MechanicName,
+		WorkshopMeta:      parseWorkshopMeta(dto.WorkshopMeta),
+		LinkedWorkOrderID: dto.LinkedWorkOrderID,
+		LinkedRoomID:      dto.LinkedRoomID,
+		LinkedTableID:     dto.LinkedTableID,
+		LayoutVariant:     dto.LayoutVariant,
+		Items:             items,
+		PaymentMethod:     dto.PaymentMethod,
+		AmountPaid:        dto.AmountPaid,
+		Notes:             dto.Notes,
+		RenderPrint:       dto.RenderPrint,
+	}
 }
 
 func parseWorkshopMeta(raw json.RawMessage) domain.WorkshopMetadata {
@@ -248,6 +299,22 @@ func parseWorkshopMeta(raw json.RawMessage) domain.WorkshopMetadata {
 	}
 }
 
+func decodeOptional(w http.ResponseWriter, r *http.Request, dst any) error {
+	if r.Body == nil {
+		return nil
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, httpx.DefaultMaxBodyBytes)
+	defer r.Body.Close()
+	dec := json.NewDecoder(r.Body)
+	if err := dec.Decode(dst); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
 func (h *Handler) handleCreateInvoice(w http.ResponseWriter, r *http.Request) {
 	var dto createInvoiceDTO
 	if err := httpx.Decode(w, r, &dto); err != nil {
@@ -255,34 +322,7 @@ func (h *Handler) handleCreateInvoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	items := make([]domain.InvoiceItem, 0, len(dto.Items))
-	for _, it := range dto.Items {
-		items = append(items, it.toDomain())
-	}
-
-	res, err := h.app.CreateInvoice(r.Context(), domain.CreateInvoiceInput{
-		CustomerID:        dto.CustomerID,
-		CustomerName:      dto.CustomerName,
-		CustomerNIT:       dto.CustomerNIT,
-		CustomerPhone:     dto.CustomerPhone,
-		CustomerAddress:   dto.CustomerAddress,
-		ContractID:        dto.ContractID,
-		DiscountPct:       dto.DiscountPct,
-		VehicleID:         dto.VehicleID,
-		Plate:             dto.Plate,
-		MechanicID:        dto.MechanicID,
-		MechanicName:      dto.MechanicName,
-		WorkshopMeta:      parseWorkshopMeta(dto.WorkshopMeta),
-		LinkedWorkOrderID: dto.LinkedWorkOrderID,
-		LinkedRoomID:      dto.LinkedRoomID,
-		LinkedTableID:     dto.LinkedTableID,
-		LayoutVariant:     dto.LayoutVariant,
-		Items:             items,
-		PaymentMethod:     dto.PaymentMethod,
-		AmountPaid:        dto.AmountPaid,
-		Notes:             dto.Notes,
-		RenderPrint:       dto.RenderPrint,
-	})
+	res, err := h.app.CreateInvoice(r.Context(), dto.toInput())
 	if err != nil {
 		httpx.RespondError(w, err)
 		return
@@ -292,6 +332,199 @@ func (h *Handler) handleCreateInvoice(w http.ResponseWriter, r *http.Request) {
 		"ok":        true,
 		"invoice":   res.Invoice,
 		"printHtml": res.PrintHTML,
+	})
+}
+
+func (h *Handler) handleUpdateInvoice(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(chi.URLParam(r, "id"))
+	var dto createInvoiceDTO
+	if err := httpx.Decode(w, r, &dto); err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+
+	res, err := h.app.UpdateInvoice(r.Context(), id, dto.toInput())
+	if err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"ok":        true,
+		"invoice":   res.Invoice,
+		"printHtml": res.PrintHTML,
+	})
+}
+
+type confirmInvoiceDTO struct {
+	RenderPrint bool `json:"renderPrint"`
+}
+
+func (h *Handler) handleConfirmInvoice(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(chi.URLParam(r, "id"))
+	var dto confirmInvoiceDTO
+	_ = decodeOptional(w, r, &dto)
+
+	res, err := h.app.ConfirmInvoice(r.Context(), id, dto.RenderPrint)
+	if err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"ok":        true,
+		"invoice":   res.Invoice,
+		"printHtml": res.PrintHTML,
+	})
+}
+
+type dianSendDTO struct {
+	DocumentKind string `json:"documentKind"`
+	DocumentID   string `json:"documentId"`
+}
+
+func (h *Handler) handleDianSend(w http.ResponseWriter, r *http.Request) {
+	var dto dianSendDTO
+	if err := httpx.Decode(w, r, &dto); err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+
+	res, err := h.app.SendToDian(r.Context(), domain.DianSendInput{
+		DocumentKind: dto.DocumentKind,
+		DocumentID:   dto.DocumentID,
+	})
+	if err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"ok":             true,
+		"transmission":   res.Transmission,
+		"invoice":        res.Invoice,
+		"adjustmentNote": res.AdjustmentNote,
+	})
+}
+
+type dianRespondDTO struct {
+	DocumentKind     string `json:"documentKind"`
+	DocumentID       string `json:"documentId"`
+	Outcome          string `json:"outcome"`
+	RejectionCode    string `json:"rejectionCode"`
+	RejectionMessage string `json:"rejectionMessage"`
+}
+
+func (h *Handler) handleDianRespond(w http.ResponseWriter, r *http.Request) {
+	var dto dianRespondDTO
+	if err := httpx.Decode(w, r, &dto); err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+
+	res, err := h.app.RespondDian(r.Context(), domain.DianRespondInput{
+		DocumentKind:     dto.DocumentKind,
+		DocumentID:       dto.DocumentID,
+		Outcome:          dto.Outcome,
+		RejectionCode:    dto.RejectionCode,
+		RejectionMessage: dto.RejectionMessage,
+	})
+	if err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"ok":             true,
+		"transmission":   res.Transmission,
+		"invoice":        res.Invoice,
+		"adjustmentNote": res.AdjustmentNote,
+	})
+}
+
+type adjustmentNoteDTO struct {
+	SaveMode          string           `json:"saveMode"`
+	NoteKind          string           `json:"noteKind"`
+	InvoiceID         string           `json:"invoiceId"`
+	CustomerName      string           `json:"customerName"`
+	CustomerNIT       string           `json:"customerNit"`
+	ReasonCode        string           `json:"reasonCode"`
+	ReasonDescription string           `json:"reasonDescription"`
+	RestockInventory  bool             `json:"restockInventory"`
+	Items             []invoiceItemDTO `json:"items"`
+}
+
+func (dto adjustmentNoteDTO) toInput() domain.CreateAdjustmentNoteInput {
+	items := make([]domain.InvoiceItem, 0, len(dto.Items))
+	for _, it := range dto.Items {
+		items = append(items, it.toDomain())
+	}
+	return domain.CreateAdjustmentNoteInput{
+		SaveMode:          dto.SaveMode,
+		NoteKind:          dto.NoteKind,
+		InvoiceID:         dto.InvoiceID,
+		CustomerName:      dto.CustomerName,
+		CustomerNIT:       dto.CustomerNIT,
+		ReasonCode:        dto.ReasonCode,
+		ReasonDescription: dto.ReasonDescription,
+		RestockInventory:  dto.RestockInventory,
+		Items:             items,
+	}
+}
+
+func (h *Handler) handleCreateNote(w http.ResponseWriter, r *http.Request) {
+	var dto adjustmentNoteDTO
+	if err := httpx.Decode(w, r, &dto); err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+
+	note, err := h.app.CreateAdjustmentNote(r.Context(), dto.toInput())
+	if err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+
+	httpx.JSON(w, http.StatusCreated, map[string]any{
+		"ok":             true,
+		"adjustmentNote": note,
+	})
+}
+
+func (h *Handler) handleUpdateNote(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(chi.URLParam(r, "id"))
+	var dto adjustmentNoteDTO
+	if err := httpx.Decode(w, r, &dto); err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+
+	note, err := h.app.UpdateAdjustmentNote(r.Context(), id, dto.toInput())
+	if err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"ok":             true,
+		"adjustmentNote": note,
+	})
+}
+
+func (h *Handler) handleConfirmNote(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(chi.URLParam(r, "id"))
+	var dummy map[string]any
+	_ = decodeOptional(w, r, &dummy)
+
+	note, err := h.app.ConfirmAdjustmentNote(r.Context(), id)
+	if err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"ok":             true,
+		"adjustmentNote": note,
 	})
 }
 

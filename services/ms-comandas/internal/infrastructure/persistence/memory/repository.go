@@ -5,18 +5,12 @@ import (
 	"strings"
 	"sync"
 
+	"ms-comandas/internal/domain"
 	"ms-comandas/internal/platform/apperr"
 	"ms-comandas/internal/platform/seqmem"
-	"ms-comandas/internal/domain"
 )
 
-const (
-	demoDBName       = "db_demo_empresa"
-	demoBaseTableSeq = 104
-	demoBaseMenuSeq  = 205
-	baseTableSeq     = 100
-	baseMenuSeq      = 200
-)
+const demoDBName = "db_demo_empresa"
 
 func isDemo(dbName string) bool {
 	return strings.TrimSpace(dbName) == demoDBName
@@ -24,16 +18,23 @@ func isDemo(dbName string) bool {
 
 func tableSeqBase(dbName string) int {
 	if isDemo(dbName) {
-		return demoBaseTableSeq
+		return domain.DemoBaseTableSeq
 	}
-	return baseTableSeq
+	return domain.BaseTableSeq
 }
 
 func menuSeqBase(dbName string) int {
 	if isDemo(dbName) {
-		return demoBaseMenuSeq
+		return domain.DemoBaseMenuSeq
 	}
-	return baseMenuSeq
+	return domain.BaseMenuSeq
+}
+
+func orderSeqBase(dbName string) int {
+	if isDemo(dbName) {
+		return domain.DemoBaseOrderSeq
+	}
+	return domain.BaseOrderSeq
 }
 
 type tenantStore struct {
@@ -41,6 +42,7 @@ type tenantStore struct {
 	menuItems   []domain.MenuItem
 	idemTables  map[string]domain.DiningTable
 	idemMenu    map[string]domain.MenuItem
+	idemOrders  map[string]domain.DiningTable
 	idemAddItem map[string]domain.DiningTable
 	idemCleared map[string]bool
 }
@@ -70,6 +72,7 @@ func (r *Repository) ensureTenantLocked(dbName string) *tenantStore {
 			menuItems:   []domain.MenuItem{},
 			idemTables:  make(map[string]domain.DiningTable),
 			idemMenu:    make(map[string]domain.MenuItem),
+			idemOrders:  make(map[string]domain.DiningTable),
 			idemAddItem: make(map[string]domain.DiningTable),
 			idemCleared: make(map[string]bool),
 		}
@@ -77,63 +80,33 @@ func (r *Repository) ensureTenantLocked(dbName string) *tenantStore {
 		return st
 	}
 	st := &tenantStore{
-		menuItems: []domain.MenuItem{
-			{ID: "mnu-201", Code: "MNU-201", Name: "Punta de Anca a la Parrilla 350g", Category: "Restaurante — Fuertes", SalePrice: 48000, TaxPct: 8},
-			{ID: "mnu-202", Code: "MNU-202", Name: "Salmón Sellado en Mantequilla de Finas Hierbas", Category: "Restaurante — Fuertes", SalePrice: 52000, TaxPct: 8},
-			{ID: "mnu-203", Code: "MNU-203", Name: "Ceviche Clásico de Camarón", Category: "Restaurante — Entradas", SalePrice: 32000, TaxPct: 8},
-			{ID: "mnu-204", Code: "MNU-204", Name: "Limonada de Coco Natural", Category: "Barra y Bebidas", SalePrice: 12000, TaxPct: 8},
-			{ID: "mnu-205", Code: "MNU-205", Name: "Café Espresso Doble Origen", Category: "Barra y Bebidas", SalePrice: 8500, TaxPct: 8},
-		},
-		tables: []domain.DiningTable{
-			{
-				ID:     "tbl-101",
-				Name:   "Mesa 1",
-				Zone:   "Salón Principal",
-				Waiter: "Camila Restrepo",
-				Status: domain.StatusEnCocina,
-				Items: []domain.OrderItem{
-					{ItemID: "itm-seed-101a", ProductID: "mnu-201", Name: "Punta de Anca a la Parrilla 350g", Qty: 2, Price: 48000, Note: "Término 3/4"},
-					{ItemID: "itm-seed-101b", ProductID: "mnu-204", Name: "Limonada de Coco Natural", Qty: 2, Price: 12000, Note: ""},
-				},
-				Total: 120000,
-			},
-			{
-				ID:     "tbl-102",
-				Name:   "Mesa 2",
-				Zone:   "Terraza",
-				Waiter: "Andrés Mejía",
-				Status: domain.StatusOcupada,
-				Items: []domain.OrderItem{
-					{ItemID: "itm-seed-102a", ProductID: "mnu-203", Name: "Ceviche Clásico de Camarón", Qty: 1, Price: 32000, Note: "Sin cebolla roja"},
-				},
-				Total: 32000,
-			},
-			{
-				ID:     "tbl-103",
-				Name:   "Mesa 3",
-				Zone:   "Salón Principal",
-				Waiter: "Camila Restrepo",
-				Status: domain.StatusLibre,
-				Items:  []domain.OrderItem{},
-				Total:  0,
-			},
-			{
-				ID:     "tbl-104",
-				Name:   "Barra 1",
-				Zone:   "Barra",
-				Waiter: "Andrés Mejía",
-				Status: domain.StatusLibre,
-				Items:  []domain.OrderItem{},
-				Total:  0,
-			},
-		},
+		menuItems:   domain.DemoMenuItems(),
+		tables:      domain.DemoDiningTables(),
 		idemTables:  make(map[string]domain.DiningTable),
 		idemMenu:    make(map[string]domain.MenuItem),
+		idemOrders:  make(map[string]domain.DiningTable),
 		idemAddItem: make(map[string]domain.DiningTable),
 		idemCleared: make(map[string]bool),
 	}
 	r.tenants[dbName] = st
 	return st
+}
+
+func resolveMenuDefaults(menu []domain.MenuItem, in domain.AddOrderItemInput) domain.AddOrderItemInput {
+	if in.ProductID != "" && (strings.TrimSpace(in.Name) == "" || in.Price <= 0) {
+		for _, m := range menu {
+			if m.ID == in.ProductID || strings.EqualFold(m.Code, in.ProductID) {
+				if strings.TrimSpace(in.Name) == "" {
+					in.Name = m.Name
+				}
+				if in.Price <= 0 {
+					in.Price = m.SalePrice
+				}
+				break
+			}
+		}
+	}
+	return in
 }
 
 func (r *Repository) GetState(_ context.Context, dbName string) (domain.GastroState, error) {
@@ -143,7 +116,9 @@ func (r *Repository) GetState(_ context.Context, dbName string) (domain.GastroSt
 	st := r.ensureTenantLocked(dbName)
 	tables := make([]domain.DiningTable, len(st.tables))
 	for i := range st.tables {
-		tables[i] = st.tables[i].Clone()
+		cloned := st.tables[i].Clone()
+		cloned.NormalizeState()
+		tables[i] = cloned
 	}
 	menu := make([]domain.MenuItem, len(st.menuItems))
 	copy(menu, st.menuItems)
@@ -203,6 +178,68 @@ func (r *Repository) CreateMenuItem(_ context.Context, dbName, idemKey string, i
 	return item, nil
 }
 
+func (r *Repository) CreateOrder(_ context.Context, dbName, idemKey string, in domain.CreateOrderInput) (domain.DiningTable, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	st := r.ensureTenantLocked(dbName)
+	cleanKey := strings.TrimSpace(idemKey)
+	if cleanKey != "" {
+		if prev, ok := st.idemOrders[cleanKey]; ok {
+			return prev.Clone(), nil
+		}
+	}
+
+	norm, err := domain.ValidateCreateOrderInput(in)
+	if err != nil {
+		return domain.DiningTable{}, err
+	}
+
+	if norm.Channel == domain.ChannelMesa {
+		for i := range st.tables {
+			if st.tables[i].ID == norm.TableID {
+				candidate := st.tables[i].Clone()
+				candidate.NormalizeState()
+				ordSeq := ""
+				if strings.TrimSpace(candidate.OrderCode) == "" {
+					ordSeq = r.seq.Next(dbName, "ORD", orderSeqBase(dbName))
+				}
+				candidate.ApplyTableOrderMetadata(ordSeq, norm)
+				for _, rawIt := range norm.Items {
+					resolved := resolveMenuDefaults(st.menuItems, rawIt)
+					if _, _, err := candidate.AddOrMergeItem(resolved); err != nil {
+						return domain.DiningTable{}, err
+					}
+				}
+				candidate.OrderStage = domain.StageNueva
+				candidate.Status = domain.StatusOcupada
+				st.tables[i] = candidate
+				if cleanKey != "" {
+					st.idemOrders[cleanKey] = candidate.Clone()
+				}
+				return candidate.Clone(), nil
+			}
+		}
+		return domain.DiningTable{}, apperr.NotFound("Mesa no encontrada")
+	}
+
+	ordSeq := r.seq.Next(dbName, "ORD", orderSeqBase(dbName))
+	ticket := domain.BuildStandaloneOrder(ordSeq, norm)
+	for _, rawIt := range norm.Items {
+		resolved := resolveMenuDefaults(st.menuItems, rawIt)
+		if _, _, err := ticket.AddOrMergeItem(resolved); err != nil {
+			return domain.DiningTable{}, err
+		}
+	}
+	ticket.OrderStage = domain.StageNueva
+	ticket.Status = domain.StatusOcupada
+	st.tables = append(st.tables, ticket.Clone())
+	if cleanKey != "" {
+		st.idemOrders[cleanKey] = ticket.Clone()
+	}
+	return ticket.Clone(), nil
+}
+
 func (r *Repository) AddItemToTable(_ context.Context, dbName, idemKey, tableID string, in domain.AddOrderItemInput) (domain.DiningTable, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -215,25 +252,17 @@ func (r *Repository) AddItemToTable(_ context.Context, dbName, idemKey, tableID 
 		}
 	}
 
-	if in.ProductID != "" && (strings.TrimSpace(in.Name) == "" || in.Price <= 0) {
-		for _, m := range st.menuItems {
-			if m.ID == in.ProductID || strings.EqualFold(m.Code, in.ProductID) {
-				if strings.TrimSpace(in.Name) == "" {
-					in.Name = m.Name
-				}
-				if in.Price <= 0 {
-					in.Price = m.SalePrice
-				}
-				break
-			}
-		}
-	}
+	in = resolveMenuDefaults(st.menuItems, in)
 
 	for i := range st.tables {
 		if st.tables[i].ID == tableID {
 			candidate := st.tables[i].Clone()
+			candidate.NormalizeState()
 			if _, _, err := candidate.AddOrMergeItem(in); err != nil {
 				return domain.DiningTable{}, err
+			}
+			if strings.TrimSpace(candidate.OrderCode) == "" {
+				candidate.OrderCode = domain.FormatOrderCode(r.seq.Next(dbName, "ORD", orderSeqBase(dbName)))
 			}
 			st.tables[i] = candidate
 			if cleanKey != "" {
@@ -253,6 +282,7 @@ func (r *Repository) RemoveItemFromTable(_ context.Context, dbName, tableID, ite
 	for i := range st.tables {
 		if st.tables[i].ID == tableID {
 			candidate := st.tables[i].Clone()
+			candidate.NormalizeState()
 			if err := candidate.RemoveItem(itemID); err != nil {
 				return domain.DiningTable{}, err
 			}
@@ -271,6 +301,7 @@ func (r *Repository) SendToKitchen(_ context.Context, dbName, tableID string) (d
 	for i := range st.tables {
 		if st.tables[i].ID == tableID {
 			candidate := st.tables[i].Clone()
+			candidate.NormalizeState()
 			if err := candidate.SendToKitchen(); err != nil {
 				return domain.DiningTable{}, err
 			}
@@ -289,6 +320,7 @@ func (r *Repository) MarkReady(_ context.Context, dbName, tableID string) (domai
 	for i := range st.tables {
 		if st.tables[i].ID == tableID {
 			candidate := st.tables[i].Clone()
+			candidate.NormalizeState()
 			if err := candidate.MarkReady(); err != nil {
 				return domain.DiningTable{}, err
 			}
@@ -297,6 +329,25 @@ func (r *Repository) MarkReady(_ context.Context, dbName, tableID string) (domai
 		}
 	}
 	return domain.DiningTable{}, apperr.NotFound("Mesa no encontrada")
+}
+
+func (r *Repository) AdvanceStage(_ context.Context, dbName, tableID, stage string) (domain.DiningTable, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	st := r.ensureTenantLocked(dbName)
+	for i := range st.tables {
+		if st.tables[i].ID == tableID {
+			candidate := st.tables[i].Clone()
+			candidate.NormalizeState()
+			if err := candidate.SetStage(stage); err != nil {
+				return domain.DiningTable{}, err
+			}
+			st.tables[i] = candidate
+			return candidate.Clone(), nil
+		}
+	}
+	return domain.DiningTable{}, apperr.NotFound("Comanda o mesa no encontrada")
 }
 
 func (r *Repository) ClearInvoicedTable(_ context.Context, dbName, idemKey, tableID, _ string) (bool, error) {
@@ -312,8 +363,13 @@ func (r *Repository) ClearInvoicedTable(_ context.Context, dbName, idemKey, tabl
 	}
 
 	for i := range st.tables {
-		if st.tables[i].ID == tableID || strings.EqualFold(st.tables[i].Name, tableID) {
-			st.tables[i].ClearAfterInvoice()
+		tbl := &st.tables[i]
+		if tbl.ID == tableID || strings.EqualFold(tbl.Name, tableID) || (tbl.OrderCode != "" && strings.EqualFold(tbl.OrderCode, tableID)) {
+			if tbl.IsStandaloneTicket() {
+				st.tables = append(st.tables[:i], st.tables[i+1:]...)
+			} else {
+				tbl.ClearAfterInvoice()
+			}
 			if cleanKey != "" {
 				st.idemCleared[cleanKey] = true
 			}
