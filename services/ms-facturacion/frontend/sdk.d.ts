@@ -330,6 +330,133 @@ declare module '@platform/ui-sdk' {
     items: { label: string; value: string; color?: string }[];
   }>;
 
+  export interface PkProcessStep {
+    step: number | string;
+    label: string;
+    sublabel?: string;
+    status: 'done' | 'active' | 'error' | 'pending';
+    tooltip?: string;
+    onClick?: () => void;
+  }
+
+  export const PkProcessNodes: React.FC<{
+    steps: PkProcessStep[];
+    compact?: boolean;
+  }>;
+
+  export interface PkLivePillTab {
+    key: string;
+    label: string;
+    count?: number;
+  }
+
+  export const PkLiveHeader: React.FC<{
+    title: string;
+    liveLabel?: string;
+    subtitle?: string;
+    pills?: PkLivePillTab[];
+    activePill?: string;
+    onPillChange?: (key: string) => void;
+    displayMode?: 'board' | 'table';
+    onDisplayModeChange?: (mode: 'board' | 'table') => void;
+    boardLabel?: string;
+    tableLabel?: string;
+    primaryActionLabel?: string;
+    onPrimaryAction?: () => void;
+    extraActions?: React.ReactNode;
+  }>;
+
+  export interface PkKanbanColumnSpec {
+    key: string;
+    title: string;
+    dotColor: 'amber' | 'blue' | 'purple' | 'emerald' | 'rose' | 'slate';
+    count: number;
+    emptyText?: string;
+    children?: React.ReactNode;
+  }
+
+  export const PkKanbanBoard: React.FC<{
+    columns: PkKanbanColumnSpec[];
+  }>;
+
+  export interface PkTicketLineItem {
+    qty?: string | number;
+    name: string;
+    amount?: string;
+  }
+
+  export interface PkTicketCardProps {
+    code: string;
+    timeAgo?: string;
+    channelBadge?: {
+      label: string;
+      tone?: 'coral' | 'blue' | 'purple' | 'emerald' | 'amber' | 'slate';
+    };
+    title: string;
+    subtitle?: string;
+    metaLine?: string;
+    items?: PkTicketLineItem[];
+    highlightNote?: string;
+    totalLabel?: string;
+    totalValue?: string;
+    paymentLabel?: string;
+    statusPill?: {
+      label: string;
+      tone: 'amber' | 'blue' | 'purple' | 'emerald' | 'rose' | 'slate';
+    };
+    processNodes?: PkProcessStep[];
+    extraBody?: React.ReactNode;
+    primaryAction?: {
+      label: string;
+      tone: 'coral' | 'blue' | 'purple' | 'emerald' | 'amber' | 'navy';
+      onClick: () => void;
+      disabled?: boolean;
+    };
+    secondaryActions?: React.ReactNode;
+  }
+
+  export const PkTicketCard: React.FC<PkTicketCardProps>;
+
+  export interface PkTypeCardOption {
+    key: string;
+    icon: string;
+    title: string;
+    description: string;
+    badge?: string;
+  }
+
+  export const PkTypeCards: React.FC<{
+    label?: string;
+    options: PkTypeCardOption[];
+    value: string;
+    onChange: (key: string) => void;
+    disabled?: boolean;
+  }>;
+
+  export const PkFullscreenDialog: React.FC<{
+    open: boolean;
+    title: string;
+    subtitle?: string;
+    badge?: { label: string; tone?: 'blue' | 'emerald' | 'amber' | 'rose' | 'slate' };
+    onClose: () => void;
+    subheader?: React.ReactNode;
+    footerLeft?: React.ReactNode;
+    footerActions?: React.ReactNode;
+    children: React.ReactNode;
+  }>;
+
+  export const PkProgressBar: React.FC<{
+    label?: string;
+    valueLabel?: string;
+    pct: number;
+    tone?: 'emerald' | 'blue' | 'amber' | 'rose' | 'purple';
+  }>;
+
+  export const PkDistributionStrip: React.FC<{
+    title?: string;
+    segments: { label: string; value: number; displayValue: string; color: string }[];
+  }>;
+
   export function useAsyncAction(): {
     busy: boolean;
     run: <T>(fn: () => Promise<T>) => Promise<T | undefined>;

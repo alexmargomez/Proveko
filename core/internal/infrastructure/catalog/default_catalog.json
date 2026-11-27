@@ -35,6 +35,13 @@
         "tabIcon": "⚡",
         "defaultActive": true,
         "summary": "Numeración autorizada, cálculo CUFE y estado de transmisión DIAN."
+      },
+      {
+        "moduleKey": "notas_ajuste",
+        "displayName": "Notas Crédito y Débito",
+        "tabIcon": "↩️",
+        "defaultActive": true,
+        "summary": "Emisión de Notas Crédito y Notas Débito referenciadas a facturas con reingreso de inventario y CUDE."
       }
     ],
     "features": [
@@ -102,9 +109,16 @@
         "dependsOnModule": "facturacion_dian",
         "defaultActive": true,
         "summary": "Generación determinista de CUFE y control de numeración."
+      },
+      {
+        "submoduleKey": "notas_credito_debito",
+        "displayName": "Gestión de Notas Crédito y Débito",
+        "dependsOnModule": "notas_ajuste",
+        "defaultActive": true,
+        "summary": "Devoluciones parciales, anulaciones totales y ajustes de valor con CUDE."
       }
     ],
-    "bundleHash": "2d46ea145bf4"
+    "bundleHash": "d272acfc51c5"
   },
   {
     "serviceKey": "ms-clientes",
@@ -176,7 +190,7 @@
         "summary": "Gestión de convenios institucionales con descuento pactado."
       }
     ],
-    "bundleHash": "d39a79235c83"
+    "bundleHash": "04152c57b9f0"
   },
   {
     "serviceKey": "ms-inventario",
@@ -262,7 +276,7 @@
         "summary": "Control de consumo interno por área solicitante."
       }
     ],
-    "bundleHash": "557fd6ff220d"
+    "bundleHash": "4cb3c0ef466e"
   },
   {
     "serviceKey": "ms-caja",
@@ -313,7 +327,7 @@
         "summary": "Conciliación de transferencias y datáfonos."
       }
     ],
-    "bundleHash": "edc30217b381"
+    "bundleHash": "b47d02892810"
   },
   {
     "serviceKey": "ms-comandas",
@@ -364,7 +378,7 @@
         "summary": "Priorización y despacho de platos preparados."
       }
     ],
-    "bundleHash": "35ada3af1e55"
+    "bundleHash": "31829b76ab12"
   },
   {
     "serviceKey": "ms-hoteleria",
@@ -415,7 +429,7 @@
         "summary": "Definición de precios según tipo de habitación."
       }
     ],
-    "bundleHash": "feaaf493727c"
+    "bundleHash": "55165edf922c"
   },
   {
     "serviceKey": "ms-taller",
@@ -480,7 +494,7 @@
         "summary": "Liquidación transparente por orden facturada."
       }
     ],
-    "bundleHash": "26c956892fcf"
+    "bundleHash": "7e985b8e65e4"
   },
   {
     "serviceKey": "ms-bascula",
@@ -545,7 +559,7 @@
         "summary": "Control de orígenes, destinos y mercancía a granel."
       }
     ],
-    "bundleHash": "884ae52ce07c"
+    "bundleHash": "07010aa5f624"
   },
   {
     "serviceKey": "ms-compras",
@@ -596,7 +610,7 @@
         "summary": "Abastecimiento con recálculo automático de costo promedio."
       }
     ],
-    "bundleHash": "dd2eb8c49f3e"
+    "bundleHash": "3784ad54bf61"
   },
   {
     "serviceKey": "ms-agenda",
@@ -633,7 +647,7 @@
         "summary": "Gestión de disponibilidad horaria y confirmación de citas."
       }
     ],
-    "bundleHash": "ec04bee1aaad"
+    "bundleHash": "ff7a3d69c949"
   },
   {
     "serviceKey": "ms-taquilla",
@@ -670,7 +684,7 @@
         "summary": "Control de boletería numerada y recaudo en taquilla."
       }
     ],
-    "bundleHash": "b390fa54710c"
+    "bundleHash": "daf87c25bf9c"
   },
   {
     "serviceKey": "ms-nomina",
@@ -707,7 +721,7 @@
         "summary": "Liquidación periódica de salarios, auxilios y deducciones."
       }
     ],
-    "bundleHash": "4885cebe1396"
+    "bundleHash": "68460187b2b6"
   },
   {
     "serviceKey": "ms-contabilidad",
@@ -744,7 +758,7 @@
         "summary": "Validación cuadrada de débitos y créditos contables."
       }
     ],
-    "bundleHash": "df63ec9638d0"
+    "bundleHash": "cd383596619a"
   },
   {
     "serviceKey": "ms-reportes",
@@ -781,7 +795,7 @@
         "summary": "Consolidación gerencial de ventas, cartera e inventario."
       }
     ],
-    "bundleHash": "1a97edf3c362"
+    "bundleHash": "aa6806b1af18"
   },
   {
     "serviceKey": "ms-impresiones",
@@ -821,6 +835,6 @@
         "summary": "Diseño institucional para Carta, Media Carta, Tirilla POS y Taller."
       }
     ],
-    "bundleHash": "afa1352ec805"
+    "bundleHash": "d1a7cb556d78"
   }
 ]

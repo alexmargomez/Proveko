@@ -6,12 +6,18 @@ import {
   ModuleGate,
   PkAutoCodeInput,
   PkConfirmModal,
+  PkDistributionStrip,
+  PkFullscreenDialog,
+  PkKanbanBoard,
   PkKpiRow,
+  PkLiveHeader,
   PkModal,
   PkPrintButton,
+  PkProgressBar,
   PkSelect,
   PkSimpleSelect,
-  PkViewSwitcher,
+  PkTicketCard,
+  PkTypeCards,
   useAsyncAction,
   usePlatform,
 } from '@platform/ui-sdk';
@@ -84,6 +90,59 @@ interface InventoryAllResponse {
   requests: SupplyRequest[];
 }
 
+type ProductStudioNature = 'FISICO' | 'INSUMO' | 'KIT';
+type RequestStudioOrigin = 'OPERACIONES' | 'MANTENIMIENTO' | 'SEDES';
+
+const PRODUCT_NATURE_OPTIONS = [
+  {
+    key: 'FISICO',
+    icon: '📦',
+    title: 'Producto Físico Inventariable',
+    description: 'Mercancía para comercialización con control de existencias, costo ponderado, lote y vencimiento.',
+    badge: 'Comercial',
+  },
+  {
+    key: 'INSUMO',
+    icon: '🧪',
+    title: 'Insumo Operativo Interno',
+    description: 'Material o suministro de consumo interno para áreas de producción, taller, cocina o atención.',
+    badge: 'Consumo',
+  },
+  {
+    key: 'KIT',
+    icon: '🛠️',
+    title: 'Referencia / Kit Comercial',
+    description: 'Presentación compuesta o referencia empaquetada con tarifa de venta y margen objetivo.',
+    badge: 'Kit',
+  },
+];
+
+const REQUEST_ORIGIN_OPTIONS = [
+  {
+    key: 'OPERACIONES',
+    icon: '⚙️',
+    title: 'Operaciones y Planta',
+    description: 'Despacho inmediato de materias primas e insumos para líneas operativas activas.',
+    badge: 'Prioritario',
+  },
+  {
+    key: 'MANTENIMIENTO',
+    icon: '🛠️',
+    title: 'Taller y Mantenimiento',
+    description: 'Solicitud de repuestos, lubricantes o herramientas para órdenes técnicas.',
+    badge: 'Técnico',
+  },
+  {
+    key: 'SEDES',
+    icon: '🏢',
+    title: 'Administración y Sedes',
+    description: 'Dotación operativa, papelería corporativa o suministros para puntos de atención.',
+    badge: 'Interno',
+  },
+];
+
+const WAREHOUSE_SWATCHES = ['#0284c7', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#0f172a'];
+
 export const InventarioView: React.FC = () => {
   const {
     activeModuleKey,
@@ -97,8 +156,20 @@ export const InventarioView: React.FC = () => {
   } = usePlatform();
   const { busy, run } = useAsyncAction();
 
-  const [productViewMode, setProductViewMode] = useState<'list' | 'create'>('list');
-  const [requestViewMode, setRequestViewMode] = useState<'list' | 'create'>('list');
+  const [productDisplayMode, setProductDisplayMode] = useState<'board' | 'table'>('board');
+  const [productPill, setProductPill] = useState<string>('ALL');
+  const [productStudioOpen, setProductStudioOpen] = useState(false);
+  const [productNature, setProductNature] = useState<ProductStudioNature>('FISICO');
+
+  const [warehouseDisplayMode, setWarehouseDisplayMode] = useState<'board' | 'table'>('board');
+
+  const [kardexDisplayMode, setKardexDisplayMode] = useState<'board' | 'table'>('board');
+  const [kardexPill, setKardexPill] = useState<string>('ALL');
+
+  const [requestDisplayMode, setRequestDisplayMode] = useState<'board' | 'table'>('board');
+  const [requestPill, setRequestPill] = useState<string>('ALL');
+  const [requestStudioOpen, setRequestStudioOpen] = useState(false);
+  const [requestOrigin, setRequestOrigin] = useState<RequestStudioOrigin>('OPERACIONES');
 
   const [productSearch, setProductSearch] = useState('');
   const [warehouseFilter, setWarehouseFilter] = useState('');
@@ -182,30 +253,103 @@ export const InventarioView: React.FC = () => {
   useEffect(() => {
     if (!incomingPayload) return;
     if (currentTab === 'solicitudes_insumos') {
-      setRequestViewMode('create');
+      setRequestStudioOpen(true);
     } else if (currentTab === 'productos_stock') {
-      setProductViewMode('create');
+      setProductStudioOpen(true);
     }
     clearIncomingPayload();
   }, [incomingPayload, currentTab, clearIncomingPayload]);
+
+  const handleProductNatureChange = (nextKey: string) => {
+    const key = nextKey as ProductStudioNature;
+    setProductNature(key);
+    if (key === 'INSUMO') {
+      setCategory('Insumos Operativos');
+      setSalePrice('0');
+    } else if (key === 'KIT') {
+      setCategory('Kit Comercial');
+      setLotCode('');
+      setExpiryDate('');
+    } else {
+      setCategory('Mercancía General');
+    }
+  };
+
+  const handleRequestOriginChange = (nextKey: string) => {
+    const key = nextKey as RequestStudioOrigin;
+    setRequestOrigin(key);
+    if (key === 'OPERACIONES') setReqArea('Operaciones');
+    else if (key === 'MANTENIMIENTO') setReqArea('Taller y Mantenimiento');
+    else setReqArea('Administración y Sedes');
+  };
 
   const metrics = useMemo(() => {
     let costVal = 0;
     let saleVal = 0;
     let lowCount = 0;
+    let optimalCount = 0;
+    let reorderCount = 0;
+    let outCount = 0;
+    let optimalCost = 0;
+    let riskCost = 0;
+
     for (const p of state.products) {
-      costVal += p.stock * p.costPrice;
-      saleVal += p.stock * p.salePrice;
+      const lineCost = Math.max(0, p.stock) * p.costPrice;
+      costVal += lineCost;
+      saleVal += Math.max(0, p.stock) * p.salePrice;
       if (p.stock <= p.minStock) {
         lowCount += 1;
+        riskCost += lineCost;
+      } else {
+        optimalCost += lineCost;
+      }
+      if (p.stock <= 0) {
+        outCount += 1;
+      } else if (p.stock <= p.minStock) {
+        reorderCount += 1;
+      } else {
+        optimalCount += 1;
       }
     }
-    return { costVal, saleVal, lowCount };
+    return { costVal, saleVal, lowCount, optimalCount, reorderCount, outCount, optimalCost, riskCost };
   }, [state.products]);
+
+  const valuationSegments = useMemo(() => {
+    if (state.warehouses.length > 1) {
+      return state.warehouses.map((w, idx) => {
+        const whVal = state.products
+          .filter((p) => p.warehouseId === w.id)
+          .reduce((acc, p) => acc + Math.max(0, p.stock) * p.costPrice, 0);
+        return {
+          label: w.name,
+          value: whVal,
+          displayValue: formatCop(whVal),
+          color: WAREHOUSE_SWATCHES[idx % WAREHOUSE_SWATCHES.length],
+        };
+      });
+    }
+    return [
+      {
+        label: 'Valorizado en Stock Óptimo',
+        value: metrics.optimalCost,
+        displayValue: formatCop(metrics.optimalCost),
+        color: '#10b981',
+      },
+      {
+        label: 'Valorizado en Nivel de Reorden',
+        value: metrics.riskCost,
+        displayValue: formatCop(metrics.riskCost),
+        color: '#f59e0b',
+      },
+    ];
+  }, [state.warehouses, state.products, metrics.optimalCost, metrics.riskCost]);
 
   const filteredProducts = useMemo(() => {
     return state.products.filter((p) => {
       if (warehouseFilter && p.warehouseId !== warehouseFilter) return false;
+      if (productPill === 'OPTIMAL' && p.stock <= p.minStock) return false;
+      if (productPill === 'REORDER' && !(p.stock > 0 && p.stock <= p.minStock)) return false;
+      if (productPill === 'OUT' && p.stock > 0) return false;
       const q = productSearch.trim().toLowerCase();
       if (!q) return true;
       return (
@@ -215,48 +359,86 @@ export const InventarioView: React.FC = () => {
         (p.lotCode || '').toLowerCase().includes(q)
       );
     });
-  }, [state.products, warehouseFilter, productSearch]);
+  }, [state.products, warehouseFilter, productPill, productSearch]);
+
+  const classifyKardex = (typeStr: string): 'IN' | 'OUT' | 'TRANSFER' => {
+    const t = (typeStr || '').toLowerCase();
+    if (t.includes('traslad') || t.includes('transfer')) return 'TRANSFER';
+    if (t.includes('salid') || t.includes('venta') || t.includes('despach') || t.includes('consum') || t.includes('baja')) {
+      return 'OUT';
+    }
+    return 'IN';
+  };
 
   const filteredKardex = useMemo(() => {
     const q = kardexSearch.trim().toLowerCase();
-    if (!q) return state.kardex;
-    return state.kardex.filter(
-      (k) =>
+    return state.kardex.filter((k) => {
+      const kind = classifyKardex(k.type);
+      if (kardexPill !== 'ALL' && kind !== kardexPill) return false;
+      if (!q) return true;
+      return (
         k.productCode.toLowerCase().includes(q) ||
         k.productName.toLowerCase().includes(q) ||
         k.type.toLowerCase().includes(q) ||
         (k.reference || '').toLowerCase().includes(q)
-    );
-  }, [state.kardex, kardexSearch]);
+      );
+    });
+  }, [state.kardex, kardexPill, kardexSearch]);
 
   const filteredRequests = useMemo(() => {
     const q = requestSearch.trim().toLowerCase();
-    if (!q) return state.requests;
-    return state.requests.filter(
-      (r) =>
+    return state.requests.filter((r) => {
+      const st = (r.status || '').toLowerCase();
+      const isPending = st.includes('pend') || st.includes('solicit') || st.includes('abiert');
+      if (requestPill === 'PENDING' && !isPending) return false;
+      if (requestPill === 'DONE' && isPending) return false;
+      if (!q) return true;
+      return (
         r.code.toLowerCase().includes(q) ||
         r.area.toLowerCase().includes(q) ||
         r.productName.toLowerCase().includes(q)
-    );
-  }, [state.requests, requestSearch]);
+      );
+    });
+  }, [state.requests, requestPill, requestSearch]);
+
+  const openRestockModal = (p: Product) => {
+    setRestockTarget(p);
+    setRestockQty('10');
+    setRestockCost(String(p.costPrice));
+    setRestockLot(p.lotCode || '');
+    setRestockExp(p.expiryDate || '');
+  };
+
+  const openTransferModal = (p: Product) => {
+    setTransferTarget(p);
+    const other = state.warehouses.find((w) => w.id !== p.warehouseId);
+    setTransferWhId(other?.id || '');
+    setTransferQty('1');
+  };
 
   const handleCreateProduct = (e: React.FormEvent) => {
     e.preventDefault();
     void run(async () => {
       const selectedSup = suppliers.find((s) => s.id === supplierId);
+      const numericCost = Number(costPrice) || 0;
+      const numericSale =
+        productNature === 'INSUMO' && (!Number(salePrice) || Number(salePrice) <= 0)
+          ? numericCost
+          : Number(salePrice) || 0;
+
       await apiPost('/api/v1/inventario/products', {
         name,
         category,
         warehouseId,
         supplierId,
         supplierName: selectedSup?.name || '',
-        costPrice: Number(costPrice) || 0,
-        salePrice: Number(salePrice) || 0,
+        costPrice: numericCost,
+        salePrice: numericSale,
         taxPct: Number(taxPct) || 0,
         stock: Number(stock) || 0,
         minStock: Number(minStock) || 0,
-        lotCode,
-        expiryDate,
+        lotCode: productNature === 'KIT' ? '' : lotCode,
+        expiryDate: productNature === 'KIT' ? '' : expiryDate,
       });
       setName('');
       setCostPrice('0');
@@ -264,8 +446,8 @@ export const InventarioView: React.FC = () => {
       setStock('0');
       setLotCode('');
       setExpiryDate('');
-      setProductViewMode('list');
-      toast('Producto registrado en inventario');
+      setProductStudioOpen(false);
+      toast('Producto registrado en el centro logístico');
       await reload();
     });
   };
@@ -352,7 +534,7 @@ export const InventarioView: React.FC = () => {
       });
       setReqQty('1');
       setReqNotes('');
-      setRequestViewMode('list');
+      setRequestStudioOpen(false);
       toast('Solicitud interna de insumos registrada');
       await reload();
     });
@@ -395,13 +577,20 @@ export const InventarioView: React.FC = () => {
     [state.nextProductCode, state.products, metrics.costVal]
   );
 
+  const previewMarginPct = useMemo(() => {
+    const c = Number(costPrice) || 0;
+    const s = Number(salePrice) || 0;
+    if (s <= 0) return 0;
+    return Math.max(0, Math.min(100, ((s - c) / s) * 100));
+  }, [costPrice, salePrice]);
+
   return (
     <div className="pk-stack">
       <PkKpiRow
         items={[
           { label: 'Referencias Activas', value: String(state.products.length) },
           { label: 'Costo en Bodega', value: formatCop(metrics.costVal) },
-          { label: 'Potencial Comercial', value: formatCop(metrics.saleVal) },
+          { label: 'Potencial Comercial', value: formatCop(metrics.saleVal), color: 'var(--pk-emerald)' },
           {
             label: 'Alertas Stock Mínimo',
             value: String(metrics.lowCount),
@@ -413,214 +602,82 @@ export const InventarioView: React.FC = () => {
       {currentTab === 'productos_stock' && (
         <ModuleGate module="productos_stock">
           <div className="pk-stack">
-            <PkViewSwitcher
-              title="Catálogo Maestro de Existencias"
-              subtitle="Administra referencias de inventario, costos ponderados, lotes y niveles mínimos de reposición."
-              mode={productViewMode}
-              onModeChange={setProductViewMode}
-              listLabel="📦 Catálogo de Productos"
-              createLabel="+ Nueva Referencia"
-              count={state.products.length}
+            <PkLiveHeader
+              title="Centro Logístico y Existencias"
+              liveLabel="Stock en vivo"
+              subtitle="Galería operativa de referencias, semáforo de punto de reorden, valorización ponderada y traslados."
+              pills={[
+                { key: 'ALL', label: 'Todos', count: state.products.length },
+                { key: 'OPTIMAL', label: 'Stock Óptimo', count: metrics.optimalCount },
+                { key: 'REORDER', label: 'Alerta Reorden', count: metrics.reorderCount },
+                { key: 'OUT', label: 'Agotados', count: metrics.outCount },
+              ]}
+              activePill={productPill}
+              onPillChange={setProductPill}
+              displayMode={productDisplayMode}
+              onDisplayModeChange={setProductDisplayMode}
+              boardLabel="🎛️ Galería de Stock"
+              tableLabel="📋 Vista Tabla"
+              primaryActionLabel="+ Nuevo Producto"
+              onPrimaryAction={() => setProductStudioOpen(true)}
               extraActions={
-                productViewMode === 'list' ? (
-                  <>
-                    <button type="button" className="pk-btn pk-btn-outline" onClick={exportInventoryCsv}>
-                      📥 Exportar CSV
-                    </button>
-                    <PkPrintButton
-                      label="🖨️ Imprimir Inventario Valorizado"
-                      payload={inventoryPrintPayload}
-                      variant="primary"
-                    />
-                  </>
-                ) : undefined
+                <>
+                  <button type="button" className="pk-btn pk-btn-outline" onClick={exportInventoryCsv}>
+                    📥 Exportar CSV
+                  </button>
+                  <PkPrintButton
+                    label="🖨️ Imprimir Inventario Valorizado"
+                    payload={inventoryPrintPayload}
+                    variant="primary"
+                  />
+                </>
               }
             />
 
-            {productViewMode === 'create' ? (
-              <div className="pk-card">
-                <div className="pk-card-head">
-                  <div className="pk-card-title">📦 Alta de Referencia de Inventario</div>
-                  <span className="pk-badge pk-badge-blue">{state.nextProductCode}</span>
-                </div>
-                <div className="pk-card-body">
-                  <form onSubmit={handleCreateProduct} className="pk-form-grid cols-2">
-                    <PkAutoCodeInput label="Código SKU" value={state.nextProductCode} />
+            <PkDistributionStrip
+              title={
+                state.warehouses.length > 1
+                  ? 'Valorización de Inventario Distribuida por Bodega'
+                  : 'Valorización de Inventario por Nivel de Disponibilidad'
+              }
+              segments={valuationSegments}
+            />
 
-                    <div className="pk-field">
-                      <label>Categoría</label>
-                      <input value={category} onChange={(e) => setCategory(e.target.value)} />
-                    </div>
-
-                    <div className="pk-field pk-col-span-full">
-                      <label>Nombre del Producto *</label>
-                      <input
-                        required
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        placeholder="Ej. Filtro de Aire Industrial"
-                      />
-                    </div>
-
-                    <PkSelect
-                      label="Bodega Asignada"
-                      items={state.warehouses}
-                      value={warehouseId}
-                      onChange={setWarehouseId}
-                      getValue={(w) => w.id}
-                      getLabel={(w) => `${w.code} — ${w.name}`}
-                      onCreateNew={() => setWhModalOpen(true)}
-                      createLabel="+ Bodega"
-                      searchable
+            <div className="pk-card" style={{ overflow: 'visible' }}>
+              <div
+                className="pk-datatable-toolbar"
+                style={{ borderBottom: productDisplayMode === 'table' ? undefined : 'none' }}
+              >
+                <input
+                  type="search"
+                  className="pk-input pk-datatable-search"
+                  value={productSearch}
+                  onChange={(e) => setProductSearch(e.target.value)}
+                  placeholder="🔎 Buscar referencia por SKU, nombre, categoría o lote..."
+                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ minWidth: 240 }}>
+                    <PkSimpleSelect
+                      ariaLabel="Filtrar por bodega"
+                      value={warehouseFilter}
+                      onChange={setWarehouseFilter}
+                      allowClear
+                      placeholder="Todas las bodegas"
+                      options={[
+                        { value: '', label: 'Todas las bodegas' },
+                        ...state.warehouses.map((w) => ({
+                          value: w.id,
+                          label: `${w.code} — ${w.name}`,
+                          sublabel: w.location,
+                        })),
+                      ]}
                     />
-
-                    {suppliers.length > 0 ? (
-                      <PkSelect
-                        label="Proveedor Habitual"
-                        items={suppliers}
-                        value={supplierId}
-                        onChange={setSupplierId}
-                        getValue={(s) => s.id}
-                        getLabel={(s) => s.name}
-                        emptyLabel="Sin proveedor asignado"
-                        searchable
-                      />
-                    ) : (
-                      <div className="pk-field">
-                        <label>IVA (%)</label>
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="any"
-                          value={taxPct}
-                          onChange={(e) => setTaxPct(e.target.value)}
-                        />
-                      </div>
-                    )}
-
-                    <div className="pk-field">
-                      <label>Costo Unitario (COP)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={costPrice}
-                        onChange={(e) => setCostPrice(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="pk-field">
-                      <label>Precio Venta (COP)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={salePrice}
-                        onChange={(e) => setSalePrice(e.target.value)}
-                      />
-                    </div>
-
-                    {suppliers.length > 0 && (
-                      <div className="pk-field">
-                        <label>IVA (%)</label>
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="any"
-                          value={taxPct}
-                          onChange={(e) => setTaxPct(e.target.value)}
-                        />
-                      </div>
-                    )}
-
-                    <div className="pk-field">
-                      <label>Existencia Inicial</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={stock}
-                        onChange={(e) => setStock(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="pk-field">
-                      <label>Stock Mínimo</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={minStock}
-                        onChange={(e) => setMinStock(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="pk-field">
-                      <label>Lote</label>
-                      <input
-                        value={lotCode}
-                        onChange={(e) => setLotCode(e.target.value)}
-                        placeholder="Ej. LT-2026"
-                      />
-                    </div>
-
-                    <div className="pk-field">
-                      <label>Vencimiento</label>
-                      <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
-                    </div>
-
-                    <div className="pk-form-actions">
-                      <button
-                        type="button"
-                        className="pk-btn pk-btn-outline"
-                        onClick={() => setProductViewMode('list')}
-                        disabled={busy}
-                      >
-                        Cancelar
-                      </button>
-                      <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
-                        {busy ? 'Guardando...' : '💾 Guardar Producto'}
-                      </button>
-                    </div>
-                  </form>
+                  </div>
+                  <span className="pk-badge pk-badge-slate">{filteredProducts.length} referencias</span>
                 </div>
               </div>
-            ) : (
-              <div className="pk-card">
-                <div className="pk-card-head">
-                  <div className="pk-card-title">📋 Catálogo Maestro de Existencias</div>
-                </div>
-                <div className="pk-datatable-toolbar">
-                  <input
-                    type="search"
-                    className="pk-input pk-datatable-search"
-                    value={productSearch}
-                    onChange={(e) => setProductSearch(e.target.value)}
-                    placeholder="🔎 Buscar por SKU, nombre, categoría o lote..."
-                  />
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                    <div style={{ minWidth: 240 }}>
-                      <PkSimpleSelect
-                        ariaLabel="Filtrar por bodega"
-                        value={warehouseFilter}
-                        onChange={setWarehouseFilter}
-                        allowClear
-                        placeholder="Todas las bodegas"
-                        options={[
-                          { value: '', label: 'Todas las bodegas' },
-                          ...state.warehouses.map((w) => ({
-                            value: w.id,
-                            label: `${w.code} — ${w.name}`,
-                            sublabel: w.location,
-                          })),
-                        ]}
-                      />
-                    </div>
-                    <span className="pk-badge pk-badge-slate">{filteredProducts.length} referencias</span>
-                  </div>
-                </div>
+
+              {productDisplayMode === 'table' && (
                 <div className="pk-card-body">
                   <div className="pk-table-wrap">
                     <table className="pk-table">
@@ -684,25 +741,14 @@ export const InventarioView: React.FC = () => {
                                   <button
                                     type="button"
                                     className="pk-btn pk-btn-outline pk-btn-sm"
-                                    onClick={() => {
-                                      setRestockTarget(p);
-                                      setRestockQty('10');
-                                      setRestockCost(String(p.costPrice));
-                                      setRestockLot(p.lotCode || '');
-                                      setRestockExp(p.expiryDate || '');
-                                    }}
+                                    onClick={() => openRestockModal(p)}
                                   >
                                     Surtir
                                   </button>
                                   <button
                                     type="button"
                                     className="pk-btn pk-btn-outline pk-btn-sm"
-                                    onClick={() => {
-                                      setTransferTarget(p);
-                                      const other = state.warehouses.find((w) => w.id !== p.warehouseId);
-                                      setTransferWhId(other?.id || '');
-                                      setTransferQty('1');
-                                    }}
+                                    onClick={() => openTransferModal(p)}
                                   >
                                     Trasladar
                                   </button>
@@ -729,7 +775,132 @@ export const InventarioView: React.FC = () => {
                     </table>
                   </div>
                 </div>
-              </div>
+              )}
+            </div>
+
+            {productDisplayMode === 'board' && (
+              <>
+                {filteredProducts.length === 0 ? (
+                  <div className="pk-kanban-empty">
+                    No existen productos que coincidan con el estado de existencias o búsqueda actual.
+                  </div>
+                ) : (
+                  <div className="pk-cards-showcase">
+                    {filteredProducts.map((p) => {
+                      const isOut = p.stock <= 0;
+                      const isLow = p.stock > 0 && p.stock <= p.minStock;
+                      const targetMax = Math.max(p.minStock * 2, 10);
+                      const stockPct = isOut ? 0 : Math.min(100, (p.stock / targetMax) * 100);
+                      const barTone: 'emerald' | 'amber' | 'rose' = isOut
+                        ? 'rose'
+                        : isLow
+                        ? 'amber'
+                        : 'emerald';
+
+                      return (
+                        <PkTicketCard
+                          key={p.id}
+                          code={p.code}
+                          timeAgo={
+                            p.lotCode
+                              ? `Lote ${p.lotCode}${p.expiryDate ? ` · Vence ${p.expiryDate}` : ''}`
+                              : `IVA ${p.taxPct}%`
+                          }
+                          channelBadge={{
+                            label: `${p.category || 'General'} · ${p.warehouseName || 'Bodega'}`,
+                            tone: isOut ? 'coral' : isLow ? 'amber' : 'blue',
+                          }}
+                          title={p.name}
+                          subtitle={
+                            p.supplierName
+                              ? `Proveedor habitual: ${p.supplierName}`
+                              : `Costo promedio: ${formatCop(p.costPrice)}`
+                          }
+                          items={[
+                            { name: 'Costo Unitario Promedio', amount: formatCop(p.costPrice) },
+                            {
+                              name: 'Capital en Existencias',
+                              amount: formatCop(Math.max(0, p.stock) * p.costPrice),
+                            },
+                          ]}
+                          extraBody={
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              <PkProgressBar
+                                label="Stock actual vs Mínimo"
+                                valueLabel={`${p.stock} uds / Mín ${p.minStock}`}
+                                pct={stockPct}
+                                tone={barTone}
+                              />
+                              {(isLow || isOut) && (
+                                <FeatureGate module="productos_stock" feature="alerta_stock_minimo">
+                                  <span
+                                    className={`pk-badge ${isOut ? 'pk-badge-rose' : 'pk-badge-amber'}`}
+                                    style={{ alignSelf: 'flex-start' }}
+                                  >
+                                    {isOut
+                                      ? 'Sin existencias disponibles'
+                                      : `Punto de reorden alcanzado (${p.minStock} uds)`}
+                                  </span>
+                                </FeatureGate>
+                              )}
+                            </div>
+                          }
+                          totalLabel="PRECIO VENTA"
+                          totalValue={formatCop(p.salePrice)}
+                          statusPill={{
+                            label: isOut ? 'Agotado' : isLow ? 'Alerta Reorden' : 'Stock Óptimo',
+                            tone: isOut ? 'rose' : isLow ? 'amber' : 'emerald',
+                          }}
+                          primaryAction={{
+                            label: '+ Entrada Stock',
+                            tone: isOut ? 'coral' : isLow ? 'amber' : 'emerald',
+                            onClick: () => openRestockModal(p),
+                            disabled: busy,
+                          }}
+                          secondaryActions={
+                            <>
+                              <div className="pk-row-actions">
+                                <button
+                                  type="button"
+                                  className="pk-btn pk-btn-outline pk-btn-sm"
+                                  onClick={() => openTransferModal(p)}
+                                  disabled={busy}
+                                >
+                                  ⇄ Traslado Bodega
+                                </button>
+                                <button
+                                  type="button"
+                                  className="pk-btn pk-btn-outline pk-btn-sm"
+                                  disabled={busy || p.stock <= 0}
+                                  onClick={() => handleDelta(p, -1)}
+                                >
+                                  -1
+                                </button>
+                                <button
+                                  type="button"
+                                  className="pk-btn pk-btn-outline pk-btn-sm"
+                                  disabled={busy}
+                                  onClick={() => handleDelta(p, 1)}
+                                >
+                                  +1
+                                </button>
+                              </div>
+                              <button
+                                type="button"
+                                className="pk-btn pk-btn-danger pk-btn-sm"
+                                onClick={() => setDeleteTarget(p)}
+                                disabled={busy}
+                              >
+                                Eliminar
+                              </button>
+                            </>
+                          }
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </ModuleGate>
@@ -738,47 +909,96 @@ export const InventarioView: React.FC = () => {
       {currentTab === 'bodegas_traslados' && (
         <ModuleGate module="bodegas_traslados">
           <div className="pk-stack">
-            <div className="pk-card">
-              <div className="pk-card-head">
-                <div className="pk-card-title">🏢 Bodegas y Centros de Almacenamiento</div>
-                <button type="button" className="pk-btn pk-btn-primary" onClick={() => setWhModalOpen(true)}>
-                  + Nueva Bodega
-                </button>
+            <PkLiveHeader
+              title="Red de Bodegas y Centros de Almacenamiento"
+              liveLabel="Almacenes en línea"
+              subtitle="Distribución física de mercancías, responsables de custodia y ocupación valorizada por centro."
+              displayMode={warehouseDisplayMode}
+              onDisplayModeChange={setWarehouseDisplayMode}
+              boardLabel="🎛️ Tarjetas de Bodega"
+              tableLabel="📋 Vista Tabla"
+              primaryActionLabel="+ Nueva Bodega"
+              onPrimaryAction={() => setWhModalOpen(true)}
+            />
+
+            {warehouseDisplayMode === 'board' ? (
+              <div className="pk-cards-showcase">
+                {state.warehouses.map((w) => {
+                  const whProducts = state.products.filter((p) => p.warehouseId === w.id);
+                  const whUnits = whProducts.reduce((acc, p) => acc + Math.max(0, p.stock), 0);
+                  const whValue = whProducts.reduce(
+                    (acc, p) => acc + Math.max(0, p.stock) * p.costPrice,
+                    0
+                  );
+                  const sharePct = metrics.costVal > 0 ? (whValue / metrics.costVal) * 100 : 0;
+
+                  return (
+                    <PkTicketCard
+                      key={w.id}
+                      code={w.code}
+                      channelBadge={{ label: `${whProducts.length} SKUs`, tone: 'blue' }}
+                      title={w.name}
+                      subtitle={`📍 ${w.location || 'Ubicación principal'}`}
+                      metaLine={`👤 Responsable: ${w.manager || 'Administración General'}`}
+                      items={[
+                        { name: 'Unidades Almacenadas', amount: `${whUnits} uds` },
+                        { name: 'Referencias Vinculadas', amount: String(whProducts.length) },
+                      ]}
+                      extraBody={
+                        <PkProgressBar
+                          label="Participación en Capital de Inventario"
+                          valueLabel={`${Math.round(sharePct)}%`}
+                          pct={sharePct}
+                          tone="blue"
+                        />
+                      }
+                      totalLabel="VALORIZADO BODEGA"
+                      totalValue={formatCop(whValue)}
+                      statusPill={{ label: 'Centro Operativo Activo', tone: 'emerald' }}
+                    />
+                  );
+                })}
               </div>
-              <div className="pk-card-body">
-                <div className="pk-table-wrap">
-                  <table className="pk-table">
-                    <thead>
-                      <tr>
-                        <th>Código</th>
-                        <th>Nombre de Bodega</th>
-                        <th>Ubicación</th>
-                        <th>Responsable</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {state.warehouses.map((w) => (
-                        <tr key={w.id}>
-                          <td>
-                            <strong>{w.code}</strong>
-                          </td>
-                          <td>{w.name}</td>
-                          <td>{w.location}</td>
-                          <td>{w.manager || 'Administración General'}</td>
-                        </tr>
-                      ))}
-                      {state.warehouses.length === 0 && (
+            ) : (
+              <div className="pk-card">
+                <div className="pk-card-head">
+                  <div className="pk-card-title">🏢 Bodegas y Centros de Almacenamiento</div>
+                </div>
+                <div className="pk-card-body">
+                  <div className="pk-table-wrap">
+                    <table className="pk-table">
+                      <thead>
                         <tr>
-                          <td colSpan={4} style={{ textAlign: 'center', color: 'var(--pk-muted)', padding: 28 }}>
-                            No hay bodegas registradas todavía.
-                          </td>
+                          <th>Código</th>
+                          <th>Nombre de Bodega</th>
+                          <th>Ubicación</th>
+                          <th>Responsable</th>
                         </tr>
-                      )}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {state.warehouses.map((w) => (
+                          <tr key={w.id}>
+                            <td>
+                              <strong>{w.code}</strong>
+                            </td>
+                            <td>{w.name}</td>
+                            <td>{w.location}</td>
+                            <td>{w.manager || 'Administración General'}</td>
+                          </tr>
+                        ))}
+                        {state.warehouses.length === 0 && (
+                          <tr>
+                            <td colSpan={4} style={{ textAlign: 'center', color: 'var(--pk-muted)', padding: 28 }}>
+                              No hay bodegas registradas todavía.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         </ModuleGate>
       )}
@@ -786,66 +1006,139 @@ export const InventarioView: React.FC = () => {
       {currentTab === 'kardex_lotes' && (
         <ModuleGate module="kardex_lotes">
           <div className="pk-stack">
-            <div className="pk-card">
-              <div className="pk-card-head">
-                <div className="pk-card-title">📊 Libro Kardex Valorizado</div>
-              </div>
-              <div className="pk-datatable-toolbar">
+            <PkLiveHeader
+              title="Auditoría Kardex Valorizado y Trazabilidad"
+              liveLabel="Kardex continuo"
+              subtitle="Secuencia cronológica de entradas, despachos, ajustes de inventario y traslados inter-bodega."
+              pills={[
+                { key: 'ALL', label: 'Todos', count: state.kardex.length },
+                {
+                  key: 'IN',
+                  label: 'Entradas / Ingresos',
+                  count: state.kardex.filter((k) => classifyKardex(k.type) === 'IN').length,
+                },
+                {
+                  key: 'OUT',
+                  label: 'Salidas / Consumos',
+                  count: state.kardex.filter((k) => classifyKardex(k.type) === 'OUT').length,
+                },
+                {
+                  key: 'TRANSFER',
+                  label: 'Traslados',
+                  count: state.kardex.filter((k) => classifyKardex(k.type) === 'TRANSFER').length,
+                },
+              ]}
+              activePill={kardexPill}
+              onPillChange={setKardexPill}
+              displayMode={kardexDisplayMode}
+              onDisplayModeChange={setKardexDisplayMode}
+              boardLabel="🎛️ Línea de Tiempo"
+              tableLabel="📋 Libro Kardex"
+            />
+
+            <div className="pk-card" style={{ overflow: 'visible' }}>
+              <div
+                className="pk-datatable-toolbar"
+                style={{ borderBottom: kardexDisplayMode === 'table' ? undefined : 'none' }}
+              >
                 <input
                   type="search"
                   className="pk-input pk-datatable-search"
                   value={kardexSearch}
                   onChange={(e) => setKardexSearch(e.target.value)}
-                  placeholder="🔎 Buscar por SKU, producto, tipo de movimiento o referencia..."
+                  placeholder="🔎 Buscar movimiento por SKU, producto, tipo o documento referencia..."
                 />
                 <span className="pk-badge pk-badge-slate">{filteredKardex.length} movimientos</span>
               </div>
-              <div className="pk-card-body">
-                <div className="pk-table-wrap">
-                  <table className="pk-table">
-                    <thead>
-                      <tr>
-                        <th>Fecha</th>
-                        <th>Tipo Movimiento</th>
-                        <th>Producto</th>
-                        <th>Bodega</th>
-                        <th className="num">Cantidad</th>
-                        <th className="num">Costo Unitario</th>
-                        <th className="num">Saldo</th>
-                        <th>Referencia</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredKardex.map((k) => (
-                        <tr key={k.id}>
-                          <td>{k.date}</td>
-                          <td>
-                            <strong>{k.type}</strong>
-                          </td>
-                          <td>
-                            {k.productCode} — {k.productName}
-                          </td>
-                          <td>{k.warehouseName}</td>
-                          <td className="num">{k.qty}</td>
-                          <td className="num">{formatCop(k.unitCost)}</td>
-                          <td className="num">
-                            <strong>{k.balanceAfter}</strong>
-                          </td>
-                          <td>{k.reference}</td>
-                        </tr>
-                      ))}
-                      {filteredKardex.length === 0 && (
+
+              {kardexDisplayMode === 'table' && (
+                <div className="pk-card-body">
+                  <div className="pk-table-wrap">
+                    <table className="pk-table">
+                      <thead>
                         <tr>
-                          <td colSpan={8} style={{ textAlign: 'center', color: 'var(--pk-muted)', padding: 28 }}>
-                            No se encontraron movimientos de Kardex para el criterio consultado.
-                          </td>
+                          <th>Fecha</th>
+                          <th>Tipo Movimiento</th>
+                          <th>Producto</th>
+                          <th>Bodega</th>
+                          <th className="num">Cantidad</th>
+                          <th className="num">Costo Unitario</th>
+                          <th className="num">Saldo</th>
+                          <th>Referencia</th>
                         </tr>
-                      )}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {filteredKardex.map((k) => (
+                          <tr key={k.id}>
+                            <td>{k.date}</td>
+                            <td>
+                              <strong>{k.type}</strong>
+                            </td>
+                            <td>
+                              {k.productCode} — {k.productName}
+                            </td>
+                            <td>{k.warehouseName}</td>
+                            <td className="num">{k.qty}</td>
+                            <td className="num">{formatCop(k.unitCost)}</td>
+                            <td className="num">
+                              <strong>{k.balanceAfter}</strong>
+                            </td>
+                            <td>{k.reference}</td>
+                          </tr>
+                        ))}
+                        {filteredKardex.length === 0 && (
+                          <tr>
+                            <td colSpan={8} style={{ textAlign: 'center', color: 'var(--pk-muted)', padding: 28 }}>
+                              No se encontraron movimientos de Kardex para el criterio consultado.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
+
+            {kardexDisplayMode === 'board' && (
+              <>
+                {filteredKardex.length === 0 ? (
+                  <div className="pk-kanban-empty">
+                    No existen registros en la línea de tiempo de Kardex para el filtro actual.
+                  </div>
+                ) : (
+                  <div className="pk-cards-showcase">
+                    {filteredKardex.map((k) => {
+                      const kind = classifyKardex(k.type);
+                      return (
+                        <PkTicketCard
+                          key={k.id}
+                          code={k.productCode}
+                          timeAgo={k.date}
+                          channelBadge={{
+                            label: k.type,
+                            tone: kind === 'IN' ? 'emerald' : kind === 'TRANSFER' ? 'purple' : 'amber',
+                          }}
+                          title={k.productName}
+                          subtitle={`🏢 ${k.warehouseName} · Ref: ${k.reference || 'Control interno'}`}
+                          items={[
+                            { name: 'Unidades Movidas', amount: `${k.qty}` },
+                            { name: 'Costo Unitario Ponderado', amount: formatCop(k.unitCost) },
+                          ]}
+                          processNodes={[
+                            { step: 1, label: 'Registro', sublabel: k.date.slice(0, 10), status: 'done' },
+                            { step: 2, label: k.type, sublabel: `${k.qty} uds`, status: 'done' },
+                            { step: 3, label: 'Saldo Final', sublabel: `${k.balanceAfter} uds`, status: 'done' },
+                          ]}
+                          totalLabel="SALDO POSTERIOR"
+                          totalValue={`${k.balanceAfter} uds`}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </ModuleGate>
       )}
@@ -853,88 +1146,53 @@ export const InventarioView: React.FC = () => {
       {currentTab === 'solicitudes_insumos' && (
         <ModuleGate module="solicitudes_insumos">
           <div className="pk-stack">
-            <PkViewSwitcher
+            <PkLiveHeader
               title="Requisiciones Internas de Insumos"
-              subtitle="Registra y consulta solicitudes internas de despacho de materiales por área operativa."
-              mode={requestViewMode}
-              onModeChange={setRequestViewMode}
-              listLabel="📋 Solicitudes Registradas"
-              createLabel="+ Nueva Solicitud"
-              count={state.requests.length}
+              liveLabel="Despachos internos"
+              subtitle="Solicitudes operativas de materiales por área funcional con trazabilidad de entrega."
+              pills={[
+                { key: 'ALL', label: 'Todas', count: state.requests.length },
+                {
+                  key: 'PENDING',
+                  label: 'En Proceso / Pendientes',
+                  count: state.requests.filter((r) =>
+                    /pend|solicit|abiert/i.test(r.status || '')
+                  ).length,
+                },
+                {
+                  key: 'DONE',
+                  label: 'Atendidas',
+                  count: state.requests.filter(
+                    (r) => !/pend|solicit|abiert/i.test(r.status || '')
+                  ).length,
+                },
+              ]}
+              activePill={requestPill}
+              onPillChange={setRequestPill}
+              displayMode={requestDisplayMode}
+              onDisplayModeChange={setRequestDisplayMode}
+              boardLabel="🎛️ Tablero de Solicitudes"
+              tableLabel="📋 Vista Tabla"
+              primaryActionLabel="+ Nueva Solicitud"
+              onPrimaryAction={() => setRequestStudioOpen(true)}
             />
 
-            {requestViewMode === 'create' ? (
-              <div className="pk-card">
-                <div className="pk-card-head">
-                  <div className="pk-card-title">📝 Nueva Requisición Interna de Insumos</div>
-                  <span className="pk-badge pk-badge-blue">{state.nextRequestCode}</span>
-                </div>
-                <div className="pk-card-body">
-                  <form onSubmit={handleCreateRequest} className="pk-form-grid cols-2">
-                    <PkAutoCodeInput label="Consecutivo" value={state.nextRequestCode} />
-                    <div className="pk-field">
-                      <label>Área Solicitante *</label>
-                      <input required value={reqArea} onChange={(e) => setReqArea(e.target.value)} />
-                    </div>
-                    <PkSelect
-                      label="Insumo Requerido *"
-                      items={state.products}
-                      value={reqProductId}
-                      onChange={setReqProductId}
-                      getValue={(p) => p.id}
-                      getLabel={(p) => `${p.code} — ${p.name}`}
-                      searchable
-                    />
-                    <div className="pk-field">
-                      <label>Cantidad *</label>
-                      <input
-                        type="number"
-                        min="1"
-                        step="any"
-                        required
-                        value={reqQty}
-                        onChange={(e) => setReqQty(e.target.value)}
-                      />
-                    </div>
-                    <div className="pk-field pk-col-span-full">
-                      <label>Observaciones</label>
-                      <input
-                        value={reqNotes}
-                        onChange={(e) => setReqNotes(e.target.value)}
-                        placeholder="Justificación o centro de costo destino"
-                      />
-                    </div>
-                    <div className="pk-form-actions">
-                      <button
-                        type="button"
-                        className="pk-btn pk-btn-outline"
-                        onClick={() => setRequestViewMode('list')}
-                        disabled={busy}
-                      >
-                        Cancelar
-                      </button>
-                      <button type="submit" className="pk-btn pk-btn-primary" disabled={busy}>
-                        {busy ? 'Guardando...' : '💾 Registrar Solicitud'}
-                      </button>
-                    </div>
-                  </form>
-                </div>
+            <div className="pk-card" style={{ overflow: 'visible' }}>
+              <div
+                className="pk-datatable-toolbar"
+                style={{ borderBottom: requestDisplayMode === 'table' ? undefined : 'none' }}
+              >
+                <input
+                  type="search"
+                  className="pk-input pk-datatable-search"
+                  value={requestSearch}
+                  onChange={(e) => setRequestSearch(e.target.value)}
+                  placeholder="🔎 Filtrar requisición por consecutivo, área solicitante o insumo..."
+                />
+                <span className="pk-badge pk-badge-slate">{filteredRequests.length} solicitudes</span>
               </div>
-            ) : (
-              <div className="pk-card">
-                <div className="pk-card-head">
-                  <div className="pk-card-title">📋 Solicitudes Registradas</div>
-                </div>
-                <div className="pk-datatable-toolbar">
-                  <input
-                    type="search"
-                    className="pk-input pk-datatable-search"
-                    value={requestSearch}
-                    onChange={(e) => setRequestSearch(e.target.value)}
-                    placeholder="🔎 Filtrar por consecutivo, área o insumo..."
-                  />
-                  <span className="pk-badge pk-badge-slate">{filteredRequests.length} solicitudes</span>
-                </div>
+
+              {requestDisplayMode === 'table' && (
                 <div className="pk-card-body">
                   <div className="pk-table-wrap">
                     <table className="pk-table">
@@ -974,11 +1232,352 @@ export const InventarioView: React.FC = () => {
                     </table>
                   </div>
                 </div>
-              </div>
+              )}
+            </div>
+
+            {requestDisplayMode === 'board' && (
+              <PkKanbanBoard
+                columns={[
+                  {
+                    key: 'req_open',
+                    title: 'Solicitudes Registradas / En Alistamiento',
+                    dotColor: 'amber',
+                    count: filteredRequests.filter((r) => /pend|solicit|abiert/i.test(r.status || '')).length,
+                    emptyText: 'Sin requisiciones pendientes de alistamiento',
+                    children: filteredRequests
+                      .filter((r) => /pend|solicit|abiert/i.test(r.status || ''))
+                      .map((r) => (
+                        <PkTicketCard
+                          key={r.id}
+                          code={r.code}
+                          timeAgo={r.date}
+                          channelBadge={{ label: r.area, tone: 'amber' }}
+                          title={r.productName}
+                          items={[{ qty: r.qty, name: r.productName }]}
+                          highlightNote={r.notes || undefined}
+                          statusPill={{ label: r.status || 'Solicitada', tone: 'amber' }}
+                        />
+                      )),
+                  },
+                  {
+                    key: 'req_dispatched',
+                    title: 'Despachadas / Procesadas en Almacén',
+                    dotColor: 'emerald',
+                    count: filteredRequests.filter((r) => !/pend|solicit|abiert/i.test(r.status || '')).length,
+                    emptyText: 'Sin requisiciones procesadas en este filtro',
+                    children: filteredRequests
+                      .filter((r) => !/pend|solicit|abiert/i.test(r.status || ''))
+                      .map((r) => (
+                        <PkTicketCard
+                          key={r.id}
+                          code={r.code}
+                          timeAgo={r.date}
+                          channelBadge={{ label: r.area, tone: 'emerald' }}
+                          title={r.productName}
+                          items={[{ qty: r.qty, name: r.productName }]}
+                          highlightNote={r.notes || undefined}
+                          statusPill={{ label: r.status || 'Atendida', tone: 'emerald' }}
+                        />
+                      )),
+                  },
+                ]}
+              />
             )}
           </div>
         </ModuleGate>
       )}
+
+      <PkFullscreenDialog
+        open={productStudioOpen}
+        title="Estudio Maestro de Alta de Producto y Existencias"
+        subtitle="Configura la ficha logística, costo inicial, punto de reorden y trazabilidad según la naturaleza del ítem."
+        badge={{ label: state.nextProductCode, tone: 'blue' }}
+        onClose={() => setProductStudioOpen(false)}
+        subheader={
+          <PkTypeCards
+            label="Naturaleza Logística de la Referencia"
+            options={PRODUCT_NATURE_OPTIONS}
+            value={productNature}
+            onChange={handleProductNatureChange}
+          />
+        }
+        footerLeft={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+            <span className="pk-badge pk-badge-blue">{state.nextProductCode}</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>
+              Capital inicial en bodega:{' '}
+              {formatCop((Number(stock) || 0) * (Number(costPrice) || 0))}
+            </span>
+          </div>
+        }
+        footerActions={
+          <>
+            <button
+              type="button"
+              className="pk-btn pk-btn-outline"
+              onClick={() => setProductStudioOpen(false)}
+              disabled={busy}
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              form="pk-fs-product-form"
+              className="pk-btn pk-btn-primary"
+              disabled={busy}
+            >
+              {busy ? 'Guardando...' : '💾 Guardar Referencia en Almacén'}
+            </button>
+          </>
+        }
+      >
+        <form id="pk-fs-product-form" onSubmit={handleCreateProduct} className="pk-stack">
+          <div className="pk-card" style={{ overflow: 'visible' }}>
+            <div className="pk-card-head">
+              <div className="pk-card-title">
+                {productNature === 'INSUMO'
+                  ? '🧪 Identificación del Insumo Operativo y Almacén'
+                  : productNature === 'KIT'
+                  ? '🛠️ Definición del Kit / Referencia Comercial'
+                  : '📦 Identificación de Mercancía y Ubicación en Bodega'}
+              </div>
+            </div>
+            <div className="pk-card-body">
+              <div className="pk-form-grid">
+                <PkAutoCodeInput label="Código SKU" value={state.nextProductCode} />
+
+                <div className="pk-field">
+                  <label>Categoría / Familia</label>
+                  <input value={category} onChange={(e) => setCategory(e.target.value)} />
+                </div>
+
+                <PkSelect
+                  label="Bodega Asignada"
+                  items={state.warehouses}
+                  value={warehouseId}
+                  onChange={setWarehouseId}
+                  getValue={(w) => w.id}
+                  getLabel={(w) => `${w.code} — ${w.name}`}
+                  onCreateNew={() => setWhModalOpen(true)}
+                  createLabel="+ Bodega"
+                  searchable
+                />
+
+                <div className="pk-field pk-col-span-2">
+                  <label>Nombre Oficial del Producto o Referencia *</label>
+                  <input
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder={
+                      productNature === 'INSUMO'
+                        ? 'Ej. Desengrasante Biodegradable Galón'
+                        : productNature === 'KIT'
+                        ? 'Ej. Kit Mantenimiento Preventivo 10.000 Km'
+                        : 'Ej. Filtro de Aire Industrial Alta Eficiencia'
+                    }
+                  />
+                </div>
+
+                {suppliers.length > 0 && (
+                  <PkSelect
+                    label="Proveedor Habitual"
+                    items={suppliers}
+                    value={supplierId}
+                    onChange={setSupplierId}
+                    getValue={(s) => s.id}
+                    getLabel={(s) => s.name}
+                    emptyLabel="Sin proveedor asignado"
+                    searchable
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="pk-card">
+            <div className="pk-card-head">
+              <div className="pk-card-title">💰 Estructura de Costos, Tarifas y Punto de Reorden</div>
+            </div>
+            <div className="pk-card-body">
+              <div className="pk-form-grid">
+                <div className="pk-field">
+                  <label>Costo Unitario (COP)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={costPrice}
+                    onChange={(e) => setCostPrice(e.target.value)}
+                  />
+                </div>
+
+                {productNature !== 'INSUMO' && (
+                  <div className="pk-field">
+                    <label>Precio Venta Comercial (COP)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={salePrice}
+                      onChange={(e) => setSalePrice(e.target.value)}
+                    />
+                  </div>
+                )}
+
+                <div className="pk-field">
+                  <label>IVA (%)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="any"
+                    value={taxPct}
+                    onChange={(e) => setTaxPct(e.target.value)}
+                  />
+                </div>
+
+                <div className="pk-field">
+                  <label>Existencia Inicial</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={stock}
+                    onChange={(e) => setStock(e.target.value)}
+                  />
+                </div>
+
+                <div className="pk-field">
+                  <label>Stock Mínimo (Alerta Reorden)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={minStock}
+                    onChange={(e) => setMinStock(e.target.value)}
+                  />
+                </div>
+
+                {productNature !== 'KIT' && (
+                  <>
+                    <div className="pk-field">
+                      <label>Código de Lote</label>
+                      <input
+                        value={lotCode}
+                        onChange={(e) => setLotCode(e.target.value)}
+                        placeholder="Ej. LT-2026"
+                      />
+                    </div>
+
+                    <div className="pk-field">
+                      <label>Fecha de Vencimiento</label>
+                      <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
+                    </div>
+                  </>
+                )}
+
+                {productNature !== 'INSUMO' && Number(salePrice) > 0 && (
+                  <div className="pk-col-span-full">
+                    <PkProgressBar
+                      label="Margen Bruto Comercial Estimado"
+                      valueLabel={`${previewMarginPct.toFixed(1)}% sobre precio de venta`}
+                      pct={previewMarginPct}
+                      tone={previewMarginPct >= 25 ? 'emerald' : previewMarginPct >= 10 ? 'blue' : 'amber'}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </form>
+      </PkFullscreenDialog>
+
+      <PkFullscreenDialog
+        open={requestStudioOpen}
+        title="Estudio de Requisición Interna de Insumos"
+        subtitle="Genera órdenes de alistamiento y entrega interna para áreas operativas con descuento controlado."
+        badge={{ label: state.nextRequestCode, tone: 'amber' }}
+        onClose={() => setRequestStudioOpen(false)}
+        subheader={
+          <PkTypeCards
+            label="Centro Solicitante de Materiales"
+            options={REQUEST_ORIGIN_OPTIONS}
+            value={requestOrigin}
+            onChange={handleRequestOriginChange}
+          />
+        }
+        footerLeft={
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>
+            Requisición {state.nextRequestCode} · Destino: {reqArea}
+          </span>
+        }
+        footerActions={
+          <>
+            <button
+              type="button"
+              className="pk-btn pk-btn-outline"
+              onClick={() => setRequestStudioOpen(false)}
+              disabled={busy}
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              form="pk-fs-request-form"
+              className="pk-btn pk-btn-primary"
+              disabled={busy}
+            >
+              {busy ? 'Guardando...' : '💾 Emitir Requisición Interna'}
+            </button>
+          </>
+        }
+      >
+        <form id="pk-fs-request-form" onSubmit={handleCreateRequest} className="pk-stack">
+          <div className="pk-card" style={{ overflow: 'visible' }}>
+            <div className="pk-card-head">
+              <div className="pk-card-title">📝 Detalle del Material Solicitado a Almacén</div>
+            </div>
+            <div className="pk-card-body">
+              <div className="pk-form-grid cols-2">
+                <PkAutoCodeInput label="Consecutivo" value={state.nextRequestCode} />
+                <div className="pk-field">
+                  <label>Área o Frente Solicitante *</label>
+                  <input required value={reqArea} onChange={(e) => setReqArea(e.target.value)} />
+                </div>
+                <PkSelect
+                  label="Insumo o Referencia Requerida *"
+                  items={state.products}
+                  value={reqProductId}
+                  onChange={setReqProductId}
+                  getValue={(p) => p.id}
+                  getLabel={(p) => `${p.code} — ${p.name} (Disp: ${p.stock})`}
+                  searchable
+                />
+                <div className="pk-field">
+                  <label>Cantidad Requerida *</label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="any"
+                    required
+                    value={reqQty}
+                    onChange={(e) => setReqQty(e.target.value)}
+                  />
+                </div>
+                <div className="pk-field pk-col-span-full">
+                  <label>Observaciones / Orden de Trabajo Destino</label>
+                  <input
+                    value={reqNotes}
+                    onChange={(e) => setReqNotes(e.target.value)}
+                    placeholder="Justificación operativa o centro de costo destino"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </form>
+      </PkFullscreenDialog>
 
       <PkModal open={whModalOpen} title="🏢 Crear Bodega de Almacenamiento" onClose={() => setWhModalOpen(false)}>
         <form onSubmit={handleCreateWarehouse} className="pk-form-grid cols-2">
@@ -993,7 +1592,11 @@ export const InventarioView: React.FC = () => {
           </div>
           <div className="pk-field pk-col-span-full">
             <label>Ciudad / Dirección</label>
-            <input value={whLocation} onChange={(e) => setWhLocation(e.target.value)} placeholder="Ej: Zona Industrial Montevideo" />
+            <input
+              value={whLocation}
+              onChange={(e) => setWhLocation(e.target.value)}
+              placeholder="Ej: Zona Industrial Montevideo"
+            />
           </div>
           <div className="pk-form-actions">
             <button
@@ -1013,7 +1616,7 @@ export const InventarioView: React.FC = () => {
 
       <PkModal
         open={Boolean(restockTarget)}
-        title={`📥 Surtir Mercancía — ${restockTarget?.name || ''}`}
+        title={`📥 Entrada de Stock — ${restockTarget?.name || ''}`}
         onClose={() => setRestockTarget(null)}
       >
         <form onSubmit={handleRestockSubmit} className="pk-form-grid cols-2">
@@ -1064,7 +1667,7 @@ export const InventarioView: React.FC = () => {
 
       <PkModal
         open={Boolean(transferTarget)}
-        title={`🔄 Trasladar entre Bodegas — ${transferTarget?.name || ''}`}
+        title={`⇄ Trasladar entre Bodegas — ${transferTarget?.name || ''}`}
         onClose={() => setTransferTarget(null)}
       >
         <form onSubmit={handleTransferSubmit} className="pk-form-grid cols-2">

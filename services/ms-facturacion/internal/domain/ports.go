@@ -75,11 +75,28 @@ type PrintPort interface {
 
 type Repository interface {
 	PeekSequences(ctx context.Context, dbName string) (nextInvoice string, nextQuote string, err error)
+	PeekNoteSequences(ctx context.Context, dbName string) (nextCreditNote string, nextDebitNote string, err error)
 	ReserveInvoiceNumber(ctx context.Context, dbName string) (string, error)
+	ReserveDraftInvoiceNumber(ctx context.Context, dbName string) (string, error)
 	ReserveQuoteNumber(ctx context.Context, dbName string) (string, error)
+	ReserveCreditNoteNumber(ctx context.Context, dbName string) (string, error)
+	ReserveDebitNoteNumber(ctx context.Context, dbName string) (string, error)
+	ReserveDraftNoteNumber(ctx context.Context, dbName string, noteKind string) (string, error)
+
 	FindInvoiceByIdempotencyKey(ctx context.Context, dbName, idemKey string) (*Invoice, error)
+	GetInvoiceByID(ctx context.Context, dbName, id string) (*Invoice, error)
 	SaveInvoice(ctx context.Context, dbName string, inv Invoice, idemKey string) error
+	ReplaceInvoice(ctx context.Context, dbName, oldID string, inv Invoice) error
 	ListInvoices(ctx context.Context, dbName string) ([]Invoice, error)
+
+	GetAdjustmentNoteByID(ctx context.Context, dbName, id string) (*AdjustmentNote, error)
+	SaveAdjustmentNote(ctx context.Context, dbName, oldID string, note AdjustmentNote) error
+	ListAdjustmentNotes(ctx context.Context, dbName string) ([]AdjustmentNote, error)
+
+	GetDianTransmission(ctx context.Context, dbName, documentKind, documentID string) (*DianTransmission, error)
+	UpsertDianTransmission(ctx context.Context, dbName string, dt DianTransmission) error
+	ListDianTransmissions(ctx context.Context, dbName string) ([]DianTransmission, error)
+
 	CreateQuote(ctx context.Context, dbName string, quote Quote) error
 	ListQuotes(ctx context.Context, dbName string) ([]Quote, error)
 	GetSummary(ctx context.Context, dbName string) (SalesSummary, error)
