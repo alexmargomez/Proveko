@@ -795,7 +795,7 @@ export const PkProcessNodes: React.FC<{
         }
 
         return (
-          <div className="pk-pnode-item" key={`${st.step}-${idx}`} title={st.tooltip || st.label}>
+          <div className={`pk-pnode-item ${st.status}`} key={`${st.step}-${idx}`} title={st.tooltip || st.label}>
             <div className="pk-pnode-track-row">
               <div className={`pk-pnode-line${idx === 0 ? ' hidden' : ''}${leftLineTone ? ` ${leftLineTone}` : ''}`} />
               <button
@@ -805,11 +805,11 @@ export const PkProcessNodes: React.FC<{
                 className={`pk-pnode-circle ${st.status}${st.onClick ? ' clickable' : ''}`}
               >
                 {st.status === 'done' ? (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="11.5" height="11.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
                 ) : st.status === 'error' ? (
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18" />
                     <line x1="6" y1="6" x2="18" y2="18" />
                   </svg>

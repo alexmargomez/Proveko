@@ -40,6 +40,13 @@ func menuSeqBase(dbName string) int {
 	return domain.BaseMenuSeq
 }
 
+func waiterSeqBase(dbName string) int {
+	if isDemo(dbName) {
+		return domain.DemoBaseWaiterSeq
+	}
+	return domain.BaseWaiterSeq
+}
+
 func orderSeqBase(dbName string) int {
 	if isDemo(dbName) {
 		return domain.DemoBaseOrderSeq
@@ -86,6 +93,16 @@ func (r *Repository) openAndSeed(ctx context.Context, dbName string) (*pgxpool.P
 	}
 
 	if isDemo(dbName) {
+		for _, w := range domain.DemoWaiters() {
+			if _, err := tx.Exec(ctx, `
+				INSERT INTO gastro.waiters (id, code, full_name, doc_id, phone, zone, shift, active)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+				ON CONFLICT (id) DO NOTHING
+			`, w.ID, w.Code, w.FullName, w.DocID, w.Phone, w.Zone, w.Shift, w.Active); err != nil {
+				return nil, err
+			}
+		}
+
 		var hasLiveCodes bool
 		if err := tx.QueryRow(ctx, `
 			SELECT EXISTS(SELECT 1 FROM gastro.dining_tables WHERE order_code <> '')
@@ -167,6 +184,11 @@ func (r *Repository) GetState(ctx context.Context, dbName string) (domain.Gastro
 		return domain.GastroState{}, err
 	}
 
+	nextWaiter, err := sequences.PeekSQL(ctx, pool, schemaName, "MSR", waiterSeqBase(dbName))
+	if err != nil {
+		return domain.GastroState{}, err
+	}
+
 	menuRows, err := pool.Query(ctx, `
 		SELECT id, code, name, category, sale_price::float8, tax_pct::float8
 		FROM gastro.menu_items
@@ -186,6 +208,28 @@ func (r *Repository) GetState(ctx context.Context, dbName string) (domain.Gastro
 		menu = append(menu, m)
 	}
 	if err := menuRows.Err(); err != nil {
+		return domain.GastroState{}, err
+	}
+
+	wRows, err := pool.Query(ctx, `
+		SELECT id, code, full_name, doc_id, phone, zone, shift, active
+		FROM gastro.waiters
+		ORDER BY code ASC
+	`)
+	if err != nil {
+		return domain.GastroState{}, err
+	}
+	defer wRows.Close()
+
+	waiters := []domain.Waiter{}
+	for wRows.Next() {
+		var w domain.Waiter
+		if err := wRows.Scan(&w.ID, &w.Code, &w.FullName, &w.DocID, &w.Phone, &w.Zone, &w.Shift, &w.Active); err != nil {
+			return domain.GastroState{}, err
+		}
+		waiters = append(waiters, w)
+	}
+	if err := wRows.Err(); err != nil {
 		return domain.GastroState{}, err
 	}
 
@@ -252,9 +296,11 @@ func (r *Repository) GetState(ctx context.Context, dbName string) (domain.Gastro
 	}
 
 	return domain.GastroState{
-		NextMenuCode: nextMenu,
-		Tables:       tables,
-		Products:     menu,
+		NextMenuCode:   nextMenu,
+		NextWaiterCode: nextWaiter,
+		Tables:         tables,
+		Products:       menu,
+		Waiters:        waiters,
 	}, nil
 }
 
@@ -398,6 +444,67 @@ func (r *Repository) CreateTable(ctx context.Context, dbName, idemKey string, in
 	return tbl, nil
 }
 
+func (r *Repository) UpdateTable(ctx context.Context, dbName, tableID string, in domain.UpdateTableInput) (domain.DiningTable, error) {
+	pool, err := r.openAndSeed(ctx, dbName)
+	if err != nil {
+		return domain.DiningTable{}, err
+	}
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return domain.DiningTable{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	tbl, err := loadTableForUpdate(ctx, tx, tableID)
+	if err != nil {
+		return domain.DiningTable{}, err
+	}
+	if err := tbl.ApplyTableUpdate(in); err != nil {
+		return domain.DiningTable{}, err
+	}
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE gastro.dining_tables
+		SET name = $1, zone = $2, waiter = $3, guests = $4, updated_at = NOW()
+		WHERE id = $5
+	`, tbl.Name, tbl.Zone, tbl.Waiter, tbl.Guests, tbl.ID); err != nil {
+		return domain.DiningTable{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return domain.DiningTable{}, err
+	}
+	return tbl, nil
+}
+
+func (r *Repository) DeleteTable(ctx context.Context, dbName, tableID string) error {
+	pool, err := r.openAndSeed(ctx, dbName)
+	if err != nil {
+		return err
+	}
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	tbl, err := loadTableForUpdate(ctx, tx, tableID)
+	if err != nil {
+		return err
+	}
+	if len(tbl.Items) > 0 {
+		return apperr.Conflict("No se puede eliminar una mesa con consumos activos; liquida o retira los platos primero")
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM gastro.dining_tables WHERE id = $1`, tbl.ID); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}
+
 func (r *Repository) CreateMenuItem(ctx context.Context, dbName, idemKey string, in domain.CreateMenuItemInput) (domain.MenuItem, error) {
 	pool, err := r.openAndSeed(ctx, dbName)
 	if err != nil {
@@ -457,6 +564,193 @@ func (r *Repository) CreateMenuItem(ctx context.Context, dbName, idemKey string,
 		return domain.MenuItem{}, err
 	}
 	return item, nil
+}
+
+func (r *Repository) UpdateMenuItem(ctx context.Context, dbName, itemID string, in domain.UpdateMenuItemInput) (domain.MenuItem, error) {
+	pool, err := r.openAndSeed(ctx, dbName)
+	if err != nil {
+		return domain.MenuItem{}, err
+	}
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return domain.MenuItem{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var item domain.MenuItem
+	err = tx.QueryRow(ctx, `
+		SELECT id, code, name, category, sale_price::float8, tax_pct::float8
+		FROM gastro.menu_items
+		WHERE id = $1 OR lower(code) = lower($1)
+		FOR UPDATE
+	`, itemID).Scan(&item.ID, &item.Code, &item.Name, &item.Category, &item.SalePrice, &item.TaxPct)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.MenuItem{}, apperr.NotFound("Plato o servicio no encontrado en la carta")
+	}
+	if err != nil {
+		return domain.MenuItem{}, err
+	}
+
+	if err := item.ApplyMenuItemUpdate(in); err != nil {
+		return domain.MenuItem{}, err
+	}
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE gastro.menu_items
+		SET name = $1, category = $2, sale_price = $3, tax_pct = $4
+		WHERE id = $5
+	`, item.Name, item.Category, item.SalePrice, item.TaxPct, item.ID); err != nil {
+		return domain.MenuItem{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return domain.MenuItem{}, err
+	}
+	return item, nil
+}
+
+func (r *Repository) DeleteMenuItem(ctx context.Context, dbName, itemID string) error {
+	pool, err := r.openAndSeed(ctx, dbName)
+	if err != nil {
+		return err
+	}
+
+	cmd, err := pool.Exec(ctx, `
+		DELETE FROM gastro.menu_items
+		WHERE id = $1 OR lower(code) = lower($1)
+	`, itemID)
+	if err != nil {
+		return err
+	}
+	if cmd.RowsAffected() == 0 {
+		return apperr.NotFound("Plato o servicio no encontrado en la carta")
+	}
+	return nil
+}
+
+func (r *Repository) CreateWaiter(ctx context.Context, dbName, idemKey string, in domain.CreateWaiterInput) (domain.Waiter, error) {
+	pool, err := r.openAndSeed(ctx, dbName)
+	if err != nil {
+		return domain.Waiter{}, err
+	}
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return domain.Waiter{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	cleanKey := strings.TrimSpace(idemKey)
+	if cleanKey != "" {
+		var raw []byte
+		err := tx.QueryRow(ctx, `SELECT response_json::text FROM gastro.idempotency_keys WHERE idem_key = $1 FOR UPDATE`, "wtr:"+cleanKey).Scan(&raw)
+		if err == nil {
+			var cached domain.Waiter
+			if jsonErr := json.Unmarshal(raw, &cached); jsonErr == nil {
+				return cached, nil
+			}
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return domain.Waiter{}, err
+		}
+	}
+
+	code, err := sequences.NextSQL(ctx, tx, schemaName, "MSR", waiterSeqBase(dbName))
+	if err != nil {
+		return domain.Waiter{}, err
+	}
+	waiter, err := domain.BuildWaiter(code, in)
+	if err != nil {
+		return domain.Waiter{}, err
+	}
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO gastro.waiters (id, code, full_name, doc_id, phone, zone, shift, active)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	`, waiter.ID, waiter.Code, waiter.FullName, waiter.DocID, waiter.Phone, waiter.Zone, waiter.Shift, waiter.Active); err != nil {
+		return domain.Waiter{}, err
+	}
+
+	if cleanKey != "" {
+		raw, err := json.Marshal(waiter)
+		if err != nil {
+			return domain.Waiter{}, err
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO gastro.idempotency_keys (idem_key, response_json) VALUES ($1, $2::jsonb)
+			ON CONFLICT (idem_key) DO NOTHING
+		`, "wtr:"+cleanKey, string(raw)); err != nil {
+			return domain.Waiter{}, err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return domain.Waiter{}, err
+	}
+	return waiter, nil
+}
+
+func (r *Repository) UpdateWaiter(ctx context.Context, dbName, waiterID string, in domain.UpdateWaiterInput) (domain.Waiter, error) {
+	pool, err := r.openAndSeed(ctx, dbName)
+	if err != nil {
+		return domain.Waiter{}, err
+	}
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return domain.Waiter{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var waiter domain.Waiter
+	err = tx.QueryRow(ctx, `
+		SELECT id, code, full_name, doc_id, phone, zone, shift, active
+		FROM gastro.waiters
+		WHERE id = $1 OR lower(code) = lower($1)
+		FOR UPDATE
+	`, waiterID).Scan(&waiter.ID, &waiter.Code, &waiter.FullName, &waiter.DocID, &waiter.Phone, &waiter.Zone, &waiter.Shift, &waiter.Active)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Waiter{}, apperr.NotFound("Mesero no encontrado")
+	}
+	if err != nil {
+		return domain.Waiter{}, err
+	}
+
+	if err := waiter.ApplyWaiterUpdate(in); err != nil {
+		return domain.Waiter{}, err
+	}
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE gastro.waiters
+		SET full_name = $1, doc_id = $2, phone = $3, zone = $4, shift = $5, active = $6
+		WHERE id = $7
+	`, waiter.FullName, waiter.DocID, waiter.Phone, waiter.Zone, waiter.Shift, waiter.Active, waiter.ID); err != nil {
+		return domain.Waiter{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return domain.Waiter{}, err
+	}
+	return waiter, nil
+}
+
+func (r *Repository) DeleteWaiter(ctx context.Context, dbName, waiterID string) error {
+	pool, err := r.openAndSeed(ctx, dbName)
+	if err != nil {
+		return err
+	}
+
+	cmd, err := pool.Exec(ctx, `
+		DELETE FROM gastro.waiters
+		WHERE id = $1 OR lower(code) = lower($1)
+	`, waiterID)
+	if err != nil {
+		return err
+	}
+	if cmd.RowsAffected() == 0 {
+		return apperr.NotFound("Mesero no encontrado")
+	}
+	return nil
 }
 
 func (r *Repository) CreateOrder(ctx context.Context, dbName, idemKey string, in domain.CreateOrderInput) (domain.DiningTable, error) {

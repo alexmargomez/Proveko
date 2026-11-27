@@ -30,6 +30,13 @@ func menuSeqBase(dbName string) int {
 	return domain.BaseMenuSeq
 }
 
+func waiterSeqBase(dbName string) int {
+	if isDemo(dbName) {
+		return domain.DemoBaseWaiterSeq
+	}
+	return domain.BaseWaiterSeq
+}
+
 func orderSeqBase(dbName string) int {
 	if isDemo(dbName) {
 		return domain.DemoBaseOrderSeq
@@ -40,8 +47,10 @@ func orderSeqBase(dbName string) int {
 type tenantStore struct {
 	tables      []domain.DiningTable
 	menuItems   []domain.MenuItem
+	waiters     []domain.Waiter
 	idemTables  map[string]domain.DiningTable
 	idemMenu    map[string]domain.MenuItem
+	idemWaiters map[string]domain.Waiter
 	idemOrders  map[string]domain.DiningTable
 	idemAddItem map[string]domain.DiningTable
 	idemCleared map[string]bool
@@ -70,8 +79,10 @@ func (r *Repository) ensureTenantLocked(dbName string) *tenantStore {
 		st := &tenantStore{
 			tables:      []domain.DiningTable{},
 			menuItems:   []domain.MenuItem{},
+			waiters:     []domain.Waiter{},
 			idemTables:  make(map[string]domain.DiningTable),
 			idemMenu:    make(map[string]domain.MenuItem),
+			idemWaiters: make(map[string]domain.Waiter),
 			idemOrders:  make(map[string]domain.DiningTable),
 			idemAddItem: make(map[string]domain.DiningTable),
 			idemCleared: make(map[string]bool),
@@ -82,8 +93,10 @@ func (r *Repository) ensureTenantLocked(dbName string) *tenantStore {
 	st := &tenantStore{
 		menuItems:   domain.DemoMenuItems(),
 		tables:      domain.DemoDiningTables(),
+		waiters:     domain.DemoWaiters(),
 		idemTables:  make(map[string]domain.DiningTable),
 		idemMenu:    make(map[string]domain.MenuItem),
+		idemWaiters: make(map[string]domain.Waiter),
 		idemOrders:  make(map[string]domain.DiningTable),
 		idemAddItem: make(map[string]domain.DiningTable),
 		idemCleared: make(map[string]bool),
@@ -123,10 +136,15 @@ func (r *Repository) GetState(_ context.Context, dbName string) (domain.GastroSt
 	menu := make([]domain.MenuItem, len(st.menuItems))
 	copy(menu, st.menuItems)
 
+	waiters := make([]domain.Waiter, len(st.waiters))
+	copy(waiters, st.waiters)
+
 	return domain.GastroState{
-		NextMenuCode: r.seq.Peek(dbName, "MNU", menuSeqBase(dbName)),
-		Tables:       tables,
-		Products:     menu,
+		NextMenuCode:   r.seq.Peek(dbName, "MNU", menuSeqBase(dbName)),
+		NextWaiterCode: r.seq.Peek(dbName, "MSR", waiterSeqBase(dbName)),
+		Tables:         tables,
+		Products:       menu,
+		Waiters:        waiters,
 	}, nil
 }
 
@@ -154,6 +172,42 @@ func (r *Repository) CreateTable(_ context.Context, dbName, idemKey string, in d
 	return tbl.Clone(), nil
 }
 
+func (r *Repository) UpdateTable(_ context.Context, dbName, tableID string, in domain.UpdateTableInput) (domain.DiningTable, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	st := r.ensureTenantLocked(dbName)
+	for i := range st.tables {
+		if st.tables[i].ID == tableID {
+			candidate := st.tables[i].Clone()
+			candidate.NormalizeState()
+			if err := candidate.ApplyTableUpdate(in); err != nil {
+				return domain.DiningTable{}, err
+			}
+			st.tables[i] = candidate
+			return candidate.Clone(), nil
+		}
+	}
+	return domain.DiningTable{}, apperr.NotFound("Mesa no encontrada")
+}
+
+func (r *Repository) DeleteTable(_ context.Context, dbName, tableID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	st := r.ensureTenantLocked(dbName)
+	for i := range st.tables {
+		if st.tables[i].ID == tableID {
+			if len(st.tables[i].Items) > 0 {
+				return apperr.Conflict("No se puede eliminar una mesa con consumos activos; liquida o retira los platos primero")
+			}
+			st.tables = append(st.tables[:i], st.tables[i+1:]...)
+			return nil
+		}
+	}
+	return apperr.NotFound("Mesa no encontrada")
+}
+
 func (r *Repository) CreateMenuItem(_ context.Context, dbName, idemKey string, in domain.CreateMenuItemInput) (domain.MenuItem, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -176,6 +230,94 @@ func (r *Repository) CreateMenuItem(_ context.Context, dbName, idemKey string, i
 		st.idemMenu[cleanKey] = item
 	}
 	return item, nil
+}
+
+func (r *Repository) UpdateMenuItem(_ context.Context, dbName, itemID string, in domain.UpdateMenuItemInput) (domain.MenuItem, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	st := r.ensureTenantLocked(dbName)
+	for i := range st.menuItems {
+		if st.menuItems[i].ID == itemID || strings.EqualFold(st.menuItems[i].Code, itemID) {
+			candidate := st.menuItems[i]
+			if err := candidate.ApplyMenuItemUpdate(in); err != nil {
+				return domain.MenuItem{}, err
+			}
+			st.menuItems[i] = candidate
+			return candidate, nil
+		}
+	}
+	return domain.MenuItem{}, apperr.NotFound("Plato o servicio no encontrado en la carta")
+}
+
+func (r *Repository) DeleteMenuItem(_ context.Context, dbName, itemID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	st := r.ensureTenantLocked(dbName)
+	for i := range st.menuItems {
+		if st.menuItems[i].ID == itemID || strings.EqualFold(st.menuItems[i].Code, itemID) {
+			st.menuItems = append(st.menuItems[:i], st.menuItems[i+1:]...)
+			return nil
+		}
+	}
+	return apperr.NotFound("Plato o servicio no encontrado en la carta")
+}
+
+func (r *Repository) CreateWaiter(_ context.Context, dbName, idemKey string, in domain.CreateWaiterInput) (domain.Waiter, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	st := r.ensureTenantLocked(dbName)
+	cleanKey := strings.TrimSpace(idemKey)
+	if cleanKey != "" {
+		if prev, ok := st.idemWaiters[cleanKey]; ok {
+			return prev, nil
+		}
+	}
+
+	seqCode := r.seq.Next(dbName, "MSR", waiterSeqBase(dbName))
+	waiter, err := domain.BuildWaiter(seqCode, in)
+	if err != nil {
+		return domain.Waiter{}, err
+	}
+	st.waiters = append(st.waiters, waiter)
+	if cleanKey != "" {
+		st.idemWaiters[cleanKey] = waiter
+	}
+	return waiter, nil
+}
+
+func (r *Repository) UpdateWaiter(_ context.Context, dbName, waiterID string, in domain.UpdateWaiterInput) (domain.Waiter, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	st := r.ensureTenantLocked(dbName)
+	for i := range st.waiters {
+		if st.waiters[i].ID == waiterID || strings.EqualFold(st.waiters[i].Code, waiterID) {
+			candidate := st.waiters[i]
+			if err := candidate.ApplyWaiterUpdate(in); err != nil {
+				return domain.Waiter{}, err
+			}
+			st.waiters[i] = candidate
+			return candidate, nil
+		}
+	}
+	return domain.Waiter{}, apperr.NotFound("Mesero no encontrado")
+}
+
+func (r *Repository) DeleteWaiter(_ context.Context, dbName, waiterID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	st := r.ensureTenantLocked(dbName)
+	for i := range st.waiters {
+		if st.waiters[i].ID == waiterID || strings.EqualFold(st.waiters[i].Code, waiterID) {
+			st.waiters = append(st.waiters[:i], st.waiters[i+1:]...)
+			return nil
+		}
+	}
+	return apperr.NotFound("Mesero no encontrado")
 }
 
 func (r *Repository) CreateOrder(_ context.Context, dbName, idemKey string, in domain.CreateOrderInput) (domain.DiningTable, error) {

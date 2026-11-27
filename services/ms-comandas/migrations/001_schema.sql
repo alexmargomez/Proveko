@@ -21,6 +21,18 @@ CREATE TABLE IF NOT EXISTS gastro.menu_items (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS gastro.waiters (
+    id         VARCHAR(48) PRIMARY KEY,
+    code       VARCHAR(32) NOT NULL UNIQUE,
+    full_name  VARCHAR(140) NOT NULL,
+    doc_id     VARCHAR(40) NOT NULL DEFAULT '',
+    phone      VARCHAR(48) NOT NULL DEFAULT '',
+    zone       VARCHAR(80) NOT NULL DEFAULT 'Salón Principal',
+    shift      VARCHAR(60) NOT NULL DEFAULT 'Turno General',
+    active     BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS gastro.dining_tables (
     id               VARCHAR(48) PRIMARY KEY,
     name             VARCHAR(80) NOT NULL,

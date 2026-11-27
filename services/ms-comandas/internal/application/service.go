@@ -26,12 +26,27 @@ func requireTenant(ctx context.Context) (authguard.TenantContext, error) {
 	return tc, nil
 }
 
+func hasAnyGastroModule(ctx context.Context) bool {
+	return licensegate.HasModule(ctx, "mapa_mesas") ||
+		licensegate.HasModule(ctx, "monitor_cocina") ||
+		licensegate.HasModule(ctx, "catalogo_mesas") ||
+		licensegate.HasModule(ctx, "carta_servicios") ||
+		licensegate.HasModule(ctx, "directorio_meseros")
+}
+
+func checkModuleOrSalon(ctx context.Context, moduleKey string) error {
+	if licensegate.HasModule(ctx, moduleKey) || licensegate.HasModule(ctx, "mapa_mesas") {
+		return nil
+	}
+	return licensegate.CheckModule(ctx, moduleKey)
+}
+
 func (s *Service) GetState(ctx context.Context) (domain.GastroState, error) {
 	tc, err := requireTenant(ctx)
 	if err != nil {
 		return domain.GastroState{}, err
 	}
-	if !licensegate.HasModule(ctx, "mapa_mesas") && !licensegate.HasModule(ctx, "monitor_cocina") {
+	if !hasAnyGastroModule(ctx) {
 		return domain.GastroState{}, apperr.Forbidden("Ningún módulo gastronómico está activo en la suscripción")
 	}
 	return s.repo.GetState(ctx, tc.DBName)
@@ -42,7 +57,7 @@ func (s *Service) CreateTable(ctx context.Context, in domain.CreateTableInput) (
 	if err != nil {
 		return domain.DiningTable{}, err
 	}
-	if err := licensegate.CheckModule(ctx, "mapa_mesas"); err != nil {
+	if err := checkModuleOrSalon(ctx, "catalogo_mesas"); err != nil {
 		return domain.DiningTable{}, err
 	}
 	if _, err := domain.BuildDiningTable("TBL-TMP", in); err != nil {
@@ -51,18 +66,122 @@ func (s *Service) CreateTable(ctx context.Context, in domain.CreateTableInput) (
 	return s.repo.CreateTable(ctx, tc.DBName, tc.IdempotencyKey, in)
 }
 
+func (s *Service) UpdateTable(ctx context.Context, tableID string, in domain.UpdateTableInput) (domain.DiningTable, error) {
+	tc, err := requireTenant(ctx)
+	if err != nil {
+		return domain.DiningTable{}, err
+	}
+	if err := checkModuleOrSalon(ctx, "catalogo_mesas"); err != nil {
+		return domain.DiningTable{}, err
+	}
+	cleanID := strings.TrimSpace(tableID)
+	if cleanID == "" {
+		return domain.DiningTable{}, apperr.Validation("El identificador de la mesa es obligatorio")
+	}
+	return s.repo.UpdateTable(ctx, tc.DBName, cleanID, in)
+}
+
+func (s *Service) DeleteTable(ctx context.Context, tableID string) error {
+	tc, err := requireTenant(ctx)
+	if err != nil {
+		return err
+	}
+	if err := checkModuleOrSalon(ctx, "catalogo_mesas"); err != nil {
+		return err
+	}
+	cleanID := strings.TrimSpace(tableID)
+	if cleanID == "" {
+		return apperr.Validation("El identificador de la mesa es obligatorio")
+	}
+	return s.repo.DeleteTable(ctx, tc.DBName, cleanID)
+}
+
 func (s *Service) CreateMenuItem(ctx context.Context, in domain.CreateMenuItemInput) (domain.MenuItem, error) {
 	tc, err := requireTenant(ctx)
 	if err != nil {
 		return domain.MenuItem{}, err
 	}
-	if err := licensegate.CheckModule(ctx, "mapa_mesas"); err != nil {
+	if err := checkModuleOrSalon(ctx, "carta_servicios"); err != nil {
 		return domain.MenuItem{}, err
 	}
 	if _, err := domain.BuildMenuItem("MNU-TMP", in); err != nil {
 		return domain.MenuItem{}, err
 	}
 	return s.repo.CreateMenuItem(ctx, tc.DBName, tc.IdempotencyKey, in)
+}
+
+func (s *Service) UpdateMenuItem(ctx context.Context, itemID string, in domain.UpdateMenuItemInput) (domain.MenuItem, error) {
+	tc, err := requireTenant(ctx)
+	if err != nil {
+		return domain.MenuItem{}, err
+	}
+	if err := checkModuleOrSalon(ctx, "carta_servicios"); err != nil {
+		return domain.MenuItem{}, err
+	}
+	cleanID := strings.TrimSpace(itemID)
+	if cleanID == "" {
+		return domain.MenuItem{}, apperr.Validation("El identificador del plato o servicio es obligatorio")
+	}
+	return s.repo.UpdateMenuItem(ctx, tc.DBName, cleanID, in)
+}
+
+func (s *Service) DeleteMenuItem(ctx context.Context, itemID string) error {
+	tc, err := requireTenant(ctx)
+	if err != nil {
+		return err
+	}
+	if err := checkModuleOrSalon(ctx, "carta_servicios"); err != nil {
+		return err
+	}
+	cleanID := strings.TrimSpace(itemID)
+	if cleanID == "" {
+		return apperr.Validation("El identificador del plato o servicio es obligatorio")
+	}
+	return s.repo.DeleteMenuItem(ctx, tc.DBName, cleanID)
+}
+
+func (s *Service) CreateWaiter(ctx context.Context, in domain.CreateWaiterInput) (domain.Waiter, error) {
+	tc, err := requireTenant(ctx)
+	if err != nil {
+		return domain.Waiter{}, err
+	}
+	if err := checkModuleOrSalon(ctx, "directorio_meseros"); err != nil {
+		return domain.Waiter{}, err
+	}
+	if _, err := domain.BuildWaiter("MSR-TMP", in); err != nil {
+		return domain.Waiter{}, err
+	}
+	return s.repo.CreateWaiter(ctx, tc.DBName, tc.IdempotencyKey, in)
+}
+
+func (s *Service) UpdateWaiter(ctx context.Context, waiterID string, in domain.UpdateWaiterInput) (domain.Waiter, error) {
+	tc, err := requireTenant(ctx)
+	if err != nil {
+		return domain.Waiter{}, err
+	}
+	if err := checkModuleOrSalon(ctx, "directorio_meseros"); err != nil {
+		return domain.Waiter{}, err
+	}
+	cleanID := strings.TrimSpace(waiterID)
+	if cleanID == "" {
+		return domain.Waiter{}, apperr.Validation("El identificador del mesero es obligatorio")
+	}
+	return s.repo.UpdateWaiter(ctx, tc.DBName, cleanID, in)
+}
+
+func (s *Service) DeleteWaiter(ctx context.Context, waiterID string) error {
+	tc, err := requireTenant(ctx)
+	if err != nil {
+		return err
+	}
+	if err := checkModuleOrSalon(ctx, "directorio_meseros"); err != nil {
+		return err
+	}
+	cleanID := strings.TrimSpace(waiterID)
+	if cleanID == "" {
+		return apperr.Validation("El identificador del mesero es obligatorio")
+	}
+	return s.repo.DeleteWaiter(ctx, tc.DBName, cleanID)
 }
 
 func (s *Service) CreateOrder(ctx context.Context, in domain.CreateOrderInput) (domain.DiningTable, error) {

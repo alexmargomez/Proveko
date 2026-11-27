@@ -65,8 +65,16 @@ func (h *Handler) mountRoutes(r chi.Router) {
 	r.Get("/ui.js", h.handleUIBundle)
 	r.Get("/tables", h.handleGetState)
 	r.Post("/tables", h.handleCreateTable)
+	r.Put("/tables/{id}", h.handleUpdateTable)
+	r.Delete("/tables/{id}", h.handleDeleteTable)
 	r.Post("/orders", h.handleCreateOrder)
 	r.Post("/menu-items", h.handleCreateMenuItem)
+	r.Put("/menu-items/{id}", h.handleUpdateMenuItem)
+	r.Delete("/menu-items/{id}", h.handleDeleteMenuItem)
+	r.Get("/waiters", h.handleGetWaiters)
+	r.Post("/waiters", h.handleCreateWaiter)
+	r.Put("/waiters/{id}", h.handleUpdateWaiter)
+	r.Delete("/waiters/{id}", h.handleDeleteWaiter)
 	r.Post("/tables/{id}/items", h.handleAddItem)
 	r.Delete("/tables/{id}/items/{itemId}", h.handleDeleteItem)
 	r.Post("/tables/{id}/send-kitchen", h.handleSendKitchen)
@@ -97,10 +105,25 @@ func (h *Handler) handleGetState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, http.StatusOK, map[string]any{
-		"ok":           true,
-		"nextMenuCode": st.NextMenuCode,
-		"tables":       st.Tables,
-		"products":     st.Products,
+		"ok":             true,
+		"nextMenuCode":   st.NextMenuCode,
+		"nextWaiterCode": st.NextWaiterCode,
+		"tables":         st.Tables,
+		"products":       st.Products,
+		"waiters":        st.Waiters,
+	})
+}
+
+func (h *Handler) handleGetWaiters(w http.ResponseWriter, r *http.Request) {
+	st, err := h.app.GetState(r.Context())
+	if err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"ok":             true,
+		"nextWaiterCode": st.NextWaiterCode,
+		"waiters":        st.Waiters,
 	})
 }
 
@@ -119,6 +142,33 @@ func (h *Handler) handleCreateTable(w http.ResponseWriter, r *http.Request) {
 		"ok":    true,
 		"table": tbl,
 	})
+}
+
+func (h *Handler) handleUpdateTable(w http.ResponseWriter, r *http.Request) {
+	tableID := chi.URLParam(r, "id")
+	var req domain.UpdateTableInput
+	if err := httpx.Decode(w, r, &req); err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+	tbl, err := h.app.UpdateTable(r.Context(), tableID, req)
+	if err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"ok":    true,
+		"table": tbl,
+	})
+}
+
+func (h *Handler) handleDeleteTable(w http.ResponseWriter, r *http.Request) {
+	tableID := chi.URLParam(r, "id")
+	if err := h.app.DeleteTable(r.Context(), tableID); err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func (h *Handler) handleCreateOrder(w http.ResponseWriter, r *http.Request) {
@@ -154,6 +204,77 @@ func (h *Handler) handleCreateMenuItem(w http.ResponseWriter, r *http.Request) {
 		"ok":       true,
 		"menuItem": item,
 	})
+}
+
+func (h *Handler) handleUpdateMenuItem(w http.ResponseWriter, r *http.Request) {
+	itemID := chi.URLParam(r, "id")
+	var req domain.UpdateMenuItemInput
+	if err := httpx.Decode(w, r, &req); err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+	item, err := h.app.UpdateMenuItem(r.Context(), itemID, req)
+	if err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"ok":       true,
+		"menuItem": item,
+	})
+}
+
+func (h *Handler) handleDeleteMenuItem(w http.ResponseWriter, r *http.Request) {
+	itemID := chi.URLParam(r, "id")
+	if err := h.app.DeleteMenuItem(r.Context(), itemID); err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (h *Handler) handleCreateWaiter(w http.ResponseWriter, r *http.Request) {
+	var req domain.CreateWaiterInput
+	if err := httpx.Decode(w, r, &req); err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+	waiter, err := h.app.CreateWaiter(r.Context(), req)
+	if err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusCreated, map[string]any{
+		"ok":     true,
+		"waiter": waiter,
+	})
+}
+
+func (h *Handler) handleUpdateWaiter(w http.ResponseWriter, r *http.Request) {
+	waiterID := chi.URLParam(r, "id")
+	var req domain.UpdateWaiterInput
+	if err := httpx.Decode(w, r, &req); err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+	waiter, err := h.app.UpdateWaiter(r.Context(), waiterID, req)
+	if err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"ok":     true,
+		"waiter": waiter,
+	})
+}
+
+func (h *Handler) handleDeleteWaiter(w http.ResponseWriter, r *http.Request) {
+	waiterID := chi.URLParam(r, "id")
+	if err := h.app.DeleteWaiter(r.Context(), waiterID); err != nil {
+		httpx.RespondError(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func (h *Handler) handleAddItem(w http.ResponseWriter, r *http.Request) {
