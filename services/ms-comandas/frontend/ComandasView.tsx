@@ -26,7 +26,7 @@ import type { PkProcessStep, PkTypeCardOption } from '@platform/ui-sdk';
 type OrderChannel = 'MESA' | 'DOMICILIO' | 'PARA_LLEVAR';
 type OrderStage = 'LIBRE' | 'NUEVA' | 'PREPARANDO' | 'LISTA' | 'ENTREGADA';
 type ChannelPillKey = 'ALL' | 'MESA' | 'DOMICILIO' | 'PARA_LLEVAR';
-type WorkspaceDisplayMode = 'board' | 'floor' | 'table';
+type SalonDisplayMode = 'floor' | 'table';
 
 interface MenuItem {
   id: string;
@@ -256,7 +256,7 @@ export const ComandasView: React.FC = () => {
   } = usePlatform();
   const { busy, run } = useAsyncAction();
 
-  const [displayMode, setDisplayMode] = useState<WorkspaceDisplayMode>('board');
+  const [salonView, setSalonView] = useState<SalonDisplayMode>('floor');
   const [channelFilter, setChannelFilter] = useState<ChannelPillKey>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [floorZonePill, setFloorZonePill] = useState<string>('Todas las Zonas');
@@ -352,12 +352,6 @@ export const ComandasView: React.FC = () => {
     (VALID_MODULES as readonly string[]).includes(activeModuleKey) && hasModule(activeModuleKey)
       ? activeModuleKey
       : VALID_MODULES.find((m) => hasModule(m)) || 'mapa_mesas';
-
-  useEffect(() => {
-    if (currentModule === 'monitor_cocina') {
-      setDisplayMode('board');
-    }
-  }, [currentModule]);
 
   const canManageOrders = hasModule('mapa_mesas');
   const notesEnabled = hasFeature('mapa_mesas', 'notas_preparacion');
@@ -770,9 +764,10 @@ export const ComandasView: React.FC = () => {
       customerName: tbl.customerName || '',
       items: tbl.items.map((it) => {
         const prod = menuItems.find((p) => p.id === it.productId);
+        const isMenuDish = !it.productId || it.productId.toLowerCase().startsWith('mnu-');
         return {
-          kind: 'PRODUCTO',
-          refId: it.productId || tbl.id,
+          kind: isMenuDish ? 'SERVICIO' : 'PRODUCTO',
+          refId: isMenuDish ? '' : it.productId,
           code: prod?.code || 'GASTRO',
           name: it.note ? `${it.name} (${it.note})` : it.name,
           qty: it.qty,
@@ -834,7 +829,7 @@ export const ComandasView: React.FC = () => {
     };
   };
 
-  const renderTicketCard = (tbl: DiningTable) => {
+  const renderKitchenTicketCard = (tbl: DiningTable) => {
     const ch = resolveChannel(tbl);
     const stg = resolveStage(tbl);
     const code = tbl.orderCode || `#${tbl.id.toUpperCase()}`;
@@ -851,60 +846,59 @@ export const ComandasView: React.FC = () => {
     const subtitle =
       ch === 'MESA'
         ? `🧑 ${tbl.waiter || 'Mesero Turno'} · ${tbl.zone}`
-        : `${tbl.customerPhone ? `📞 ${tbl.customerPhone} · ` : ''}🧑 ${tbl.waiter || 'Despacho'}`;
+        : `🧑 ${tbl.waiter || 'Despacho'} · ${ch === 'DOMICILIO' ? 'Empaque domicilio' : 'Empaque mostrador'}`;
 
     const metaLine =
       ch === 'DOMICILIO'
-        ? `📍 ${tbl.deliveryAddress || 'Dirección por confirmar'}`
+        ? `🛵 Destino: ${tbl.deliveryAddress || 'Dirección registrada'}`
         : ch === 'PARA_LLEVAR'
         ? `🛍️ ${tbl.deliveryAddress || 'Retiro en mostrador principal'}`
-        : `👥 ${tbl.guests && tbl.guests > 0 ? `${tbl.guests} personas` : 'Servicio en salón'} · 📍 ${tbl.zone}`;
+        : `👥 ${tbl.guests && tbl.guests > 0 ? `${tbl.guests} comensales` : 'Servicio en salón'}`;
 
     const notesList = (tbl.items || [])
       .filter((it) => it.note && it.note.trim() !== '')
       .map((it) => ((tbl.items || []).length > 1 ? `${it.name}: ${it.note}` : it.note));
     const highlightNote = notesList.length > 0 ? notesList.join(' · ') : undefined;
 
+    const totalUnits = (tbl.items || []).reduce((acc, it) => acc + it.qty, 0);
+
     let statusPill: { label: string; tone: 'amber' | 'blue' | 'purple' | 'emerald' } = {
-      label: 'Nueva',
+      label: 'Recibida en cocina',
       tone: 'amber',
     };
-    let primaryAction: {
-      label: string;
-      tone: 'coral' | 'blue' | 'purple' | 'emerald';
-      onClick: () => void;
-      disabled?: boolean;
-    } = {
-      label: 'Aceptar y preparar',
+    let primaryAction:
+      | {
+          label: string;
+          tone: 'coral' | 'blue' | 'purple' | 'emerald';
+          onClick: () => void;
+          disabled?: boolean;
+        }
+      | undefined = {
+      label: '🔥 Aceptar y preparar',
       tone: 'coral',
       onClick: () => handleStageChange(tbl, 'PREPARANDO'),
       disabled: busy,
     };
 
     if (stg === 'PREPARANDO') {
-      statusPill = { label: 'En preparación', tone: 'blue' };
+      statusPill = { label: 'En fogones / barra', tone: 'blue' };
       primaryAction = {
-        label: 'Marcar lista',
+        label: '🛎️ Marcar pedido listo',
         tone: 'blue',
         onClick: () => handleStageChange(tbl, 'LISTA'),
         disabled: busy,
       };
     } else if (stg === 'LISTA') {
-      statusPill = { label: 'Lista', tone: 'purple' };
+      statusPill = { label: 'Lista en pasaplatos', tone: 'purple' };
       primaryAction = {
-        label: 'Entregar pedido',
+        label: '✅ Despachar pedido',
         tone: 'purple',
         onClick: () => handleStageChange(tbl, 'ENTREGADA'),
         disabled: busy,
       };
     } else if (stg === 'ENTREGADA') {
-      statusPill = { label: 'Entregada', tone: 'emerald' };
-      primaryAction = {
-        label: 'Facturar en Caja POS',
-        tone: 'emerald',
-        onClick: () => handlePassToPos(tbl),
-        disabled: busy || !canManageOrders,
-      };
+      statusPill = { label: 'Despachada', tone: 'emerald' };
+      primaryAction = undefined;
     }
 
     return (
@@ -918,638 +912,698 @@ export const ComandasView: React.FC = () => {
         metaLine={metaLine}
         items={(tbl.items || []).map((it) => ({
           qty: it.qty,
-          name: it.name,
-          amount: formatCop(it.qty * it.price),
+          name: it.note ? `${it.name} (${it.note})` : it.name,
         }))}
         highlightNote={highlightNote}
-        totalLabel="TOTAL"
-        totalValue={formatCop(tbl.total)}
-        paymentLabel={`Pago: ${tbl.paymentHint || 'En caja al cierre'}`}
+        totalLabel="UNIDADES A PREPARAR"
+        totalValue={`${totalUnits} plato(s)`}
         statusPill={statusPill}
         primaryAction={primaryAction}
         secondaryActions={
-          <>
-            {stg === 'ENTREGADA' || stg === 'LISTA' ? (
-              <PkPrintButton label="🖨️ Precuenta" payload={buildPrintPayload(tbl, false)} />
-            ) : (
-              <PkPrintButton label="🖨️ Comanda" payload={buildPrintPayload(tbl, true)} />
-            )}
-            {ch === 'MESA' && canManageOrders && (
-              <button
-                type="button"
-                className="pk-btn pk-btn-outline pk-btn-sm"
-                disabled={busy}
-                onClick={() => openOrderStudio({ channel: 'MESA', table: tbl })}
-              >
-                + Platos
-              </button>
-            )}
-          </>
+          <PkPrintButton label="🖨️ Tirilla Cocina" payload={buildPrintPayload(tbl, true)} />
         }
       />
     );
   };
 
+  const nonTableOrders = activeOrders.filter((t) => resolveChannel(t) !== 'MESA');
+  const freeTablesCount = physicalTables.filter((t) => resolveStage(t) === 'LIBRE').length;
+  const occupiedTablesCount = physicalTables.length - freeTablesCount;
+  const totalKitchenUnits = filteredActiveOrders
+    .filter((o) => resolveStage(o) !== 'ENTREGADA')
+    .reduce((acc, o) => acc + (o.items || []).reduce((s, it) => s + it.qty, 0), 0);
+
   return (
     <ModuleGate module={currentModule}>
       <div className="pk-stack">
-        <PkLiveHeader
-          title="Comandas"
-          liveLabel="En vivo"
-          subtitle="Control gastronómico en tiempo real de salón, domicilios, cocina y despacho."
-          pills={[
-            { key: 'ALL', label: 'Todas', count: countsByChannel.all },
-            { key: 'MESA', label: 'Mesas', count: countsByChannel.mesa },
-            { key: 'DOMICILIO', label: 'Domicilios', count: countsByChannel.domicilio },
-            { key: 'PARA_LLEVAR', label: 'Para llevar', count: countsByChannel.llevar },
-          ]}
-          activePill={channelFilter}
-          onPillChange={(k) => setChannelFilter(k as ChannelPillKey)}
-          primaryActionLabel={canManageOrders ? '+ Nueva Comanda' : undefined}
-          onPrimaryAction={canManageOrders ? () => openOrderStudio() : undefined}
-          extraActions={
-            <>
-              <div className="pk-segmented" role="tablist" aria-label="Vista operativa de comandas">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={displayMode === 'board'}
-                  className={`pk-segmented-btn${displayMode === 'board' ? ' active' : ''}`}
-                  onClick={() => setDisplayMode('board')}
-                >
-                  🎛️ Tablero Comandas
-                </button>
-                {canManageOrders && (
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={displayMode === 'floor'}
-                    className={`pk-segmented-btn${displayMode === 'floor' ? ' active' : ''}`}
-                    onClick={() => setDisplayMode('floor')}
-                  >
-                    🪑 Plano de Mesas
-                  </button>
-                )}
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={displayMode === 'table'}
-                  className={`pk-segmented-btn${displayMode === 'table' ? ' active' : ''}`}
-                  onClick={() => setDisplayMode('table')}
-                >
-                  📋 Vista Tabla
-                </button>
-              </div>
-
-              {canManageOrders && (
-                <>
-                  <button
-                    type="button"
-                    className="pk-btn pk-btn-outline pk-btn-sm"
-                    onClick={() => setShowNewTableModal(true)}
-                  >
-                    + Mesa
-                  </button>
-                  <button
-                    type="button"
-                    className="pk-btn pk-btn-outline pk-btn-sm"
-                    onClick={() => setShowNewDishModal(true)}
-                  >
-                    + Plato
-                  </button>
-                </>
-              )}
-
-              <button
-                type="button"
-                className="pk-btn pk-btn-outline pk-btn-sm"
-                disabled={busy}
-                onClick={() => void reload()}
-                title="Sincronizar tablero en tiempo real"
-              >
-                🔄
-              </button>
-            </>
-          }
-        />
-
-        <PkKpiRow
-          items={[
-            { label: 'Comandas Activas', value: String(activeOrders.length), color: 'var(--pk-primary)' },
-            {
-              label: 'En Preparación Cocina',
-              value: String(kanbanBuckets.preparando.length),
-              color: 'var(--pk-amber)',
-            },
-            {
-              label: 'Listas / Por Entregar',
-              value: String(kanbanBuckets.listas.length),
-              color: '#6d28d9',
-            },
-            {
-              label: 'Facturación Activa en Curso',
-              value: formatCop(totalLiveBilling),
-              color: 'var(--pk-emerald)',
-            },
-          ]}
-        />
-
-        {displayMode === 'board' && (
-          <div className="pk-stack">
-            <div
-              className="pk-card"
-              style={{
-                padding: '12px 16px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 12,
-                flexWrap: 'wrap',
-              }}
-            >
-              <input
-                className="pk-input"
-                style={{ maxWidth: 420, flex: '1 1 260px' }}
-                placeholder="🔎 Filtrar tiquetes por #código, cliente, mesa, plato o dirección..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 12.5, color: 'var(--pk-muted)' }}>
-                <span>🟡 Nuevas: <strong>{kanbanBuckets.nuevas.length}</strong></span>
-                <span>·</span>
-                <span>🔵 En preparación: <strong>{kanbanBuckets.preparando.length}</strong></span>
-                <span>·</span>
-                <span>🟣 Listas: <strong>{kanbanBuckets.listas.length}</strong></span>
-                <span>·</span>
-                <span>🟢 Entregadas: <strong>{kanbanBuckets.entregadas.length}</strong></span>
-              </div>
-            </div>
-
-            <PkKanbanBoard
-              columns={[
-                {
-                  key: 'NUEVA',
-                  title: 'Nuevas',
-                  dotColor: 'amber',
-                  count: kanbanBuckets.nuevas.length,
-                  emptyText: 'Sin comandas nuevas pendientes por aceptar',
-                  children: kanbanBuckets.nuevas.map(renderTicketCard),
-                },
-                {
-                  key: 'PREPARANDO',
-                  title: 'En preparación',
-                  dotColor: 'blue',
-                  count: kanbanBuckets.preparando.length,
-                  emptyText: 'Sin pedidos activos en fogones o barra',
-                  children: kanbanBuckets.preparando.map(renderTicketCard),
-                },
-                {
-                  key: 'LISTA',
-                  title: 'Listas',
-                  dotColor: 'purple',
-                  count: kanbanBuckets.listas.length,
-                  emptyText: 'Ningún pedido pendiente en pasaplatos',
-                  children: kanbanBuckets.listas.map(renderTicketCard),
-                },
-                {
-                  key: 'ENTREGADA',
-                  title: 'Entregadas',
-                  dotColor: 'emerald',
-                  count: kanbanBuckets.entregadas.length,
-                  emptyText: 'Sin cuentas entregadas pendientes de caja',
-                  children: kanbanBuckets.entregadas.map(renderTicketCard),
-                },
+        {currentModule === 'monitor_cocina' ? (
+          <>
+            <PkLiveHeader
+              title="Pantalla Cocina y Barra (KDS)"
+              liveLabel="En vivo"
+              subtitle="Monitor exclusivo de preparación gastronómica por orden de llegada, notas de cocción y despacho en pasaplatos."
+              pills={[
+                { key: 'ALL', label: 'Todas las Comandas', count: countsByChannel.all },
+                { key: 'MESA', label: 'Salón', count: countsByChannel.mesa },
+                { key: 'DOMICILIO', label: 'Domicilios', count: countsByChannel.domicilio },
+                { key: 'PARA_LLEVAR', label: 'Para llevar', count: countsByChannel.llevar },
               ]}
-            />
-          </div>
-        )}
-
-        {displayMode === 'floor' && canManageOrders && (
-          <div className="pk-stack">
-            <PkDistributionStrip
-              title="Ocupación del Salón y Ambientes Gastronómicos"
-              segments={[
-                {
-                  label: 'Mesas Libres',
-                  value: physicalTables.filter((t) => resolveStage(t) === 'LIBRE').length,
-                  displayValue: String(physicalTables.filter((t) => resolveStage(t) === 'LIBRE').length),
-                  color: '#10b981',
-                },
-                {
-                  label: 'Comanda Nueva',
-                  value: physicalTables.filter((t) => resolveStage(t) === 'NUEVA').length,
-                  displayValue: String(physicalTables.filter((t) => resolveStage(t) === 'NUEVA').length),
-                  color: '#f59e0b',
-                },
-                {
-                  label: 'En Cocina',
-                  value: physicalTables.filter((t) => resolveStage(t) === 'PREPARANDO').length,
-                  displayValue: String(physicalTables.filter((t) => resolveStage(t) === 'PREPARANDO').length),
-                  color: '#2563eb',
-                },
-                {
-                  label: 'Listas / Servidas',
-                  value: physicalTables.filter((t) => {
-                    const st = resolveStage(t);
-                    return st === 'LISTA' || st === 'ENTREGADA';
-                  }).length,
-                  displayValue: String(
-                    physicalTables.filter((t) => {
-                      const st = resolveStage(t);
-                      return st === 'LISTA' || st === 'ENTREGADA';
-                    }).length
-                  ),
-                  color: '#8b5cf6',
-                },
-              ]}
-            />
-
-            <div className="pk-card">
-              <div className="pk-card-head" style={{ flexWrap: 'wrap', gap: 12 }}>
-                <div className="pk-pill-tabs" role="tablist" aria-label="Ambientes del restaurante">
-                  {floorZoneList.map((zone) => {
-                    const active = floorZonePill === zone;
-                    const zoneCount =
-                      zone === 'Todas las Zonas'
-                        ? physicalTables.length
-                        : physicalTables.filter((t) => t.zone === zone).length;
-                    return (
-                      <button
-                        key={zone}
-                        type="button"
-                        role="tab"
-                        aria-selected={active}
-                        className={`pk-pill-tab${active ? ' active' : ''}`}
-                        onClick={() => setFloorZonePill(zone)}
-                      >
-                        <span>{zone}</span>
-                        <span className="pk-pill-tab-count">{zoneCount}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              activePill={channelFilter}
+              onPillChange={(k) => setChannelFilter(k as ChannelPillKey)}
+              extraActions={
+                <div className="pk-row-actions">
                   <input
                     className="pk-input"
-                    style={{ width: 250 }}
-                    placeholder="🔎 Buscar mesa o mesero..."
+                    style={{ minWidth: 'min(100%, 240px)', minHeight: 38 }}
+                    placeholder="🔎 Buscar #comanda, plato o mesa..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
                   <button
                     type="button"
                     className="pk-btn pk-btn-outline pk-btn-sm"
-                    onClick={() => setShowNewTableModal(true)}
+                    disabled={busy}
+                    onClick={() => void reload()}
+                    title="Sincronizar monitor de cocina"
                   >
-                    + Nueva Mesa
+                    🔄 Actualizar
                   </button>
                 </div>
-              </div>
+              }
+            />
 
-              <div className="pk-card-body">
-                {filteredFloorTables.length === 0 ? (
-                  <div className="pk-kanban-empty">
-                    No hay mesas registradas en este ambiente. Usa &quot;+ Nueva Mesa&quot; para configurar el plano.
+            <PkKpiRow
+              items={[
+                {
+                  label: 'Por Aceptar en Cocina',
+                  value: String(kanbanBuckets.nuevas.length),
+                  color: 'var(--pk-amber)',
+                },
+                {
+                  label: 'En Fogones y Barra',
+                  value: String(kanbanBuckets.preparando.length),
+                  color: 'var(--pk-primary)',
+                },
+                {
+                  label: 'Listas en Pasaplatos',
+                  value: String(kanbanBuckets.listas.length),
+                  color: '#6d28d9',
+                },
+                {
+                  label: 'Platos Pendientes de Salir',
+                  value: String(totalKitchenUnits),
+                  color: 'var(--pk-emerald)',
+                },
+              ]}
+            />
+
+            <PkKanbanBoard
+              columns={[
+                {
+                  key: 'NUEVA',
+                  title: '1. Nuevas Recibidas',
+                  dotColor: 'amber',
+                  count: kanbanBuckets.nuevas.length,
+                  emptyText: 'Sin comandas nuevas pendientes por aceptar',
+                  children: kanbanBuckets.nuevas.map(renderKitchenTicketCard),
+                },
+                {
+                  key: 'PREPARANDO',
+                  title: '2. En Fogones y Barra',
+                  dotColor: 'blue',
+                  count: kanbanBuckets.preparando.length,
+                  emptyText: 'Sin pedidos activos en preparación',
+                  children: kanbanBuckets.preparando.map(renderKitchenTicketCard),
+                },
+                {
+                  key: 'LISTA',
+                  title: '3. Listas en Pasaplatos',
+                  dotColor: 'purple',
+                  count: kanbanBuckets.listas.length,
+                  emptyText: 'Ningún pedido pendiente de recoger',
+                  children: kanbanBuckets.listas.map(renderKitchenTicketCard),
+                },
+                {
+                  key: 'ENTREGADA',
+                  title: '4. Despachadas en Turno',
+                  dotColor: 'emerald',
+                  count: kanbanBuckets.entregadas.length,
+                  emptyText: 'Aún no hay comandas despachadas en este filtro',
+                  children: kanbanBuckets.entregadas.map(renderKitchenTicketCard),
+                },
+              ]}
+            />
+          </>
+        ) : (
+          <>
+            <PkLiveHeader
+              title="Mapa de Mesas y Pedidos"
+              liveLabel="En vivo"
+              subtitle="Plano interactivo del salón por ambientes, apertura de cuentas, domicilios y liquidación directa hacia Caja POS."
+              primaryActionLabel={canManageOrders ? '+ Nueva Comanda' : undefined}
+              onPrimaryAction={canManageOrders ? () => openOrderStudio() : undefined}
+              extraActions={
+                <>
+                  <div className="pk-segmented" role="tablist" aria-label="Vista de salón y cuentas">
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={salonView === 'floor'}
+                      className={`pk-segmented-btn${salonView === 'floor' ? ' active' : ''}`}
+                      onClick={() => setSalonView('floor')}
+                    >
+                      🪑 Plano de Mesas
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={salonView === 'table'}
+                      className={`pk-segmented-btn${salonView === 'table' ? ' active' : ''}`}
+                      onClick={() => setSalonView('table')}
+                    >
+                      📋 Listado de Cuentas ({activeOrders.length})
+                    </button>
                   </div>
-                ) : (
-                  <div className="pk-cards-showcase">
-                    {filteredFloorTables.map((tbl) => {
-                      const stg = resolveStage(tbl);
-                      const isFree = stg === 'LIBRE';
-                      const isSelected = selectedFloorTable?.id === tbl.id;
-                      const dotBg = isFree
-                        ? '#10b981'
-                        : stg === 'NUEVA'
-                        ? '#f59e0b'
-                        : stg === 'PREPARANDO'
-                        ? '#2563eb'
-                        : stg === 'LISTA'
-                        ? '#8b5cf6'
-                        : '#059669';
 
-                      const stageLabel = isFree
-                        ? 'Disponible'
-                        : stg === 'NUEVA'
-                        ? 'Comanda Nueva'
-                        : stg === 'PREPARANDO'
-                        ? 'En Cocina'
-                        : stg === 'LISTA'
-                        ? 'Lista p/ Servir'
-                        : 'Servida en Mesa';
+                  {canManageOrders && (
+                    <>
+                      <button
+                        type="button"
+                        className="pk-btn pk-btn-outline pk-btn-sm"
+                        onClick={() => setShowNewTableModal(true)}
+                      >
+                        + Mesa
+                      </button>
+                      <button
+                        type="button"
+                        className="pk-btn pk-btn-outline pk-btn-sm"
+                        onClick={() => setShowNewDishModal(true)}
+                      >
+                        + Plato
+                      </button>
+                    </>
+                  )}
 
-                      return (
-                        <div
-                          key={tbl.id}
-                          onClick={() => setSelectedFloorTableId(tbl.id)}
-                          className="pk-ticket-card"
-                          style={{
-                            cursor: 'pointer',
-                            border: isSelected ? '2px solid var(--pk-primary)' : undefined,
-                            background: isFree ? '#f8fafc' : '#ffffff',
-                          }}
-                        >
-                          <div className="pk-ticket-top">
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                              <span
-                                style={{
-                                  width: 12,
-                                  height: 12,
-                                  borderRadius: 999,
-                                  background: dotBg,
-                                  boxShadow: `0 0 0 4px ${dotBg}22`,
-                                  flexShrink: 0,
-                                }}
-                              />
-                              <div>
-                                <div className="pk-ticket-code">{tbl.name}</div>
-                                <div className="pk-ticket-time">📍 {tbl.zone}</div>
-                              </div>
-                            </div>
+                  <button
+                    type="button"
+                    className="pk-btn pk-btn-outline pk-btn-sm"
+                    disabled={busy}
+                    onClick={() => void reload()}
+                    title="Actualizar estado del salón"
+                  >
+                    🔄
+                  </button>
+                </>
+              }
+            />
 
-                            <span
-                              className={`pk-ticket-status-pill ${
-                                isFree
-                                  ? 'emerald'
-                                  : stg === 'NUEVA'
-                                  ? 'amber'
-                                  : stg === 'PREPARANDO'
-                                  ? 'blue'
-                                  : stg === 'LISTA'
-                                  ? 'purple'
-                                  : 'emerald'
-                              }`}
-                            >
-                              {tbl.orderCode ? `${tbl.orderCode} · ${stageLabel}` : stageLabel}
-                            </span>
-                          </div>
+            <PkKpiRow
+              items={[
+                {
+                  label: 'Mesas Disponibles',
+                  value: `${freeTablesCount} / ${physicalTables.length}`,
+                  color: 'var(--pk-emerald)',
+                },
+                {
+                  label: 'Mesas Ocupadas',
+                  value: String(occupiedTablesCount),
+                  color: 'var(--pk-primary)',
+                },
+                {
+                  label: 'Domicilios y Para Llevar',
+                  value: String(nonTableOrders.length),
+                  color: 'var(--pk-amber)',
+                },
+                {
+                  label: 'Cuentas Abiertas en Salón',
+                  value: formatCop(totalLiveBilling),
+                  color: 'var(--pk-navy)',
+                },
+              ]}
+            />
 
-                          <div
-                            style={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                              fontSize: 12.5,
-                              color: '#334155',
-                              gap: 8,
-                              flexWrap: 'wrap',
-                            }}
+            {salonView === 'floor' ? (
+              <div className="pk-stack">
+                <PkDistributionStrip
+                  title="Ocupación del Salón y Ambientes Gastronómicos"
+                  segments={[
+                    {
+                      label: 'Mesas Libres',
+                      value: freeTablesCount,
+                      displayValue: String(freeTablesCount),
+                      color: '#10b981',
+                    },
+                    {
+                      label: 'Comanda Nueva',
+                      value: physicalTables.filter((t) => resolveStage(t) === 'NUEVA').length,
+                      displayValue: String(physicalTables.filter((t) => resolveStage(t) === 'NUEVA').length),
+                      color: '#f59e0b',
+                    },
+                    {
+                      label: 'En Cocina',
+                      value: physicalTables.filter((t) => resolveStage(t) === 'PREPARANDO').length,
+                      displayValue: String(physicalTables.filter((t) => resolveStage(t) === 'PREPARANDO').length),
+                      color: '#2563eb',
+                    },
+                    {
+                      label: 'Listas / Servidas',
+                      value: physicalTables.filter((t) => {
+                        const st = resolveStage(t);
+                        return st === 'LISTA' || st === 'ENTREGADA';
+                      }).length,
+                      displayValue: String(
+                        physicalTables.filter((t) => {
+                          const st = resolveStage(t);
+                          return st === 'LISTA' || st === 'ENTREGADA';
+                        }).length
+                      ),
+                      color: '#8b5cf6',
+                    },
+                  ]}
+                />
+
+                <div className="pk-card">
+                  <div className="pk-card-head" style={{ flexWrap: 'wrap', gap: 12 }}>
+                    <div className="pk-pill-tabs" role="tablist" aria-label="Ambientes del restaurante">
+                      {floorZoneList.map((zone) => {
+                        const active = floorZonePill === zone;
+                        const zoneCount =
+                          zone === 'Todas las Zonas'
+                            ? physicalTables.length
+                            : physicalTables.filter((t) => t.zone === zone).length;
+                        return (
+                          <button
+                            key={zone}
+                            type="button"
+                            role="tab"
+                            aria-selected={active}
+                            className={`pk-pill-tab${active ? ' active' : ''}`}
+                            onClick={() => setFloorZonePill(zone)}
                           >
-                            <span>👥 Capacidad: <strong>{tbl.guests && tbl.guests > 0 ? tbl.guests : 4} puestos</strong></span>
-                            <span>🧑 {tbl.waiter || 'Mesero Turno'}</span>
-                          </div>
+                            <span>{zone}</span>
+                            <span className="pk-pill-tab-count">{zoneCount}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
 
-                          {tbl.customerName && (
-                            <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--pk-navy)' }}>
-                              👤 {tbl.customerName}
-                            </div>
-                          )}
+                    <div className="pk-row-actions">
+                      <input
+                        className="pk-input"
+                        style={{ minWidth: 'min(100%, 230px)' }}
+                        placeholder="🔎 Buscar mesa o mesero..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="pk-btn pk-btn-outline pk-btn-sm"
+                        onClick={() => setShowNewTableModal(true)}
+                      >
+                        + Nueva Mesa
+                      </button>
+                    </div>
+                  </div>
 
-                          <div style={{ padding: '4px 0' }}>
-                            <PkProcessNodes
-                              compact
-                              steps={buildOrderProcessSteps(stg, (target) => handleStageChange(tbl, target))}
-                            />
-                          </div>
+                  <div className="pk-card-body">
+                    {filteredFloorTables.length === 0 ? (
+                      <div className="pk-kanban-empty">
+                        No hay mesas registradas en este ambiente. Usa &quot;+ Nueva Mesa&quot; para configurar el plano.
+                      </div>
+                    ) : (
+                      <div className="pk-cards-showcase">
+                        {filteredFloorTables.map((tbl) => {
+                          const stg = resolveStage(tbl);
+                          const isFree = stg === 'LIBRE';
+                          const isSelected = selectedFloorTable?.id === tbl.id;
+                          const dotBg = isFree
+                            ? '#10b981'
+                            : stg === 'NUEVA'
+                            ? '#f59e0b'
+                            : stg === 'PREPARANDO'
+                            ? '#2563eb'
+                            : stg === 'LISTA'
+                            ? '#8b5cf6'
+                            : '#059669';
 
-                          <div className="pk-ticket-total-row">
-                            <span>{(tbl.items || []).length} plato(s)</span>
-                            <span>{formatCop(tbl.total)}</span>
-                          </div>
+                          const stageLabel = isFree
+                            ? 'Disponible'
+                            : stg === 'NUEVA'
+                            ? 'Comanda Nueva'
+                            : stg === 'PREPARANDO'
+                            ? 'En Cocina'
+                            : stg === 'LISTA'
+                            ? 'Lista p/ Servir'
+                            : 'Servida en Mesa';
 
-                          <div className="pk-row-actions" style={{ justifyContent: 'space-between', marginTop: 4 }}>
-                            <button
-                              type="button"
-                              className="pk-btn pk-btn-primary pk-btn-sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openOrderStudio({ channel: 'MESA', table: tbl });
+                          return (
+                            <div
+                              key={tbl.id}
+                              onClick={() => setSelectedFloorTableId(tbl.id)}
+                              className="pk-ticket-card"
+                              style={{
+                                cursor: 'pointer',
+                                border: isSelected ? '2px solid var(--pk-primary)' : undefined,
+                                background: isFree ? '#f8fafc' : '#ffffff',
                               }}
                             >
-                              + Agregar Platos
-                            </button>
+                              <div className="pk-ticket-top">
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                                  <span
+                                    style={{
+                                      width: 12,
+                                      height: 12,
+                                      borderRadius: 999,
+                                      background: dotBg,
+                                      boxShadow: `0 0 0 4px ${dotBg}22`,
+                                      flexShrink: 0,
+                                    }}
+                                  />
+                                  <div>
+                                    <div className="pk-ticket-code">{tbl.name}</div>
+                                    <div className="pk-ticket-time">📍 {tbl.zone}</div>
+                                  </div>
+                                </div>
 
+                                <span
+                                  className={`pk-ticket-status-pill ${
+                                    isFree
+                                      ? 'emerald'
+                                      : stg === 'NUEVA'
+                                      ? 'amber'
+                                      : stg === 'PREPARANDO'
+                                      ? 'blue'
+                                      : stg === 'LISTA'
+                                      ? 'purple'
+                                      : 'emerald'
+                                  }`}
+                                >
+                                  {tbl.orderCode ? `${tbl.orderCode} · ${stageLabel}` : stageLabel}
+                                </span>
+                              </div>
+
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center',
+                                  fontSize: 12.5,
+                                  color: '#334155',
+                                  gap: 8,
+                                  flexWrap: 'wrap',
+                                }}
+                              >
+                                <span>
+                                  👥 Capacidad:{' '}
+                                  <strong>{tbl.guests && tbl.guests > 0 ? tbl.guests : 4} puestos</strong>
+                                </span>
+                                <span>🧑 {tbl.waiter || 'Mesero Turno'}</span>
+                              </div>
+
+                              {tbl.customerName && (
+                                <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--pk-navy)' }}>
+                                  👤 {tbl.customerName}
+                                </div>
+                              )}
+
+                              <div style={{ padding: '4px 0' }}>
+                                <PkProcessNodes
+                                  compact
+                                  steps={buildOrderProcessSteps(stg, (target) => handleStageChange(tbl, target))}
+                                />
+                              </div>
+
+                              <div className="pk-ticket-total-row">
+                                <span>{(tbl.items || []).length} plato(s)</span>
+                                <span>{formatCop(tbl.total)}</span>
+                              </div>
+
+                              <div className="pk-row-actions" style={{ justifyContent: 'space-between', marginTop: 4 }}>
+                                <button
+                                  type="button"
+                                  className="pk-btn pk-btn-primary pk-btn-sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openOrderStudio({ channel: 'MESA', table: tbl });
+                                  }}
+                                >
+                                  + Agregar Platos
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="pk-btn pk-btn-emerald pk-btn-sm"
+                                  disabled={busy || (tbl.items || []).length === 0}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handlePassToPos(tbl);
+                                  }}
+                                >
+                                  Liquidar Cuenta
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {selectedFloorTable && (
+                  <div className="pk-card">
+                    <div className="pk-card-head">
+                      <div className="pk-card-title">
+                        🧾 Cuenta Detallada — {selectedFloorTable.name}
+                        {selectedFloorTable.orderCode ? ` (${selectedFloorTable.orderCode})` : ''}
+                      </div>
+                      <div className="pk-row-actions">
+                        {(selectedFloorTable.items || []).length > 0 && (
+                          <>
+                            <PkPrintButton
+                              label="🖨️ Precuenta 80mm"
+                              payload={buildPrintPayload(selectedFloorTable, false)}
+                            />
                             <button
                               type="button"
                               className="pk-btn pk-btn-emerald pk-btn-sm"
-                              disabled={busy || (tbl.items || []).length === 0}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handlePassToPos(tbl);
-                              }}
+                              disabled={busy}
+                              onClick={() => handlePassToPos(selectedFloorTable)}
                             >
-                              Liquidar Cuenta
+                              💳 Pasar a Factura POS
                             </button>
-                          </div>
+                          </>
+                        )}
+                        <button
+                          type="button"
+                          className="pk-btn pk-btn-primary pk-btn-sm"
+                          onClick={() => openOrderStudio({ channel: 'MESA', table: selectedFloorTable })}
+                        >
+                          + Agregar Platos
+                        </button>
+                      </div>
+                    </div>
+                    <div className="pk-card-body">
+                      {(selectedFloorTable.items || []).length === 0 ? (
+                        <div style={{ color: 'var(--pk-muted)', fontSize: 13.5 }}>
+                          Esta mesa está libre y lista para recibir comensales. Haz clic en &quot;+ Agregar Platos&quot; para abrir comanda.
                         </div>
-                      );
-                    })}
+                      ) : (
+                        <div className="pk-table-wrap">
+                          <table className="pk-table">
+                            <thead>
+                              <tr>
+                                <th>Plato / Bebida</th>
+                                <th>Cant.</th>
+                                <th>Precio Unit.</th>
+                                <th>Subtotal</th>
+                                <th></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {selectedFloorTable.items.map((it) => (
+                                <tr key={it.itemId}>
+                                  <td>
+                                    <div style={{ fontWeight: 700 }}>{it.name}</div>
+                                    {it.note && (
+                                      <div style={{ fontSize: 11.5, color: 'var(--pk-amber)', fontWeight: 700 }}>
+                                        “{it.note}”
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td>{it.qty}</td>
+                                  <td>{formatCop(it.price)}</td>
+                                  <td style={{ fontWeight: 800 }}>{formatCop(it.qty * it.price)}</td>
+                                  <td style={{ textAlign: 'right' }}>
+                                    <button
+                                      type="button"
+                                      className="pk-btn pk-btn-danger pk-btn-sm"
+                                      disabled={busy}
+                                      onClick={() => setItemToDelete({ table: selectedFloorTable, item: it })}
+                                    >
+                                      ✕
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {nonTableOrders.length > 0 && (
+                  <div className="pk-card">
+                    <div className="pk-card-head">
+                      <div className="pk-card-title">
+                        🛵 Domicilios y Pedidos Para Llevar Activos ({nonTableOrders.length})
+                      </div>
+                      <div className="pk-row-actions">
+                        <button
+                          type="button"
+                          className="pk-btn pk-btn-outline pk-btn-sm"
+                          onClick={() => openOrderStudio({ channel: 'DOMICILIO' })}
+                        >
+                          + Nuevo Domicilio
+                        </button>
+                        <button
+                          type="button"
+                          className="pk-btn pk-btn-outline pk-btn-sm"
+                          onClick={() => openOrderStudio({ channel: 'PARA_LLEVAR' })}
+                        >
+                          + Para Llevar
+                        </button>
+                      </div>
+                    </div>
+                    <div className="pk-card-body">
+                      <div className="pk-cards-showcase">
+                        {nonTableOrders.map((ord) => {
+                          const ch = resolveChannel(ord);
+                          const stg = resolveStage(ord);
+                          const badge = channelBadgeFor(ch);
+                          return (
+                            <PkTicketCard
+                              key={ord.id}
+                              code={ord.orderCode || `#${ord.id.toUpperCase()}`}
+                              timeAgo={formatOpenedElapsed(ord.openedAt)}
+                              channelBadge={badge}
+                              title={ord.customerName || ord.name}
+                              subtitle={`${ord.customerPhone ? `📞 ${ord.customerPhone} · ` : ''}🧑 ${ord.waiter || 'Despacho'}`}
+                              metaLine={`📍 ${ord.deliveryAddress || ord.zone}`}
+                              items={(ord.items || []).map((it) => ({
+                                qty: it.qty,
+                                name: it.name,
+                                amount: formatCop(it.qty * it.price),
+                              }))}
+                              totalLabel="TOTAL CUENTA"
+                              totalValue={formatCop(ord.total)}
+                              paymentLabel={`Pago: ${ord.paymentHint || 'En caja'}`}
+                              processNodes={buildOrderProcessSteps(stg, (next) => handleStageChange(ord, next))}
+                              primaryAction={{
+                                label: '💳 Liquidar en Caja POS',
+                                tone: 'emerald',
+                                disabled: busy,
+                                onClick: () => handlePassToPos(ord),
+                              }}
+                              secondaryActions={
+                                <PkPrintButton label="🖨️ Precuenta" payload={buildPrintPayload(ord, false)} />
+                              }
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
-            </div>
-
-            {selectedFloorTable && (
+            ) : (
               <div className="pk-card">
                 <div className="pk-card-head">
-                  <div className="pk-card-title">
-                    🧾 Cuenta Detallada — {selectedFloorTable.name}
-                    {selectedFloorTable.orderCode ? ` (${selectedFloorTable.orderCode})` : ''}
-                  </div>
+                  <div className="pk-card-title">📋 Consolidado de Cuentas, Mesas y Pedidos</div>
                   <div className="pk-row-actions">
-                    {(selectedFloorTable.items || []).length > 0 && (
-                      <PkPrintButton
-                        label="🖨️ Precuenta 80mm"
-                        payload={buildPrintPayload(selectedFloorTable, false)}
-                      />
-                    )}
-                    <button
-                      type="button"
-                      className="pk-btn pk-btn-primary pk-btn-sm"
-                      onClick={() => openOrderStudio({ channel: 'MESA', table: selectedFloorTable })}
-                    >
-                      + Agregar Platos
+                    <input
+                      className="pk-input"
+                      style={{ minWidth: 'min(100%, 230px)' }}
+                      placeholder="🔎 Buscar código, cliente o mesa..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                    <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={handleExportCsv}>
+                      📥 Exportar CSV
                     </button>
                   </div>
                 </div>
                 <div className="pk-card-body">
-                  {(selectedFloorTable.items || []).length === 0 ? (
-                    <div style={{ color: 'var(--pk-muted)', fontSize: 13.5 }}>
-                      Esta mesa está libre y lista para recibir comensales. Haz clic en &quot;+ Agregar Platos&quot; para abrir comanda.
-                    </div>
-                  ) : (
-                    <div className="pk-table-wrap">
-                      <table className="pk-table">
-                        <thead>
-                          <tr>
-                            <th>Plato / Bebida</th>
-                            <th>Cant.</th>
-                            <th>Precio Unit.</th>
-                            <th>Subtotal</th>
-                            <th></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {selectedFloorTable.items.map((it) => (
-                            <tr key={it.itemId}>
-                              <td>
-                                <div style={{ fontWeight: 700 }}>{it.name}</div>
-                                {it.note && (
-                                  <div style={{ fontSize: 11.5, color: 'var(--pk-amber)', fontWeight: 700 }}>
-                                    “{it.note}”
+                  <div className="pk-table-wrap">
+                    <table className="pk-table">
+                      <thead>
+                        <tr>
+                          <th>Comanda</th>
+                          <th>Canal</th>
+                          <th>Mesa / Cliente</th>
+                          <th>Ubicación / Entrega</th>
+                          <th>Flujo en Vivo</th>
+                          <th>Total</th>
+                          <th>Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tables
+                          .filter((t) => {
+                            const ch = resolveChannel(t);
+                            if (channelFilter !== 'ALL' && ch !== channelFilter) return false;
+                            const q = searchQuery.trim().toLowerCase();
+                            if (!q) return true;
+                            return (
+                              (t.orderCode || '').toLowerCase().includes(q) ||
+                              t.name.toLowerCase().includes(q) ||
+                              (t.customerName || '').toLowerCase().includes(q) ||
+                              (t.deliveryAddress || '').toLowerCase().includes(q)
+                            );
+                          })
+                          .map((tbl) => {
+                            const ch = resolveChannel(tbl);
+                            const stg = resolveStage(tbl);
+                            const badge = channelBadgeFor(ch);
+                            return (
+                              <tr key={tbl.id}>
+                                <td style={{ fontWeight: 900 }}>{tbl.orderCode || '—'}</td>
+                                <td>
+                                  <span className={`pk-ticket-channel ${badge.tone}`}>{badge.label}</span>
+                                </td>
+                                <td>
+                                  <div style={{ fontWeight: 800 }}>{tbl.name}</div>
+                                  {tbl.customerName && (
+                                    <div style={{ fontSize: 12, color: 'var(--pk-muted)' }}>
+                                      {tbl.customerName} {tbl.customerPhone ? `· ${tbl.customerPhone}` : ''}
+                                    </div>
+                                  )}
+                                </td>
+                                <td style={{ fontSize: 12.5 }}>
+                                  {ch === 'MESA' ? `${tbl.zone} · 🧑 ${tbl.waiter}` : tbl.deliveryAddress || tbl.zone}
+                                </td>
+                                <td style={{ minWidth: 230 }}>
+                                  <PkProcessNodes
+                                    compact
+                                    steps={buildOrderProcessSteps(stg, (next) => handleStageChange(tbl, next))}
+                                  />
+                                </td>
+                                <td style={{ fontWeight: 800 }}>{formatCop(tbl.total)}</td>
+                                <td>
+                                  <div className="pk-row-actions">
+                                    {ch === 'MESA' && (
+                                      <button
+                                        type="button"
+                                        className="pk-btn pk-btn-outline pk-btn-sm"
+                                        onClick={() => openOrderStudio({ channel: 'MESA', table: tbl })}
+                                      >
+                                        + Platos
+                                      </button>
+                                    )}
+                                    {(tbl.items || []).length > 0 && canManageOrders && (
+                                      <button
+                                        type="button"
+                                        className="pk-btn pk-btn-emerald pk-btn-sm"
+                                        disabled={busy}
+                                        onClick={() => handlePassToPos(tbl)}
+                                      >
+                                        Facturar POS
+                                      </button>
+                                    )}
                                   </div>
-                                )}
-                              </td>
-                              <td>{it.qty}</td>
-                              <td>{formatCop(it.price)}</td>
-                              <td style={{ fontWeight: 800 }}>{formatCop(it.qty * it.price)}</td>
-                              <td style={{ textAlign: 'right' }}>
-                                <button
-                                  type="button"
-                                  className="pk-btn pk-btn-danger pk-btn-sm"
-                                  disabled={busy}
-                                  onClick={() => setItemToDelete({ table: selectedFloorTable, item: it })}
-                                >
-                                  ✕
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             )}
-          </div>
-        )}
-
-        {displayMode === 'table' && (
-          <div className="pk-card">
-            <div className="pk-card-head">
-              <div className="pk-card-title">📋 Consolidado Tabular de Comandas y Mesas</div>
-              <div className="pk-row-actions">
-                <input
-                  className="pk-input"
-                  style={{ width: 260 }}
-                  placeholder="🔎 Buscar código, cliente o mesa..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-                <button type="button" className="pk-btn pk-btn-outline pk-btn-sm" onClick={handleExportCsv}>
-                  📥 Exportar CSV
-                </button>
-              </div>
-            </div>
-            <div className="pk-card-body">
-              <div className="pk-table-wrap">
-                <table className="pk-table">
-                  <thead>
-                    <tr>
-                      <th>Comanda</th>
-                      <th>Canal</th>
-                      <th>Mesa / Cliente</th>
-                      <th>Ubicación / Entrega</th>
-                      <th>Flujo en Vivo</th>
-                      <th>Total</th>
-                      <th>Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tables
-                      .filter((t) => {
-                        const ch = resolveChannel(t);
-                        if (channelFilter !== 'ALL' && ch !== channelFilter) return false;
-                        const q = searchQuery.trim().toLowerCase();
-                        if (!q) return true;
-                        return (
-                          (t.orderCode || '').toLowerCase().includes(q) ||
-                          t.name.toLowerCase().includes(q) ||
-                          (t.customerName || '').toLowerCase().includes(q) ||
-                          (t.deliveryAddress || '').toLowerCase().includes(q)
-                        );
-                      })
-                      .map((tbl) => {
-                        const ch = resolveChannel(tbl);
-                        const stg = resolveStage(tbl);
-                        const badge = channelBadgeFor(ch);
-                        return (
-                          <tr key={tbl.id}>
-                            <td style={{ fontWeight: 900 }}>{tbl.orderCode || '—'}</td>
-                            <td>
-                              <span className={`pk-ticket-channel ${badge.tone}`}>{badge.label}</span>
-                            </td>
-                            <td>
-                              <div style={{ fontWeight: 800 }}>{tbl.name}</div>
-                              {tbl.customerName && (
-                                <div style={{ fontSize: 12, color: 'var(--pk-muted)' }}>
-                                  {tbl.customerName} {tbl.customerPhone ? `· ${tbl.customerPhone}` : ''}
-                                </div>
-                              )}
-                            </td>
-                            <td style={{ fontSize: 12.5 }}>
-                              {ch === 'MESA' ? `${tbl.zone} · 🧑 ${tbl.waiter}` : tbl.deliveryAddress || tbl.zone}
-                            </td>
-                            <td style={{ minWidth: 230 }}>
-                              <PkProcessNodes
-                                compact
-                                steps={buildOrderProcessSteps(stg, (next) => handleStageChange(tbl, next))}
-                              />
-                            </td>
-                            <td style={{ fontWeight: 800 }}>{formatCop(tbl.total)}</td>
-                            <td>
-                              <div className="pk-row-actions">
-                                {stg === 'NUEVA' && (
-                                  <button
-                                    type="button"
-                                    className="pk-btn pk-btn-primary pk-btn-sm"
-                                    disabled={busy}
-                                    onClick={() => handleStageChange(tbl, 'PREPARANDO')}
-                                  >
-                                    Preparar
-                                  </button>
-                                )}
-                                {stg === 'PREPARANDO' && (
-                                  <button
-                                    type="button"
-                                    className="pk-btn pk-btn-primary pk-btn-sm"
-                                    disabled={busy}
-                                    onClick={() => handleStageChange(tbl, 'LISTA')}
-                                  >
-                                    Marcar Lista
-                                  </button>
-                                )}
-                                {stg === 'LISTA' && (
-                                  <button
-                                    type="button"
-                                    className="pk-btn pk-btn-primary pk-btn-sm"
-                                    disabled={busy}
-                                    onClick={() => handleStageChange(tbl, 'ENTREGADA')}
-                                  >
-                                    Entregar
-                                  </button>
-                                )}
-                                {(tbl.items || []).length > 0 && canManageOrders && (
-                                  <button
-                                    type="button"
-                                    className="pk-btn pk-btn-emerald pk-btn-sm"
-                                    disabled={busy}
-                                    onClick={() => handlePassToPos(tbl)}
-                                  >
-                                    Facturar POS
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
+          </>
         )}
 
         <PkFullscreenDialog
