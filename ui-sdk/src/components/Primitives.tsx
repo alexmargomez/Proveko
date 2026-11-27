@@ -1164,7 +1164,9 @@ export const PkFullscreenDialog: React.FC<{
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const onKey = (ev: KeyboardEvent) => {
-      if (ev.key === 'Escape') onClose();
+      if (ev.key === 'Escape' && !document.querySelector('.pk-modal-backdrop')) {
+        onClose();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => {
