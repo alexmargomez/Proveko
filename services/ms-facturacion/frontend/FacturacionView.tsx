@@ -33,6 +33,8 @@ import {
 import {
   ContractOption,
   CustomerOption,
+  ComandaMenuOption,
+  ComandaOrderOption,
   InvoiceFullscreenStudio,
   InvoiceStudioInitialDraft,
   InvoiceStudioSubmitPayload,
@@ -103,6 +105,12 @@ interface OptionalTallerResponse {
   ok?: boolean;
   vehicles?: VehicleOption[];
   workers?: WorkerOption[];
+}
+
+interface OptionalComandasResponse {
+  ok?: boolean;
+  tables?: ComandaOrderOption[];
+  products?: ComandaMenuOption[];
 }
 
 const VALID_MODULES = [
@@ -188,6 +196,8 @@ export const FacturacionView: React.FC = () => {
   const [products, setProducts] = useState<ProductOption[]>([]);
   const [vehicles, setVehicles] = useState<VehicleOption[]>([]);
   const [workers, setWorkers] = useState<WorkerOption[]>([]);
+  const [comandaOrders, setComandaOrders] = useState<ComandaOrderOption[]>([]);
+  const [comandaMenu, setComandaMenu] = useState<ComandaMenuOption[]>([]);
   const [catalogReady, setCatalogReady] = useState(false);
 
   // Main Invoices Table state
@@ -243,11 +253,12 @@ export const FacturacionView: React.FC = () => {
   const hasClientes = hasService('ms-clientes');
   const hasInventario = hasService('ms-inventario');
   const hasTaller = hasService('ms-taller');
+  const hasComandas = hasService('ms-comandas');
   const hasDianModule = hasModule('facturacion_dian');
   const hasNotasModule = hasModule('notas_ajuste');
 
   const loadAll = useCallback(async () => {
-    const [posRes, cliRes, invRes, talRes] = await Promise.allSettled([
+    const [posRes, cliRes, invRes, talRes, comRes] = await Promise.allSettled([
       apiGet<PosStateResponse>('/api/v1/facturacion/pos-state'),
       hasClientes
         ? apiGet<OptionalCustomersResponse>('/api/v1/clientes/all')
@@ -257,6 +268,9 @@ export const FacturacionView: React.FC = () => {
         : Promise.resolve(null),
       hasTaller
         ? apiGet<OptionalTallerResponse>('/api/v1/taller/all')
+        : Promise.resolve(null),
+      hasComandas
+        ? apiGet<OptionalComandasResponse>('/api/v1/comandas/tables')
         : Promise.resolve(null),
     ]);
 
@@ -294,6 +308,14 @@ export const FacturacionView: React.FC = () => {
       talRes.status === 'fulfilled' && talRes.value?.workers
         ? talRes.value.workers
         : [];
+    const nextComandaOrders =
+      comRes.status === 'fulfilled' && comRes.value?.tables
+        ? comRes.value.tables
+        : [];
+    const nextComandaMenu =
+      comRes.status === 'fulfilled' && comRes.value?.products
+        ? comRes.value.products
+        : [];
 
     setCustomers(nextCustomers);
     setContracts(nextContracts);
@@ -301,6 +323,8 @@ export const FacturacionView: React.FC = () => {
     setProducts(nextProducts);
     setVehicles(nextVehicles);
     setWorkers(nextWorkers);
+    setComandaOrders(nextComandaOrders);
+    setComandaMenu(nextComandaMenu);
 
     if (nextProducts.length > 0) {
       setQuoteProductId((prev) => prev || nextProducts[0].id);
@@ -309,7 +333,7 @@ export const FacturacionView: React.FC = () => {
       setQuoteCustomerId((prev) => prev || nextCustomers[0].id);
     }
     setCatalogReady(true);
-  }, [apiGet, hasClientes, hasInventario, hasTaller]);
+  }, [apiGet, hasClientes, hasInventario, hasTaller, hasComandas]);
 
   useEffect(() => {
     void loadAll();
@@ -318,7 +342,7 @@ export const FacturacionView: React.FC = () => {
   // Auto-open InvoiceFullscreenStudio when incomingPayload arrives from operational modules
   useEffect(() => {
     if (!incomingPayload) return;
-    if (hasInventario && !catalogReady) return;
+    if ((hasInventario || hasComandas) && !catalogReady) return;
 
     const rawCustId =
       typeof incomingPayload.customerId === 'string'
@@ -362,8 +386,11 @@ export const FacturacionView: React.FC = () => {
         ? incomingPayload.linkedTableId
         : '';
 
-    const detectedType: InvoiceTypeKey =
-      rawPlate || rawVehId || rawOrderId ? 'TALLER' : 'MOSTRADOR';
+    const detectedType: InvoiceTypeKey = rawTableId
+      ? 'COMANDA'
+      : rawPlate || rawVehId || rawOrderId
+      ? 'TALLER'
+      : 'MOSTRADOR';
 
     const normalizedItems: InvoiceItemRecord[] = [];
     if (Array.isArray(incomingPayload.items) && incomingPayload.items.length > 0) {
@@ -373,10 +400,12 @@ export const FacturacionView: React.FC = () => {
         const rawKind = String(rec.itemType ?? rec.kind ?? 'PRODUCTO')
           .trim()
           .toUpperCase();
-        const isServiceKind = rawKind === 'SERVICIO';
         const candidateProdId = String(rec.productId ?? rec.refId ?? '').trim();
+        const isServiceKind =
+          rawKind === 'SERVICIO' ||
+          candidateProdId.toLowerCase().startsWith('mnu-');
         const matchedProduct =
-          candidateProdId !== ''
+          !isServiceKind && candidateProdId !== ''
             ? products.find(
                 (p) =>
                   p.id === candidateProdId ||
@@ -441,6 +470,7 @@ export const FacturacionView: React.FC = () => {
     incomingPayload,
     catalogReady,
     hasInventario,
+    hasComandas,
     clearIncomingPayload,
     products,
     setActiveModuleKey,
@@ -887,6 +917,8 @@ export const FacturacionView: React.FC = () => {
         products={products}
         vehicles={vehicles}
         workers={workers}
+        comandaOrders={comandaOrders}
+        comandaMenu={comandaMenu}
         onOpenNewCustomerModal={() => setShowNewCustomerModal(true)}
         onOpenNewVehicleModal={() => setShowNewVehicleModal(true)}
         onSubmit={handleInvoiceStudioSubmit}

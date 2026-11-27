@@ -120,6 +120,43 @@ export interface InvoiceStudioSubmitPayload {
   notes: string;
 }
 
+export interface ComandaOrderItemOption {
+  itemId: string;
+  productId: string;
+  name: string;
+  qty: number;
+  price: number;
+  note?: string;
+}
+
+export interface ComandaOrderOption {
+  id: string;
+  name: string;
+  zone: string;
+  waiter: string;
+  status: string;
+  orderCode?: string;
+  channel?: string;
+  orderStage?: string;
+  customerName?: string;
+  customerPhone?: string;
+  deliveryAddress?: string;
+  guests?: number;
+  paymentHint?: string;
+  openedAt?: string;
+  items: ComandaOrderItemOption[];
+  total: number;
+}
+
+export interface ComandaMenuOption {
+  id: string;
+  code: string;
+  name: string;
+  category: string;
+  salePrice: number;
+  taxPct?: number;
+}
+
 export interface InvoiceFullscreenStudioProps {
   open: boolean;
   onClose: () => void;
@@ -132,6 +169,8 @@ export interface InvoiceFullscreenStudioProps {
   products: ProductOption[];
   vehicles: VehicleOption[];
   workers: WorkerOption[];
+  comandaOrders?: ComandaOrderOption[];
+  comandaMenu?: ComandaMenuOption[];
   onOpenNewCustomerModal: () => void;
   onOpenNewVehicleModal: () => void;
   onSubmit: (payload: InvoiceStudioSubmitPayload) => void;
@@ -157,6 +196,8 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
   products,
   vehicles,
   workers,
+  comandaOrders = [],
+  comandaMenu = [],
   onOpenNewCustomerModal,
   onOpenNewVehicleModal,
   onSubmit,
@@ -165,6 +206,7 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
 
   const hasClientes = hasService('ms-clientes');
   const hasInventario = hasService('ms-inventario');
+  const hasComandas = hasService('ms-comandas');
   const hasTallerModule = hasModule('facturas_taller');
   const canCredit = hasFeature('', 'pagos_mixtos_cxc');
   const canDiscount = hasFeature('', 'descuento_linea');
@@ -200,6 +242,11 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
   const [linkedRoomId, setLinkedRoomId] = useState('');
   const [linkedTableId, setLinkedTableId] = useState('');
 
+  // Dedicated Comanda Order Selector Dialog state
+  const [comandaDialogOpen, setComandaDialogOpen] = useState(false);
+  const [comandaSearch, setComandaSearch] = useState('');
+  const [comandaChannelFilter, setComandaChannelFilter] = useState<string>('ALL');
+
   // Dedicated Item Selector Dialog state
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
   const [itemDialogMode, setItemDialogMode] = useState<ItemDialogMode>('PRODUCTO');
@@ -216,6 +263,7 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
   useEffect(() => {
     if (!open) {
       setItemDialogOpen(false);
+      setComandaDialogOpen(false);
       return;
     }
 
@@ -224,6 +272,8 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
       const inferredType: InvoiceTypeKey =
         rawType === 'TALLER' || editingInv.plate || editingInv.vehicleId
           ? 'TALLER'
+          : rawType === 'COMANDA' || editingInv.linkedTableId
+          ? 'COMANDA'
           : rawType === 'CORPORATIVA_CXC' ||
             editingInv.contractId ||
             editingInv.purchaseOrderRef
@@ -310,6 +360,15 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
         description: 'Liquidación directa de productos y servicios comerciales.',
       },
     ];
+    if (hasComandas) {
+      opts.push({
+        key: 'COMANDA',
+        icon: '🍽️',
+        title: 'Liquidación de Comanda / Orden',
+        description: 'Selecciona la orden o mesa activa y carga sus servicios automáticamente.',
+        badge: 'Comandas',
+      });
+    }
     if (hasTallerModule) {
       opts.push({
         key: 'TALLER',
@@ -329,7 +388,97 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
       });
     }
     return opts;
-  }, [hasTallerModule, canCredit]);
+  }, [hasComandas, hasTallerModule, canCredit]);
+
+  const openComandaOrders = useMemo(
+    () => comandaOrders.filter((ord) => (ord.items || []).length > 0),
+    [comandaOrders]
+  );
+
+  const selectedComandaOrder = useMemo(
+    () => comandaOrders.find((ord) => ord.id === linkedTableId) || null,
+    [comandaOrders, linkedTableId]
+  );
+
+  const filteredComandaOrders = useMemo(() => {
+    const q = comandaSearch.trim().toLowerCase();
+    return openComandaOrders.filter((ord) => {
+      const ch = (ord.channel || 'MESA').toUpperCase();
+      if (comandaChannelFilter !== 'ALL' && ch !== comandaChannelFilter) {
+        return false;
+      }
+      if (!q) return true;
+      const dishesText = (ord.items || [])
+        .map((it) => `${it.name} ${it.note || ''}`)
+        .join(' ')
+        .toLowerCase();
+      return (
+        (ord.orderCode || '').toLowerCase().includes(q) ||
+        ord.name.toLowerCase().includes(q) ||
+        (ord.customerName || '').toLowerCase().includes(q) ||
+        (ord.waiter || '').toLowerCase().includes(q) ||
+        (ord.zone || '').toLowerCase().includes(q) ||
+        dishesText.includes(q)
+      );
+    });
+  }, [openComandaOrders, comandaChannelFilter, comandaSearch]);
+
+  const handleSelectComandaOrder = (ord: ComandaOrderOption) => {
+    setInvoiceType('COMANDA');
+    setLinkedTableId(ord.id);
+
+    if (
+      ord.customerName &&
+      ord.customerName.trim() !== '' &&
+      (!customerId &&
+        (customerName.trim() === '' ||
+          customerName === 'Consumidor Final Mostrador'))
+    ) {
+      setCustomerName(ord.customerName.trim());
+    }
+
+    const mappedItems: InvoiceItemRecord[] = (ord.items || []).map((it) => {
+      const candidateId = (it.productId || '').trim();
+      const isMenuDish = !candidateId || candidateId.toLowerCase().startsWith('mnu-');
+      const matchedWarehouseProd =
+        !isMenuDish && hasInventario
+          ? products.find(
+              (p) =>
+                p.id === candidateId ||
+                p.code.toUpperCase() === candidateId.toUpperCase()
+            )
+          : undefined;
+      const menuRef = comandaMenu.find((m) => m.id === candidateId);
+
+      const resolvedProdId = matchedWarehouseProd ? matchedWarehouseProd.id : '';
+      const resolvedType: 'PRODUCTO' | 'SERVICIO' =
+        resolvedProdId !== '' ? 'PRODUCTO' : 'SERVICIO';
+      const qty = Math.max(1, Number(it.qty || 1));
+      const unitPrice = Math.max(0, Number(it.price || 0));
+      const taxPct = matchedWarehouseProd
+        ? matchedWarehouseProd.taxPct
+        : menuRef?.taxPct ?? 8;
+      const code = matchedWarehouseProd?.code || menuRef?.code || 'GASTRO';
+      const description = it.note ? `${it.name} (${it.note})` : it.name;
+
+      return {
+        productId: resolvedProdId,
+        code,
+        description,
+        itemType: resolvedType,
+        quantity: qty,
+        unitPrice,
+        taxPct,
+        subtotal: Math.round(qty * unitPrice),
+      };
+    });
+
+    setCart(mappedItems);
+    setComandaDialogOpen(false);
+    toast(
+      `Orden ${ord.orderCode || ord.name} seleccionada (${mappedItems.length} servicio(s) cargados)`
+    );
+  };
 
   const openItemDialog = (preferredMode: ItemDialogMode) => {
     const nextMode: ItemDialogMode =
@@ -765,7 +914,7 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
             </div>
           )}
 
-          {(linkedTableId || linkedRoomId) && (
+          {linkedRoomId && (
             <div
               className="pk-card"
               style={{
@@ -776,10 +925,8 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
                 color: '#065f46',
               }}
             >
-              <strong>🔗 Liquidación integrada:</strong>{' '}
-              {linkedTableId
-                ? `Cuenta origen ${linkedTableId} se cerrará al confirmar la factura.`
-                : `Habitación ${linkedRoomId} registrará Check-Out al confirmar la factura.`}
+              <strong>🔗 Liquidación integrada:</strong> Habitación {linkedRoomId}{' '}
+              registrará Check-Out al confirmar la factura.
             </div>
           )}
 
@@ -827,6 +974,126 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
                   />
                 </div>
               </div>
+
+              {(invoiceType === 'COMANDA' || linkedTableId !== '') && (
+                <div
+                  style={{
+                    marginTop: 18,
+                    padding: '16px 18px',
+                    borderRadius: 12,
+                    border: '1px solid #fcd34d',
+                    background: '#fffbeb',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: 12,
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <strong
+                        style={{
+                          fontSize: 13.5,
+                          color: '#92400e',
+                          display: 'block',
+                        }}
+                      >
+                        🍽️ Orden / Cuenta Gastronómica Asociada
+                      </strong>
+                      {linkedTableId ? (
+                        <div style={{ marginTop: 6 }}>
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8,
+                              flexWrap: 'wrap',
+                            }}
+                          >
+                            <span className="pk-badge pk-badge-emerald">
+                              ✓ Orden Seleccionada
+                            </span>
+                            <strong style={{ fontSize: 14.5, color: '#0f172a' }}>
+                              {selectedComandaOrder
+                                ? `${selectedComandaOrder.name}${
+                                    selectedComandaOrder.orderCode
+                                      ? ` (${selectedComandaOrder.orderCode})`
+                                      : ''
+                                  }`
+                                : linkedTableId}
+                            </strong>
+                            {selectedComandaOrder?.customerName && (
+                              <span style={{ fontSize: 13, color: '#475569' }}>
+                                • {selectedComandaOrder.customerName}
+                              </span>
+                            )}
+                            {selectedComandaOrder && (
+                              <span className="pk-badge pk-badge-amber">
+                                {selectedComandaOrder.items.length} servicio(s) •{' '}
+                                {formatCop(selectedComandaOrder.total)}
+                              </span>
+                            )}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 12,
+                              color: '#b45309',
+                              marginTop: 4,
+                            }}
+                          >
+                            La mesa o pedido se liberará automáticamente al confirmar
+                            la factura en firme.
+                          </div>
+                        </div>
+                      ) : (
+                        <div
+                          style={{
+                            fontSize: 12.5,
+                            color: '#92400e',
+                            marginTop: 4,
+                          }}
+                        >
+                          Selecciona una orden activa desde el diálogo para cargar
+                          automáticamente sus platos y servicios en la factura.
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pk-row-actions">
+                      <button
+                        type="button"
+                        className={
+                          linkedTableId
+                            ? 'pk-btn pk-btn-outline pk-btn-sm'
+                            : 'pk-btn pk-btn-amber-brand'
+                        }
+                        onClick={() => {
+                          setComandaSearch('');
+                          setComandaChannelFilter('ALL');
+                          setComandaDialogOpen(true);
+                        }}
+                      >
+                        {linkedTableId
+                          ? '🔄 Cambiar Orden'
+                          : `🍽️ Seleccionar Orden Activa (${openComandaOrders.length})`}
+                      </button>
+                      {linkedTableId && (
+                        <button
+                          type="button"
+                          className="pk-btn pk-btn-outline pk-btn-sm"
+                          onClick={() => setLinkedTableId('')}
+                        >
+                          ✕ Quitar Orden
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {invoiceType === 'TALLER' && (
                 <FacturasTallerBox
@@ -1619,6 +1886,153 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
               </div>
             </form>
           )}
+        </div>
+      </PkModal>
+
+      {/* DEDICATED DIALOG FOR SELECTING AN ACTIVE COMANDA / GASTRONOMIC ORDER */}
+      <PkModal
+        open={comandaDialogOpen}
+        title="🍽️ Seleccionar Orden / Cuenta Activa de Comandas"
+        onClose={() => setComandaDialogOpen(false)}
+        maxWidth={900}
+      >
+        <div className="pk-stack">
+          <div className="pk-form-grid cols-2">
+            <div className="pk-field">
+              <label>Buscar Orden, Mesa o Cliente</label>
+              <input
+                value={comandaSearch}
+                onChange={(e) => setComandaSearch(e.target.value)}
+                placeholder="🔎 Buscar por #orden, mesa, cliente, mesero o plato..."
+              />
+            </div>
+            <PkSimpleSelect
+              label="Filtrar por Canal"
+              value={comandaChannelFilter}
+              onChange={setComandaChannelFilter}
+              searchable={false}
+              options={[
+                { value: 'ALL', label: `Todas las Órdenes (${openComandaOrders.length})` },
+                { value: 'MESA', label: '🪑 Servicio en Salón / Mesas' },
+                { value: 'DOMICILIO', label: '🛵 Domicilios' },
+                { value: 'PARA_LLEVAR', label: '🛍️ Para Llevar' },
+              ]}
+            />
+          </div>
+
+          <div
+            className="pk-table-wrap"
+            style={{
+              maxHeight: 390,
+              overflowY: 'auto',
+              border: '1px solid var(--pk-border)',
+              borderRadius: 12,
+            }}
+          >
+            <table className="pk-table">
+              <thead>
+                <tr>
+                  <th>Orden</th>
+                  <th>Canal</th>
+                  <th>Mesa / Cliente</th>
+                  <th>Platos y Servicios</th>
+                  <th>Total</th>
+                  <th style={{ width: 140 }}>Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredComandaOrders.map((ord) => {
+                  const ch = (ord.channel || 'MESA').toUpperCase();
+                  const isCurrent = ord.id === linkedTableId;
+                  const chLabel =
+                    ch === 'DOMICILIO'
+                      ? '🛵 Domicilio'
+                      : ch === 'PARA_LLEVAR'
+                      ? '🛍️ Para llevar'
+                      : '🪑 Salón';
+                  return (
+                    <tr key={ord.id}>
+                      <td>
+                        <strong>{ord.orderCode || ord.id}</strong>
+                      </td>
+                      <td>
+                        <span
+                          className={`pk-badge ${
+                            ch === 'DOMICILIO'
+                              ? 'pk-badge-rose'
+                              : ch === 'PARA_LLEVAR'
+                              ? 'pk-badge-amber'
+                              : 'pk-badge-blue'
+                          }`}
+                        >
+                          {chLabel}
+                        </span>
+                      </td>
+                      <td>
+                        <strong>{ord.name}</strong>
+                        <div style={{ fontSize: 11.5, color: 'var(--pk-muted)' }}>
+                          {ord.customerName
+                            ? `${ord.customerName} • `
+                            : ''}
+                          {ord.zone}
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ fontSize: 12.5 }}>
+                          {(ord.items || [])
+                            .slice(0, 3)
+                            .map((it) => `${it.qty}x ${it.name}`)
+                            .join(', ')}
+                          {(ord.items || []).length > 3 &&
+                            ` (+${ord.items.length - 3} más)`}
+                        </div>
+                      </td>
+                      <td>
+                        <strong>{formatCop(ord.total)}</strong>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className={
+                            isCurrent
+                              ? 'pk-btn pk-btn-emerald pk-btn-sm'
+                              : 'pk-btn pk-btn-primary pk-btn-sm'
+                          }
+                          onClick={() => handleSelectComandaOrder(ord)}
+                        >
+                          {isCurrent ? '✓ Recargar' : '✅ Seleccionar'}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {filteredComandaOrders.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      style={{
+                        textAlign: 'center',
+                        color: 'var(--pk-muted)',
+                        padding: 28,
+                      }}
+                    >
+                      No hay órdenes de comandas abiertas con consumos pendientes para este filtro.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="pk-form-actions" style={{ marginTop: 0 }}>
+            <button
+              type="button"
+              className="pk-btn pk-btn-outline"
+              onClick={() => setComandaDialogOpen(false)}
+            >
+              Cerrar
+            </button>
+          </div>
         </div>
       </PkModal>
     </>
