@@ -75,8 +75,8 @@ export const LandingAndAuth: React.FC = () => {
           <div className="pk-brand-meta">
             <div className="pk-brand-title">
               <span>PROVEKO</span>
-              <span style={{ color: '#cbd5e1', fontWeight: 400 }}>|</span>
-              <span style={{ color: 'var(--pk-primary)', fontWeight: 700, fontSize: 13.5 }}>
+              <span className="pk-hide-xs" style={{ color: '#cbd5e1', fontWeight: 400 }}>|</span>
+              <span className="pk-hide-xs" style={{ color: 'var(--pk-primary)', fontWeight: 700, fontSize: 13.5 }}>
                 {activeAuthMode === 'showcase'
                   ? 'Soluciones para tu Empresa'
                   : activeAuthMode === 'register'
@@ -119,7 +119,7 @@ export const LandingAndAuth: React.FC = () => {
           </button>
         </nav>
 
-        <div className="pk-row-actions">
+        <div className="pk-row-actions pk-hide-mobile">
           {isAuthenticated ? (
             <button type="button" className="pk-btn pk-btn-primary pk-btn-sm" onClick={() => setPublicView('app')}>
               Ir a mi Estación Activa →
@@ -147,15 +147,7 @@ export const LandingAndAuth: React.FC = () => {
             <section className="pk-hero-banner">
               <div>
                 <span className="pk-hero-badge">SISTEMA DE VENTAS, INVENTARIO Y CONTROL DE NEGOCIOS</span>
-                <h1
-                  style={{
-                    fontSize: 32,
-                    fontWeight: 900,
-                    margin: '14px 0 12px',
-                    lineHeight: 1.2,
-                    letterSpacing: '-0.02em',
-                  }}
-                >
+                <h1 className="pk-hero-title">
                   Administra tu negocio de forma fácil: Facturación, Inventario, Comandas, Taller, Hotelería y Caja en un solo lugar.
                 </h1>
                 <p style={{ color: '#dbeafe', fontSize: 15, lineHeight: 1.6, margin: '0 0 22px', maxWidth: 680 }}>

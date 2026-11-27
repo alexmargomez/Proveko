@@ -858,7 +858,7 @@ export const AdjustmentNotesTab: React.FC<AdjustmentNotesTabProps> = ({
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <input
                 className="pk-input"
-                style={{ minWidth: 210, minHeight: 38 }}
+                style={{ minWidth: 'min(100%, 210px)', minHeight: 38 }}
                 placeholder="🔎 Buscar NC, ND o factura..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}

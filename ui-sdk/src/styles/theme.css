@@ -34,11 +34,40 @@ body,
   margin: 0;
   padding: 0;
   width: 100%;
+  max-width: 100%;
   min-height: 100vh;
+  overflow-x: hidden;
   font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: var(--pk-bg);
   color: var(--pk-text);
   -webkit-font-smoothing: antialiased;
+}
+
+.pk-stage,
+.pk-stack,
+.pk-view,
+.pk-card,
+.pk-card-head,
+.pk-card-body,
+.pk-main,
+.pk-app-frame,
+.pk-live-header,
+.pk-live-top,
+.pk-live-title-group,
+.pk-live-actions,
+.pk-view-switcher,
+.pk-view-switcher-meta,
+.pk-view-switcher-controls,
+.pk-datatable-toolbar,
+.pk-fs-scroll,
+.pk-fs-body,
+.pk-fs-container,
+.pk-modal,
+.pk-split-layout,
+.pk-ticket-card,
+.pk-kanban-col {
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* ============================================================================
@@ -910,7 +939,7 @@ body,
 
 .pk-kpi-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
   gap: 18px;
 }
 
@@ -2031,7 +2060,7 @@ body,
 
 .pk-cards-showcase {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
   gap: 18px;
   align-items: start;
 }
@@ -2418,6 +2447,16 @@ body,
   margin-top: 2px;
 }
 
+.pk-fs-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+}
+
 .pk-fs-subheader {
   background: #ffffff;
   border-bottom: 1px solid #dbe3ee;
@@ -2427,7 +2466,6 @@ body,
 
 .pk-fs-body {
   flex: 1;
-  overflow-y: auto;
   padding: 24px 28px 36px;
 }
 
@@ -2454,7 +2492,7 @@ body,
 
 .pk-type-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 215px), 1fr));
   gap: 12px;
 }
 
@@ -2519,7 +2557,7 @@ body,
 }
 
 /* ============================================================================
-   VISUAL METERS & MULTI-SEGMENT DISTRIBUTION STRIPS
+   VISUAL METERS, SPLIT WORKSPACES & RESPONSIVE SHELL UTILITIES
    ============================================================================ */
 .pk-meter-wrap {
   display: flex;
@@ -2599,20 +2637,124 @@ body,
   flex-shrink: 0;
 }
 
+.pk-comandas-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.95fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.pk-segmented-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.pk-mobile-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.54);
+  backdrop-filter: blur(2px);
+  z-index: 140;
+}
+
+.pk-rail-close-btn {
+  display: none;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: none;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 800;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.pk-hero-title {
+  font-size: clamp(22px, 3.6vw, 32px);
+  font-weight: 900;
+  margin: 14px 0 12px;
+  line-height: 1.22;
+  letter-spacing: -0.02em;
+}
+
+/* ============================================================================
+   MULTI-TIER RESPONSIVE DESIGN SYSTEM (1280px -> 1024px -> 900px -> 768px -> 600px -> 380px)
+   ============================================================================ */
+
+/* Tier 1: Compact Laptops (<= 1280px) */
+@media (max-width: 1280px) {
+  .pk-kanban-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow-x: visible;
+  }
+  .pk-grid-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .pk-stage {
+    padding: 20px 22px 36px;
+  }
+}
+
+/* Tier 2: Tablets Landscape & Split Windows (<= 1024px) */
 @media (max-width: 1024px) {
   .pk-hero-banner,
   .pk-grid-2,
   .pk-grid-3,
   .pk-grid-4,
-  .pk-stepper {
+  .pk-stepper,
+  .pk-comandas-split {
     grid-template-columns: 1fr;
   }
   .pk-brand-sub {
     display: none;
   }
+  .pk-kpi-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
 }
 
+/* Tier 3: Horizontal Touch Strips for Navigation & Filter Pills (<= 900px) */
+@media (max-width: 900px) {
+  .pk-folder-tabs,
+  .pk-module-tabs,
+  .pk-pill-tabs,
+  .pk-subtabs-list,
+  .pk-surface-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    max-width: 100%;
+  }
+  .pk-folder-tabs::-webkit-scrollbar,
+  .pk-module-tabs::-webkit-scrollbar,
+  .pk-pill-tabs::-webkit-scrollbar,
+  .pk-subtabs-list::-webkit-scrollbar,
+  .pk-surface-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .pk-folder-tab,
+  .pk-module-tab,
+  .pk-pill-tab,
+  .pk-tab-pill,
+  .pk-surface-tab {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+}
+
+/* Tier 4: Tablets Portrait & Smartphones (<= 768px) */
 @media (max-width: 768px) {
+  .pk-hide-mobile {
+    display: none !important;
+  }
   .pk-workstation-shell {
     height: auto;
     min-height: 100dvh;
@@ -2628,7 +2770,11 @@ body,
   .pk-mobile-menu-btn {
     display: inline-flex;
   }
+
+  /* Dissolve parent stacking context so mobile drawer sits cleanly above topbar and backdrop */
   .pk-rail-host {
+    position: static !important;
+    z-index: auto !important;
     width: 0 !important;
   }
   .pk-rail-sidebar {
@@ -2637,22 +2783,305 @@ body,
     left: 0;
     bottom: 0;
     height: 100dvh;
-    z-index: 85;
-    transform: translateX(-100%);
-    transition: transform 0.22s ease;
-    width: var(--pk-rail-expanded);
+    width: min(85vw, 288px) !important;
+    z-index: 150;
+    transform: translateX(-105%);
+    pointer-events: none;
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
   }
   .pk-rail-sidebar.mobile-open {
     transform: translateX(0);
-    box-shadow: 12px 0 36px rgba(2, 26, 41, 0.45);
+    pointer-events: auto;
+    box-shadow: 16px 0 42px rgba(2, 26, 41, 0.52);
+  }
+  .pk-rail-pin-btn {
+    display: none !important;
+  }
+  .pk-rail-close-btn {
+    display: inline-flex !important;
+  }
+
+  /* Prevent mobile browser auto-zoom on input focus */
+  .pk-field input,
+  .pk-field select,
+  .pk-field textarea,
+  .pk-input,
+  .pk-s2-trigger,
+  .pk-s2-search,
+  .pk-omnibox-input {
+    font-size: 16px;
+  }
+
+  .pk-topbar {
+    padding: 8px 12px;
+    gap: 8px;
+  }
+  .pk-brand {
+    min-width: 0;
+    max-width: calc(100vw - 165px);
+  }
+  .pk-brand-meta {
+    min-width: 0;
+  }
+  .pk-brand-title {
+    font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .pk-omnibox-wrap {
     order: 3;
     max-width: 100%;
+    min-width: 0;
     flex-basis: 100%;
+  }
+  .pk-ws-header {
+    padding: 12px 14px 0;
+  }
+  .pk-ws-title {
+    font-size: 17px;
   }
   .pk-stage,
   .pk-public-container {
+    padding: 12px 12px 28px;
+    gap: 14px;
+  }
+  .pk-stack,
+  .pk-view {
+    gap: 14px;
+  }
+  .pk-card-head {
+    padding: 12px 14px;
+    gap: 10px;
+  }
+  .pk-card-body {
     padding: 14px;
+  }
+  .pk-dist-card {
+    padding: 13px 14px;
+  }
+  .pk-live-header,
+  .pk-view-switcher {
+    padding: 14px;
+    gap: 12px;
+    border-radius: 13px;
+  }
+  .pk-live-title {
+    font-size: 17.5px;
+  }
+  .pk-live-actions,
+  .pk-view-switcher-controls,
+  .pk-datatable-toolbar {
+    width: 100%;
+    gap: 8px;
+  }
+  .pk-datatable-toolbar {
+    padding: 12px 14px;
+  }
+  .pk-datatable-search {
+    min-width: 0;
+    max-width: 100%;
+    flex: 1 1 100%;
+  }
+  .pk-kanban-board {
+    grid-template-columns: 1fr;
+    overflow-x: visible;
+    gap: 12px;
+  }
+  .pk-kanban-col {
+    min-height: auto;
+    padding: 12px;
+  }
+  .pk-cards-showcase {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .pk-table th,
+  .pk-table td {
+    padding: 10px 11px;
+    font-size: 12.5px;
+  }
+  .pk-modal-backdrop {
+    padding: 10px;
+    align-items: flex-end;
+  }
+  .pk-modal {
+    max-height: 92dvh;
+    border-radius: 16px 16px 12px 12px;
+  }
+  .pk-fs-header {
+    padding: 10px 14px;
+    gap: 10px;
+  }
+  .pk-fs-title {
+    font-size: 15.5px;
+  }
+  .pk-fs-subtitle,
+  .pk-fs-close-label {
+    display: none;
+  }
+  .pk-fs-close-btn {
+    padding: 7px 11px;
+    min-height: 36px;
+  }
+  .pk-fs-subheader {
+    padding: 12px 14px;
+  }
+  .pk-fs-body {
+    padding: 12px 12px 24px;
+  }
+  .pk-fs-container {
+    gap: 14px;
+  }
+  .pk-fs-footer {
+    padding: 10px 14px;
+    gap: 10px;
+  }
+}
+
+/* Tier 5: Smartphones (<= 600px) */
+@media (max-width: 600px) {
+  .pk-hide-xs {
+    display: none !important;
+  }
+  .pk-dropdown-menu {
+    position: fixed;
+    left: 12px !important;
+    right: 12px !important;
+    top: 58px;
+    min-width: 0 !important;
+    width: auto !important;
+    max-width: calc(100vw - 24px);
+    z-index: 135;
+  }
+  .pk-surface-tabs {
+    order: 3;
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .pk-hero-banner {
+    padding: 20px 16px;
+    gap: 18px;
+    border-radius: 14px;
+  }
+  .pk-hero-banner .pk-row-actions .pk-btn {
+    width: 100%;
+  }
+  .pk-quote-card {
+    padding: 16px;
+  }
+  .pk-kpi-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .pk-kpi-card {
+    padding: 12px 13px;
+    border-radius: 12px;
+  }
+  .pk-kpi-label {
+    font-size: 10px;
+  }
+  .pk-kpi-value {
+    font-size: 17.5px;
+    margin-top: 5px;
+    word-break: break-word;
+  }
+  .pk-shortcut-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .pk-shortcut-tile {
+    padding: 14px 10px;
+  }
+  .pk-type-grid,
+  .pk-segmented-2 {
+    grid-template-columns: 1fr;
+  }
+  .pk-segmented {
+    width: 100%;
+    display: flex;
+    overflow-x: auto;
+  }
+  .pk-segmented-btn {
+    flex: 1;
+    justify-content: center;
+    white-space: nowrap;
+    padding: 7px 10px;
+    font-size: 12px;
+  }
+  .pk-live-actions > *,
+  .pk-view-switcher-controls > * {
+    width: 100%;
+    max-width: 100%;
+  }
+  .pk-live-actions .pk-btn,
+  .pk-view-switcher-controls > .pk-btn {
+    width: 100%;
+  }
+  .pk-form-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .pk-form-actions .pk-btn,
+  .pk-form-grid > button,
+  .pk-form-grid > .pk-btn {
+    width: 100%;
+    justify-self: stretch;
+    min-width: 0;
+  }
+  .pk-fs-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .pk-fs-footer-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    width: 100%;
+  }
+  .pk-fs-footer-actions .pk-btn {
+    width: 100%;
+    padding: 8px 10px;
+    font-size: 12px;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.2;
+  }
+  .pk-pnodes,
+  .pk-pnodes.compact {
+    min-width: 0;
+  }
+  .pk-pnode-circle,
+  .pk-pnodes.compact .pk-pnode-circle {
+    width: 25px;
+    height: 25px;
+    font-size: 11px;
+    border-radius: 7px;
+  }
+  .pk-pnode-label {
+    font-size: 9.5px;
+    white-space: normal;
+    line-height: 1.15;
+    overflow: visible;
+    text-overflow: clip;
+  }
+  .pk-pnode-sub {
+    display: none;
+  }
+  .pk-toast {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    text-align: center;
+  }
+}
+
+/* Tier 6: Compact Smartphones (<= 380px) */
+@media (max-width: 380px) {
+  .pk-kpi-row,
+  .pk-fs-footer-actions {
+    grid-template-columns: 1fr;
   }
 }

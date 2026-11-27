@@ -1131,7 +1131,7 @@ export const CajaView: React.FC = () => {
                   placeholder="🔎 Buscar movimiento bancario por código, cuenta, referencia o concepto..."
                 />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                  <div style={{ minWidth: 220 }}>
+                  <div style={{ minWidth: 'min(100%, 220px)' }}>
                     <PkSimpleSelect
                       ariaLabel="Filtrar por tipo de movimiento"
                       value={bankTypeFilter}

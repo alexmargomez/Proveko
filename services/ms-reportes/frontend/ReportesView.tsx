@@ -978,7 +978,7 @@ export const ReportesView: React.FC = () => {
               </div>
             </div>
             <div className="pk-datatable-toolbar">
-              <div style={{ minWidth: 300 }}>
+              <div style={{ minWidth: 'min(100%, 300px)' }}>
                 <PkSimpleSelect
                   ariaLabel="Filtrar estado de facturas"
                   value={invoiceFilter}
@@ -1063,7 +1063,7 @@ export const ReportesView: React.FC = () => {
               </div>
             </div>
             <div className="pk-datatable-toolbar">
-              <div style={{ minWidth: 300 }}>
+              <div style={{ minWidth: 'min(100%, 300px)' }}>
                 <PkSimpleSelect
                   ariaLabel="Filtrar nivel de stock"
                   value={stockFilter}

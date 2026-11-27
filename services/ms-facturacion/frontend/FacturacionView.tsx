@@ -1086,14 +1086,7 @@ export const FacturacionView: React.FC = () => {
               compact
             />
 
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: 8,
-                fontSize: 13,
-              }}
-            >
+            <div className="pk-grid-2" style={{ gap: 8, fontSize: 13 }}>
               <div>
                 <strong>Cliente:</strong> {selectedInvoice.customerName} (
                 {selectedInvoice.customerNit})
@@ -1312,7 +1305,7 @@ export const FacturacionView: React.FC = () => {
             extraActions={
               <input
                 className="pk-input"
-                style={{ minWidth: 220, minHeight: 38 }}
+                style={{ minWidth: 'min(100%, 220px)', minHeight: 38 }}
                 placeholder="🔎 Buscar cotización o cliente..."
                 value={quoteSearch}
                 onChange={(e) => setQuoteSearch(e.target.value)}
@@ -1851,7 +1844,7 @@ export const FacturacionView: React.FC = () => {
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <input
               className="pk-input"
-              style={{ minWidth: 220, minHeight: 38 }}
+              style={{ minWidth: 'min(100%, 220px)', minHeight: 38 }}
               placeholder="🔎 Buscar N°, cliente, NIT o placa..."
               value={invoiceSearch}
               onChange={(e) => setInvoiceSearch(e.target.value)}

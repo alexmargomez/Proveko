@@ -656,7 +656,7 @@ export const InventarioView: React.FC = () => {
                   placeholder="🔎 Buscar referencia por SKU, nombre, categoría o lote..."
                 />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                  <div style={{ minWidth: 240 }}>
+                  <div style={{ minWidth: 'min(100%, 240px)' }}>
                     <PkSimpleSelect
                       ariaLabel="Filtrar por bodega"
                       value={warehouseFilter}

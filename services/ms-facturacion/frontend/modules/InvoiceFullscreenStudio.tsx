@@ -649,7 +649,7 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
               <div style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--pk-navy)' }}>
                 Estado del Documento
               </div>
-              <div style={{ flex: 1, minWidth: 280, maxWidth: 680 }}>
+              <div style={{ flex: 1, minWidth: 'min(100%, 260px)', maxWidth: 680 }}>
                 <PkProcessNodes steps={processSteps} compact />
               </div>
             </div>
@@ -1350,13 +1350,7 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
       >
         <div className="pk-stack">
           {hasInventario && (
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-                gap: 10,
-              }}
-            >
+            <div className="pk-segmented-2">
               <button
                 type="button"
                 className={

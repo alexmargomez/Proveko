@@ -991,7 +991,7 @@ export const TallerView: React.FC = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', justifyContent: 'space-between' }}>
                 <input
                   className="pk-input pk-datatable-search"
-                  style={{ flex: 1, minWidth: 260 }}
+                  style={{ flex: 1, minWidth: 'min(100%, 260px)' }}
                   placeholder="🔎 Filtrar en vivo por placa, consecutivo OT, marca, titular, síntoma o especialista..."
                   value={orderSearch}
                   onChange={(e) => setOrderSearch(e.target.value)}

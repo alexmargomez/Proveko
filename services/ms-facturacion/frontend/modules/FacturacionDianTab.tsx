@@ -613,7 +613,7 @@ export const FacturacionDianTab: React.FC<FacturacionDianTabProps> = ({
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <input
                 className="pk-input"
-                style={{ minWidth: 240, minHeight: 38 }}
+                style={{ minWidth: 'min(100%, 240px)', minHeight: 38 }}
                 placeholder="🔎 Buscar N°, NIT, TrackID o CUFE..."
                 value={dianSearch}
                 onChange={(e) => setDianSearch(e.target.value)}

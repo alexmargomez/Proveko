@@ -116,12 +116,14 @@ const InternalSelect2Control: React.FC<InternalSelect2ControlProps> = ({
     const el = triggerRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const viewportH = window.innerHeight || 800;
-    const viewportW = window.innerWidth || 1280;
+    const viewportH = window.visualViewport?.height || window.innerHeight || 800;
+    const viewportW = window.visualViewport?.width || window.innerWidth || 1280;
     const spaceBelow = viewportH - rect.bottom;
     const spaceAbove = rect.top;
-    const flipUp = spaceBelow < 250 && spaceAbove > spaceBelow;
-    const desiredWidth = Math.min(Math.max(rect.width, 260), Math.max(260, viewportW - 24));
+    const flipUp = spaceBelow < 240 && spaceAbove > spaceBelow;
+    const minW = Math.min(240, Math.max(180, viewportW - 24));
+    const maxW = Math.max(minW, viewportW - 24);
+    const desiredWidth = Math.min(Math.max(rect.width, minW), maxW);
     const clampedLeft = Math.max(12, Math.min(rect.left, viewportW - desiredWidth - 12));
     setCoords({
       top: flipUp ? rect.top - 6 : rect.bottom + 6,
@@ -148,11 +150,11 @@ const InternalSelect2Control: React.FC<InternalSelect2ControlProps> = ({
   useEffect(() => {
     if (!open) return;
     const raf = window.requestAnimationFrame(() => {
-      if (searchable && searchInputRef.current) {
+      if (searchable && searchInputRef.current && window.innerWidth > 768) {
         searchInputRef.current.focus();
       }
     });
-    const handlePointerDown = (ev: MouseEvent) => {
+    const handlePointerDown = (ev: MouseEvent | TouchEvent) => {
       const target = ev.target as Node | null;
       if (!target) return;
       if (triggerRef.current?.contains(target) || popoverRef.current?.contains(target)) {
@@ -167,11 +169,13 @@ const InternalSelect2Control: React.FC<InternalSelect2ControlProps> = ({
       recomputePosition();
     };
     document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown, { passive: true });
     window.addEventListener('resize', handleScrollOrResize);
     window.addEventListener('scroll', handleScrollOrResize, true);
     return () => {
       window.cancelAnimationFrame(raf);
       document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
       window.removeEventListener('resize', handleScrollOrResize);
       window.removeEventListener('scroll', handleScrollOrResize, true);
     };
@@ -1192,33 +1196,35 @@ export const PkFullscreenDialog: React.FC<{
     <div className="pk-fs-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId}>
       <div className="pk-fs-header">
         <div className="pk-fs-header-main">
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <h2 className="pk-fs-title" id={titleId}>{title}</h2>
               {badge && <span className={badgeClass}>{badge.label}</span>}
             </div>
             {subtitle && <div className="pk-fs-subtitle">{subtitle}</div>}
           </div>
         </div>
-        <button type="button" className="pk-btn pk-btn-hero-outline" onClick={onClose}>
-          ✕ Cerrar Estudio
+        <button type="button" className="pk-btn pk-btn-hero-outline pk-fs-close-btn" onClick={onClose}>
+          ✕ <span className="pk-fs-close-label">Cerrar Estudio</span>
         </button>
       </div>
 
-      {subheader && (
-        <div className="pk-fs-subheader">
-          <div style={{ maxWidth: 1540, margin: '0 auto' }}>{subheader}</div>
-        </div>
-      )}
+      <div className="pk-fs-scroll">
+        {subheader && (
+          <div className="pk-fs-subheader">
+            <div style={{ maxWidth: 1540, margin: '0 auto', minWidth: 0 }}>{subheader}</div>
+          </div>
+        )}
 
-      <div className="pk-fs-body">
-        <div className="pk-fs-container">{children}</div>
+        <div className="pk-fs-body">
+          <div className="pk-fs-container">{children}</div>
+        </div>
       </div>
 
       {(footerLeft || footerActions) && (
         <div className="pk-fs-footer">
-          <div>{footerLeft}</div>
-          <div className="pk-row-actions">{footerActions}</div>
+          <div className="pk-fs-footer-left">{footerLeft}</div>
+          <div className="pk-row-actions pk-fs-footer-actions">{footerActions}</div>
         </div>
       )}
     </div>,

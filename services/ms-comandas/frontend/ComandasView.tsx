@@ -1786,21 +1786,14 @@ export const ComandasView: React.FC = () => {
             </div>
           </div>
 
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'minmax(0, 1.45fr) minmax(340px, 0.95fr)',
-              gap: 20,
-              alignItems: 'start',
-            }}
-          >
+          <div className="pk-comandas-split">
             <div className="pk-card">
               <div className="pk-card-head" style={{ flexWrap: 'wrap', gap: 10 }}>
                 <div className="pk-card-title">🍽️ Carta Interactiva de Platos y Bebidas</div>
-                <div className="pk-row-actions">
+                <div className="pk-row-actions" style={{ flex: '1 1 auto', justifyContent: 'flex-end' }}>
                   <input
                     className="pk-input"
-                    style={{ width: 240 }}
+                    style={{ flex: '1 1 180px', maxWidth: 260, minWidth: 0 }}
                     placeholder="🔎 Buscar en la carta..."
                     value={studioMenuSearch}
                     onChange={(e) => setStudioMenuSearch(e.target.value)}
@@ -1845,7 +1838,7 @@ export const ComandasView: React.FC = () => {
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                       <input
                         className="pk-input"
-                        style={{ flex: '1 1 220px', background: '#ffffff' }}
+                        style={{ flex: '1 1 200px', minWidth: 0, background: '#ffffff' }}
                         value={studioQuickNote}
                         onChange={(e) => setStudioQuickNote(e.target.value)}
                         placeholder="Ej: Término 3/4, sin cebolla, salsa aparte..."
@@ -1872,7 +1865,7 @@ export const ComandasView: React.FC = () => {
                   <div
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 200px), 1fr))',
                       gap: 12,
                     }}
                   >

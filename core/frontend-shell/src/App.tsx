@@ -460,22 +460,22 @@ export const App: React.FC = () => {
           style={{
             background: 'linear-gradient(90deg, #023047 0%, #0b4f78 100%)',
             color: '#ffffff',
-            padding: '8px 20px',
+            padding: '8px 14px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 12,
+            gap: 10,
             flexWrap: 'wrap',
             fontSize: 12.5,
             flexShrink: 0,
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', flex: '1 1 220px', minWidth: 0 }}>
             <span className="pk-badge pk-badge-amber">DEMO EN VIVO</span>
-            <span>
+            <span className="pk-hide-mobile">
               Explora facturación, inventario, comandas, taller y roles libremente. Simular vista de empleado:
             </span>
-            <div style={{ minWidth: 260, maxWidth: 300 }}>
+            <div style={{ flex: '1 1 200px', maxWidth: 300, minWidth: 0 }}>
               <PkSimpleSelect
                 ariaLabel="Simular rol en modo demostración"
                 compact
@@ -501,7 +501,7 @@ export const App: React.FC = () => {
 
           <button
             type="button"
-            className="pk-btn pk-btn-emerald pk-btn-sm"
+            className="pk-btn pk-btn-emerald pk-btn-sm pk-hide-xs"
             onClick={() => {
               void (async () => {
                 await handleLogout();
@@ -522,14 +522,9 @@ export const App: React.FC = () => {
       <div className="pk-app-frame">
         {mobileMenuOpen && (
           <div
+            className="pk-mobile-backdrop"
             aria-hidden="true"
             onClick={() => setMobileMenuOpen(false)}
-            style={{
-              position: 'fixed',
-              inset: 0,
-              background: 'rgba(15, 23, 42, 0.45)',
-              zIndex: 80,
-            }}
           />
         )}
         <div className={`pk-rail-host ${railPinned ? 'pinned' : ''}`}>
