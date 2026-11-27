@@ -929,7 +929,7 @@ export const BasculaView: React.FC = () => {
                   onChange={(e) => setTicketSearch(e.target.value)}
                 />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                  <div style={{ minWidth: 260 }}>
+                  <div style={{ minWidth: 'min(100%, 260px)' }}>
                     <PkSimpleSelect
                       ariaLabel="Filtrar por empresa transportadora"
                       value={carrierFilter}

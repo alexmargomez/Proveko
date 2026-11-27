@@ -3,14 +3,12 @@ import {
   ModuleGate,
   PkAutoCodeInput,
   PkFullscreenDialog,
-  PkKanbanBoard,
   PkKpiRow,
   PkLiveHeader,
   PkPrintButton,
   PkProcessNodes,
   PkSelect,
   PkSimpleSelect,
-  PkTicketCard,
   PkTypeCards,
   downloadCsvUtf8,
   formatCop,
@@ -773,7 +771,6 @@ export const AdjustmentNotesTab: React.FC<AdjustmentNotesTabProps> = ({
   const { hasModule } = usePlatform();
   const hasDian = hasModule('facturacion_dian');
 
-  const [displayMode, setDisplayMode] = useState<'board' | 'table'>('board');
   const [activePill, setActivePill] = useState<string>('ALL');
   const [search, setSearch] = useState('');
 
@@ -802,23 +799,6 @@ export const AdjustmentNotesTab: React.FC<AdjustmentNotesTabProps> = ({
       );
     });
   }, [notes, activePill, search]);
-
-  const draftLane = filtered.filter((n) => n.docStatus === 'BORRADOR');
-  const confirmedPendingLane = filtered.filter(
-    (n) =>
-      n.docStatus === 'CONFIRMADA' &&
-      resolveDianStage(n.dianStage, n.cude) === 'SIN_ENVIAR'
-  );
-  const inTransitOrRejectedLane = filtered.filter((n) => {
-    if (n.docStatus !== 'CONFIRMADA') return false;
-    const st = resolveDianStage(n.dianStage, n.cude);
-    return st === 'ENVIADA' || st === 'RECHAZADA';
-  });
-  const acceptedLane = filtered.filter(
-    (n) =>
-      n.docStatus === 'CONFIRMADA' &&
-      resolveDianStage(n.dianStage, n.cude) === 'ACEPTADA'
-  );
 
   return (
     <ModuleGate module="notas_ajuste">
@@ -850,7 +830,7 @@ export const AdjustmentNotesTab: React.FC<AdjustmentNotesTabProps> = ({
 
         <PkLiveHeader
           title="Notas Crédito y Notas Débito"
-          liveLabel="En vivo"
+          liveLabel="En línea"
           subtitle="Gestiona devoluciones, anulaciones, descuentos posteriores y notas de cargo vinculadas a facturas electrónicas con firma CUDE."
           pills={[
             { key: 'ALL', label: 'Todas', count: notes.length },
@@ -872,17 +852,13 @@ export const AdjustmentNotesTab: React.FC<AdjustmentNotesTabProps> = ({
           ]}
           activePill={activePill}
           onPillChange={setActivePill}
-          displayMode={displayMode}
-          onDisplayModeChange={setDisplayMode}
-          boardLabel="🎛️ Tablero"
-          tableLabel="📋 Vista Tabla"
           primaryActionLabel="+ Emitir Nota Crédito / Débito"
           onPrimaryAction={() => onOpenCreateNote()}
           extraActions={
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <input
                 className="pk-input"
-                style={{ minWidth: 210, minHeight: 38 }}
+                style={{ minWidth: 'min(100%, 210px)', minHeight: 38 }}
                 placeholder="🔎 Buscar NC, ND o factura..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -926,372 +902,149 @@ export const AdjustmentNotesTab: React.FC<AdjustmentNotesTabProps> = ({
           }
         />
 
-        {displayMode === 'board' ? (
-          <PkKanbanBoard
-            columns={[
-              {
-                key: 'DRAFT',
-                title: '🟡 Borradores Editables',
-                dotColor: 'amber',
-                count: draftLane.length,
-                emptyText: 'Sin borradores de notas pendientes',
-                children: draftLane.map((n) => (
-                  <PkTicketCard
-                    key={n.id}
-                    code={n.id}
-                    timeAgo={n.issueDate}
-                    channelBadge={{
-                      label:
-                        n.noteKind === 'DEBIT'
-                          ? 'Nota Débito ND'
-                          : 'Nota Crédito NC',
-                      tone: n.noteKind === 'DEBIT' ? 'purple' : 'amber',
-                    }}
-                    title={n.customerName}
-                    subtitle={`Ref. Factura: ${n.invoiceId}`}
-                    highlightNote={n.reasonDescription}
-                    items={(n.items || []).slice(0, 2).map((it) => ({
-                      qty: it.quantity,
-                      name: it.description,
-                      amount: formatCop(it.subtotal),
-                    }))}
-                    totalLabel="VALOR AJUSTE"
-                    totalValue={formatCop(n.total)}
-                    processNodes={buildFourStageNodes(
-                      n.docStatus,
-                      n.dianStage,
-                      n.cude,
-                      'CUDE'
-                    )}
-                    primaryAction={{
-                      label: '✅ Confirmar Nota Oficial',
-                      tone: 'emerald',
-                      disabled: busy,
-                      onClick: () => onConfirmNote(n.id),
-                    }}
-                    secondaryActions={
-                      <button
-                        type="button"
-                        className="pk-btn pk-btn-outline pk-btn-sm"
-                        style={{ width: '100%' }}
-                        onClick={() => onEditNote(n)}
-                      >
-                        ✏️ Editar Borrador
-                      </button>
-                    }
-                  />
-                )),
-              },
-              {
-                key: 'SIN_ENVIAR',
-                title: '🔵 Confirmadas · Pendientes DIAN',
-                dotColor: 'blue',
-                count: confirmedPendingLane.length,
-                emptyText: 'Sin notas confirmadas pendientes de envío',
-                children: confirmedPendingLane.map((n) => (
-                  <PkTicketCard
-                    key={n.id}
-                    code={n.id}
-                    timeAgo={n.issueDate}
-                    channelBadge={{
-                      label:
-                        n.noteKind === 'DEBIT'
-                          ? 'Nota Débito ND'
-                          : 'Nota Crédito NC',
-                      tone: n.noteKind === 'DEBIT' ? 'purple' : 'amber',
-                    }}
-                    title={n.customerName}
-                    subtitle={`Aplicada a ${n.invoiceId} • NIT ${n.customerNit}`}
-                    metaLine={
-                      n.restockInventory
-                        ? '📦 Reingreso de stock aplicado en inventario'
-                        : undefined
-                    }
-                    highlightNote={n.reasonDescription}
-                    totalLabel="TOTAL CONFIRMADO"
-                    totalValue={formatCop(n.total)}
-                    processNodes={buildFourStageNodes(
-                      n.docStatus,
-                      n.dianStage,
-                      n.cude,
-                      'CUDE'
-                    )}
-                    primaryAction={
-                      hasDian
-                        ? {
-                            label: '🚀 Enviar Nota a DIAN (Paso 1)',
-                            tone: 'blue',
-                            disabled: busy,
-                            onClick: () => onSendNoteToDian(n),
-                          }
-                        : undefined
-                    }
-                    secondaryActions={
-                      <>
-                        <button
-                          type="button"
-                          className="pk-btn pk-btn-outline pk-btn-sm"
-                          onClick={() => onEditNote(n)}
-                        >
-                          ✏️ Editar
-                        </button>
-                        <PkPrintButton
-                          label="🖨️ PDF"
-                          payload={buildNotePrintPayload(n)}
-                        />
-                      </>
-                    }
-                  />
-                )),
-              },
-              {
-                key: 'TRANSIT',
-                title: '🟣 En Transmisión / Subsanación DIAN',
-                dotColor: 'purple',
-                count: inTransitOrRejectedLane.length,
-                emptyText: 'Sin notas en validación o rechazo DIAN',
-                children: inTransitOrRejectedLane.map((n) => {
-                  const st = resolveDianStage(n.dianStage, n.cude);
-                  return (
-                    <PkTicketCard
-                      key={n.id}
-                      code={n.id}
-                      timeAgo={n.issueDate}
-                      channelBadge={{
-                        label:
-                          st === 'RECHAZADA'
-                            ? 'Rechazada DIAN'
-                            : 'Enviada DIAN',
-                        tone: st === 'RECHAZADA' ? 'coral' : 'blue',
-                      }}
-                      title={n.customerName}
-                      subtitle={`Factura: ${n.invoiceId}`}
-                      highlightNote={
-                        st === 'RECHAZADA'
-                          ? `${n.rejectionCode}: ${n.rejectionMessage}`
-                          : `TrackID: ${n.trackId || 'En curso'}`
-                      }
-                      totalValue={formatCop(n.total)}
-                      processNodes={buildFourStageNodes(
-                        n.docStatus,
-                        n.dianStage,
-                        n.cude,
-                        'CUDE'
-                      )}
-                      primaryAction={
-                        st === 'RECHAZADA'
-                          ? {
-                              label: '✏️ Corregir Nota Rechazada',
-                              tone: 'coral',
-                              onClick: () => onEditNote(n),
-                            }
-                          : undefined
-                      }
-                    />
-                  );
-                }),
-              },
-              {
-                key: 'ACCEPTED',
-                title: '🟢 Aceptadas con CUDE DIAN',
-                dotColor: 'emerald',
-                count: acceptedLane.length,
-                emptyText: 'Aún no hay notas validadas con CUDE',
-                children: acceptedLane.map((n) => (
-                  <PkTicketCard
-                    key={n.id}
-                    code={n.id}
-                    timeAgo={n.issueDate}
-                    channelBadge={{
-                      label:
-                        n.noteKind === 'DEBIT'
-                          ? 'ND Validada CUDE'
-                          : 'NC Validada CUDE',
-                      tone: 'emerald',
-                    }}
-                    title={n.customerName}
-                    subtitle={`Factura: ${n.invoiceId}`}
-                    highlightNote={n.reasonDescription}
-                    extraBody={
-                      n.cude ? (
-                        <div
-                          style={{
-                            padding: '6px 9px',
-                            borderRadius: 8,
-                            background: '#ecfdf5',
-                            fontSize: 10.5,
-                            color: '#065f46',
-                            fontFamily: 'monospace',
-                          }}
-                          title={n.cude}
-                        >
-                          CUDE: {n.cude.slice(0, 32)}...
-                        </div>
-                      ) : undefined
-                    }
-                    totalValue={formatCop(n.total)}
-                    processNodes={buildFourStageNodes(
-                      n.docStatus,
-                      n.dianStage,
-                      n.cude,
-                      'CUDE'
-                    )}
-                    secondaryActions={
-                      <PkPrintButton
-                        label="🖨️ Imprimir PDF CUDE"
-                        payload={buildNotePrintPayload(n)}
-                      />
-                    }
-                  />
-                )),
-              },
-            ]}
-          />
-        ) : (
-          <div className="pk-card">
-            <div className="pk-card-head">
-              <div className="pk-card-title">
-                📋 Registro General de Notas Crédito y Notas Débito
-              </div>
-              <span className="pk-badge pk-badge-blue">
-                {filtered.length} notas
-              </span>
+        <div className="pk-card">
+          <div className="pk-card-head">
+            <div className="pk-card-title">
+              📋 Registro General de Notas Crédito y Notas Débito
             </div>
-            <div className="pk-card-body">
-              <div className="pk-table-wrap">
-                <table className="pk-table">
-                  <thead>
-                    <tr>
-                      <th>N° Nota</th>
-                      <th>Tipo</th>
-                      <th>Factura Origen</th>
-                      <th>Adquiriente</th>
-                      <th>Causal DIAN</th>
-                      <th>Total</th>
-                      <th>Progreso 4 Etapas</th>
-                      <th>Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map((n) => {
-                      const st = resolveDianStage(n.dianStage, n.cude);
-                      const isEditable =
-                        n.editable ??
-                        (n.docStatus === 'BORRADOR' ||
-                          (st !== 'ENVIADA' && st !== 'ACEPTADA'));
-                      return (
-                        <tr key={n.id}>
-                          <td>
-                            <strong>{n.id}</strong>
-                            <div
-                              style={{ fontSize: 11, color: 'var(--pk-muted)' }}
-                            >
-                              {n.issueDate}
-                            </div>
-                          </td>
-                          <td>
-                            <span
-                              className={`pk-badge ${
-                                n.noteKind === 'DEBIT'
-                                  ? 'pk-badge-blue'
-                                  : 'pk-badge-amber'
-                              }`}
-                            >
-                              {n.noteKind === 'DEBIT'
-                                ? 'Nota Débito'
-                                : 'Nota Crédito'}
-                            </span>
-                          </td>
-                          <td>
-                            <strong>{n.invoiceId}</strong>
-                          </td>
-                          <td>
-                            <strong>{n.customerName}</strong>
-                            <div
-                              style={{ fontSize: 11, color: 'var(--pk-muted)' }}
-                            >
-                              {n.customerNit}
-                            </div>
-                          </td>
-                          <td style={{ maxWidth: 220, fontSize: 12 }}>
-                            {n.reasonDescription}
-                          </td>
-                          <td>
-                            <strong>{formatCop(n.total)}</strong>
-                          </td>
-                          <td style={{ minWidth: 240 }}>
-                            <PkProcessNodes
-                              compact
-                              steps={buildFourStageNodes(
-                                n.docStatus,
-                                n.dianStage,
-                                n.cude,
-                                'CUDE'
-                              )}
-                            />
-                          </td>
-                          <td>
-                            <div className="pk-row-actions">
-                              {n.docStatus === 'BORRADOR' && (
+            <span className="pk-badge pk-badge-blue">
+              {filtered.length} notas
+            </span>
+          </div>
+          <div className="pk-card-body">
+            <div className="pk-table-wrap">
+              <table className="pk-table">
+                <thead>
+                  <tr>
+                    <th>N° Nota</th>
+                    <th>Tipo</th>
+                    <th>Factura Origen</th>
+                    <th>Adquiriente</th>
+                    <th>Causal DIAN</th>
+                    <th>Total</th>
+                    <th>Progreso 4 Etapas</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((n) => {
+                    const st = resolveDianStage(n.dianStage, n.cude);
+                    const isEditable =
+                      n.editable ??
+                      (n.docStatus === 'BORRADOR' ||
+                        (st !== 'ENVIADA' && st !== 'ACEPTADA'));
+                    return (
+                      <tr key={n.id}>
+                        <td>
+                          <strong>{n.id}</strong>
+                          <div
+                            style={{ fontSize: 11, color: 'var(--pk-muted)' }}
+                          >
+                            {n.issueDate}
+                          </div>
+                        </td>
+                        <td>
+                          <span
+                            className={`pk-badge ${
+                              n.noteKind === 'DEBIT'
+                                ? 'pk-badge-blue'
+                                : 'pk-badge-amber'
+                            }`}
+                          >
+                            {n.noteKind === 'DEBIT'
+                              ? 'Nota Débito'
+                              : 'Nota Crédito'}
+                          </span>
+                        </td>
+                        <td>
+                          <strong>{n.invoiceId}</strong>
+                        </td>
+                        <td>
+                          <strong>{n.customerName}</strong>
+                          <div
+                            style={{ fontSize: 11, color: 'var(--pk-muted)' }}
+                          >
+                            {n.customerNit}
+                          </div>
+                        </td>
+                        <td style={{ maxWidth: 220, fontSize: 12 }}>
+                          {n.reasonDescription}
+                        </td>
+                        <td>
+                          <strong>{formatCop(n.total)}</strong>
+                        </td>
+                        <td style={{ minWidth: 240 }}>
+                          <PkProcessNodes
+                            compact
+                            steps={buildFourStageNodes(
+                              n.docStatus,
+                              n.dianStage,
+                              n.cude,
+                              'CUDE'
+                            )}
+                          />
+                        </td>
+                        <td>
+                          <div className="pk-row-actions">
+                            {n.docStatus === 'BORRADOR' && (
+                              <button
+                                type="button"
+                                className="pk-btn pk-btn-emerald pk-btn-sm"
+                                disabled={busy}
+                                onClick={() => onConfirmNote(n.id)}
+                              >
+                                ✅ Confirmar
+                              </button>
+                            )}
+                            {isEditable && (
+                              <button
+                                type="button"
+                                className="pk-btn pk-btn-outline pk-btn-sm"
+                                onClick={() => onEditNote(n)}
+                              >
+                                ✏️ Editar
+                              </button>
+                            )}
+                            {n.docStatus === 'CONFIRMADA' &&
+                              st === 'SIN_ENVIAR' &&
+                              hasDian && (
                                 <button
                                   type="button"
-                                  className="pk-btn pk-btn-emerald pk-btn-sm"
+                                  className="pk-btn pk-btn-primary pk-btn-sm"
                                   disabled={busy}
-                                  onClick={() => onConfirmNote(n.id)}
+                                  onClick={() => onSendNoteToDian(n)}
                                 >
-                                  ✅ Confirmar
+                                  🚀 DIAN
                                 </button>
                               )}
-                              {isEditable && (
-                                <button
-                                  type="button"
-                                  className="pk-btn pk-btn-outline pk-btn-sm"
-                                  onClick={() => onEditNote(n)}
-                                >
-                                  ✏️ Editar
-                                </button>
-                              )}
-                              {n.docStatus === 'CONFIRMADA' &&
-                                st === 'SIN_ENVIAR' &&
-                                hasDian && (
-                                  <button
-                                    type="button"
-                                    className="pk-btn pk-btn-primary pk-btn-sm"
-                                    disabled={busy}
-                                    onClick={() => onSendNoteToDian(n)}
-                                  >
-                                    🚀 DIAN
-                                  </button>
-                                )}
-                              <PkPrintButton
-                                label="🖨️ PDF"
-                                payload={buildNotePrintPayload(n)}
-                              />
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {filtered.length === 0 && (
-                      <tr>
-                        <td
-                          colSpan={8}
-                          style={{
-                            textAlign: 'center',
-                            color: 'var(--pk-muted)',
-                            padding: 28,
-                          }}
-                        >
-                          No hay notas crédito o débito registradas para el filtro actual.
+                            <PkPrintButton
+                              label="🖨️ PDF"
+                              payload={buildNotePrintPayload(n)}
+                            />
+                          </div>
                         </td>
                       </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                    );
+                  })}
+                  {filtered.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={8}
+                        style={{
+                          textAlign: 'center',
+                          color: 'var(--pk-muted)',
+                          padding: 28,
+                        }}
+                      >
+                        No hay notas crédito o débito registradas para el filtro actual.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
-        )}
+        </div>
       </div>
     </ModuleGate>
   );

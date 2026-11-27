@@ -257,7 +257,7 @@ export const PlatformAdminConsole: React.FC<Props> = ({ onLogout, onStartSupport
     <div className="pk-workstation-shell">
       {/* INSTITUTIONAL WHITE TOPBAR (IDENTICAL VISUAL SYSTEM TO WORKSTATION) */}
       <header className="pk-topbar">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
           <button
             type="button"
             className="pk-mobile-menu-btn"
@@ -276,8 +276,8 @@ export const PlatformAdminConsole: React.FC<Props> = ({ onLogout, onStartSupport
             <div className="pk-brand-meta">
               <div className="pk-brand-title">
                 <span>PROVEKO</span>
-                <span style={{ color: '#cbd5e1', fontWeight: 400 }}>|</span>
-                <span style={{ color: 'var(--pk-primary)', fontWeight: 700, fontSize: 14 }}>
+                <span className="pk-hide-xs" style={{ color: '#cbd5e1', fontWeight: 400 }}>|</span>
+                <span className="pk-hide-xs" style={{ color: 'var(--pk-primary)', fontWeight: 700, fontSize: 14 }}>
                   Consola de Plataforma
                 </span>
               </div>
@@ -339,7 +339,7 @@ export const PlatformAdminConsole: React.FC<Props> = ({ onLogout, onStartSupport
         </div>
 
         {/* RIGHT ACTIONS & PROFILE DROPDOWN */}
-        <div className="pk-row-actions">
+        <div className="pk-row-actions" style={{ flexShrink: 0 }}>
           {hasPlatformPermission('empresas.crear') && (
             <button
               type="button"
@@ -352,7 +352,7 @@ export const PlatformAdminConsole: React.FC<Props> = ({ onLogout, onStartSupport
               + Nueva Empresa
             </button>
           )}
-          <span className="pk-badge pk-badge-blue">{platformRole || 'superadmin'}</span>
+          <span className="pk-badge pk-badge-blue pk-hide-mobile">{platformRole || 'superadmin'}</span>
 
           <div style={{ position: 'relative' }} ref={profileRef}>
             <button
@@ -403,14 +403,9 @@ export const PlatformAdminConsole: React.FC<Props> = ({ onLogout, onStartSupport
       <div className="pk-app-frame">
         {mobileMenuOpen && (
           <div
+            className="pk-mobile-backdrop"
             aria-hidden="true"
             onClick={() => setMobileMenuOpen(false)}
-            style={{
-              position: 'fixed',
-              inset: 0,
-              background: 'rgba(15, 23, 42, 0.45)',
-              zIndex: 80,
-            }}
           />
         )}
 
@@ -429,6 +424,14 @@ export const PlatformAdminConsole: React.FC<Props> = ({ onLogout, onStartSupport
                 title={railPinned ? 'Contraer menú lateral' : 'Fijar menú lateral abierto'}
               >
                 <PkIcon name="pin" size={15} />
+              </button>
+              <button
+                type="button"
+                className="pk-rail-close-btn"
+                aria-label="Cerrar menú lateral"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                ✕
               </button>
             </div>
 

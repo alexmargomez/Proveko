@@ -631,7 +631,7 @@ export const HoteleriaView: React.FC = () => {
                 </div>
                 <input
                   className="pk-input pk-datatable-search"
-                  style={{ minWidth: 280, flex: '1 1 280px', maxWidth: 440 }}
+                  style={{ minWidth: 'min(100%, 280px)', flex: '1 1 280px', maxWidth: 440 }}
                   placeholder="🔎 Buscar suite, piso, acomodación, folio o huésped..."
                   value={roomSearch}
                   onChange={(e) => setRoomSearch(e.target.value)}

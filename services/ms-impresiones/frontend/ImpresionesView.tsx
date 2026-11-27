@@ -658,7 +658,7 @@ export const ImpresionesView: React.FC = () => {
                         flexWrap: 'wrap',
                       }}
                     >
-                      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flex: 1, minWidth: 220 }}>
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flex: 1, minWidth: 'min(100%, 220px)' }}>
                         <div
                           style={{
                             width: 44,
@@ -710,13 +710,12 @@ export const ImpresionesView: React.FC = () => {
                     </div>
 
                     <div
+                      className="pk-grid-2"
                       style={{
                         background: '#f8fafc',
                         border: '1px solid #e2e8f0',
                         borderRadius: 8,
                         padding: '9px 12px',
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
                         gap: '4px 12px',
                         fontSize: 11.5,
                         color: '#1e293b',
@@ -738,13 +737,12 @@ export const ImpresionesView: React.FC = () => {
 
                     {canvasVariant === 'factura_taller' && (
                       <div
+                        className="pk-grid-3"
                         style={{
                           background: '#eff6ff',
                           border: `1.5px solid ${safeColor}`,
                           borderRadius: 8,
                           padding: '10px 12px',
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
                           gap: 8,
                           fontSize: 11.5,
                         }}
@@ -848,7 +846,7 @@ export const ImpresionesView: React.FC = () => {
 
                       <div
                         style={{
-                          minWidth: 210,
+                          minWidth: 'min(100%, 210px)',
                           border: '1px solid #cbd5e1',
                           borderRadius: 8,
                           padding: '8px 12px',

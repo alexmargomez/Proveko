@@ -75,7 +75,7 @@ export const AdminMyAccountTab: React.FC = () => {
           </span>
         </div>
         <div className="pk-card-body pk-stack">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13 }}>
+          <div className="pk-grid-2" style={{ gap: 12, fontSize: 13 }}>
             <div>
               <div className="pk-label">Operador</div>
               <div style={{ fontWeight: 700 }}>{me?.fullName || username}</div>

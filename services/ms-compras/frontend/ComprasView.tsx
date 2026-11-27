@@ -640,7 +640,7 @@ export const ComprasView: React.FC = () => {
                   placeholder="🔎 Buscar orden por consecutivo, proveedor, NIT o referencia..."
                 />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                  <div style={{ minWidth: 250 }}>
+                  <div style={{ minWidth: 'min(100%, 250px)' }}>
                     <PkSimpleSelect
                       ariaLabel="Filtrar por proveedor"
                       value={orderSupplierFilter}

@@ -295,7 +295,7 @@ export const AdminStaffAndRolesTab: React.FC<{
                     label="Exigir motivo/ticket obligatorio para ver o exportar datos de clientes"
                   />
                 </div>
-                <div className="pk-field" style={{ minWidth: 220 }}>
+                <div className="pk-field" style={{ flex: '1 1 200px', minWidth: 0 }}>
                   <input
                     placeholder="Filtrar permisos..."
                     value={permSearch}
@@ -322,7 +322,7 @@ export const AdminStaffAndRolesTab: React.FC<{
                       )}
                     </div>
                     <div className="pk-card-body" style={{ padding: 12 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: 10 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 260px), 1fr))', gap: 10 }}>
                         {list.map((spec) => {
                           const checked = draftRole.permissions.includes('*') || draftRole.permissions.includes(spec.key);
                           return (

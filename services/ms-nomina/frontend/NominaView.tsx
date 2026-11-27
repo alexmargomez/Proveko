@@ -470,7 +470,7 @@ export const NominaView: React.FC = () => {
             />
             {activePill === 'payrolls' ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                <div style={{ minWidth: 270 }}>
+                <div style={{ minWidth: 'min(100%, 270px)' }}>
                   <PkSimpleSelect
                     ariaLabel="Filtrar por colaborador"
                     value={employeeFilter}
@@ -901,7 +901,7 @@ export const NominaView: React.FC = () => {
         <div className="pk-card">
           <div className="pk-card-head">
             <div className="pk-card-title">2. Datos Oficiales del Desprendible de Pago</div>
-            <div style={{ minWidth: 260 }}>
+            <div style={{ minWidth: 'min(100%, 260px)' }}>
               <PkProcessNodes
                 compact
                 steps={[

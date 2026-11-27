@@ -483,7 +483,7 @@ export const ContabilidadView: React.FC = () => {
             />
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
               {activePill === 'puc' && (
-                <div style={{ minWidth: 240 }}>
+                <div style={{ minWidth: 'min(100%, 240px)' }}>
                   <PkSimpleSelect
                     ariaLabel="Filtrar subcuentas por naturaleza contable"
                     value={categoryFilter}
@@ -818,7 +818,7 @@ export const ContabilidadView: React.FC = () => {
             <div style={{ fontWeight: 900, fontSize: 14, color: 'var(--pk-navy)' }}>
               ⚖️ Barra de Equilibrio de Partida Doble en Vivo (Total Débito vs Total Crédito)
             </div>
-            <div style={{ minWidth: 260 }}>
+            <div style={{ minWidth: 'min(100%, 260px)' }}>
               <PkProcessNodes
                 compact
                 steps={[

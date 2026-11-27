@@ -141,7 +141,7 @@ export const TopModuleTabs: React.FC<{
 
   return (
     <header className="pk-topbar">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
           {onToggleMobileMenu && (
             <button
               type="button"
@@ -246,9 +246,9 @@ export const TopModuleTabs: React.FC<{
           )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           {role === 'superadmin' && tenantsList.filter((t) => t.status !== 'SUSPENDED').length > 1 && (
-            <div style={{ minWidth: 220, maxWidth: 260 }}>
+            <div className="pk-hide-mobile" style={{ minWidth: 220, maxWidth: 260 }}>
               <PkSimpleSelect
                 ariaLabel="Cambiar empresa activa"
                 compact
@@ -276,7 +276,7 @@ export const TopModuleTabs: React.FC<{
                 className="pk-btn pk-btn-primary pk-btn-sm"
                 aria-haspopup="menu"
                 aria-expanded={quickCreateOpen}
-                style={{ height: 34, padding: '0 13px', borderRadius: 8 }}
+                style={{ height: 34, padding: '0 12px', borderRadius: 8 }}
                 onClick={() => setQuickCreateOpen((v) => !v)}
               >
                 <PkIcon name="plus" size={15} />
@@ -332,7 +332,7 @@ export const TopModuleTabs: React.FC<{
           {isCompanyAdmin && (
             <button
               type="button"
-              className="pk-btn pk-btn-outline pk-btn-sm"
+              className="pk-btn pk-btn-outline pk-btn-sm pk-hide-mobile"
               style={{ height: 34, padding: '0 10px' }}
               title="Configuración de Usuarios y Servicios por Empleado"
               onClick={() => setWorkstationView('users')}
@@ -345,7 +345,7 @@ export const TopModuleTabs: React.FC<{
           {role === 'superadmin' && (
             <button
               type="button"
-              className="pk-btn pk-btn-outline pk-btn-sm"
+              className="pk-btn pk-btn-outline pk-btn-sm pk-hide-mobile"
               style={{ height: 34 }}
               onClick={onOpenAdmin}
             >

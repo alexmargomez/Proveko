@@ -522,13 +522,13 @@ export const AgendaView: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
             <input
               className="pk-input pk-datatable-search"
-              style={{ flex: 1, minWidth: 260 }}
+              style={{ flex: 1, minWidth: 'min(100%, 260px)' }}
               placeholder="🔎 Buscar por código de cita, paciente/cliente, documento, especialista o motivo..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-              <div style={{ minWidth: 270 }}>
+              <div style={{ minWidth: 'min(100%, 270px)' }}>
                 <PkSimpleSelect
                   ariaLabel="Filtrar por profesional o recurso"
                   value={resourceFilter}

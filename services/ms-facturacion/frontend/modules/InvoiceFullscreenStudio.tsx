@@ -3,6 +3,7 @@ import {
   FeatureGate,
   PkAutoCodeInput,
   PkFullscreenDialog,
+  PkModal,
   PkProgressBar,
   PkProcessNodes,
   PkSelect,
@@ -119,6 +120,43 @@ export interface InvoiceStudioSubmitPayload {
   notes: string;
 }
 
+export interface ComandaOrderItemOption {
+  itemId: string;
+  productId: string;
+  name: string;
+  qty: number;
+  price: number;
+  note?: string;
+}
+
+export interface ComandaOrderOption {
+  id: string;
+  name: string;
+  zone: string;
+  waiter: string;
+  status: string;
+  orderCode?: string;
+  channel?: string;
+  orderStage?: string;
+  customerName?: string;
+  customerPhone?: string;
+  deliveryAddress?: string;
+  guests?: number;
+  paymentHint?: string;
+  openedAt?: string;
+  items: ComandaOrderItemOption[];
+  total: number;
+}
+
+export interface ComandaMenuOption {
+  id: string;
+  code: string;
+  name: string;
+  category: string;
+  salePrice: number;
+  taxPct?: number;
+}
+
 export interface InvoiceFullscreenStudioProps {
   open: boolean;
   onClose: () => void;
@@ -131,10 +169,14 @@ export interface InvoiceFullscreenStudioProps {
   products: ProductOption[];
   vehicles: VehicleOption[];
   workers: WorkerOption[];
+  comandaOrders?: ComandaOrderOption[];
+  comandaMenu?: ComandaMenuOption[];
   onOpenNewCustomerModal: () => void;
   onOpenNewVehicleModal: () => void;
   onSubmit: (payload: InvoiceStudioSubmitPayload) => void;
 }
+
+type ItemDialogMode = 'PRODUCTO' | 'SERVICIO';
 
 function defaultDueDate30Days(): string {
   const d = new Date();
@@ -154,6 +196,8 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
   products,
   vehicles,
   workers,
+  comandaOrders = [],
+  comandaMenu = [],
   onOpenNewCustomerModal,
   onOpenNewVehicleModal,
   onSubmit,
@@ -162,7 +206,6 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
 
   const hasClientes = hasService('ms-clientes');
   const hasInventario = hasService('ms-inventario');
-  const hasHoteleria = hasService('ms-hoteleria');
   const hasComandas = hasService('ms-comandas');
   const hasTallerModule = hasModule('facturas_taller');
   const canCredit = hasFeature('', 'pagos_mixtos_cxc');
@@ -199,25 +242,43 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
   const [linkedRoomId, setLinkedRoomId] = useState('');
   const [linkedTableId, setLinkedTableId] = useState('');
 
+  // Dedicated Comanda Order Selector Dialog state
+  const [comandaDialogOpen, setComandaDialogOpen] = useState(false);
+  const [comandaSearch, setComandaSearch] = useState('');
+  const [comandaChannelFilter, setComandaChannelFilter] = useState<string>('ALL');
+
+  // Dedicated Item Selector Dialog state
+  const [itemDialogOpen, setItemDialogOpen] = useState(false);
+  const [itemDialogMode, setItemDialogMode] = useState<ItemDialogMode>('PRODUCTO');
   const [catalogSearch, setCatalogSearch] = useState('');
+  const [catalogCategory, setCatalogCategory] = useState('ALL');
+  const [qtyDraftByProduct, setQtyDraftByProduct] = useState<Record<string, string>>({});
+
+  const [srvCode, setSrvCode] = useState('SRV-MO');
   const [srvName, setSrvName] = useState('');
+  const [srvQty, setSrvQty] = useState('1');
   const [srvPrice, setSrvPrice] = useState('85000');
   const [srvTaxPct, setSrvTaxPct] = useState('19');
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setItemDialogOpen(false);
+      setComandaDialogOpen(false);
+      return;
+    }
 
     if (editingInv) {
-      const inferredType = ((editingInv.invoiceType || '').toUpperCase() ||
-        (editingInv.plate || editingInv.vehicleId
+      const rawType = (editingInv.invoiceType || '').toUpperCase();
+      const inferredType: InvoiceTypeKey =
+        rawType === 'TALLER' || editingInv.plate || editingInv.vehicleId
           ? 'TALLER'
-          : editingInv.linkedRoomId
-          ? 'HOTELERIA'
-          : editingInv.linkedTableId
+          : rawType === 'COMANDA' || editingInv.linkedTableId
           ? 'COMANDA'
-          : editingInv.contractId || editingInv.purchaseOrderRef
+          : rawType === 'CORPORATIVA_CXC' ||
+            editingInv.contractId ||
+            editingInv.purchaseOrderRef
           ? 'CORPORATIVA_CXC'
-          : 'MOSTRADOR')) as InvoiceTypeKey;
+          : 'MOSTRADOR';
 
       setInvoiceType(inferredType);
       setCustomerId(editingInv.customerId || '');
@@ -295,10 +356,19 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
       {
         key: 'MOSTRADOR',
         icon: '🛒',
-        title: 'Venta Estándar / Mostrador POS',
-        description: 'Liquidación rápida de productos y servicios en mostrador.',
+        title: 'Factura Estándar / Mostrador',
+        description: 'Liquidación directa de productos y servicios comerciales.',
       },
     ];
+    if (hasComandas) {
+      opts.push({
+        key: 'COMANDA',
+        icon: '🍽️',
+        title: 'Liquidación de Comanda / Orden',
+        description: 'Selecciona la orden o mesa activa y carga sus servicios automáticamente.',
+        badge: 'Comandas',
+      });
+    }
     if (hasTallerModule) {
       opts.push({
         key: 'TALLER',
@@ -308,33 +378,116 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
         badge: 'Automotriz',
       });
     }
-    if (hasHoteleria || Boolean(linkedRoomId)) {
-      opts.push({
-        key: 'HOTELERIA',
-        icon: '🏨',
-        title: 'Check-Out Hotelero',
-        description: 'Cierre de habitación/suite, alojamiento y consumos.',
-      });
-    }
-    if (hasComandas || Boolean(linkedTableId)) {
-      opts.push({
-        key: 'COMANDA',
-        icon: '🍽️',
-        title: 'Cuenta Gastronómica',
-        description: 'Liquidación de mesa, domicilio o pedido de restaurante.',
-      });
-    }
     if (canCredit) {
       opts.push({
         key: 'CORPORATIVA_CXC',
         icon: '🏢',
-        title: 'Factura Corporativa / Convenio Crédito',
+        title: 'Factura Corporativa / Crédito CxC',
         description: 'Orden de compra, fecha de vencimiento y cartera CxC.',
         badge: 'Crédito CxC',
       });
     }
     return opts;
-  }, [hasTallerModule, hasHoteleria, hasComandas, canCredit, linkedRoomId, linkedTableId]);
+  }, [hasComandas, hasTallerModule, canCredit]);
+
+  const openComandaOrders = useMemo(
+    () => comandaOrders.filter((ord) => (ord.items || []).length > 0),
+    [comandaOrders]
+  );
+
+  const selectedComandaOrder = useMemo(
+    () => comandaOrders.find((ord) => ord.id === linkedTableId) || null,
+    [comandaOrders, linkedTableId]
+  );
+
+  const filteredComandaOrders = useMemo(() => {
+    const q = comandaSearch.trim().toLowerCase();
+    return openComandaOrders.filter((ord) => {
+      const ch = (ord.channel || 'MESA').toUpperCase();
+      if (comandaChannelFilter !== 'ALL' && ch !== comandaChannelFilter) {
+        return false;
+      }
+      if (!q) return true;
+      const dishesText = (ord.items || [])
+        .map((it) => `${it.name} ${it.note || ''}`)
+        .join(' ')
+        .toLowerCase();
+      return (
+        (ord.orderCode || '').toLowerCase().includes(q) ||
+        ord.name.toLowerCase().includes(q) ||
+        (ord.customerName || '').toLowerCase().includes(q) ||
+        (ord.waiter || '').toLowerCase().includes(q) ||
+        (ord.zone || '').toLowerCase().includes(q) ||
+        dishesText.includes(q)
+      );
+    });
+  }, [openComandaOrders, comandaChannelFilter, comandaSearch]);
+
+  const handleSelectComandaOrder = (ord: ComandaOrderOption) => {
+    setInvoiceType('COMANDA');
+    setLinkedTableId(ord.id);
+
+    if (
+      ord.customerName &&
+      ord.customerName.trim() !== '' &&
+      (!customerId &&
+        (customerName.trim() === '' ||
+          customerName === 'Consumidor Final Mostrador'))
+    ) {
+      setCustomerName(ord.customerName.trim());
+    }
+
+    const mappedItems: InvoiceItemRecord[] = (ord.items || []).map((it) => {
+      const candidateId = (it.productId || '').trim();
+      const isMenuDish = !candidateId || candidateId.toLowerCase().startsWith('mnu-');
+      const matchedWarehouseProd =
+        !isMenuDish && hasInventario
+          ? products.find(
+              (p) =>
+                p.id === candidateId ||
+                p.code.toUpperCase() === candidateId.toUpperCase()
+            )
+          : undefined;
+      const menuRef = comandaMenu.find((m) => m.id === candidateId);
+
+      const resolvedProdId = matchedWarehouseProd ? matchedWarehouseProd.id : '';
+      const resolvedType: 'PRODUCTO' | 'SERVICIO' =
+        resolvedProdId !== '' ? 'PRODUCTO' : 'SERVICIO';
+      const qty = Math.max(1, Number(it.qty || 1));
+      const unitPrice = Math.max(0, Number(it.price || 0));
+      const taxPct = matchedWarehouseProd
+        ? matchedWarehouseProd.taxPct
+        : menuRef?.taxPct ?? 8;
+      const code = matchedWarehouseProd?.code || menuRef?.code || 'GASTRO';
+      const description = it.note ? `${it.name} (${it.note})` : it.name;
+
+      return {
+        productId: resolvedProdId,
+        code,
+        description,
+        itemType: resolvedType,
+        quantity: qty,
+        unitPrice,
+        taxPct,
+        subtotal: Math.round(qty * unitPrice),
+      };
+    });
+
+    setCart(mappedItems);
+    setComandaDialogOpen(false);
+    toast(
+      `Orden ${ord.orderCode || ord.name} seleccionada (${mappedItems.length} servicio(s) cargados)`
+    );
+  };
+
+  const openItemDialog = (preferredMode: ItemDialogMode) => {
+    const nextMode: ItemDialogMode =
+      preferredMode === 'PRODUCTO' && hasInventario ? 'PRODUCTO' : 'SERVICIO';
+    setItemDialogMode(nextMode);
+    setCatalogSearch('');
+    setCatalogCategory('ALL');
+    setItemDialogOpen(true);
+  };
 
   const handleSelectCustomer = (custId: string) => {
     setCustomerId(custId);
@@ -380,14 +533,15 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
     }
   };
 
-  const addProductToCart = (p: ProductOption) => {
+  const addProductToCart = (p: ProductOption, customQty?: number) => {
+    const qtyToAdd = Math.max(1, Math.round(customQty || 1));
     setCart((prev) => {
       const idx = prev.findIndex(
         (it) => it.itemType === 'PRODUCTO' && it.productId === p.id
       );
       if (idx >= 0) {
         const copy = [...prev];
-        const nextQty = copy[idx].quantity + 1;
+        const nextQty = copy[idx].quantity + qtyToAdd;
         copy[idx] = {
           ...copy[idx],
           quantity: nextQty,
@@ -402,39 +556,47 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
           code: p.code,
           description: p.name,
           itemType: 'PRODUCTO',
-          quantity: 1,
+          quantity: qtyToAdd,
           unitPrice: p.salePrice,
           taxPct: p.taxPct,
-          subtotal: Math.round(p.salePrice),
+          subtotal: Math.round(qtyToAdd * p.salePrice),
         },
       ];
     });
+    setQtyDraftByProduct((prev) => ({ ...prev, [p.id]: '1' }));
   };
 
-  const handleAddQuickService = (e: React.FormEvent) => {
-    e.preventDefault();
+  const appendServiceItem = (closeAfter: boolean) => {
     const desc = srvName.trim();
+    const codeClean = srvCode.trim().toUpperCase() || 'SRV-MO';
+    const qtyVal = Math.max(1, Math.round(Number(srvQty || 1)));
     const priceVal = Number(srvPrice || 0);
     const taxVal = Math.max(0, Math.min(100, Number(srvTaxPct || 0)));
     if (!desc || !Number.isFinite(priceVal) || priceVal <= 0) {
-      toast('Ingresa la descripción del servicio y un valor mayor a cero');
+      toast('Ingresa la descripción del servicio y un valor unitario mayor a cero');
       return;
     }
     setCart((prev) => [
       ...prev,
       {
         productId: '',
-        code: 'SRV-MO',
+        code: codeClean,
         description: desc,
         itemType: 'SERVICIO',
-        quantity: 1,
+        quantity: qtyVal,
         unitPrice: priceVal,
         taxPct: taxVal,
-        subtotal: Math.round(priceVal),
+        subtotal: Math.round(qtyVal * priceVal),
         workerId: invoiceType === 'TALLER' ? mechanicId || undefined : undefined,
       },
     ]);
     setSrvName('');
+    setSrvQty('1');
+    if (closeAfter) {
+      setItemDialogOpen(false);
+    } else {
+      toast(`Concepto "${desc}" agregado a la factura`);
+    }
   };
 
   const updateCartItem = (index: number, patch: Partial<InvoiceItemRecord>) => {
@@ -476,16 +638,45 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
     : grandTotal;
   const pendingBalancePreview = Math.max(0, grandTotal - paidAmount);
 
+  const categoryOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of products) {
+      if (p.category && p.category.trim()) {
+        set.add(p.category.trim());
+      }
+    }
+    return [
+      { value: 'ALL', label: 'Todas las categorías' },
+      ...Array.from(set)
+        .sort((a, b) => a.localeCompare(b, 'es'))
+        .map((cat) => ({ value: cat, label: cat })),
+    ];
+  }, [products]);
+
   const filteredCatalog = useMemo(() => {
     const q = catalogSearch.trim().toLowerCase();
-    if (!q) return products;
-    return products.filter(
-      (p) =>
+    return products.filter((p) => {
+      if (catalogCategory !== 'ALL' && p.category !== catalogCategory) {
+        return false;
+      }
+      if (!q) return true;
+      return (
         p.name.toLowerCase().includes(q) ||
         p.code.toLowerCase().includes(q) ||
         p.category.toLowerCase().includes(q)
-    );
-  }, [products, catalogSearch]);
+      );
+    });
+  }, [products, catalogSearch, catalogCategory]);
+
+  const cartQtyByProductId = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const it of cart) {
+      if (it.productId) {
+        map[it.productId] = (map[it.productId] || 0) + it.quantity;
+      }
+    }
+    return map;
+  }, [cart]);
 
   const customerSelectItems: CustomerOption[] = [
     {
@@ -498,7 +689,7 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
 
   const triggerSubmit = (saveMode: 'DRAFT' | 'CONFIRM', renderPrint: boolean) => {
     if (cart.length === 0) {
-      toast('Agrega al menos un producto o servicio al carrito para continuar');
+      toast('Agrega al menos un producto o servicio a la factura para continuar');
       return;
     }
     if (effectiveCreditMode && pendingBalancePreview > 0.009 && !customerId) {
@@ -510,8 +701,6 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
     const selectedWorker = workers.find((w) => w.id === mechanicId);
 
     const isTaller = invoiceType === 'TALLER';
-    const isHotel = invoiceType === 'HOTELERIA';
-    const isComanda = invoiceType === 'COMANDA';
     const isCorp = invoiceType === 'CORPORATIVA_CXC';
 
     onSubmit({
@@ -535,8 +724,8 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
       mechanicId: isTaller ? mechanicId : '',
       mechanicName: isTaller ? selectedWorker?.name || '' : '',
       linkedWorkOrderId: isTaller ? workOrderId : '',
-      linkedRoomId: isHotel ? linkedRoomId : '',
-      linkedTableId: isComanda ? linkedTableId : '',
+      linkedRoomId,
+      linkedTableId,
       workshopMeta: isTaller
         ? {
             vehicleBrand: selectedVehicle
@@ -562,333 +751,190 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
     : buildFourStageNodes('BORRADOR', 'SIN_ENVIAR', '');
 
   return (
-    <PkFullscreenDialog
-      open={open}
-      onClose={onClose}
-      title={
-        editingInv
-          ? `✏️ Editar Factura ${editingInv.id}`
-          : '🧾 Estudio Modular de Facturación Comercial'
-      }
-      subtitle={
-        editingInv
-          ? 'Actualiza líneas, datos tributarios o condiciones de pago antes de transmitir o subsanar ante la DIAN.'
-          : 'Selecciona el tipo de operación para desplegar únicamente sus apartados especializados y guarda como borrador o confirma en firme.'
-      }
-      badge={{
-        label: editingInv
-          ? editingDianStage === 'RECHAZADA'
-            ? 'Subsanación DIAN'
-            : editingInv.docStatus === 'BORRADOR'
-            ? `Borrador ${editingInv.id}`
-            : `Confirmada ${editingInv.id}`
-          : `Próxima Oficial: ${nextInvoiceNumber}`,
-        tone:
-          editingDianStage === 'RECHAZADA'
-            ? 'rose'
-            : editingInv?.docStatus === 'BORRADOR'
-            ? 'amber'
-            : 'blue',
-      }}
-      subheader={
-        <div className="pk-stack" style={{ gap: 14 }}>
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: 16,
-              flexWrap: 'wrap',
-              padding: '8px 14px',
-              background: '#ffffff',
-              borderRadius: 12,
-              border: '1px solid var(--pk-border)',
-            }}
-          >
-            <div style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--pk-navy)' }}>
-              Ciclo Fiscal en 4 Etapas Conectadas
+    <>
+      <PkFullscreenDialog
+        open={open}
+        onClose={onClose}
+        title={
+          editingInv
+            ? `✏️ Editar Factura ${editingInv.id}`
+            : '🧾 Crear Factura de Venta'
+        }
+        subtitle={
+          editingInv
+            ? 'Actualiza datos del adquiriente, conceptos o condiciones de pago antes de enviar o subsanar ante la DIAN.'
+            : 'Completa los datos principales de la factura, agrega productos o servicios desde el selector y guarda en borrador o confirma en firme.'
+        }
+        badge={{
+          label: editingInv
+            ? editingDianStage === 'RECHAZADA'
+              ? 'Subsanación DIAN'
+              : editingInv.docStatus === 'BORRADOR'
+              ? `Borrador ${editingInv.id}`
+              : `Confirmada ${editingInv.id}`
+            : `Próxima Oficial: ${nextInvoiceNumber}`,
+          tone:
+            editingDianStage === 'RECHAZADA'
+              ? 'rose'
+              : editingInv?.docStatus === 'BORRADOR'
+              ? 'amber'
+              : 'blue',
+        }}
+        subheader={
+          <div className="pk-stack" style={{ gap: 14 }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: 16,
+                flexWrap: 'wrap',
+                padding: '8px 14px',
+                background: '#ffffff',
+                borderRadius: 12,
+                border: '1px solid var(--pk-border)',
+              }}
+            >
+              <div style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--pk-navy)' }}>
+                Estado del Documento
+              </div>
+              <div style={{ flex: 1, minWidth: 'min(100%, 260px)', maxWidth: 680 }}>
+                <PkProcessNodes steps={processSteps} compact />
+              </div>
             </div>
-            <div style={{ flex: 1, minWidth: 280, maxWidth: 680 }}>
-              <PkProcessNodes steps={processSteps} compact />
-            </div>
-          </div>
 
-          <PkTypeCards
-            label="Selecciona la Modalidad Operativa de la Factura"
-            options={typeOptions}
-            value={invoiceType}
-            onChange={(key) => {
-              const nextKey = key as InvoiceTypeKey;
-              setInvoiceType(nextKey);
-              if (nextKey === 'CORPORATIVA_CXC') {
-                setIsCreditMode(true);
-              }
-            }}
-          />
-        </div>
-      }
-      footerLeft={
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          <div>
-            <div style={{ fontSize: 11.5, color: 'var(--pk-muted)', fontWeight: 700 }}>
-              RESUMEN DEL DOCUMENTO ({cart.length} ÍTEMS)
-            </div>
-            <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--pk-navy)' }}>
-              Total: {formatCop(grandTotal)}
-              {pendingBalancePreview > 0 && (
-                <span
-                  style={{
-                    marginLeft: 10,
-                    fontSize: 13,
-                    color: 'var(--pk-amber)',
-                    fontWeight: 800,
-                  }}
-                >
-                  • Saldo CxC: {formatCop(pendingBalancePreview)}
-                </span>
-              )}
+            {typeOptions.length > 1 && (
+              <PkTypeCards
+                label="Tipo de Factura"
+                options={typeOptions}
+                value={invoiceType}
+                onChange={(key) => {
+                  const nextKey = key as InvoiceTypeKey;
+                  setInvoiceType(nextKey);
+                  if (nextKey === 'CORPORATIVA_CXC') {
+                    setIsCreditMode(true);
+                  }
+                }}
+              />
+            )}
+          </div>
+        }
+        footerLeft={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: 11.5, color: 'var(--pk-muted)', fontWeight: 700 }}>
+                RESUMEN DEL DOCUMENTO ({cart.length} ÍTEMS)
+              </div>
+              <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--pk-navy)' }}>
+                Total: {formatCop(grandTotal)}
+                {pendingBalancePreview > 0 && (
+                  <span
+                    style={{
+                      marginLeft: 10,
+                      fontSize: 13,
+                      color: 'var(--pk-amber)',
+                      fontWeight: 800,
+                    }}
+                  >
+                    • Saldo CxC: {formatCop(pendingBalancePreview)}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      }
-      footerActions={
-        <>
-          <button
-            type="button"
-            className="pk-btn pk-btn-outline"
-            disabled={busy}
-            onClick={onClose}
-          >
-            Cancelar
-          </button>
-          {!isConfirmedEdit && (
+        }
+        footerActions={
+          <>
             <button
               type="button"
-              className="pk-btn pk-btn-amber"
+              className="pk-btn pk-btn-outline"
               disabled={busy}
-              onClick={() => triggerSubmit('DRAFT', false)}
+              onClick={onClose}
             >
-              {busy ? 'Guardando...' : '💾 Guardar Borrador'}
+              Cancelar
             </button>
-          )}
-          <button
-            type="button"
-            className="pk-btn pk-btn-primary"
-            disabled={busy}
-            onClick={() => triggerSubmit('CONFIRM', false)}
-          >
-            {busy
-              ? 'Procesando...'
-              : isConfirmedEdit
-              ? '💾 Guardar Corrección'
-              : '✅ Confirmar Factura'}
-          </button>
-          <button
-            type="button"
-            className="pk-btn pk-btn-emerald"
-            disabled={busy}
-            onClick={() => triggerSubmit('CONFIRM', true)}
-          >
-            {busy
-              ? 'Procesando...'
-              : isConfirmedEdit
-              ? '🖨️ Guardar e Imprimir'
-              : '🖨️ Confirmar e Imprimir'}
-          </button>
-        </>
-      }
-    >
-      <div className="pk-stack">
-        {editingDianStage === 'RECHAZADA' && editingInv && (
-          <div
-            className="pk-card"
-            style={{
-              background: '#fff1f2',
-              borderColor: '#fda4af',
-              padding: '14px 18px',
-            }}
-          >
-            <strong style={{ color: '#be123c', fontSize: 13.5 }}>
-              ⚠️ Subsanación de Rechazo DIAN ({editingInv.rejectionCode || 'DIAN-RUT-04'}):{' '}
-            </strong>
-            <span style={{ fontSize: 13, color: '#9f1239' }}>
-              {editingInv.rejectionMessage ||
-                'Revisa el NIT, razón social o valores del documento.'}{' '}
-              Al guardar los cambios podrás volver a transmitir en el Paso 1 DIAN.
-            </span>
-          </div>
-        )}
-
-        <div className="pk-grid-2" style={{ alignItems: 'start' }}>
-          {/* LEFT PANEL: CATALOG + QUICK SERVICE */}
-          <div className="pk-card">
-            <div className="pk-card-head">
-              <div className="pk-card-title">
-                📦 Catálogo Visual y Servicios Libres
-              </div>
-              <input
-                className="pk-input"
-                value={catalogSearch}
-                onChange={(e) => setCatalogSearch(e.target.value)}
-                placeholder="🔎 Filtrar por nombre, SKU o categoría..."
-                style={{ maxWidth: 260, minHeight: 38 }}
-              />
-            </div>
-            <div className="pk-card-body">
-              {filteredCatalog.length > 0 ? (
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))',
-                    gap: 12,
-                    marginBottom: 20,
-                    maxHeight: 430,
-                    overflowY: 'auto',
-                    paddingRight: 4,
-                  }}
-                >
-                  {filteredCatalog.map((p) => (
-                    <div
-                      key={p.id}
-                      style={{
-                        border: '1px solid var(--pk-border)',
-                        borderRadius: 12,
-                        padding: '13px 14px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'space-between',
-                        gap: 10,
-                        background: '#f8fafc',
-                      }}
-                    >
-                      <div>
-                        <div
-                          style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            gap: 6,
-                          }}
-                        >
-                          <span className="pk-badge pk-badge-slate">{p.code}</span>
-                          <span
-                            className={`pk-badge ${
-                              p.stock > p.minStock
-                                ? 'pk-badge-emerald'
-                                : 'pk-badge-amber'
-                            }`}
-                          >
-                            Stock: {p.stock}
-                          </span>
-                        </div>
-                        <div style={{ fontWeight: 800, fontSize: 13.5, marginTop: 8 }}>
-                          {p.name}
-                        </div>
-                        <div
-                          style={{
-                            fontSize: 11.5,
-                            color: 'var(--pk-muted)',
-                            marginTop: 2,
-                          }}
-                        >
-                          {p.category} • IVA {p.taxPct}%
-                        </div>
-                      </div>
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          paddingTop: 6,
-                          borderTop: '1px solid #e2e8f0',
-                        }}
-                      >
-                        <strong style={{ fontSize: 14.5, color: 'var(--pk-primary)' }}>
-                          {formatCop(p.salePrice)}
-                        </strong>
-                        <button
-                          type="button"
-                          className="pk-btn pk-btn-primary pk-btn-sm"
-                          onClick={() => addProductToCart(p)}
-                        >
-                          + Agregar
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div
-                  style={{
-                    padding: '14px 0',
-                    fontSize: 13,
-                    color: 'var(--pk-muted)',
-                  }}
-                >
-                  {hasInventario
-                    ? 'No se encontraron productos para el criterio ingresado.'
-                    : 'Catálogo de inventario desacoplado; agrega conceptos o servicios libres debajo.'}
-                </div>
-              )}
-
-              <form
-                onSubmit={handleAddQuickService}
-                style={{ borderTop: '1px solid #e2e8f0', paddingTop: 16 }}
+            {!isConfirmedEdit && (
+              <button
+                type="button"
+                className="pk-btn pk-btn-amber"
+                disabled={busy}
+                onClick={() => triggerSubmit('DRAFT', false)}
               >
-                <div
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 800,
-                    marginBottom: 12,
-                    color: 'var(--pk-navy)',
-                  }}
-                >
-                  🛠️ Agregar Servicio Libre / Concepto Personalizado
-                </div>
-                <div className="pk-form-grid cols-2">
-                  <div className="pk-field pk-col-span-full">
-                    <label>Descripción del Servicio o Concepto</label>
-                    <input
-                      value={srvName}
-                      onChange={(e) => setSrvName(e.target.value)}
-                      placeholder="Ej: Mano de obra especializada, alojamiento o asesoría"
-                    />
-                  </div>
-                  <div className="pk-field">
-                    <label>Valor Unitario ($)</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={srvPrice}
-                      onChange={(e) => setSrvPrice(e.target.value)}
-                    />
-                  </div>
-                  <PkSimpleSelect
-                    label="Tarifa IVA (%)"
-                    value={srvTaxPct}
-                    onChange={setSrvTaxPct}
-                    searchable={false}
-                    options={[
-                      { value: '0', label: '0% — Excluido / Exento' },
-                      { value: '5', label: '5% — Tarifa Reducida' },
-                      { value: '8', label: '8% — Impoconsumo Gastronomía' },
-                      { value: '19', label: '19% — Tarifa General IVA' },
-                    ]}
-                  />
-                  <div className="pk-form-actions pk-col-span-full">
-                    <button type="submit" className="pk-btn pk-btn-outline">
-                      + Añadir Concepto al Carrito
-                    </button>
-                  </div>
-                </div>
-              </form>
+                {busy ? 'Guardando...' : '💾 Guardar Borrador'}
+              </button>
+            )}
+            <button
+              type="button"
+              className="pk-btn pk-btn-primary"
+              disabled={busy}
+              onClick={() => triggerSubmit('CONFIRM', false)}
+            >
+              {busy
+                ? 'Procesando...'
+                : isConfirmedEdit
+                ? '💾 Guardar Corrección'
+                : '✅ Confirmar Factura'}
+            </button>
+            <button
+              type="button"
+              className="pk-btn pk-btn-emerald"
+              disabled={busy}
+              onClick={() => triggerSubmit('CONFIRM', true)}
+            >
+              {busy
+                ? 'Procesando...'
+                : isConfirmedEdit
+                ? '🖨️ Guardar e Imprimir'
+                : '🖨️ Confirmar e Imprimir'}
+            </button>
+          </>
+        }
+      >
+        <div
+          className="pk-stack"
+          style={{ maxWidth: 1320, margin: '0 auto', width: '100%' }}
+        >
+          {editingDianStage === 'RECHAZADA' && editingInv && (
+            <div
+              className="pk-card"
+              style={{
+                background: '#fff1f2',
+                borderColor: '#fda4af',
+                padding: '14px 18px',
+              }}
+            >
+              <strong style={{ color: '#be123c', fontSize: 13.5 }}>
+                ⚠️ Subsanación de Rechazo DIAN ({editingInv.rejectionCode || 'DIAN-RUT-04'}):{' '}
+              </strong>
+              <span style={{ fontSize: 13, color: '#9f1239' }}>
+                {editingInv.rejectionMessage ||
+                  'Revisa el NIT, razón social o valores del documento.'}{' '}
+                Al guardar los cambios podrás volver a transmitir en el Paso 1 DIAN.
+              </span>
             </div>
-          </div>
+          )}
 
-          {/* RIGHT PANEL: MODULAR HEADER + CART + TOTALS */}
+          {linkedRoomId && (
+            <div
+              className="pk-card"
+              style={{
+                background: '#ecfdf5',
+                borderColor: '#a7f3d0',
+                padding: '12px 18px',
+                fontSize: 13,
+                color: '#065f46',
+              }}
+            >
+              <strong>🔗 Liquidación integrada:</strong> Habitación {linkedRoomId}{' '}
+              registrará Check-Out al confirmar la factura.
+            </div>
+          )}
+
+          {/* SECTION 1: PROTAGONIST CLIENT & DOCUMENT HEADER */}
           <div className="pk-card">
             <div className="pk-card-head">
               <div className="pk-card-title">
-                🧾 Titular Fiscal, Apartado Operativo y Carrito
+                🧾 1. Datos Principales del Adquiriente y Encabezado
               </div>
               <span className="pk-badge pk-badge-blue">
                 {editingInv ? editingInv.id : nextInvoiceNumber}
@@ -929,7 +975,126 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
                 </div>
               </div>
 
-              {/* STRICTLY MODULAR SECTION BY SELECTED INVOICE TYPE */}
+              {(invoiceType === 'COMANDA' || linkedTableId !== '') && (
+                <div
+                  style={{
+                    marginTop: 18,
+                    padding: '16px 18px',
+                    borderRadius: 12,
+                    border: '1px solid #fcd34d',
+                    background: '#fffbeb',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: 12,
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <strong
+                        style={{
+                          fontSize: 13.5,
+                          color: '#92400e',
+                          display: 'block',
+                        }}
+                      >
+                        🍽️ Orden / Cuenta Gastronómica Asociada
+                      </strong>
+                      {linkedTableId ? (
+                        <div style={{ marginTop: 6 }}>
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8,
+                              flexWrap: 'wrap',
+                            }}
+                          >
+                            <span className="pk-badge pk-badge-emerald">
+                              ✓ Orden Seleccionada
+                            </span>
+                            <strong style={{ fontSize: 14.5, color: '#0f172a' }}>
+                              {selectedComandaOrder
+                                ? `${selectedComandaOrder.name}${
+                                    selectedComandaOrder.orderCode
+                                      ? ` (${selectedComandaOrder.orderCode})`
+                                      : ''
+                                  }`
+                                : linkedTableId}
+                            </strong>
+                            {selectedComandaOrder?.customerName && (
+                              <span style={{ fontSize: 13, color: '#475569' }}>
+                                • {selectedComandaOrder.customerName}
+                              </span>
+                            )}
+                            {selectedComandaOrder && (
+                              <span className="pk-badge pk-badge-amber">
+                                {selectedComandaOrder.items.length} servicio(s) •{' '}
+                                {formatCop(selectedComandaOrder.total)}
+                              </span>
+                            )}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 12,
+                              color: '#b45309',
+                              marginTop: 4,
+                            }}
+                          >
+                            La mesa o pedido se liberará automáticamente al confirmar
+                            la factura en firme.
+                          </div>
+                        </div>
+                      ) : (
+                        <div
+                          style={{
+                            fontSize: 12.5,
+                            color: '#92400e',
+                            marginTop: 4,
+                          }}
+                        >
+                          Selecciona una orden activa desde el diálogo para cargar
+                          automáticamente sus platos y servicios en la factura.
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pk-row-actions">
+                      <button
+                        type="button"
+                        className={
+                          linkedTableId
+                            ? 'pk-btn pk-btn-outline pk-btn-sm'
+                            : 'pk-btn pk-btn-amber-brand'
+                        }
+                        onClick={() => {
+                          setComandaSearch('');
+                          setComandaChannelFilter('ALL');
+                          setComandaDialogOpen(true);
+                        }}
+                      >
+                        {linkedTableId
+                          ? '🔄 Cambiar Orden'
+                          : `🍽️ Seleccionar Orden Activa (${openComandaOrders.length})`}
+                      </button>
+                      {linkedTableId && (
+                        <button
+                          type="button"
+                          className="pk-btn pk-btn-outline pk-btn-sm"
+                          onClick={() => setLinkedTableId('')}
+                        >
+                          ✕ Quitar Orden
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {invoiceType === 'TALLER' && (
                 <FacturasTallerBox
                   vehicles={vehicles}
@@ -948,80 +1113,27 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
                 />
               )}
 
-              {invoiceType === 'HOTELERIA' && (
-                <div
-                  style={{
-                    margin: '16px 0',
-                    padding: '15px 18px',
-                    borderRadius: 12,
-                    border: '1px solid #a7f3d0',
-                    background: '#ecfdf5',
-                  }}
-                >
-                  <strong style={{ fontSize: 13, color: '#065f46', display: 'block', marginBottom: 10 }}>
-                    🏨 Liquidación de Check-Out Hotelero
-                  </strong>
-                  <div className="pk-form-grid cols-2">
-                    <div className="pk-field pk-col-span-full">
-                      <label>Habitación o Suite Vinculada</label>
-                      <input
-                        value={linkedRoomId}
-                        onChange={(e) => setLinkedRoomId(e.target.value)}
-                        placeholder="Ej: hab-302 / Suite Ejecutiva 401"
-                      />
-                    </div>
-                  </div>
-                  <div style={{ fontSize: 12, color: '#047857', marginTop: 8 }}>
-                    Nota: Al confirmar la factura (Etapa 2), la habitación completará
-                    Check-Out automáticamente; en Borrador permanece abierta.
-                  </div>
-                </div>
-              )}
-
-              {invoiceType === 'COMANDA' && (
-                <div
-                  style={{
-                    margin: '16px 0',
-                    padding: '15px 18px',
-                    borderRadius: 12,
-                    border: '1px solid #fed7aa',
-                    background: '#fff7ed',
-                  }}
-                >
-                  <strong style={{ fontSize: 13, color: '#9a3412', display: 'block', marginBottom: 10 }}>
-                    🍽️ Cierre de Cuenta Gastronómica / Comanda
-                  </strong>
-                  <div className="pk-form-grid cols-2">
-                    <div className="pk-field pk-col-span-full">
-                      <label>Mesa / Cuenta Gastronómica Asociada</label>
-                      <input
-                        value={linkedTableId}
-                        onChange={(e) => setLinkedTableId(e.target.value)}
-                        placeholder="Ej: mesa-04 / Domicilio #0047"
-                      />
-                    </div>
-                  </div>
-                  <div style={{ fontSize: 12, color: '#c2410c', marginTop: 8 }}>
-                    Nota: La mesa o pedido se liberará únicamente cuando confirmes la
-                    factura en firme.
-                  </div>
-                </div>
-              )}
-
               {invoiceType === 'CORPORATIVA_CXC' && (
                 <div
                   style={{
-                    margin: '16px 0',
-                    padding: '15px 18px',
+                    marginTop: 16,
+                    padding: '16px 18px',
                     borderRadius: 12,
                     border: '1px solid #c7d2fe',
                     background: '#eef2ff',
                   }}
                 >
-                  <strong style={{ fontSize: 13, color: '#3730a3', display: 'block', marginBottom: 10 }}>
+                  <strong
+                    style={{
+                      fontSize: 13,
+                      color: '#3730a3',
+                      display: 'block',
+                      marginBottom: 12,
+                    }}
+                  >
                     🏢 Condiciones Corporativas, Convenio y Cartera CxC
                   </strong>
-                  <div className="pk-form-grid cols-2">
+                  <div className="pk-form-grid">
                     <div className="pk-field">
                       <label>Orden de Compra (OC)</label>
                       <input
@@ -1036,6 +1148,17 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
                         type="date"
                         value={dueDate}
                         onChange={(e) => setDueDate(e.target.value)}
+                      />
+                    </div>
+                    <div className="pk-field">
+                      <label>Abono Inicial Recibido Hoy ($)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={grandTotal}
+                        value={amountPaidInput}
+                        onChange={(e) => setAmountPaidInput(e.target.value)}
+                        placeholder="0 para 100% crédito"
                       />
                     </div>
                     {contracts.length > 0 && (
@@ -1055,17 +1178,6 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
                         />
                       </div>
                     )}
-                    <div className="pk-field pk-col-span-full">
-                      <label>Abono Inicial Recibido Hoy ($)</label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={grandTotal}
-                        value={amountPaidInput}
-                        onChange={(e) => setAmountPaidInput(e.target.value)}
-                        placeholder="0 para 100% crédito"
-                      />
-                    </div>
                   </div>
                   {selectedCustomer && (selectedCustomer.creditLimit || 0) > 0 && (
                     <div style={{ marginTop: 12 }}>
@@ -1092,17 +1204,51 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
                   )}
                 </div>
               )}
+            </div>
+          </div>
 
-              {/* CART ITEMS TABLE */}
-              <div className="pk-table-wrap" style={{ marginTop: 16 }}>
+          {/* SECTION 2: FULL-WIDTH INVOICE LINES TABLE + DIALOG TRIGGERS */}
+          <div className="pk-card">
+            <div className="pk-card-head">
+              <div className="pk-card-title">
+                🛒 2. Productos y Servicios de la Factura ({cart.length})
+              </div>
+              <div className="pk-row-actions">
+                {hasInventario && (
+                  <button
+                    type="button"
+                    className="pk-btn pk-btn-primary"
+                    onClick={() => openItemDialog('PRODUCTO')}
+                  >
+                    📦 + Seleccionar Producto
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={
+                    hasInventario
+                      ? 'pk-btn pk-btn-outline'
+                      : 'pk-btn pk-btn-primary'
+                  }
+                  onClick={() => openItemDialog('SERVICIO')}
+                >
+                  🛠️ + Agregar Servicio o Concepto
+                </button>
+              </div>
+            </div>
+            <div className="pk-card-body">
+              <div className="pk-table-wrap">
                 <table className="pk-table">
                   <thead>
                     <tr>
-                      <th>Concepto / Ítem</th>
-                      <th>Cant.</th>
-                      <th>Vr. Unitario</th>
-                      <th>Subtotal</th>
-                      <th></th>
+                      <th>Código</th>
+                      <th>Descripción del Producto o Servicio</th>
+                      <th>Tipo</th>
+                      <th>IVA / Imp.</th>
+                      <th style={{ width: 150 }}>Cantidad</th>
+                      <th style={{ width: 150 }}>Vr. Unitario</th>
+                      <th style={{ width: 150 }}>Subtotal</th>
+                      <th style={{ width: 70 }}></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1112,30 +1258,81 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
                       return (
                         <tr key={`${item.code}-${idx}`}>
                           <td>
-                            <strong>{item.description}</strong>
-                            <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>
-                              {item.code} • {item.itemType} • IVA {item.taxPct}%
+                            <span className="pk-badge pk-badge-slate">
+                              {item.code}
+                            </span>
+                          </td>
+                          <td>
+                            <strong style={{ fontSize: 13.5 }}>
+                              {item.description}
+                            </strong>
+                          </td>
+                          <td>
+                            <span
+                              className={`pk-badge ${
+                                item.itemType === 'PRODUCTO'
+                                  ? 'pk-badge-blue'
+                                  : 'pk-badge-emerald'
+                              }`}
+                            >
+                              {item.itemType === 'PRODUCTO'
+                                ? 'Producto'
+                                : 'Servicio'}
+                            </span>
+                          </td>
+                          <td>{item.taxPct}%</td>
+                          <td>
+                            <div
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                              }}
+                            >
+                              <button
+                                type="button"
+                                className="pk-btn pk-btn-outline pk-btn-sm"
+                                style={{ padding: '4px 9px', minHeight: 32 }}
+                                onClick={() =>
+                                  updateCartItem(idx, {
+                                    quantity: Math.max(0, item.quantity - 1),
+                                  })
+                                }
+                              >
+                                −
+                              </button>
+                              <input
+                                type="number"
+                                min={1}
+                                value={item.quantity}
+                                onChange={(e) =>
+                                  updateCartItem(idx, {
+                                    quantity: Number(e.target.value || 1),
+                                  })
+                                }
+                                style={{
+                                  width: 64,
+                                  textAlign: 'center',
+                                  padding: '6px 8px',
+                                  borderRadius: 8,
+                                  border: '1px solid var(--pk-border-strong)',
+                                }}
+                              />
+                              <button
+                                type="button"
+                                className="pk-btn pk-btn-outline pk-btn-sm"
+                                style={{ padding: '4px 9px', minHeight: 32 }}
+                                onClick={() =>
+                                  updateCartItem(idx, {
+                                    quantity: item.quantity + 1,
+                                  })
+                                }
+                              >
+                                +
+                              </button>
                             </div>
                           </td>
-                          <td style={{ width: 88 }}>
-                            <input
-                              type="number"
-                              min={1}
-                              value={item.quantity}
-                              onChange={(e) =>
-                                updateCartItem(idx, {
-                                  quantity: Number(e.target.value || 1),
-                                })
-                              }
-                              style={{
-                                width: 70,
-                                padding: '6px 8px',
-                                borderRadius: 8,
-                                border: '1px solid var(--pk-border-strong)',
-                              }}
-                            />
-                          </td>
-                          <td style={{ width: 126 }}>
+                          <td>
                             <input
                               type="number"
                               min={1}
@@ -1147,8 +1344,8 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
                                 })
                               }
                               style={{
-                                width: 110,
-                                padding: '6px 8px',
+                                width: 128,
+                                padding: '6px 10px',
                                 borderRadius: 8,
                                 border: '1px solid var(--pk-border-strong)',
                                 background: lockedCatalogPrice
@@ -1158,7 +1355,7 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
                             />
                           </td>
                           <td>
-                            <strong>
+                            <strong style={{ fontSize: 14 }}>
                               {formatCop(item.quantity * item.unitPrice)}
                             </strong>
                           </td>
@@ -1177,150 +1374,228 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
                     {cart.length === 0 && (
                       <tr>
                         <td
-                          colSpan={5}
+                          colSpan={8}
                           style={{
                             textAlign: 'center',
-                            color: 'var(--pk-muted)',
-                            padding: 24,
+                            padding: '36px 20px',
                           }}
                         >
-                          Selecciona productos o servicios en el panel izquierdo para
-                          construir la factura.
+                          <div
+                            style={{
+                              fontSize: 14,
+                              fontWeight: 700,
+                              color: 'var(--pk-navy)',
+                              marginBottom: 6,
+                            }}
+                          >
+                            Aún no has agregado productos ni servicios a esta factura
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 12.5,
+                              color: 'var(--pk-muted)',
+                              marginBottom: 16,
+                            }}
+                          >
+                            Usa los botones para abrir el selector de catálogo o registrar un servicio personalizado.
+                          </div>
+                          <div
+                            style={{
+                              display: 'inline-flex',
+                              gap: 10,
+                              flexWrap: 'wrap',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            {hasInventario && (
+                              <button
+                                type="button"
+                                className="pk-btn pk-btn-primary"
+                                onClick={() => openItemDialog('PRODUCTO')}
+                              >
+                                📦 + Seleccionar Producto del Catálogo
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="pk-btn pk-btn-outline"
+                              onClick={() => openItemDialog('SERVICIO')}
+                            >
+                              🛠️ + Agregar Servicio o Concepto
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     )}
                   </tbody>
                 </table>
               </div>
+            </div>
+          </div>
 
-              {/* PAYMENT & DISCOUNT */}
-              <div className="pk-form-grid cols-2" style={{ marginTop: 16 }}>
-                <PkSimpleSelect
-                  label="Medio de Recaudo Principal"
-                  value={paymentMethod}
-                  onChange={setPaymentMethod}
-                  searchable={false}
-                  options={[
-                    { value: 'Efectivo', label: 'Efectivo en Caja' },
-                    {
-                      value: 'Transferencia / Nequi',
-                      label: 'Transferencia / Nequi / PSE',
-                    },
-                    {
-                      value: 'Tarjeta Débito / Crédito',
-                      label: 'Tarjeta Débito / Crédito',
-                    },
-                  ]}
-                />
-
-                <FeatureGate feature="descuento_linea">
-                  <div className="pk-field">
-                    <label>Descuento Comercial (%)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={discountPct}
-                      onChange={(e) => setDiscountPct(e.target.value)}
-                    />
-                  </div>
-                </FeatureGate>
-
-                {invoiceType !== 'CORPORATIVA_CXC' && (
-                  <FeatureGate feature="pagos_mixtos_cxc">
-                    <div className="pk-field pk-col-span-full">
-                      <label>
-                        <span>Habilitar Pago Parcial / Cartera CxC</span>
-                        <input
-                          type="checkbox"
-                          checked={isCreditMode}
-                          onChange={(e) => {
-                            setIsCreditMode(e.target.checked);
-                            if (e.target.checked && !amountPaidInput) {
-                              setAmountPaidInput('0');
-                            }
-                          }}
-                          style={{ width: 16, height: 16, minHeight: 16 }}
-                        />
-                      </label>
-                      {isCreditMode && (
-                        <input
-                          type="number"
-                          min={0}
-                          max={grandTotal}
-                          value={amountPaidInput}
-                          onChange={(e) => setAmountPaidInput(e.target.value)}
-                          placeholder="Valor abonado hoy ($)"
-                        />
-                      )}
-                    </div>
-                  </FeatureGate>
-                )}
-
-                <div className="pk-field pk-col-span-full">
-                  <label>Notas / Observaciones Comerciales</label>
-                  <input
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Condiciones de garantía, entrega o referencia interna..."
-                  />
+          {/* SECTION 3: PAYMENT TERMS & FINANCIAL LIQUIDATION */}
+          <div className="pk-grid-2" style={{ alignItems: 'stretch' }}>
+            <div className="pk-card">
+              <div className="pk-card-head">
+                <div className="pk-card-title">
+                  💳 3. Medio de Recaudo y Observaciones
                 </div>
               </div>
+              <div className="pk-card-body">
+                <div className="pk-form-grid cols-2">
+                  <PkSimpleSelect
+                    label="Medio de Recaudo Principal"
+                    value={paymentMethod}
+                    onChange={setPaymentMethod}
+                    searchable={false}
+                    options={[
+                      { value: 'Efectivo', label: 'Efectivo en Caja' },
+                      {
+                        value: 'Transferencia / Nequi',
+                        label: 'Transferencia / Nequi / PSE',
+                      },
+                      {
+                        value: 'Tarjeta Débito / Crédito',
+                        label: 'Tarjeta Débito / Crédito',
+                      },
+                    ]}
+                  />
 
-              {/* TOTALS BOX */}
+                  <FeatureGate feature="descuento_linea">
+                    <div className="pk-field">
+                      <label>Descuento Comercial (%)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={discountPct}
+                        onChange={(e) => setDiscountPct(e.target.value)}
+                      />
+                    </div>
+                  </FeatureGate>
+
+                  {invoiceType !== 'CORPORATIVA_CXC' && (
+                    <FeatureGate feature="pagos_mixtos_cxc">
+                      <div className="pk-field pk-col-span-full">
+                        <label>
+                          <span>Habilitar Pago Parcial / Cartera CxC</span>
+                          <input
+                            type="checkbox"
+                            checked={isCreditMode}
+                            onChange={(e) => {
+                              setIsCreditMode(e.target.checked);
+                              if (e.target.checked && !amountPaidInput) {
+                                setAmountPaidInput('0');
+                              }
+                            }}
+                            style={{ width: 16, height: 16, minHeight: 16 }}
+                          />
+                        </label>
+                        {isCreditMode && (
+                          <input
+                            type="number"
+                            min={0}
+                            max={grandTotal}
+                            value={amountPaidInput}
+                            onChange={(e) => setAmountPaidInput(e.target.value)}
+                            placeholder="Valor abonado hoy ($)"
+                          />
+                        )}
+                      </div>
+                    </FeatureGate>
+                  )}
+
+                  <div className="pk-field pk-col-span-full">
+                    <label>Notas / Observaciones Comerciales</label>
+                    <input
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="Condiciones de garantía, entrega o referencia interna..."
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="pk-card">
+              <div className="pk-card-head">
+                <div className="pk-card-title">
+                  📊 4. Liquidación Tributaria y Total
+                </div>
+              </div>
               <div
+                className="pk-card-body"
                 style={{
-                  marginTop: 16,
-                  padding: '16px 18px',
-                  background: '#f8fafc',
-                  borderRadius: 12,
-                  border: '1px solid var(--pk-border)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  gap: 14,
                 }}
               >
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    fontSize: 13,
-                    marginBottom: 4,
-                  }}
-                >
-                  <span>Subtotal Bruto:</span>
-                  <strong>{formatCop(rawSubtotal)}</strong>
-                </div>
-                {discountAmount > 0 && (
+                <div className="pk-stack" style={{ gap: 10 }}>
                   <div
                     style={{
                       display: 'flex',
                       justifyContent: 'space-between',
-                      fontSize: 13,
-                      color: 'var(--pk-rose)',
-                      marginBottom: 4,
+                      fontSize: 14,
                     }}
                   >
-                    <span>Descuento ({effectivePct}%):</span>
-                    <strong>-{formatCop(discountAmount)}</strong>
+                    <span style={{ color: 'var(--pk-muted)' }}>Subtotal Bruto:</span>
+                    <strong>{formatCop(rawSubtotal)}</strong>
                   </div>
-                )}
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    fontSize: 13,
-                  }}
-                >
-                  <span>IVA / Impuestos:</span>
-                  <strong>{formatCop(taxAmount)}</strong>
+                  {discountAmount > 0 && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        fontSize: 14,
+                        color: 'var(--pk-rose)',
+                      }}
+                    >
+                      <span>Descuento Comercial ({effectivePct}%):</span>
+                      <strong>-{formatCop(discountAmount)}</strong>
+                    </div>
+                  )}
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      fontSize: 14,
+                    }}
+                  >
+                    <span style={{ color: 'var(--pk-muted)' }}>
+                      IVA / Impuestos Liquidados:
+                    </span>
+                    <strong>{formatCop(taxAmount)}</strong>
+                  </div>
+                  {effectiveCreditMode && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        fontSize: 13.5,
+                        color: 'var(--pk-amber)',
+                        paddingTop: 6,
+                        borderTop: '1px dashed var(--pk-border)',
+                      }}
+                    >
+                      <span>Saldo Pendiente Cartera CxC:</span>
+                      <strong>{formatCop(pendingBalancePreview)}</strong>
+                    </div>
+                  )}
                 </div>
+
                 <div
                   style={{
                     display: 'flex',
                     justifyContent: 'space-between',
-                    fontSize: 18,
+                    alignItems: 'center',
+                    padding: '16px 18px',
+                    background: '#f8fafc',
+                    borderRadius: 12,
+                    border: '1px solid var(--pk-border-strong)',
+                    fontSize: 20,
                     fontWeight: 900,
-                    marginTop: 10,
-                    paddingTop: 10,
-                    borderTop: '1px solid #cbd5e1',
                     color: 'var(--pk-primary)',
                   }}
                 >
@@ -1331,7 +1606,435 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
             </div>
           </div>
         </div>
-      </div>
-    </PkFullscreenDialog>
+      </PkFullscreenDialog>
+
+      {/* DEDICATED DIALOG FOR SELECTING CATALOG PRODUCTS OR CUSTOM SERVICES */}
+      <PkModal
+        open={itemDialogOpen}
+        title="📦 Seleccionar Producto del Catálogo o Servicio"
+        onClose={() => setItemDialogOpen(false)}
+        maxWidth={920}
+      >
+        <div className="pk-stack">
+          {hasInventario && (
+            <div className="pk-segmented-2">
+              <button
+                type="button"
+                className={
+                  itemDialogMode === 'PRODUCTO'
+                    ? 'pk-btn pk-btn-primary'
+                    : 'pk-btn pk-btn-outline'
+                }
+                style={{ justifyContent: 'center' }}
+                onClick={() => setItemDialogMode('PRODUCTO')}
+              >
+                📦 Catálogo de Productos ({products.length})
+              </button>
+              <button
+                type="button"
+                className={
+                  itemDialogMode === 'SERVICIO'
+                    ? 'pk-btn pk-btn-primary'
+                    : 'pk-btn pk-btn-outline'
+                }
+                style={{ justifyContent: 'center' }}
+                onClick={() => setItemDialogMode('SERVICIO')}
+              >
+                🛠️ Servicio o Concepto Personalizado
+              </button>
+            </div>
+          )}
+
+          {itemDialogMode === 'PRODUCTO' && hasInventario ? (
+            <div className="pk-stack">
+              <div className="pk-form-grid cols-2">
+                <div className="pk-field">
+                  <label>Buscar Producto</label>
+                  <input
+                    autoFocus
+                    value={catalogSearch}
+                    onChange={(e) => setCatalogSearch(e.target.value)}
+                    placeholder="🔎 Buscar por nombre, código SKU o categoría..."
+                  />
+                </div>
+                <PkSimpleSelect
+                  label="Filtrar por Categoría"
+                  value={catalogCategory}
+                  onChange={setCatalogCategory}
+                  options={categoryOptions}
+                  searchable={categoryOptions.length > 6}
+                />
+              </div>
+
+              <div
+                className="pk-table-wrap"
+                style={{
+                  maxHeight: 380,
+                  overflowY: 'auto',
+                  border: '1px solid var(--pk-border)',
+                  borderRadius: 12,
+                }}
+              >
+                <table className="pk-table">
+                  <thead>
+                    <tr>
+                      <th>SKU</th>
+                      <th>Producto / Categoría</th>
+                      <th>Stock</th>
+                      <th>IVA</th>
+                      <th>Precio Unitario</th>
+                      <th style={{ width: 110 }}>Cant.</th>
+                      <th style={{ width: 130 }}>Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredCatalog.map((p) => {
+                      const draftQty = qtyDraftByProduct[p.id] ?? '1';
+                      const inCartQty = cartQtyByProductId[p.id] || 0;
+                      return (
+                        <tr key={p.id}>
+                          <td>
+                            <span className="pk-badge pk-badge-slate">
+                              {p.code}
+                            </span>
+                          </td>
+                          <td>
+                            <strong>{p.name}</strong>
+                            <div style={{ fontSize: 11.5, color: 'var(--pk-muted)' }}>
+                              {p.category}
+                              {inCartQty > 0 && (
+                                <span
+                                  style={{
+                                    marginLeft: 8,
+                                    color: 'var(--pk-emerald)',
+                                    fontWeight: 800,
+                                  }}
+                                >
+                                  • En factura: {inCartQty} und.
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td>
+                            <span
+                              className={`pk-badge ${
+                                p.stock > p.minStock
+                                  ? 'pk-badge-emerald'
+                                  : 'pk-badge-amber'
+                              }`}
+                            >
+                              {p.stock}
+                            </span>
+                          </td>
+                          <td>{p.taxPct}%</td>
+                          <td>
+                            <strong>{formatCop(p.salePrice)}</strong>
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              min={1}
+                              value={draftQty}
+                              onChange={(e) =>
+                                setQtyDraftByProduct((prev) => ({
+                                  ...prev,
+                                  [p.id]: e.target.value,
+                                }))
+                              }
+                              style={{
+                                width: 76,
+                                padding: '6px 8px',
+                                borderRadius: 8,
+                                border: '1px solid var(--pk-border-strong)',
+                              }}
+                            />
+                          </td>
+                          <td>
+                            <button
+                              type="button"
+                              className="pk-btn pk-btn-primary pk-btn-sm"
+                              onClick={() =>
+                                addProductToCart(p, Number(draftQty || 1))
+                              }
+                            >
+                              + Agregar
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {filteredCatalog.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={7}
+                          style={{
+                            textAlign: 'center',
+                            color: 'var(--pk-muted)',
+                            padding: 28,
+                          }}
+                        >
+                          No se encontraron productos para el filtro actual.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  gap: 12,
+                  flexWrap: 'wrap',
+                  paddingTop: 8,
+                  borderTop: '1px solid var(--pk-border)',
+                }}
+              >
+                <div style={{ fontSize: 13, color: 'var(--pk-muted)' }}>
+                  Ítems en la factura: <strong>{cart.length}</strong> • Subtotal:{' '}
+                  <strong style={{ color: 'var(--pk-navy)' }}>
+                    {formatCop(rawSubtotal)}
+                  </strong>
+                </div>
+                <button
+                  type="button"
+                  className="pk-btn pk-btn-emerald"
+                  onClick={() => setItemDialogOpen(false)}
+                >
+                  ✅ Listo, volver a la factura
+                </button>
+              </div>
+            </div>
+          ) : (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                appendServiceItem(true);
+              }}
+              className="pk-stack"
+            >
+              <div className="pk-form-grid cols-2">
+                <div className="pk-field pk-col-span-full">
+                  <label>Descripción del Servicio o Concepto</label>
+                  <input
+                    autoFocus
+                    value={srvName}
+                    onChange={(e) => setSrvName(e.target.value)}
+                    placeholder="Ej: Mano de obra especializada, asesoría técnica o servicio operativo"
+                  />
+                </div>
+                <div className="pk-field">
+                  <label>Código / Referencia</label>
+                  <input
+                    value={srvCode}
+                    onChange={(e) => setSrvCode(e.target.value)}
+                    placeholder="SRV-MO"
+                  />
+                </div>
+                <div className="pk-field">
+                  <label>Cantidad</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={srvQty}
+                    onChange={(e) => setSrvQty(e.target.value)}
+                  />
+                </div>
+                <div className="pk-field">
+                  <label>Valor Unitario ($)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={srvPrice}
+                    onChange={(e) => setSrvPrice(e.target.value)}
+                  />
+                </div>
+                <PkSimpleSelect
+                  label="Tarifa IVA / Impuesto (%)"
+                  value={srvTaxPct}
+                  onChange={setSrvTaxPct}
+                  searchable={false}
+                  options={[
+                    { value: '0', label: '0% — Excluido / Exento' },
+                    { value: '5', label: '5% — Tarifa Reducida' },
+                    { value: '8', label: '8% — Impoconsumo' },
+                    { value: '19', label: '19% — Tarifa General IVA' },
+                  ]}
+                />
+              </div>
+
+              <div className="pk-form-actions">
+                <button
+                  type="button"
+                  className="pk-btn pk-btn-outline"
+                  onClick={() => setItemDialogOpen(false)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="pk-btn pk-btn-outline"
+                  onClick={() => appendServiceItem(false)}
+                >
+                  + Agregar y crear otro
+                </button>
+                <button type="submit" className="pk-btn pk-btn-primary">
+                  ✅ Agregar a la Factura
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      </PkModal>
+
+      {/* DEDICATED DIALOG FOR SELECTING AN ACTIVE COMANDA / GASTRONOMIC ORDER */}
+      <PkModal
+        open={comandaDialogOpen}
+        title="🍽️ Seleccionar Orden / Cuenta Activa de Comandas"
+        onClose={() => setComandaDialogOpen(false)}
+        maxWidth={900}
+      >
+        <div className="pk-stack">
+          <div className="pk-form-grid cols-2">
+            <div className="pk-field">
+              <label>Buscar Orden, Mesa o Cliente</label>
+              <input
+                value={comandaSearch}
+                onChange={(e) => setComandaSearch(e.target.value)}
+                placeholder="🔎 Buscar por #orden, mesa, cliente, mesero o plato..."
+              />
+            </div>
+            <PkSimpleSelect
+              label="Filtrar por Canal"
+              value={comandaChannelFilter}
+              onChange={setComandaChannelFilter}
+              searchable={false}
+              options={[
+                { value: 'ALL', label: `Todas las Órdenes (${openComandaOrders.length})` },
+                { value: 'MESA', label: '🪑 Servicio en Salón / Mesas' },
+                { value: 'DOMICILIO', label: '🛵 Domicilios' },
+                { value: 'PARA_LLEVAR', label: '🛍️ Para Llevar' },
+              ]}
+            />
+          </div>
+
+          <div
+            className="pk-table-wrap"
+            style={{
+              maxHeight: 390,
+              overflowY: 'auto',
+              border: '1px solid var(--pk-border)',
+              borderRadius: 12,
+            }}
+          >
+            <table className="pk-table">
+              <thead>
+                <tr>
+                  <th>Orden</th>
+                  <th>Canal</th>
+                  <th>Mesa / Cliente</th>
+                  <th>Platos y Servicios</th>
+                  <th>Total</th>
+                  <th style={{ width: 140 }}>Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredComandaOrders.map((ord) => {
+                  const ch = (ord.channel || 'MESA').toUpperCase();
+                  const isCurrent = ord.id === linkedTableId;
+                  const chLabel =
+                    ch === 'DOMICILIO'
+                      ? '🛵 Domicilio'
+                      : ch === 'PARA_LLEVAR'
+                      ? '🛍️ Para llevar'
+                      : '🪑 Salón';
+                  return (
+                    <tr key={ord.id}>
+                      <td>
+                        <strong>{ord.orderCode || ord.id}</strong>
+                      </td>
+                      <td>
+                        <span
+                          className={`pk-badge ${
+                            ch === 'DOMICILIO'
+                              ? 'pk-badge-rose'
+                              : ch === 'PARA_LLEVAR'
+                              ? 'pk-badge-amber'
+                              : 'pk-badge-blue'
+                          }`}
+                        >
+                          {chLabel}
+                        </span>
+                      </td>
+                      <td>
+                        <strong>{ord.name}</strong>
+                        <div style={{ fontSize: 11.5, color: 'var(--pk-muted)' }}>
+                          {ord.customerName
+                            ? `${ord.customerName} • `
+                            : ''}
+                          {ord.zone}
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ fontSize: 12.5 }}>
+                          {(ord.items || [])
+                            .slice(0, 3)
+                            .map((it) => `${it.qty}x ${it.name}`)
+                            .join(', ')}
+                          {(ord.items || []).length > 3 &&
+                            ` (+${ord.items.length - 3} más)`}
+                        </div>
+                      </td>
+                      <td>
+                        <strong>{formatCop(ord.total)}</strong>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className={
+                            isCurrent
+                              ? 'pk-btn pk-btn-emerald pk-btn-sm'
+                              : 'pk-btn pk-btn-primary pk-btn-sm'
+                          }
+                          onClick={() => handleSelectComandaOrder(ord)}
+                        >
+                          {isCurrent ? '✓ Recargar' : '✅ Seleccionar'}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {filteredComandaOrders.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      style={{
+                        textAlign: 'center',
+                        color: 'var(--pk-muted)',
+                        padding: 28,
+                      }}
+                    >
+                      No hay órdenes de comandas abiertas con consumos pendientes para este filtro.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="pk-form-actions" style={{ marginTop: 0 }}>
+            <button
+              type="button"
+              className="pk-btn pk-btn-outline"
+              onClick={() => setComandaDialogOpen(false)}
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </PkModal>
+    </>
   );
 };

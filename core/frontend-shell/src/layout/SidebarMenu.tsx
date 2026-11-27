@@ -46,6 +46,16 @@ export const SidebarMenu: React.FC<{
         >
           <PkIcon name="pin" size={15} />
         </button>
+        {onCloseMobile && (
+          <button
+            type="button"
+            className="pk-rail-close-btn"
+            aria-label="Cerrar menú lateral"
+            onClick={onCloseMobile}
+          >
+            ✕
+          </button>
+        )}
       </div>
 
       <button

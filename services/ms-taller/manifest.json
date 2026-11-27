@@ -38,7 +38,7 @@
       "dependsOnSubmodule": "recepcion_diagnostico_ot"
     }
   ],
-  "bundleHash": "7e985b8e65e4",
+  "bundleHash": "0bbf49589fd7",
   "submodules": [
     {
       "submoduleKey": "recepcion_diagnostico_ot",
