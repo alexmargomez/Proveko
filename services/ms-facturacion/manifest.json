@@ -73,7 +73,7 @@
       "dependsOnSubmodule": "liquidacion_automotriz"
     }
   ],
-  "bundleHash": "d272acfc51c5",
+  "bundleHash": "55fcfb162be9",
   "submodules": [
     {
       "submoduleKey": "caja_rapida_pos",

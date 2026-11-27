@@ -1,10 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ModuleGate,
   PkAutoCodeInput,
   PkDistributionStrip,
   PkFullscreenDialog,
-  PkKanbanBoard,
   PkKpiRow,
   PkLiveHeader,
   PkModal,
@@ -12,7 +11,6 @@ import {
   PkProcessNodes,
   PkSelect,
   PkSimpleSelect,
-  PkTicketCard,
   downloadCsvUtf8,
   formatCop,
   useAsyncAction,
@@ -133,7 +131,7 @@ function formatKmText(raw: unknown): string {
 
 function channelBadgeForInvoice(inv: InvoiceRecord): {
   label: string;
-  tone: 'coral' | 'blue' | 'purple' | 'emerald' | 'amber' | 'slate';
+  tone: 'blue' | 'purple' | 'emerald' | 'amber' | 'slate';
 } {
   const t = (inv.invoiceType || '').toUpperCase();
   if (t === 'TALLER' || inv.plate || inv.vehicleId) {
@@ -142,22 +140,16 @@ function channelBadgeForInvoice(inv: InvoiceRecord): {
       tone: 'blue',
     };
   }
-  if (t === 'HOTELERIA' || inv.linkedRoomId) {
-    return {
-      label: inv.linkedRoomId ? `🏨 Hab. ${inv.linkedRoomId}` : '🏨 Hotelería',
-      tone: 'emerald',
-    };
-  }
-  if (t === 'COMANDA' || inv.linkedTableId) {
-    return {
-      label: inv.linkedTableId ? `🍽️ ${inv.linkedTableId}` : '🍽️ Gastronomía',
-      tone: 'coral',
-    };
-  }
   if (t === 'CORPORATIVA_CXC' || inv.contractId || inv.purchaseOrderRef) {
     return { label: '🏢 Corporativa CxC', tone: 'purple' };
   }
-  return { label: '🛒 Mostrador POS', tone: 'slate' };
+  if (inv.linkedRoomId) {
+    return { label: `🔗 Hab. ${inv.linkedRoomId}`, tone: 'emerald' };
+  }
+  if (inv.linkedTableId) {
+    return { label: `🔗 Cuenta ${inv.linkedTableId}`, tone: 'amber' };
+  }
+  return { label: '🛒 Estándar POS', tone: 'slate' };
 }
 
 export const FacturacionView: React.FC = () => {
@@ -196,11 +188,9 @@ export const FacturacionView: React.FC = () => {
   const [products, setProducts] = useState<ProductOption[]>([]);
   const [vehicles, setVehicles] = useState<VehicleOption[]>([]);
   const [workers, setWorkers] = useState<WorkerOption[]>([]);
+  const [catalogReady, setCatalogReady] = useState(false);
 
-  // Main Invoices Board / Table state
-  const [invoiceDisplayMode, setInvoiceDisplayMode] = useState<
-    'board' | 'table'
-  >('board');
+  // Main Invoices Table state
   const [invoicePill, setInvoicePill] = useState<string>('ALL');
   const [invoiceSearch, setInvoiceSearch] = useState('');
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRecord | null>(
@@ -222,9 +212,6 @@ export const FacturacionView: React.FC = () => {
   );
 
   // Quotes Studio & View state
-  const [quoteDisplayMode, setQuoteDisplayMode] = useState<'board' | 'table'>(
-    'board'
-  );
   const [quoteStudioOpen, setQuoteStudioOpen] = useState(false);
   const [quoteSearch, setQuoteSearch] = useState('');
   const [quoteCustomerId, setQuoteCustomerId] = useState('');
@@ -321,15 +308,17 @@ export const FacturacionView: React.FC = () => {
     if (nextCustomers.length > 0) {
       setQuoteCustomerId((prev) => prev || nextCustomers[0].id);
     }
+    setCatalogReady(true);
   }, [apiGet, hasClientes, hasInventario, hasTaller]);
 
   useEffect(() => {
     void loadAll();
   }, [loadAll]);
 
-  // Auto-open InvoiceFullscreenStudio when incomingPayload arrives from Comandas / Taller / Hotelería
+  // Auto-open InvoiceFullscreenStudio when incomingPayload arrives from operational modules
   useEffect(() => {
     if (!incomingPayload) return;
+    if (hasInventario && !catalogReady) return;
 
     const rawCustId =
       typeof incomingPayload.customerId === 'string'
@@ -373,14 +362,8 @@ export const FacturacionView: React.FC = () => {
         ? incomingPayload.linkedTableId
         : '';
 
-    let detectedType: InvoiceTypeKey = 'MOSTRADOR';
-    if (rawTableId) {
-      detectedType = 'COMANDA';
-    } else if (rawRoomId) {
-      detectedType = 'HOTELERIA';
-    } else if (rawPlate || rawVehId || rawOrderId) {
-      detectedType = 'TALLER';
-    }
+    const detectedType: InvoiceTypeKey =
+      rawPlate || rawVehId || rawOrderId ? 'TALLER' : 'MOSTRADOR';
 
     const normalizedItems: InvoiceItemRecord[] = [];
     if (Array.isArray(incomingPayload.items) && incomingPayload.items.length > 0) {
@@ -392,20 +375,19 @@ export const FacturacionView: React.FC = () => {
           .toUpperCase();
         const isServiceKind = rawKind === 'SERVICIO';
         const candidateProdId = String(rec.productId ?? rec.refId ?? '').trim();
-        const matchesCatalog =
-          candidateProdId !== '' &&
-          products.some((p) => p.id === candidateProdId);
+        const matchedProduct =
+          candidateProdId !== ''
+            ? products.find(
+                (p) =>
+                  p.id === candidateProdId ||
+                  p.code.toUpperCase() === candidateProdId.toUpperCase()
+              )
+            : undefined;
 
-        const resolvedType: 'PRODUCTO' | 'SERVICIO' =
-          isServiceKind ||
-          (products.length > 0 && candidateProdId !== '' && !matchesCatalog)
-            ? 'SERVICIO'
-            : 'PRODUCTO';
         const resolvedProdId =
-          resolvedType === 'PRODUCTO' &&
-          (products.length === 0 || matchesCatalog)
-            ? candidateProdId
-            : '';
+          !isServiceKind && matchedProduct ? matchedProduct.id : '';
+        const resolvedType: 'PRODUCTO' | 'SERVICIO' =
+          resolvedProdId !== '' ? 'PRODUCTO' : 'SERVICIO';
 
         const qty = Math.max(1, Number(rec.quantity ?? rec.qty ?? 1) || 1);
         const unitPrice = Math.max(
@@ -454,9 +436,11 @@ export const FacturacionView: React.FC = () => {
     setActiveModuleKey('pos_mostrador');
     setInvoiceStudioOpen(true);
     clearIncomingPayload();
-    toast('Cuenta operativa cargada en el Estudio de Facturación');
+    toast('Conceptos cargados en el Estudio de Facturación');
   }, [
     incomingPayload,
+    catalogReady,
+    hasInventario,
     clearIncomingPayload,
     products,
     setActiveModuleKey,
@@ -1323,10 +1307,6 @@ export const FacturacionView: React.FC = () => {
             title="Cotizaciones Comerciales"
             liveLabel="En vivo"
             subtitle="Propuestas formales con vigencia controlada listas para convertirse en factura en un clic."
-            displayMode={quoteDisplayMode}
-            onDisplayModeChange={setQuoteDisplayMode}
-            boardLabel="🎛️ Tablero de Propuestas"
-            tableLabel="📋 Vista Tabla"
             primaryActionLabel="+ Nueva Cotización"
             onPrimaryAction={() => setQuoteStudioOpen(true)}
             extraActions={
@@ -1340,136 +1320,105 @@ export const FacturacionView: React.FC = () => {
             }
           />
 
-          {quoteDisplayMode === 'board' ? (
-            <PkKanbanBoard
-              columns={[
-                {
-                  key: 'VIGENTES',
-                  title: '🔵 Propuestas Vigentes',
-                  dotColor: 'blue',
-                  count: filteredQuotes.length,
-                  emptyText: 'Aún no hay cotizaciones registradas',
-                  children: filteredQuotes.map((q) => (
-                    <PkTicketCard
-                      key={q.id}
-                      code={q.id}
-                      timeAgo={q.createdAt}
-                      channelBadge={{ label: 'Propuesta Comercial', tone: 'blue' }}
-                      title={q.customerName}
-                      subtitle={`NIT: ${q.customerNit || 'N/A'} • Válida hasta ${q.validUntil}`}
-                      items={(q.items || []).slice(0, 3).map((it) => ({
-                        qty: it.quantity,
-                        name: it.description,
-                        amount: formatCop(it.subtotal),
-                      }))}
-                      highlightNote={q.notes}
-                      totalLabel="TOTAL COTIZADO"
-                      totalValue={formatCop(q.total)}
-                      primaryAction={{
-                        label: '🛒 Convertir en Factura',
-                        tone: 'emerald',
-                        onClick: () => convertQuoteToInvoice(q),
-                      }}
-                      secondaryActions={
-                        <PkPrintButton
-                          label="🖨️ Imprimir Cotización"
-                          payload={{
-                            document_type: 'COTIZACIÓN COMERCIAL',
-                            document_number: q.id,
-                            issue_date: q.createdAt,
-                            customer_name: q.customerName,
-                            customer_nit: q.customerNit,
-                            extra_fields: {
-                              'Válida Hasta': q.validUntil || '',
-                              Estado: q.status || 'Vigente',
-                            },
-                            items: (q.items || []).map((it) => ({
-                              code: it.code,
-                              description: it.description,
-                              quantity: it.quantity,
-                              unit_price: it.unitPrice,
-                              tax_pct: it.taxPct,
-                              subtotal: it.subtotal,
-                            })),
-                            subtotal: q.subtotal,
-                            tax_total: q.taxTotal,
-                            grand_total: q.total,
-                            notes: q.notes,
-                          }}
-                        />
-                      }
-                    />
-                  ))}
-              ]}
-            />
-          ) : (
-            <div className="pk-card">
-              <div className="pk-card-body">
-                <div className="pk-table-wrap">
-                  <table className="pk-table">
-                    <thead>
-                      <tr>
-                        <th>N° Cotización</th>
-                        <th>Fecha</th>
-                        <th>Cliente</th>
-                        <th>Vigencia</th>
-                        <th>Total</th>
-                        <th>Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredQuotes.map((q) => (
-                        <tr key={q.id}>
-                          <td>
-                            <strong>{q.id}</strong>
-                          </td>
-                          <td>{q.createdAt}</td>
-                          <td>{q.customerName}</td>
-                          <td>{q.validUntil}</td>
-                          <td>
-                            <strong>{formatCop(q.total)}</strong>
-                          </td>
-                          <td>
-                            <div className="pk-row-actions">
-                              <button
-                                type="button"
-                                className="pk-btn pk-btn-emerald pk-btn-sm"
-                                onClick={() => convertQuoteToInvoice(q)}
-                              >
-                                🛒 Pasar a Factura
-                              </button>
-                              <PkPrintButton
-                                label="🖨️ Imprimir"
-                                payload={{
-                                  document_type: 'COTIZACIÓN COMERCIAL',
-                                  document_number: q.id,
-                                  issue_date: q.createdAt,
-                                  customer_name: q.customerName,
-                                  customer_nit: q.customerNit,
-                                  items: (q.items || []).map((it) => ({
-                                    code: it.code,
-                                    description: it.description,
-                                    quantity: it.quantity,
-                                    unit_price: it.unitPrice,
-                                    tax_pct: it.taxPct,
-                                    subtotal: it.subtotal,
-                                  })),
-                                  subtotal: q.subtotal,
-                                  tax_total: q.taxTotal,
-                                  grand_total: q.total,
-                                  notes: q.notes,
-                                }}
-                              />
+          <div className="pk-card">
+            <div className="pk-card-head">
+              <div className="pk-card-title">
+                📋 Listado de Cotizaciones Comerciales ({filteredQuotes.length})
+              </div>
+              <span className="pk-badge pk-badge-blue">
+                Próxima Cotización: {nextQuoteNumber}
+              </span>
+            </div>
+            <div className="pk-card-body">
+              <div className="pk-table-wrap">
+                <table className="pk-table">
+                  <thead>
+                    <tr>
+                      <th>N° Cotización</th>
+                      <th>Fecha</th>
+                      <th>Cliente / NIT</th>
+                      <th>Vigencia</th>
+                      <th>Total</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredQuotes.map((q) => (
+                      <tr key={q.id}>
+                        <td>
+                          <strong>{q.id}</strong>
+                        </td>
+                        <td>{q.createdAt}</td>
+                        <td>
+                          <strong>{q.customerName}</strong>
+                          {q.customerNit && (
+                            <div style={{ fontSize: 11.5, color: 'var(--pk-muted)' }}>
+                              {q.customerNit}
                             </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                          )}
+                        </td>
+                        <td>{q.validUntil}</td>
+                        <td>
+                          <strong>{formatCop(q.total)}</strong>
+                        </td>
+                        <td>
+                          <div className="pk-row-actions">
+                            <button
+                              type="button"
+                              className="pk-btn pk-btn-emerald pk-btn-sm"
+                              onClick={() => convertQuoteToInvoice(q)}
+                            >
+                              🛒 Pasar a Factura
+                            </button>
+                            <PkPrintButton
+                              label="🖨️ Imprimir"
+                              payload={{
+                                document_type: 'COTIZACIÓN COMERCIAL',
+                                document_number: q.id,
+                                issue_date: q.createdAt,
+                                customer_name: q.customerName,
+                                customer_nit: q.customerNit,
+                                extra_fields: {
+                                  'Válida Hasta': q.validUntil || '',
+                                  Estado: q.status || 'Vigente',
+                                },
+                                items: (q.items || []).map((it) => ({
+                                  code: it.code,
+                                  description: it.description,
+                                  quantity: it.quantity,
+                                  unit_price: it.unitPrice,
+                                  tax_pct: it.taxPct,
+                                  subtotal: it.subtotal,
+                                })),
+                                subtotal: q.subtotal,
+                                tax_total: q.taxTotal,
+                                grand_total: q.total,
+                                notes: q.notes,
+                              }}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredQuotes.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          style={{
+                            textAlign: 'center',
+                            color: 'var(--pk-muted)',
+                            padding: 28,
+                          }}
+                        >
+                          Aún no hay cotizaciones registradas para los filtros actuales.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
-          )}
+          </div>
 
           <PkFullscreenDialog
             open={quoteStudioOpen}
@@ -1826,25 +1775,6 @@ export const FacturacionView: React.FC = () => {
     );
   });
 
-  const stage1Drafts = filteredInvoices.filter(
-    (iv) => iv.docStatus === 'BORRADOR'
-  );
-  const stage2ConfirmedSinEnviar = filteredInvoices.filter(
-    (iv) =>
-      (iv.docStatus || 'CONFIRMADA') === 'CONFIRMADA' &&
-      resolveDianStage(iv.dianStage, iv.cufe) === 'SIN_ENVIAR'
-  );
-  const stage3DianTransitOrRejected = filteredInvoices.filter((iv) => {
-    if ((iv.docStatus || 'CONFIRMADA') !== 'CONFIRMADA') return false;
-    const st = resolveDianStage(iv.dianStage, iv.cufe);
-    return st === 'ENVIADA' || st === 'RECHAZADA';
-  });
-  const stage4AcceptedOrClosed = filteredInvoices.filter((iv) => {
-    if (iv.docStatus === 'BORRADOR') return false;
-    if (iv.docStatus === 'ANULADA_NC') return true;
-    return resolveDianStage(iv.dianStage, iv.cufe) === 'ACEPTADA';
-  });
-
   return (
     <div className="pk-stack">
       <PkKpiRow
@@ -1915,10 +1845,6 @@ export const FacturacionView: React.FC = () => {
         ]}
         activePill={invoicePill}
         onPillChange={setInvoicePill}
-        displayMode={invoiceDisplayMode}
-        onDisplayModeChange={setInvoiceDisplayMode}
-        boardLabel="🎛️ Tablero de Tiquetes"
-        tableLabel="📋 Vista Tabla"
         primaryActionLabel="+ Crear Factura"
         onPrimaryAction={() => openCreateInvoiceStudio('MOSTRADOR')}
         extraActions={
@@ -1971,440 +1897,181 @@ export const FacturacionView: React.FC = () => {
         }
       />
 
-      {invoiceDisplayMode === 'board' ? (
-        <PkKanbanBoard
-          columns={[
-            {
-              key: 'BORRADOR',
-              title: '🟡 1. Borradores Editables',
-              dotColor: 'amber',
-              count: stage1Drafts.length,
-              emptyText: 'Sin facturas en borrador',
-              children: stage1Drafts.map((inv) => (
-                <PkTicketCard
-                  key={inv.id}
-                  code={inv.id}
-                  timeAgo={inv.issueDate || inv.date}
-                  channelBadge={channelBadgeForInvoice(inv)}
-                  title={inv.customerName}
-                  subtitle={`NIT: ${inv.customerNit}`}
-                  metaLine="Borrador abierto • No descuenta stock ni cartera aún"
-                  items={inv.items.slice(0, 3).map((it) => ({
-                    qty: it.quantity,
-                    name: it.description,
-                    amount: formatCop(it.subtotal),
-                  }))}
-                  highlightNote={inv.notes}
-                  totalValue={formatCop(inv.total)}
-                  paymentLabel={inv.paymentMethod}
-                  processNodes={buildFourStageNodes(
-                    inv.docStatus,
-                    inv.dianStage,
-                    inv.cufe
-                  )}
-                  statusPill={{ label: 'Borrador Editable', tone: 'amber' }}
-                  primaryAction={{
-                    label: '✅ Confirmar Factura',
-                    tone: 'emerald',
-                    disabled: busy,
-                    onClick: () => handleConfirmDraftInvoice(inv.id),
-                  }}
-                  secondaryActions={
-                    <>
-                      <button
-                        type="button"
-                        className="pk-btn pk-btn-outline pk-btn-sm"
-                        onClick={() => openEditInvoiceStudio(inv)}
-                      >
-                        ✏️ Editar
-                      </button>
-                      <button
-                        type="button"
-                        className="pk-btn pk-btn-outline pk-btn-sm"
-                        onClick={() => setSelectedInvoice(inv)}
-                      >
-                        👁️ Ver
-                      </button>
-                    </>
-                  }
-                />
-              )),
-            },
-            {
-              key: 'CONFIRMADA',
-              title: '🔵 2. Confirmadas (Sin Enviar DIAN)',
-              dotColor: 'blue',
-              count: stage2ConfirmedSinEnviar.length,
-              emptyText: 'Sin facturas pendientes de envío DIAN',
-              children: stage2ConfirmedSinEnviar.map((inv) => {
-                const isEditable =
-                  inv.editable ?? inv.docStatus !== 'ANULADA_NC';
-                return (
-                  <PkTicketCard
-                    key={inv.id}
-                    code={inv.id}
-                    timeAgo={inv.issueDate || inv.date}
-                    channelBadge={channelBadgeForInvoice(inv)}
-                    title={inv.customerName}
-                    subtitle={`NIT: ${inv.customerNit}`}
-                    metaLine={
-                      inv.pendingBalance > 0
-                        ? `Saldo Cartera CxC: ${formatCop(inv.pendingBalance)}`
-                        : 'Stock y pago confirmados'
-                    }
-                    items={inv.items.slice(0, 3).map((it) => ({
-                      qty: it.quantity,
-                      name: it.description,
-                      amount: formatCop(it.subtotal),
-                    }))}
-                    highlightNote={inv.notes}
-                    totalValue={formatCop(inv.total)}
-                    paymentLabel={inv.paymentMethod}
-                    processNodes={buildFourStageNodes(
-                      inv.docStatus,
-                      inv.dianStage,
-                      inv.cufe
-                    )}
-                    statusPill={{
-                      label: inv.status,
-                      tone: inv.pendingBalance > 0 ? 'amber' : 'blue',
-                    }}
-                    primaryAction={
-                      hasDianModule
-                        ? {
-                            label: '🚀 Paso 1: Enviar a DIAN',
-                            tone: 'blue',
-                            disabled: busy,
-                            onClick: () => handleSendToDian('INVOICE', inv.id),
-                          }
-                        : undefined
-                    }
-                    secondaryActions={
-                      <>
-                        {isEditable && (
-                          <button
-                            type="button"
-                            className="pk-btn pk-btn-outline pk-btn-sm"
-                            onClick={() => openEditInvoiceStudio(inv)}
-                          >
-                            ✏️ Editar
-                          </button>
-                        )}
-                        <PkPrintButton
-                          label="🖨️ PDF"
-                          payload={buildInvoicePrintPayload(inv)}
-                        />
-                      </>
-                    }
-                  />
-                );
-              }),
-            },
-            {
-              key: 'DIAN_TRANSIT',
-              title: '🟣 3. En Validación / Rechazo DIAN',
-              dotColor: 'purple',
-              count: stage3DianTransitOrRejected.length,
-              emptyText: 'Sin facturas en espera o rechazo DIAN',
-              children: stage3DianTransitOrRejected.map((inv) => {
-                const st = resolveDianStage(inv.dianStage, inv.cufe);
-                return (
-                  <PkTicketCard
-                    key={inv.id}
-                    code={inv.id}
-                    timeAgo={inv.issueDate || inv.date}
-                    channelBadge={channelBadgeForInvoice(inv)}
-                    title={inv.customerName}
-                    subtitle={`NIT: ${inv.customerNit}`}
-                    highlightNote={
-                      st === 'RECHAZADA'
-                        ? `${inv.rejectionCode || 'DIAN'}: ${inv.rejectionMessage || 'Subsanar datos'}`
-                        : `TrackID: ${inv.trackId || 'Transmitida'}`
-                    }
-                    totalValue={formatCop(inv.total)}
-                    processNodes={buildFourStageNodes(
-                      inv.docStatus,
-                      inv.dianStage,
-                      inv.cufe
-                    )}
-                    statusPill={{
-                      label:
-                        st === 'RECHAZADA'
-                          ? 'Rechazada DIAN (Editable)'
-                          : 'Enviada a DIAN (Bloqueada)',
-                      tone: st === 'RECHAZADA' ? 'rose' : 'purple',
-                    }}
-                    primaryAction={
-                      st === 'RECHAZADA'
-                        ? {
-                            label: '✏️ Editar y Subsanar',
-                            tone: 'coral',
-                            onClick: () => openEditInvoiceStudio(inv),
-                          }
-                        : {
-                            label: '✅ Paso 2: Recibir Aceptación DIAN',
-                            tone: 'emerald',
-                            disabled: busy,
-                            onClick: () =>
-                              handleRespondDian('INVOICE', inv.id, 'ACCEPTED'),
-                          }
-                    }
-                    secondaryActions={
-                      <button
-                        type="button"
-                        className="pk-btn pk-btn-outline pk-btn-sm"
-                        style={{ width: '100%' }}
-                        onClick={() => setActiveModuleKey('facturacion_dian')}
-                      >
-                        ⚡ Abrir Consola DIAN
-                      </button>
-                    }
-                  />
-                );
-              }),
-            },
-            {
-              key: 'ACEPTADA',
-              title: '🟢 4. Aceptadas CUFE / Cerradas',
-              dotColor: 'emerald',
-              count: stage4AcceptedOrClosed.length,
-              emptyText: 'Aún no hay facturas aceptadas con CUFE',
-              children: stage4AcceptedOrClosed.map((inv) => {
-                const isAnulada = inv.docStatus === 'ANULADA_NC';
-                return (
-                  <PkTicketCard
-                    key={inv.id}
-                    code={inv.id}
-                    timeAgo={inv.issueDate || inv.date}
-                    channelBadge={channelBadgeForInvoice(inv)}
-                    title={inv.customerName}
-                    subtitle={`NIT: ${inv.customerNit}`}
-                    metaLine={
-                      inv.pendingBalance > 0
-                        ? `Saldo CxC: ${formatCop(inv.pendingBalance)}`
-                        : (inv.creditedTotal || 0) > 0
-                        ? `Notas Crédito aplicadas: -${formatCop(inv.creditedTotal || 0)}`
-                        : undefined
-                    }
-                    items={inv.items.slice(0, 2).map((it) => ({
-                      qty: it.quantity,
-                      name: it.description,
-                      amount: formatCop(it.subtotal),
-                    }))}
-                    totalValue={formatCop(inv.total)}
-                    paymentLabel={inv.paymentMethod}
-                    processNodes={buildFourStageNodes(
-                      inv.docStatus,
-                      inv.dianStage,
-                      inv.cufe
-                    )}
-                    statusPill={{
-                      label: isAnulada
-                        ? 'Anulada por Nota Crédito'
-                        : 'Validada CUFE DIAN',
-                      tone: isAnulada ? 'rose' : 'emerald',
-                    }}
-                    secondaryActions={
-                      <>
-                        <button
-                          type="button"
-                          className="pk-btn pk-btn-outline pk-btn-sm"
-                          onClick={() => setSelectedInvoice(inv)}
-                        >
-                          👁️ Ver
-                        </button>
-                        <PkPrintButton
-                          label="🖨️ PDF"
-                          payload={buildInvoicePrintPayload(inv)}
-                        />
-                        {!isAnulada && hasNotasModule && (
-                          <button
-                            type="button"
-                            className="pk-btn pk-btn-amber pk-btn-sm"
-                            onClick={() => openNoteStudioForInvoice(inv.id)}
-                          >
-                            ↩️ Nota Crédito / Débito
-                          </button>
-                        )}
-                      </>
-                    }
-                  />
-                );
-              }),
-            },
-          ]}
-        />
-      ) : (
-        <div className="pk-card">
-          <div className="pk-card-head">
-            <div className="pk-card-title">
-              📋 Listado General de Facturas Comerciales ({filteredInvoices.length})
-            </div>
-            <span className="pk-badge pk-badge-blue">
-              Próxima Oficial: {nextInvoiceNumber}
-            </span>
+      <div className="pk-card">
+        <div className="pk-card-head">
+          <div className="pk-card-title">
+            📋 Listado General de Facturas Comerciales ({filteredInvoices.length})
           </div>
-          <div className="pk-card-body">
-            <div className="pk-table-wrap">
-              <table className="pk-table">
-                <thead>
-                  <tr>
-                    <th>Documento</th>
-                    <th>Adquiriente / NIT</th>
-                    <th>Modalidad</th>
-                    <th>Progreso 4 Etapas</th>
-                    <th>Total / Saldo CxC</th>
-                    <th>Estado</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredInvoices.map((inv) => {
-                    const st = resolveDianStage(inv.dianStage, inv.cufe);
-                    const isDraft = inv.docStatus === 'BORRADOR';
-                    const isAnulada = inv.docStatus === 'ANULADA_NC';
-                    const isEditable =
-                      inv.editable ??
-                      (!isAnulada && st !== 'ENVIADA' && st !== 'ACEPTADA');
-                    const badge = channelBadgeForInvoice(inv);
-                    return (
-                      <tr key={inv.id}>
-                        <td>
-                          <strong>{inv.id}</strong>
-                          <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>
-                            {inv.issueDate || inv.date}
-                          </div>
-                        </td>
-                        <td>
-                          <strong>{inv.customerName}</strong>
-                          <div style={{ fontSize: 11.5, color: 'var(--pk-muted)' }}>
-                            {inv.customerNit}
-                          </div>
-                        </td>
-                        <td>
-                          <span
-                            className={`pk-badge pk-badge-${
-                              badge.tone === 'coral'
-                                ? 'amber'
-                                : badge.tone === 'purple'
-                                ? 'blue'
-                                : badge.tone
-                            }`}
-                          >
-                            {badge.label}
-                          </span>
-                        </td>
-                        <td style={{ minWidth: 250 }}>
-                          <PkProcessNodes
-                            compact
-                            steps={buildFourStageNodes(
-                              inv.docStatus,
-                              inv.dianStage,
-                              inv.cufe
-                            )}
-                          />
-                        </td>
-                        <td>
-                          <strong>{formatCop(inv.total)}</strong>
-                          {inv.pendingBalance > 0 && !isDraft && (
-                            <div style={{ fontSize: 11, color: 'var(--pk-amber)', fontWeight: 700 }}>
-                              CxC: {formatCop(inv.pendingBalance)}
-                            </div>
+          <span className="pk-badge pk-badge-blue">
+            Próxima Oficial: {nextInvoiceNumber}
+          </span>
+        </div>
+        <div className="pk-card-body">
+          <div className="pk-table-wrap">
+            <table className="pk-table">
+              <thead>
+                <tr>
+                  <th>Documento</th>
+                  <th>Adquiriente / NIT</th>
+                  <th>Modalidad</th>
+                  <th>Progreso 4 Etapas</th>
+                  <th>Total / Saldo CxC</th>
+                  <th>Estado</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredInvoices.map((inv) => {
+                  const st = resolveDianStage(inv.dianStage, inv.cufe);
+                  const isDraft = inv.docStatus === 'BORRADOR';
+                  const isAnulada = inv.docStatus === 'ANULADA_NC';
+                  const isEditable =
+                    inv.editable ??
+                    (!isAnulada && st !== 'ENVIADA' && st !== 'ACEPTADA');
+                  const badge = channelBadgeForInvoice(inv);
+                  return (
+                    <tr key={inv.id}>
+                      <td>
+                        <strong>{inv.id}</strong>
+                        <div style={{ fontSize: 11, color: 'var(--pk-muted)' }}>
+                          {inv.issueDate || inv.date}
+                        </div>
+                      </td>
+                      <td>
+                        <strong>{inv.customerName}</strong>
+                        <div style={{ fontSize: 11.5, color: 'var(--pk-muted)' }}>
+                          {inv.customerNit}
+                        </div>
+                      </td>
+                      <td>
+                        <span
+                          className={`pk-badge pk-badge-${
+                            badge.tone === 'purple' ? 'blue' : badge.tone
+                          }`}
+                        >
+                          {badge.label}
+                        </span>
+                      </td>
+                      <td style={{ minWidth: 250 }}>
+                        <PkProcessNodes
+                          compact
+                          steps={buildFourStageNodes(
+                            inv.docStatus,
+                            inv.dianStage,
+                            inv.cufe
                           )}
-                        </td>
-                        <td>
-                          <span
-                            className={`pk-badge ${
-                              isAnulada
-                                ? 'pk-badge-rose'
-                                : isDraft
-                                ? 'pk-badge-amber'
-                                : inv.pendingBalance > 0
-                                ? 'pk-badge-amber'
-                                : 'pk-badge-emerald'
-                            }`}
-                          >
-                            {inv.status}
-                          </span>
-                        </td>
-                        <td>
-                          <div className="pk-row-actions">
-                            {isDraft && (
-                              <button
-                                type="button"
-                                className="pk-btn pk-btn-emerald pk-btn-sm"
-                                disabled={busy}
-                                onClick={() => handleConfirmDraftInvoice(inv.id)}
-                              >
-                                ✅ Confirmar
-                              </button>
-                            )}
-                            {isEditable && (
-                              <button
-                                type="button"
-                                className="pk-btn pk-btn-outline pk-btn-sm"
-                                onClick={() => openEditInvoiceStudio(inv)}
-                              >
-                                ✏️ Editar
-                              </button>
-                            )}
-                            {st === 'ACEPTADA' && !isAnulada && hasNotasModule && (
-                              <button
-                                type="button"
-                                className="pk-btn pk-btn-amber pk-btn-sm"
-                                onClick={() => openNoteStudioForInvoice(inv.id)}
-                              >
-                                ↩️ Nota Crédito / Débito
-                              </button>
-                            )}
+                        />
+                      </td>
+                      <td>
+                        <strong>{formatCop(inv.total)}</strong>
+                        {inv.pendingBalance > 0 && !isDraft && (
+                          <div style={{ fontSize: 11, color: 'var(--pk-amber)', fontWeight: 700 }}>
+                            CxC: {formatCop(inv.pendingBalance)}
+                          </div>
+                        )}
+                      </td>
+                      <td>
+                        <span
+                          className={`pk-badge ${
+                            isAnulada
+                              ? 'pk-badge-rose'
+                              : isDraft
+                              ? 'pk-badge-amber'
+                              : inv.pendingBalance > 0
+                              ? 'pk-badge-amber'
+                              : 'pk-badge-emerald'
+                          }`}
+                        >
+                          {inv.status}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="pk-row-actions">
+                          {isDraft && (
+                            <button
+                              type="button"
+                              className="pk-btn pk-btn-emerald pk-btn-sm"
+                              disabled={busy}
+                              onClick={() => handleConfirmDraftInvoice(inv.id)}
+                            >
+                              ✅ Confirmar
+                            </button>
+                          )}
+                          {!isDraft && !isAnulada && st === 'SIN_ENVIAR' && hasDianModule && (
+                            <button
+                              type="button"
+                              className="pk-btn pk-btn-primary pk-btn-sm"
+                              disabled={busy}
+                              onClick={() => handleSendToDian('INVOICE', inv.id)}
+                            >
+                              🚀 Enviar DIAN
+                            </button>
+                          )}
+                          {isEditable && (
                             <button
                               type="button"
                               className="pk-btn pk-btn-outline pk-btn-sm"
-                              onClick={() => setSelectedInvoice(inv)}
+                              onClick={() => openEditInvoiceStudio(inv)}
                             >
-                              👁️ Ver
+                              ✏️ Editar
                             </button>
-                            <PkPrintButton
-                              label="🖨️ Imprimir"
-                              variant="primary"
-                              payload={buildInvoicePrintPayload(inv)}
-                            />
-                            {inv.pendingBalance > 0 && !isDraft && hasClientes && (
-                              <button
-                                type="button"
-                                className="pk-btn pk-btn-outline pk-btn-sm"
-                                onClick={() =>
-                                  navigateTo('ms-clientes', 'cartera_cxc')
-                                }
-                              >
-                                💳 Abonar
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {filteredInvoices.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={7}
-                        style={{
-                          textAlign: 'center',
-                          color: 'var(--pk-muted)',
-                          padding: 28,
-                        }}
-                      >
-                        No se encontraron facturas para los filtros actuales.
+                          )}
+                          {st === 'ACEPTADA' && !isAnulada && hasNotasModule && (
+                            <button
+                              type="button"
+                              className="pk-btn pk-btn-amber pk-btn-sm"
+                              onClick={() => openNoteStudioForInvoice(inv.id)}
+                            >
+                              ↩️ Nota Crédito / Débito
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="pk-btn pk-btn-outline pk-btn-sm"
+                            onClick={() => setSelectedInvoice(inv)}
+                          >
+                            👁️ Ver
+                          </button>
+                          <PkPrintButton
+                            label="🖨️ Imprimir"
+                            variant="primary"
+                            payload={buildInvoicePrintPayload(inv)}
+                          />
+                          {inv.pendingBalance > 0 && !isDraft && hasClientes && (
+                            <button
+                              type="button"
+                              className="pk-btn pk-btn-outline pk-btn-sm"
+                              onClick={() =>
+                                navigateTo('ms-clientes', 'cartera_cxc')
+                              }
+                            >
+                              💳 Abonar
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  );
+                })}
+                {filteredInvoices.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={7}
+                      style={{
+                        textAlign: 'center',
+                        color: 'var(--pk-muted)',
+                        padding: 28,
+                      }}
+                    >
+                      No se encontraron facturas para los filtros actuales.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
-      )}
+      </div>
 
       {sharedOverlays}
     </div>

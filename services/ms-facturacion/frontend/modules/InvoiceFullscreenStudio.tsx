@@ -162,8 +162,6 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
 
   const hasClientes = hasService('ms-clientes');
   const hasInventario = hasService('ms-inventario');
-  const hasHoteleria = hasService('ms-hoteleria');
-  const hasComandas = hasService('ms-comandas');
   const hasTallerModule = hasModule('facturas_taller');
   const canCredit = hasFeature('', 'pagos_mixtos_cxc');
   const canDiscount = hasFeature('', 'descuento_linea');
@@ -208,16 +206,15 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
     if (!open) return;
 
     if (editingInv) {
-      const inferredType = ((editingInv.invoiceType || '').toUpperCase() ||
-        (editingInv.plate || editingInv.vehicleId
+      const rawType = (editingInv.invoiceType || '').toUpperCase();
+      const inferredType: InvoiceTypeKey =
+        rawType === 'TALLER' || editingInv.plate || editingInv.vehicleId
           ? 'TALLER'
-          : editingInv.linkedRoomId
-          ? 'HOTELERIA'
-          : editingInv.linkedTableId
-          ? 'COMANDA'
-          : editingInv.contractId || editingInv.purchaseOrderRef
+          : rawType === 'CORPORATIVA_CXC' ||
+            editingInv.contractId ||
+            editingInv.purchaseOrderRef
           ? 'CORPORATIVA_CXC'
-          : 'MOSTRADOR')) as InvoiceTypeKey;
+          : 'MOSTRADOR';
 
       setInvoiceType(inferredType);
       setCustomerId(editingInv.customerId || '');
@@ -295,8 +292,8 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
       {
         key: 'MOSTRADOR',
         icon: '🛒',
-        title: 'Venta Estándar / Mostrador POS',
-        description: 'Liquidación rápida de productos y servicios en mostrador.',
+        title: 'Factura Estándar / Mostrador',
+        description: 'Liquidación directa de productos y servicios comerciales.',
       },
     ];
     if (hasTallerModule) {
@@ -308,33 +305,17 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
         badge: 'Automotriz',
       });
     }
-    if (hasHoteleria || Boolean(linkedRoomId)) {
-      opts.push({
-        key: 'HOTELERIA',
-        icon: '🏨',
-        title: 'Check-Out Hotelero',
-        description: 'Cierre de habitación/suite, alojamiento y consumos.',
-      });
-    }
-    if (hasComandas || Boolean(linkedTableId)) {
-      opts.push({
-        key: 'COMANDA',
-        icon: '🍽️',
-        title: 'Cuenta Gastronómica',
-        description: 'Liquidación de mesa, domicilio o pedido de restaurante.',
-      });
-    }
     if (canCredit) {
       opts.push({
         key: 'CORPORATIVA_CXC',
         icon: '🏢',
-        title: 'Factura Corporativa / Convenio Crédito',
+        title: 'Factura Corporativa / Crédito CxC',
         description: 'Orden de compra, fecha de vencimiento y cartera CxC.',
         badge: 'Crédito CxC',
       });
     }
     return opts;
-  }, [hasTallerModule, hasHoteleria, hasComandas, canCredit, linkedRoomId, linkedTableId]);
+  }, [hasTallerModule, canCredit]);
 
   const handleSelectCustomer = (custId: string) => {
     setCustomerId(custId);
@@ -510,8 +491,6 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
     const selectedWorker = workers.find((w) => w.id === mechanicId);
 
     const isTaller = invoiceType === 'TALLER';
-    const isHotel = invoiceType === 'HOTELERIA';
-    const isComanda = invoiceType === 'COMANDA';
     const isCorp = invoiceType === 'CORPORATIVA_CXC';
 
     onSubmit({
@@ -535,8 +514,8 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
       mechanicId: isTaller ? mechanicId : '',
       mechanicName: isTaller ? selectedWorker?.name || '' : '',
       linkedWorkOrderId: isTaller ? workOrderId : '',
-      linkedRoomId: isHotel ? linkedRoomId : '',
-      linkedTableId: isComanda ? linkedTableId : '',
+      linkedRoomId,
+      linkedTableId,
       workshopMeta: isTaller
         ? {
             vehicleBrand: selectedVehicle
@@ -568,12 +547,12 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
       title={
         editingInv
           ? `✏️ Editar Factura ${editingInv.id}`
-          : '🧾 Estudio Modular de Facturación Comercial'
+          : '🧾 Crear Factura de Venta'
       }
       subtitle={
         editingInv
-          ? 'Actualiza líneas, datos tributarios o condiciones de pago antes de transmitir o subsanar ante la DIAN.'
-          : 'Selecciona el tipo de operación para desplegar únicamente sus apartados especializados y guarda como borrador o confirma en firme.'
+          ? 'Actualiza líneas, datos tributarios o condiciones de pago antes de enviar o subsanar ante la DIAN.'
+          : 'Elige el tipo de factura, guarda en borrador para editar cuando quieras o confirma la venta en firme.'
       }
       badge={{
         label: editingInv
@@ -606,25 +585,27 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
             }}
           >
             <div style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--pk-navy)' }}>
-              Ciclo Fiscal en 4 Etapas Conectadas
+              Estado del Documento
             </div>
             <div style={{ flex: 1, minWidth: 280, maxWidth: 680 }}>
               <PkProcessNodes steps={processSteps} compact />
             </div>
           </div>
 
-          <PkTypeCards
-            label="Selecciona la Modalidad Operativa de la Factura"
-            options={typeOptions}
-            value={invoiceType}
-            onChange={(key) => {
-              const nextKey = key as InvoiceTypeKey;
-              setInvoiceType(nextKey);
-              if (nextKey === 'CORPORATIVA_CXC') {
-                setIsCreditMode(true);
-              }
-            }}
-          />
+          {typeOptions.length > 1 && (
+            <PkTypeCards
+              label="Tipo de Factura"
+              options={typeOptions}
+              value={invoiceType}
+              onChange={(key) => {
+                const nextKey = key as InvoiceTypeKey;
+                setInvoiceType(nextKey);
+                if (nextKey === 'CORPORATIVA_CXC') {
+                  setIsCreditMode(true);
+                }
+              }}
+            />
+          )}
         </div>
       }
       footerLeft={
@@ -719,12 +700,30 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
           </div>
         )}
 
+        {(linkedTableId || linkedRoomId) && (
+          <div
+            className="pk-card"
+            style={{
+              background: '#ecfdf5',
+              borderColor: '#a7f3d0',
+              padding: '12px 18px',
+              fontSize: 13,
+              color: '#065f46',
+            }}
+          >
+            <strong>🔗 Liquidación integrada:</strong>{' '}
+            {linkedTableId
+              ? `Cuenta origen ${linkedTableId} se cerrará al confirmar la factura.`
+              : `Habitación ${linkedRoomId} registrará Check-Out al confirmar la factura.`}
+          </div>
+        )}
+
         <div className="pk-grid-2" style={{ alignItems: 'start' }}>
           {/* LEFT PANEL: CATALOG + QUICK SERVICE */}
           <div className="pk-card">
             <div className="pk-card-head">
               <div className="pk-card-title">
-                📦 Catálogo Visual y Servicios Libres
+                📦 Catálogo de Productos y Servicios
               </div>
               <input
                 className="pk-input"
@@ -850,7 +849,7 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
                     <input
                       value={srvName}
                       onChange={(e) => setSrvName(e.target.value)}
-                      placeholder="Ej: Mano de obra especializada, alojamiento o asesoría"
+                      placeholder="Ej: Mano de obra especializada o asesoría"
                     />
                   </div>
                   <div className="pk-field">
@@ -870,7 +869,7 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
                     options={[
                       { value: '0', label: '0% — Excluido / Exento' },
                       { value: '5', label: '5% — Tarifa Reducida' },
-                      { value: '8', label: '8% — Impoconsumo Gastronomía' },
+                      { value: '8', label: '8% — Impoconsumo' },
                       { value: '19', label: '19% — Tarifa General IVA' },
                     ]}
                   />
@@ -888,7 +887,7 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
           <div className="pk-card">
             <div className="pk-card-head">
               <div className="pk-card-title">
-                🧾 Titular Fiscal, Apartado Operativo y Carrito
+                🧾 Datos del Adquiriente y Detalle de Factura
               </div>
               <span className="pk-badge pk-badge-blue">
                 {editingInv ? editingInv.id : nextInvoiceNumber}
@@ -929,7 +928,6 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
                 </div>
               </div>
 
-              {/* STRICTLY MODULAR SECTION BY SELECTED INVOICE TYPE */}
               {invoiceType === 'TALLER' && (
                 <FacturasTallerBox
                   vehicles={vehicles}
@@ -946,66 +944,6 @@ export const InvoiceFullscreenStudio: React.FC<InvoiceFullscreenStudioProps> = (
                   onWorkOrderIdChange={setWorkOrderId}
                   onOpenNewVehicleModal={onOpenNewVehicleModal}
                 />
-              )}
-
-              {invoiceType === 'HOTELERIA' && (
-                <div
-                  style={{
-                    margin: '16px 0',
-                    padding: '15px 18px',
-                    borderRadius: 12,
-                    border: '1px solid #a7f3d0',
-                    background: '#ecfdf5',
-                  }}
-                >
-                  <strong style={{ fontSize: 13, color: '#065f46', display: 'block', marginBottom: 10 }}>
-                    🏨 Liquidación de Check-Out Hotelero
-                  </strong>
-                  <div className="pk-form-grid cols-2">
-                    <div className="pk-field pk-col-span-full">
-                      <label>Habitación o Suite Vinculada</label>
-                      <input
-                        value={linkedRoomId}
-                        onChange={(e) => setLinkedRoomId(e.target.value)}
-                        placeholder="Ej: hab-302 / Suite Ejecutiva 401"
-                      />
-                    </div>
-                  </div>
-                  <div style={{ fontSize: 12, color: '#047857', marginTop: 8 }}>
-                    Nota: Al confirmar la factura (Etapa 2), la habitación completará
-                    Check-Out automáticamente; en Borrador permanece abierta.
-                  </div>
-                </div>
-              )}
-
-              {invoiceType === 'COMANDA' && (
-                <div
-                  style={{
-                    margin: '16px 0',
-                    padding: '15px 18px',
-                    borderRadius: 12,
-                    border: '1px solid #fed7aa',
-                    background: '#fff7ed',
-                  }}
-                >
-                  <strong style={{ fontSize: 13, color: '#9a3412', display: 'block', marginBottom: 10 }}>
-                    🍽️ Cierre de Cuenta Gastronómica / Comanda
-                  </strong>
-                  <div className="pk-form-grid cols-2">
-                    <div className="pk-field pk-col-span-full">
-                      <label>Mesa / Cuenta Gastronómica Asociada</label>
-                      <input
-                        value={linkedTableId}
-                        onChange={(e) => setLinkedTableId(e.target.value)}
-                        placeholder="Ej: mesa-04 / Domicilio #0047"
-                      />
-                    </div>
-                  </div>
-                  <div style={{ fontSize: 12, color: '#c2410c', marginTop: 8 }}>
-                    Nota: La mesa o pedido se liberará únicamente cuando confirmes la
-                    factura en firme.
-                  </div>
-                </div>
               )}
 
               {invoiceType === 'CORPORATIVA_CXC' && (
